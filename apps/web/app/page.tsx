@@ -24,6 +24,14 @@ type PortfolioPayload = {
   positions: Array<{ market_value: number }>;
 };
 
+type IndicatorsPayload = {
+  source: string;
+  indicators: {
+    ma?: number;
+    rsi?: number;
+  };
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -37,7 +45,7 @@ async function fetchJson<T>(path: string): Promise<T> {
 export default async function HomePage() {
   const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
   const primaryInstrument = instrumentsPayload.items[0];
-  const [barsPayload, reportPayload, portfolioPayload] = await Promise.all([
+  const [barsPayload, reportPayload, portfolioPayload, indicatorsPayload] = await Promise.all([
     fetchJson<BarsPayload>(
       `/market-data/${primaryInstrument.symbol}/bars?timeframe=1d&start=2026-01-01&end=2026-01-02`,
     ),
@@ -45,10 +53,13 @@ export default async function HomePage() {
       `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
     ),
     fetchJson<PortfolioPayload>("/portfolios/demo"),
+    fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
   ]);
 
   const latestClose = barsPayload.items.at(-1)?.close;
   const portfolioValue = portfolioPayload.positions[0]?.market_value;
+  const ma = indicatorsPayload.indicators.ma;
+  const rsi = indicatorsPayload.indicators.rsi;
 
   return (
     <main>
@@ -73,6 +84,12 @@ export default async function HomePage() {
         <h2>数据采集</h2>
         <p>触发一次开发用 Mock 行情采集，并写入后端数据库。</p>
         <IngestionButton market={primaryInstrument.market} start="2026-01-01" end="2026-01-02" />
+      </section>
+      <section>
+        <h2>技术指标</h2>
+        <p>
+          MA：{ma}，RSI：{rsi}，来源：{indicatorsPayload.source}
+        </p>
       </section>
       <section>
         <h2>AI 报告</h2>
