@@ -7,6 +7,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     llm_provider: str = "mock"
     llm_api_key: str | None = None
+    daily_report_symbol: str = "AAPL"
+    daily_report_market: str = "US"
+    daily_report_start: str = "2026-01-01"
+    daily_report_end: str = "2026-01-20"
+    daily_report_ma_window: int = 3
+    daily_report_cron_hour: int = 21
+    daily_report_cron_minute: int = 30
 
     model_config = SettingsConfigDict(
         env_file=".env",
