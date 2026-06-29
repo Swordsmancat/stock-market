@@ -54,6 +54,14 @@ type NewsPayload = {
   }>;
 };
 
+type TaskRunPayload = {
+  status: string;
+  duration_ms?: number;
+  result_json?: {
+    item_count?: number;
+  };
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -75,6 +83,7 @@ export default async function HomePage() {
     portfolioPayload,
     indicatorsPayload,
     newsPayload,
+    taskRunPayload,
   ] =
     await Promise.all([
       fetchJson<BarsPayload>(
@@ -90,6 +99,9 @@ export default async function HomePage() {
       fetchJson<PortfolioPayload>("/portfolios/demo"),
       fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
       fetchJson<NewsPayload>(`/news/${primaryInstrument.symbol}`),
+      fetchJson<TaskRunPayload>(
+        "/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis",
+      ),
     ]);
 
   const latestClose = barsPayload.items.at(-1)?.close;
@@ -167,6 +179,13 @@ export default async function HomePage() {
         ) : (
           <p>暂无持久化每日报告</p>
         )}
+      </section>
+      <section>
+        <h2>自动任务状态</h2>
+        <p>
+          最近日报调度：{taskRunPayload.status}，处理股票数：
+          {taskRunPayload.result_json?.item_count ?? 0}，耗时：{taskRunPayload.duration_ms ?? 0}ms
+        </p>
       </section>
       <section>
         <h2>模拟组合</h2>

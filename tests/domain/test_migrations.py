@@ -36,6 +36,16 @@ def load_generated_reports_migration():
     return module
 
 
+def load_task_runs_migration():
+    migration_path = Path("alembic/versions/0004_task_runs.py")
+    spec = importlib.util.spec_from_file_location("task_runs_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -94,3 +104,21 @@ def test_generated_reports_migration_creates_report_table():
         tables = set(inspect(connection).get_table_names())
 
     assert "generated_reports" in tables
+
+
+def test_task_runs_migration_creates_task_runs_table():
+    initial_migration = load_initial_migration()
+    news_migration = load_news_migration()
+    generated_reports_migration = load_generated_reports_migration()
+    task_runs_migration = load_task_runs_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(news_migration, connection)
+        run_migration(generated_reports_migration, connection)
+        run_migration(task_runs_migration, connection)
+
+        tables = set(inspect(connection).get_table_names())
+
+    assert "task_runs" in tables

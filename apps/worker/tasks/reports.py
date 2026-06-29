@@ -2,6 +2,7 @@ from datetime import date
 
 from apps.worker.celery_app import celery_app
 from packages.services.analysis import refresh_stock_analysis
+from packages.services.task_runs import fail_task_run, finish_task_run, start_task_run
 from packages.shared.config import settings
 from packages.shared.database import SessionLocal
 
@@ -56,6 +57,16 @@ def refresh_daily_watchlist_analysis(
     end_value = end or settings.daily_report_end
     ma_window_value = ma_window or settings.daily_report_ma_window
     watchlist_value = watchlist or settings.daily_report_watchlist
+    task_run = start_task_run(
+        "reports.refresh_daily_watchlist_analysis",
+        {
+            "watchlist": watchlist_value,
+            "start": start_value,
+            "end": end_value,
+            "ma_window": ma_window_value,
+        },
+        session=session,
+    )
 
     try:
         items = []
@@ -76,6 +87,11 @@ def refresh_daily_watchlist_analysis(
                     "report": result["report"],
                 }
             )
-        return {"status": "refreshed", "item_count": len(items), "items": items}
+        result_payload = {"status": "refreshed", "item_count": len(items), "items": items}
+        finish_task_run(task_run, result_payload, session=session)
+        return result_payload
+    except Exception as exc:
+        fail_task_run(task_run, str(exc), session=session)
+        raise
     finally:
         session.close()

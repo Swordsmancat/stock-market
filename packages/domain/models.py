@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID as PythonUUID
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -145,6 +145,27 @@ class GeneratedReport(Base):
         JSON().with_variant(JSONB, "postgresql"),
         default=dict,
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class TaskRun(Base):
+    __tablename__ = "task_runs"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    task_name: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(32))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, default=None)
+    input_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    result_json: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=None,
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

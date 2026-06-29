@@ -3,11 +3,13 @@ from datetime import date
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+import pytest
 
 import packages.domain.models  # noqa: F401
 from apps.worker.tasks.ingestion import ingest_mock_market_data
 from apps.worker.tasks import reports as report_tasks
 from packages.services.reports import get_latest_daily_report_payload
+from packages.services.task_runs import get_latest_task_run_payload
 from packages.shared.database import Base
 
 
@@ -66,3 +68,49 @@ def test_refresh_daily_watchlist_analysis_task_stores_reports_for_each_symbol(mo
     assert [item["symbol"] for item in result["items"]] == ["AAPL", "0700"]
     assert aapl_latest["as_of"] == date(2026, 1, 20).isoformat()
     assert hk_latest["as_of"] == date(2026, 1, 20).isoformat()
+
+
+def test_refresh_daily_watchlist_analysis_task_records_succeeded_run(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)
+
+    report_tasks.refresh_daily_watchlist_analysis(
+        watchlist="AAPL:US",
+        start="2026-01-01",
+        end="2026-01-20",
+        ma_window=3,
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_watchlist_analysis",
+    )
+
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["input_json"]["watchlist"] == "AAPL:US"
+    assert latest_run["result_json"]["item_count"] == 1
+
+
+def test_refresh_daily_watchlist_analysis_task_records_failed_run(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)
+
+    def fail_refresh(**kwargs):
+        raise RuntimeError("provider timeout")
+
+    monkeypatch.setattr(report_tasks, "refresh_stock_analysis", fail_refresh)
+
+    with pytest.raises(RuntimeError, match="provider timeout"):
+        report_tasks.refresh_daily_watchlist_analysis(
+            watchlist="AAPL:US",
+            start="2026-01-01",
+            end="2026-01-20",
+            ma_window=3,
+        )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_watchlist_analysis",
+    )
+
+    assert latest_run["status"] == "failed"
+    assert latest_run["error_message"] == "provider timeout"
+    assert latest_run["input_json"]["watchlist"] == "AAPL:US"
