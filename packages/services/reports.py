@@ -136,3 +136,34 @@ def get_latest_daily_report_payload(symbol: str, session: Session) -> dict[str, 
         "citations": report.citations,
         "source_summary": report.source_summary,
     }
+
+
+def get_daily_report_history_payload(
+    symbol: str,
+    session: Session,
+    limit: int = 10,
+) -> dict[str, object]:
+    reports = (
+        session.query(GeneratedReport)
+        .filter(GeneratedReport.symbol == symbol)
+        .filter(GeneratedReport.report_type == "stock_daily")
+        .order_by(GeneratedReport.as_of.desc(), GeneratedReport.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "symbol": symbol,
+        "source": "database",
+        "items": [
+            {
+                "symbol": report.symbol,
+                "report_type": report.report_type,
+                "as_of": report.as_of.isoformat(),
+                "content_markdown": report.content_markdown,
+                "citations": report.citations,
+                "source_summary": report.source_summary,
+            }
+            for report in reports
+        ],
+    }

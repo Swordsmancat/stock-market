@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from packages.services.reports import (
     generate_and_store_daily_report,
     generate_stock_report_payload,
+    get_daily_report_history_payload,
     get_latest_daily_report_payload,
 )
 from packages.shared.database import get_session
@@ -34,6 +35,15 @@ def get_latest_daily_report(
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return get_latest_daily_report_payload(symbol, session=session)
+
+
+@router.get("/{symbol}/daily/history")
+def get_daily_report_history(
+    symbol: str,
+    limit: int = Query(default=10, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return get_daily_report_history_payload(symbol, session=session, limit=limit)
 
 
 @router.get("/{symbol}/stock")

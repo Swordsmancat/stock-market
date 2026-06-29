@@ -25,6 +25,13 @@ type DailyReportPayload = {
   content_markdown?: string;
 };
 
+type DailyReportHistoryPayload = {
+  items: Array<{
+    as_of: string;
+    content_markdown: string;
+  }>;
+};
+
 type PortfolioPayload = {
   source: string;
   positions: Array<{ market_value: number }>;
@@ -64,6 +71,7 @@ export default async function HomePage() {
     barsPayload,
     reportPayload,
     dailyReportPayload,
+    dailyReportHistoryPayload,
     portfolioPayload,
     indicatorsPayload,
     newsPayload,
@@ -76,6 +84,9 @@ export default async function HomePage() {
         `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
       ),
       fetchJson<DailyReportPayload>(`/reports/${primaryInstrument.symbol}/daily/latest`),
+      fetchJson<DailyReportHistoryPayload>(
+        `/reports/${primaryInstrument.symbol}/daily/history?limit=5`,
+      ),
       fetchJson<PortfolioPayload>("/portfolios/demo"),
       fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
       fetchJson<NewsPayload>(`/news/${primaryInstrument.symbol}`),
@@ -146,6 +157,12 @@ export default async function HomePage() {
           <>
             <p>最新日报日期：{dailyReportPayload.as_of}</p>
             <p>{dailyReportPayload.content_markdown}</p>
+            <h3>历史日报</h3>
+            <ul>
+              {dailyReportHistoryPayload.items.map((item) => (
+                <li key={item.as_of}>历史日报：{item.as_of}</li>
+              ))}
+            </ul>
           </>
         ) : (
           <p>暂无持久化每日报告</p>
