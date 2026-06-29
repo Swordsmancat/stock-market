@@ -1,3 +1,4 @@
+import { AnalysisRefreshButton } from "./AnalysisRefreshButton";
 import { IngestionButton } from "./IngestionButton";
 
 type Instrument = {
@@ -96,6 +97,14 @@ export default async function HomePage() {
         <h2>数据采集</h2>
         <p>触发一次开发用 Mock 行情采集，并写入后端数据库。</p>
         <IngestionButton market={primaryInstrument.market} start="2026-01-01" end="2026-01-02" />
+        <p>一键刷新当前股票的行情、技术指标、新闻舆情和 AI 报告。</p>
+        <AnalysisRefreshButton
+          symbol={primaryInstrument.symbol}
+          market={primaryInstrument.market}
+          start="2026-01-01"
+          end="2026-01-20"
+          maWindow={3}
+        />
       </section>
       <section>
         <h2>技术指标</h2>

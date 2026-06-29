@@ -94,6 +94,17 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
         ),
       );
     }
+    if (url.includes("/api/analysis/refresh")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "AAPL",
+            status: "refreshed",
+            report: { report_type: "stock_daily" },
+          }),
+        ),
+      );
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
@@ -121,5 +132,12 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     "/api/ingestion/mock-snapshot?market=US&start=2026-01-01&end=2026-01-02",
     { method: "POST" },
   );
-  expect(fetchMock).toHaveBeenCalledTimes(7);
+  fireEvent.click(screen.getByRole("button", { name: "刷新股票分析" }));
+
+  expect(await screen.findByText("分析刷新完成：AAPL，报告已生成")).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/analysis/refresh?symbol=AAPL&market=US&start=2026-01-01&end=2026-01-20&ma_window=3",
+    { method: "POST" },
+  );
+  expect(fetchMock).toHaveBeenCalledTimes(8);
 });
