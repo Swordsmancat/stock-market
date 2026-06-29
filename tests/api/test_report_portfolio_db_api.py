@@ -7,7 +7,9 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
+from packages.services.indicators import calculate_and_store_daily_indicators
 from packages.services.ingestion import ingest_mock_market_snapshot
+from packages.services.news import ingest_mock_news
 from packages.shared.database import Base, get_session
 
 
@@ -23,7 +25,15 @@ def make_session():
 
 def test_report_api_uses_database_market_data_when_available():
     session = make_session()
-    ingest_mock_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 2), session=session)
+    ingest_mock_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 20), session=session)
+    calculate_and_store_daily_indicators(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 20),
+        session=session,
+        ma_window=3,
+    )
+    ingest_mock_news("AAPL", session=session)
 
     def override_session():
         yield session
@@ -33,7 +43,7 @@ def test_report_api_uses_database_market_data_when_available():
         client = TestClient(app)
         response = client.get(
             "/reports/AAPL/stock",
-            params={"start": "2026-01-01", "end": "2026-01-02"},
+            params={"start": "2026-01-01", "end": "2026-01-20"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -41,7 +51,11 @@ def test_report_api_uses_database_market_data_when_available():
     assert response.status_code == 200
     payload = response.json()
     assert payload["source"] == "database"
-    assert "bars_1d:AAPL:2026-01-02" in payload["citations"]
+    assert "MA 119.00" in payload["content_markdown"]
+    assert "Apple reports strong growth in services revenue" in payload["content_markdown"]
+    assert "bars_1d:AAPL:2026-01-20" in payload["citations"]
+    assert "technical_indicators:AAPL:2026-01-20T00:00:00+00:00" in payload["citations"]
+    assert "news_articles:AAPL:https://example.com/aapl-services-growth" in payload["citations"]
 
 
 def test_portfolio_api_uses_database_latest_price_when_available():

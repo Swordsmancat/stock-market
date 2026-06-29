@@ -36,7 +36,8 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
           JSON.stringify({
             symbol: "AAPL",
             report_type: "stock_daily",
-            content_markdown: "# AAPL AI 个股报告",
+            content_markdown:
+              "# AAPL AI 个股报告\n\nMA 119.00, RSI 100.00\n\nApple reports strong growth in services revenue",
           }),
         ),
       );
@@ -105,7 +106,13 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(
     screen.getByText("新闻：Apple reports strong growth in services revenue，情绪：positive，置信度：0.6"),
   ).toBeInTheDocument();
-  expect(screen.getByText("# AAPL AI 个股报告")).toBeInTheDocument();
+  expect(
+    screen.getByText((content) =>
+      content.includes("# AAPL AI 个股报告") &&
+      content.includes("MA 119.00, RSI 100.00") &&
+      content.includes("Apple reports strong growth in services revenue"),
+    ),
+  ).toBeInTheDocument();
   expect(screen.getByText("模拟组合市值：1020，来源：database")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "触发行情采集" }));
 
