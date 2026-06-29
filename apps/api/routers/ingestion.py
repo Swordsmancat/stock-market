@@ -12,8 +12,9 @@ router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 @router.post("/mock-snapshot")
 def ingest_mock_snapshot(
     market: str = Query(...),
+    provider: str = Query(default="mock"),
     start: date = Query(...),
     end: date = Query(...),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return ingest_mock_market_snapshot(market, start, end, session=session)
+    return ingest_mock_market_snapshot(market, start, end, session=session, provider_name=provider)

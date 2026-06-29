@@ -42,6 +42,22 @@ celery -A apps.worker.celery_app.celery_app beat --loglevel=info
 docker compose up -d db redis worker beat
 ```
 
+## 行情数据源 Provider
+
+开发环境默认使用 Mock 数据源：
+
+```bash
+curl -X POST "http://localhost:8000/ingestion/mock-snapshot?market=US&provider=mock&start=2026-01-01&end=2026-01-20"
+```
+
+如需尝试真实行情数据源，可使用 `provider=yfinance`。该路径会通过 yfinance 拉取日线数据，并写入同一张 `bars_1d` 表：
+
+```bash
+curl -X POST "http://localhost:8000/ingestion/mock-snapshot?market=US&provider=yfinance&start=2026-01-01&end=2026-01-20"
+```
+
+Mock 仍然是默认 Provider，因此本地测试和演示流程不会依赖外部网络。
+
 ## 配置每日股票池
 
 默认定时任务会读取：

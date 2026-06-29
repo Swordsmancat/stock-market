@@ -3,8 +3,8 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from packages.domain.models import DailyBar, Instrument, Market
-from packages.providers.mock_provider import MockProvider
-from packages.services.market_data import get_market_snapshot
+from packages.providers.base import ProviderAdapter
+from packages.services.market_data import get_market_snapshot, get_provider
 
 
 MARKET_META = {
@@ -58,8 +58,13 @@ def _get_or_create_instrument(
     return instrument
 
 
-def _write_snapshot_to_database(market_code: str, start: date, end: date, session: Session) -> int:
-    provider = MockProvider()
+def _write_snapshot_to_database(
+    market_code: str,
+    start: date,
+    end: date,
+    session: Session,
+    provider: ProviderAdapter,
+) -> int:
     market = _get_or_create_market(session, market_code)
     bar_count = 0
     for provider_instrument in provider.fetch_instruments(market_code):
@@ -97,10 +102,29 @@ def ingest_mock_market_snapshot(
     start: date,
     end: date,
     session: Session | None = None,
+    provider_name: str = "mock",
 ) -> dict[str, object]:
-    snapshot = get_market_snapshot(market, start, end)
+    return ingest_market_snapshot(
+        market=market,
+        start=start,
+        end=end,
+        session=session,
+        provider_name=provider_name,
+    )
+
+
+def ingest_market_snapshot(
+    market: str,
+    start: date,
+    end: date,
+    session: Session | None = None,
+    provider_name: str = "mock",
+) -> dict[str, object]:
+    provider_name = provider_name.lower()
+    provider = get_provider(provider_name)
+    snapshot = get_market_snapshot(market, start, end, provider_name=provider_name)
     bar_count = (
-        _write_snapshot_to_database(market, start, end, session)
+        _write_snapshot_to_database(market, start, end, session, provider)
         if session is not None
         else sum(len(instrument["bars"]) for instrument in snapshot["instruments"])
     )

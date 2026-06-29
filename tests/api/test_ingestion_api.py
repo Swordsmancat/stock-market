@@ -1,5 +1,3 @@
-from datetime import date
-
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -31,7 +29,12 @@ def test_ingestion_api_writes_mock_snapshot_then_market_data_reads_database():
         client = TestClient(app)
         ingest_response = client.post(
             "/ingestion/mock-snapshot",
-            params={"market": "US", "start": "2026-01-01", "end": "2026-01-02"},
+            params={
+                "market": "US",
+                "provider": "mock",
+                "start": "2026-01-01",
+                "end": "2026-01-02",
+            },
         )
         bars_response = client.get(
             "/market-data/AAPL/bars",
@@ -44,6 +47,7 @@ def test_ingestion_api_writes_mock_snapshot_then_market_data_reads_database():
     ingest_payload = ingest_response.json()
     assert ingest_payload["status"] == "ingested"
     assert ingest_payload["market"] == "US"
+    assert ingest_payload["provider"] == "mock"
     assert ingest_payload["bar_count"] == 2
 
     assert bars_response.status_code == 200

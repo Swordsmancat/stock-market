@@ -12,6 +12,7 @@ dependencies = [
   "celery",
   "redis",
   "pandas",
+  "yfinance",
   "httpx",
   "python-dotenv"
 ]

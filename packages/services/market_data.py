@@ -6,12 +6,24 @@ from sqlalchemy.orm import Session
 
 from packages.analytics.indicators import calculate_ma, calculate_rsi
 from packages.domain.models import DailyBar, Instrument, Market
+from packages.providers.base import ProviderAdapter
 from packages.providers.base import ProviderBar
 from packages.providers.mock_provider import MockProvider
+from packages.providers.yfinance_provider import YFinanceProvider
 
 
 def _provider() -> MockProvider:
     return MockProvider()
+
+
+def get_provider(provider_name: str = "mock") -> ProviderAdapter:
+    normalized = provider_name.lower()
+    if normalized == "mock":
+        return MockProvider()
+    if normalized == "yfinance":
+        return YFinanceProvider()
+    msg = f"Unsupported market data provider: {provider_name}"
+    raise ValueError(msg)
 
 
 def serialize_bar(bar: ProviderBar) -> dict[str, float | str | None]:
@@ -144,11 +156,13 @@ def get_market_snapshot(
     start: date,
     end: date,
     timeframe: str = "1d",
+    provider_name: str = "mock",
 ) -> dict[str, object]:
-    provider = _provider()
+    provider = get_provider(provider_name)
     instruments = provider.fetch_instruments(market)
     return {
         "market": market,
+        "provider": provider_name.lower(),
         "timeframe": timeframe,
         "start": start.isoformat(),
         "end": end.isoformat(),
