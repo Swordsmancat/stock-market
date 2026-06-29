@@ -1,0 +1,20 @@
+{
+  "type": "module",
+  "scripts": {
+    "dev:web": "next dev apps/web",
+    "test:web": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "latest",
+    "@testing-library/react": "latest",
+    "jsdom": "latest",
+    "vitest": "latest"
+  }
+}
