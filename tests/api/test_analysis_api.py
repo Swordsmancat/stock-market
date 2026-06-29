@@ -37,6 +37,7 @@ def test_analysis_refresh_orchestrates_market_indicators_news_and_report():
                 "ma_window": 3,
             },
         )
+        latest_response = client.get("/reports/AAPL/daily/latest")
     finally:
         app.dependency_overrides.clear()
 
@@ -53,3 +54,10 @@ def test_analysis_refresh_orchestrates_market_indicators_news_and_report():
     assert "Apple reports strong growth in services revenue" in payload["report"]["content_markdown"]
     assert "technical_indicators:AAPL:2026-01-20T00:00:00+00:00" in payload["report"]["citations"]
     assert "news_articles:AAPL:https://example.com/aapl-services-growth" in payload["report"]["citations"]
+
+    assert latest_response.status_code == 200
+    latest = latest_response.json()
+    assert latest["symbol"] == "AAPL"
+    assert latest["as_of"] == "2026-01-20"
+    assert "MA 119.00" in latest["content_markdown"]
+    assert "Apple reports strong growth in services revenue" in latest["content_markdown"]

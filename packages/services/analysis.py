@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from packages.services.indicators import calculate_and_store_daily_indicators
 from packages.services.ingestion import ingest_mock_market_snapshot
 from packages.services.news import ingest_mock_news
-from packages.services.reports import generate_stock_report_payload
+from packages.services.reports import generate_and_store_daily_report
 
 
 def refresh_stock_analysis(
@@ -25,7 +25,7 @@ def refresh_stock_analysis(
         ma_window=ma_window,
     )
     news = ingest_mock_news(symbol, session=session)
-    report = generate_stock_report_payload(symbol, start, end, session=session)
+    report = generate_and_store_daily_report(symbol, start, end, session=session)
 
     return {
         "symbol": symbol,

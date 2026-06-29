@@ -3,6 +3,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from packages.ai.report_builder import ReportContext, build_stock_report
+from packages.domain.models import GeneratedReport
 from packages.services.indicators import get_stored_indicators_payload
 from packages.services.market_data import get_bars_payload
 from packages.services.news import get_news_sentiment_payload
@@ -79,4 +80,59 @@ def generate_stock_report_payload(
         "source": bars_payload["source"],
         "content_markdown": build_stock_report(context),
         "citations": context.citations,
+    }
+
+
+def generate_and_store_daily_report(
+    symbol: str,
+    start: date,
+    end: date,
+    session: Session,
+) -> dict[str, object]:
+    payload = generate_stock_report_payload(symbol, start, end, session=session)
+    report = GeneratedReport(
+        symbol=symbol,
+        report_type=str(payload["report_type"]),
+        as_of=end,
+        content_markdown=str(payload["content_markdown"]),
+        citations=list(payload["citations"]),
+        source_summary={"source": payload["source"]},
+    )
+    session.add(report)
+    session.commit()
+
+    return {
+        "symbol": symbol,
+        "report_type": payload["report_type"],
+        "as_of": end.isoformat(),
+        "status": "stored",
+        "content_markdown": payload["content_markdown"],
+        "citations": payload["citations"],
+    }
+
+
+def get_latest_daily_report_payload(symbol: str, session: Session) -> dict[str, object]:
+    report = (
+        session.query(GeneratedReport)
+        .filter(GeneratedReport.symbol == symbol)
+        .filter(GeneratedReport.report_type == "stock_daily")
+        .order_by(GeneratedReport.as_of.desc(), GeneratedReport.created_at.desc())
+        .first()
+    )
+    if report is None:
+        return {
+            "symbol": symbol,
+            "report_type": "stock_daily",
+            "source": "database",
+            "items": [],
+        }
+
+    return {
+        "symbol": report.symbol,
+        "report_type": report.report_type,
+        "as_of": report.as_of.isoformat(),
+        "source": "database",
+        "content_markdown": report.content_markdown,
+        "citations": report.citations,
+        "source_summary": report.source_summary,
     }

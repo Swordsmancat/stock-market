@@ -8,7 +8,11 @@ import packages.domain.models  # noqa: F401
 from packages.services.indicators import calculate_and_store_daily_indicators
 from packages.services.ingestion import ingest_mock_market_snapshot
 from packages.services.news import ingest_mock_news
-from packages.services.reports import generate_stock_report_payload
+from packages.services.reports import (
+    generate_and_store_daily_report,
+    generate_stock_report_payload,
+    get_latest_daily_report_payload,
+)
 from packages.shared.database import Base
 
 
@@ -58,3 +62,33 @@ def test_generate_stock_report_payload_aggregates_database_indicators_and_news()
     assert "bars_1d:AAPL:2026-01-20" in payload["citations"]
     assert "technical_indicators:AAPL:2026-01-20T00:00:00+00:00" in payload["citations"]
     assert "news_articles:AAPL:https://example.com/aapl-services-growth" in payload["citations"]
+
+
+def test_generate_and_store_daily_report_persists_latest_report():
+    session = make_session()
+    ingest_mock_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 20), session=session)
+    calculate_and_store_daily_indicators(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 20),
+        session=session,
+        ma_window=3,
+    )
+    ingest_mock_news("AAPL", session=session)
+
+    stored = generate_and_store_daily_report(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 20),
+        session=session,
+    )
+    latest = get_latest_daily_report_payload("AAPL", session=session)
+
+    assert stored["status"] == "stored"
+    assert stored["report_type"] == "stock_daily"
+    assert latest["symbol"] == "AAPL"
+    assert latest["report_type"] == "stock_daily"
+    assert latest["as_of"] == "2026-01-20"
+    assert "MA 119.00" in latest["content_markdown"]
+    assert "Apple reports strong growth in services revenue" in latest["content_markdown"]
+    assert "news_articles:AAPL:https://example.com/aapl-services-growth" in latest["citations"]

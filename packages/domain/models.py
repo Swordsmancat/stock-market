@@ -130,3 +130,22 @@ class SentimentSignal(Base):
     )
 
     article: Mapped[NewsArticle] = relationship("NewsArticle")
+
+
+class GeneratedReport(Base):
+    __tablename__ = "generated_reports"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    symbol: Mapped[str] = mapped_column(String(64))
+    report_type: Mapped[str] = mapped_column(String(64))
+    as_of: Mapped[date] = mapped_column(Date)
+    content_markdown: Mapped[str] = mapped_column(Text)
+    citations: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    source_summary: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )

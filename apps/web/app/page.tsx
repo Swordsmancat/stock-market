@@ -20,6 +20,11 @@ type ReportPayload = {
   content_markdown: string;
 };
 
+type DailyReportPayload = {
+  as_of?: string;
+  content_markdown?: string;
+};
+
 type PortfolioPayload = {
   source: string;
   positions: Array<{ market_value: number }>;
@@ -55,7 +60,14 @@ async function fetchJson<T>(path: string): Promise<T> {
 export default async function HomePage() {
   const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
   const primaryInstrument = instrumentsPayload.items[0];
-  const [barsPayload, reportPayload, portfolioPayload, indicatorsPayload, newsPayload] =
+  const [
+    barsPayload,
+    reportPayload,
+    dailyReportPayload,
+    portfolioPayload,
+    indicatorsPayload,
+    newsPayload,
+  ] =
     await Promise.all([
       fetchJson<BarsPayload>(
         `/market-data/${primaryInstrument.symbol}/bars?timeframe=1d&start=2026-01-01&end=2026-01-02`,
@@ -63,6 +75,7 @@ export default async function HomePage() {
       fetchJson<ReportPayload>(
         `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
       ),
+      fetchJson<DailyReportPayload>(`/reports/${primaryInstrument.symbol}/daily/latest`),
       fetchJson<PortfolioPayload>("/portfolios/demo"),
       fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
       fetchJson<NewsPayload>(`/news/${primaryInstrument.symbol}`),
@@ -126,6 +139,17 @@ export default async function HomePage() {
       <section>
         <h2>AI 报告</h2>
         <p>{reportPayload.content_markdown}</p>
+      </section>
+      <section>
+        <h2>每日报告</h2>
+        {dailyReportPayload.content_markdown ? (
+          <>
+            <p>最新日报日期：{dailyReportPayload.as_of}</p>
+            <p>{dailyReportPayload.content_markdown}</p>
+          </>
+        ) : (
+          <p>暂无持久化每日报告</p>
+        )}
       </section>
       <section>
         <h2>模拟组合</h2>

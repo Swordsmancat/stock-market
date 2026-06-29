@@ -42,6 +42,20 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
         ),
       );
     }
+    if (url.endsWith("/reports/AAPL/daily/latest")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "AAPL",
+            report_type: "stock_daily",
+            as_of: "2026-01-20",
+            content_markdown:
+              "# AAPL 每日报告\n\n持久化日报：MA 119.00，Apple reports strong growth in services revenue",
+            citations: ["news_articles:AAPL:https://example.com/aapl-services-growth"],
+          }),
+        ),
+      );
+    }
     if (url.endsWith("/portfolios/demo")) {
       return Promise.resolve(
         new Response(
@@ -124,6 +138,12 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
       content.includes("Apple reports strong growth in services revenue"),
     ),
   ).toBeInTheDocument();
+  expect(screen.getByText("最新日报日期：2026-01-20")).toBeInTheDocument();
+  expect(
+    screen.getByText((content) =>
+      content.includes("# AAPL 每日报告") && content.includes("持久化日报：MA 119.00"),
+    ),
+  ).toBeInTheDocument();
   expect(screen.getByText("模拟组合市值：1020，来源：database")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "触发行情采集" }));
 
@@ -139,5 +159,5 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     "/api/analysis/refresh?symbol=AAPL&market=US&start=2026-01-01&end=2026-01-20&ma_window=3",
     { method: "POST" },
   );
-  expect(fetchMock).toHaveBeenCalledTimes(8);
+  expect(fetchMock).toHaveBeenCalledTimes(9);
 });
