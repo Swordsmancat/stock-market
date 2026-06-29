@@ -16,18 +16,32 @@ def load_initial_migration():
     return module
 
 
+def load_news_migration():
+    migration_path = Path("alembic/versions/0002_news_sentiment.py")
+    spec = importlib.util.spec_from_file_location("news_sentiment_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_migration(migration, connection):
+    context = MigrationContext.configure(connection)
+    original_op = migration.op
+    migration.op = Operations(context)
+    try:
+        migration.upgrade()
+    finally:
+        migration.op = original_op
+
+
 def test_initial_migration_creates_current_core_tables():
     migration = load_initial_migration()
     engine = create_engine("sqlite:///:memory:")
 
     with engine.begin() as connection:
-        context = MigrationContext.configure(connection)
-        original_op = migration.op
-        migration.op = Operations(context)
-        try:
-            migration.upgrade()
-        finally:
-            migration.op = original_op
+        run_migration(migration, connection)
 
         tables = set(inspect(connection).get_table_names())
 
@@ -40,3 +54,17 @@ def test_initial_migration_creates_current_core_tables():
         "bars_1m",
         "technical_indicators",
     }.issubset(tables)
+
+
+def test_news_sentiment_migration_creates_news_tables():
+    initial_migration = load_initial_migration()
+    news_migration = load_news_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(news_migration, connection)
+
+        tables = set(inspect(connection).get_table_names())
+
+    assert {"news_articles", "sentiment_signals"}.issubset(tables)

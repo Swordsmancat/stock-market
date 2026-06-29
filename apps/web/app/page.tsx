@@ -32,6 +32,15 @@ type IndicatorsPayload = {
   };
 };
 
+type NewsPayload = {
+  source: string;
+  items: Array<{
+    title: string;
+    sentiment: string;
+    confidence: number;
+  }>;
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -45,21 +54,24 @@ async function fetchJson<T>(path: string): Promise<T> {
 export default async function HomePage() {
   const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
   const primaryInstrument = instrumentsPayload.items[0];
-  const [barsPayload, reportPayload, portfolioPayload, indicatorsPayload] = await Promise.all([
-    fetchJson<BarsPayload>(
-      `/market-data/${primaryInstrument.symbol}/bars?timeframe=1d&start=2026-01-01&end=2026-01-02`,
-    ),
-    fetchJson<ReportPayload>(
-      `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
-    ),
-    fetchJson<PortfolioPayload>("/portfolios/demo"),
-    fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
-  ]);
+  const [barsPayload, reportPayload, portfolioPayload, indicatorsPayload, newsPayload] =
+    await Promise.all([
+      fetchJson<BarsPayload>(
+        `/market-data/${primaryInstrument.symbol}/bars?timeframe=1d&start=2026-01-01&end=2026-01-02`,
+      ),
+      fetchJson<ReportPayload>(
+        `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
+      ),
+      fetchJson<PortfolioPayload>("/portfolios/demo"),
+      fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
+      fetchJson<NewsPayload>(`/news/${primaryInstrument.symbol}`),
+    ]);
 
   const latestClose = barsPayload.items.at(-1)?.close;
   const portfolioValue = portfolioPayload.positions[0]?.market_value;
   const ma = indicatorsPayload.indicators.ma;
   const rsi = indicatorsPayload.indicators.rsi;
+  const latestNews = newsPayload.items[0];
 
   return (
     <main>
@@ -90,6 +102,17 @@ export default async function HomePage() {
         <p>
           MA：{ma}，RSI：{rsi}，来源：{indicatorsPayload.source}
         </p>
+      </section>
+      <section>
+        <h2>新闻舆情</h2>
+        {latestNews ? (
+          <p>
+            新闻：{latestNews.title}，情绪：{latestNews.sentiment}，置信度：
+            {latestNews.confidence}
+          </p>
+        ) : (
+          <p>暂无新闻舆情数据，来源：{newsPayload.source}</p>
+        )}
       </section>
       <section>
         <h2>AI 报告</h2>

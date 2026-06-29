@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID as PythonUUID
 from uuid import uuid4
@@ -100,3 +100,33 @@ class TechnicalIndicator(Base):
     indicator_code: Mapped[str] = mapped_column(String(64))
     params: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
     value_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+
+
+class NewsArticle(Base):
+    __tablename__ = "news_articles"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    symbol: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(512))
+    url: Mapped[str] = mapped_column(String(1024))
+    source: Mapped[str] = mapped_column(String(128))
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    summary: Mapped[str | None] = mapped_column(Text, default=None)
+    dedupe_hash: Mapped[str] = mapped_column(String(64), unique=True)
+
+
+class SentimentSignal(Base):
+    __tablename__ = "sentiment_signals"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    article_id: Mapped[PythonUUID] = mapped_column(ForeignKey("news_articles.id"))
+    symbol: Mapped[str] = mapped_column(String(64))
+    sentiment: Mapped[str] = mapped_column(String(32))
+    confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4))
+    reason: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    article: Mapped[NewsArticle] = relationship("NewsArticle")
