@@ -1,11 +1,18 @@
 from datetime import date
 
+from sqlalchemy.orm import Session
+
 from packages.ai.report_builder import ReportContext, build_stock_report
 from packages.services.market_data import get_bars_payload
 
 
-def generate_stock_report_payload(symbol: str, start: date, end: date) -> dict[str, object]:
-    bars_payload = get_bars_payload(symbol, "1d", start, end)
+def generate_stock_report_payload(
+    symbol: str,
+    start: date,
+    end: date,
+    session: Session | None = None,
+) -> dict[str, object]:
+    bars_payload = get_bars_payload(symbol, "1d", start, end, session=session)
     items = bars_payload["items"]
     first_bar = items[0]
     latest_bar = items[-1]
@@ -23,6 +30,7 @@ def generate_stock_report_payload(symbol: str, start: date, end: date) -> dict[s
         "symbol": symbol,
         "report_type": "stock_daily",
         "as_of": context.as_of,
+        "source": bars_payload["source"],
         "content_markdown": build_stock_report(context),
         "citations": context.citations,
     }

@@ -1,14 +1,23 @@
 from fastapi.testclient import TestClient
 
 from apps.api.main import app
+from packages.shared.database import get_session
+
+
+def override_no_database_session():
+    yield None
 
 
 def test_get_bars_returns_mock_market_data():
-    client = TestClient(app)
-    response = client.get(
-        "/market-data/AAPL/bars",
-        params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-03"},
-    )
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/market-data/AAPL/bars",
+            params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-03"},
+        )
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     payload = response.json()
@@ -19,11 +28,15 @@ def test_get_bars_returns_mock_market_data():
 
 
 def test_get_indicators_returns_latest_ma_and_rsi():
-    client = TestClient(app)
-    response = client.get(
-        "/market-data/AAPL/indicators",
-        params={"start": "2026-01-01", "end": "2026-01-15", "ma_window": 3},
-    )
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/market-data/AAPL/indicators",
+            params={"start": "2026-01-01", "end": "2026-01-15", "ma_window": 3},
+        )
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     payload = response.json()

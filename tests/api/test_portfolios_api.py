@@ -1,11 +1,20 @@
 from fastapi.testclient import TestClient
 
 from apps.api.main import app
+from packages.shared.database import get_session
+
+
+def override_no_database_session():
+    yield None
 
 
 def test_get_demo_portfolio_returns_positions_and_simulated_recommendation():
-    client = TestClient(app)
-    response = client.get("/portfolios/demo")
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get("/portfolios/demo")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     payload = response.json()

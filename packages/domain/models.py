@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID as PythonUUID
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -98,5 +98,5 @@ class TechnicalIndicator(Base):
     timeframe: Mapped[str] = mapped_column(String(16))
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     indicator_code: Mapped[str] = mapped_column(String(64))
-    params: Mapped[dict] = mapped_column(JSONB, default=dict)
-    value_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    params: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    value_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
