@@ -1,3 +1,5 @@
+import { IngestionButton } from "./IngestionButton";
+
 type Instrument = {
   symbol: string;
   name: string;
@@ -66,6 +68,11 @@ export default async function HomePage() {
         <p>
           {primaryInstrument.symbol} 最新收盘价：{latestClose}，来源：{barsPayload.source}
         </p>
+      </section>
+      <section>
+        <h2>数据采集</h2>
+        <p>触发一次开发用 Mock 行情采集，并写入后端数据库。</p>
+        <IngestionButton market={primaryInstrument.market} start="2026-01-01" end="2026-01-02" />
       </section>
       <section>
         <h2>AI 报告</h2>

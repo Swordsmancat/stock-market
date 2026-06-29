@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import HomePage from "./page";
@@ -52,6 +52,17 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
         ),
       );
     }
+    if (url.includes("/api/ingestion/mock-snapshot")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ingested",
+            market: "US",
+            bar_count: 2,
+          }),
+        ),
+      );
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
@@ -62,5 +73,12 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("AAPL 最新收盘价：102，来源：database")).toBeInTheDocument();
   expect(screen.getByText("# AAPL AI 个股报告")).toBeInTheDocument();
   expect(screen.getByText("模拟组合市值：1020，来源：database")).toBeInTheDocument();
-  expect(fetchMock).toHaveBeenCalledTimes(4);
+  fireEvent.click(screen.getByRole("button", { name: "触发行情采集" }));
+
+  expect(await screen.findByText("采集完成：US，2 条行情写入数据库")).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/ingestion/mock-snapshot?market=US&start=2026-01-01&end=2026-01-02",
+    { method: "POST" },
+  );
+  expect(fetchMock).toHaveBeenCalledTimes(5);
 });
