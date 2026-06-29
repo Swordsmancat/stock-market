@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     llm_provider: str = "mock"
     llm_api_key: str | None = None
+    daily_report_watchlist: str = "AAPL:US"
     daily_report_symbol: str = "AAPL"
     daily_report_market: str = "US"
     daily_report_start: str = "2026-01-01"

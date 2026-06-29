@@ -23,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://stock:stock@db:5432/stock
       REDIS_URL: redis://redis:6379/0
+      DAILY_REPORT_WATCHLIST: AAPL:US
     depends_on:
       - db
       - redis
@@ -38,6 +39,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://stock:stock@db:5432/stock
       REDIS_URL: redis://redis:6379/0
+      DAILY_REPORT_WATCHLIST: AAPL:US
     depends_on:
       - db
       - redis

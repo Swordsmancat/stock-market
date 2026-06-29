@@ -42,6 +42,20 @@ celery -A apps.worker.celery_app.celery_app beat --loglevel=info
 docker compose up -d db redis worker beat
 ```
 
+## 配置每日股票池
+
+默认定时任务会读取：
+
+```bash
+DAILY_REPORT_WATCHLIST=AAPL:US
+```
+
+多个股票用英文逗号分隔，格式为 `SYMBOL:MARKET`：
+
+```bash
+DAILY_REPORT_WATCHLIST=AAPL:US,0700:HK,600519:CN
+```
+
 ## 安装前端依赖
 
 ```bash

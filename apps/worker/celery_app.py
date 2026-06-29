@@ -9,15 +9,14 @@ celery_app = Celery(
     backend=settings.redis_url,
 )
 celery_app.conf.beat_schedule = {
-    "daily-stock-analysis-report": {
-        "task": "reports.refresh_daily_stock_analysis",
+    "daily-watchlist-analysis-report": {
+        "task": "reports.refresh_daily_watchlist_analysis",
         "schedule": crontab(
             hour=settings.daily_report_cron_hour,
             minute=settings.daily_report_cron_minute,
         ),
         "kwargs": {
-            "symbol": settings.daily_report_symbol,
-            "market": settings.daily_report_market,
+            "watchlist": settings.daily_report_watchlist,
             "start": settings.daily_report_start,
             "end": settings.daily_report_end,
             "ma_window": settings.daily_report_ma_window,
