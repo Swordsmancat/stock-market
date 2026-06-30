@@ -37,9 +37,11 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     payload = get_stored_indicators_payload("AAPL", session=session)
 
     assert result["status"] == "calculated"
-    assert result["indicator_count"] == 2
+    assert result["indicator_count"] == 4
     assert payload["source"] == "database"
     assert payload["symbol"] == "AAPL"
     assert payload["as_of"] == "2026-01-20T00:00:00+00:00"
     assert payload["indicators"]["ma"] == 119.0
     assert payload["indicators"]["rsi"] == 100.0
+    assert payload["indicators"]["bollinger"] == {"upper": 121.0, "middle": 119.0, "lower": 117.0}
+    assert payload["indicators"]["atr"] == 3.0

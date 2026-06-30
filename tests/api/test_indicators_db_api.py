@@ -47,7 +47,7 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
     assert recalculate_response.status_code == 200
     recalculate_payload = recalculate_response.json()
     assert recalculate_payload["status"] == "calculated"
-    assert recalculate_payload["indicator_count"] == 2
+    assert recalculate_payload["indicator_count"] == 4
 
     assert indicators_response.status_code == 200
     indicators_payload = indicators_response.json()
@@ -56,3 +56,9 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
     assert indicators_payload["as_of"] == "2026-01-20T00:00:00+00:00"
     assert indicators_payload["indicators"]["ma"] == 119.0
     assert indicators_payload["indicators"]["rsi"] == 100.0
+    assert indicators_payload["indicators"]["bollinger"] == {
+        "upper": 121.0,
+        "middle": 119.0,
+        "lower": 117.0,
+    }
+    assert indicators_payload["indicators"]["atr"] == 3.0

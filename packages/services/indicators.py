@@ -3,7 +3,12 @@ from datetime import date, datetime, time, timezone
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from packages.analytics.indicators import calculate_ma, calculate_rsi
+from packages.analytics.indicators import (
+    calculate_atr,
+    calculate_bollinger_bands,
+    calculate_ma,
+    calculate_rsi,
+)
 from packages.domain.models import DailyBar, Instrument, TechnicalIndicator
 
 
@@ -42,6 +47,32 @@ def _latest_rsi_value(close: pd.Series) -> float:
     return float(rsi_values.iloc[-1])
 
 
+def _latest_atr_value(high: pd.Series, low: pd.Series, close: pd.Series) -> float | None:
+    atr_series = calculate_atr(high, low, close)
+    atr_values = atr_series.dropna()
+    if atr_values.empty:
+        return None
+    return float(atr_values.iloc[-1])
+
+
+def _latest_bollinger_value(close: pd.Series, window: int) -> dict[str, float] | None:
+    bollinger = calculate_bollinger_bands(close, window=window).dropna()
+    if bollinger.empty:
+        return None
+    latest = bollinger.iloc[-1]
+    return {
+        "upper": float(latest["upper"]),
+        "middle": float(latest["middle"]),
+        "lower": float(latest["lower"]),
+    }
+
+
+def _serialize_indicator_value(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: float(item) for key, item in value.items()}
+    return float(value)
+
+
 def calculate_and_store_daily_indicators(
     symbol: str,
     start: date,
@@ -55,16 +86,27 @@ def calculate_and_store_daily_indicators(
 
     instrument = _instrument_for_symbol(symbol, session)
     close = pd.Series([float(bar.close) for bar in bars])
+    high = pd.Series([float(bar.high) for bar in bars])
+    low = pd.Series([float(bar.low) for bar in bars])
     ma_values = calculate_ma(close, ma_window).dropna()
     if ma_values.empty:
         return {"symbol": symbol, "status": "insufficient_data", "indicator_count": 0}
 
     latest_bar = bars[-1]
     as_of = _as_of_datetime(latest_bar.trade_date)
+    bollinger = _latest_bollinger_value(close, ma_window)
+    atr = _latest_atr_value(high, low, close)
     indicator_values = {
         "ma": {"params": {"window": ma_window}, "value": float(ma_values.iloc[-1])},
         "rsi": {"params": {"window": 14}, "value": _latest_rsi_value(close)},
     }
+    if bollinger is not None:
+        indicator_values["bollinger"] = {
+            "params": {"window": ma_window, "std_dev": 2.0},
+            "value": bollinger,
+        }
+    if atr is not None:
+        indicator_values["atr"] = {"params": {"window": 14}, "value": atr}
 
     session.query(TechnicalIndicator).filter(
         TechnicalIndicator.instrument_id == instrument.id,
@@ -119,7 +161,7 @@ def get_stored_indicators_payload(symbol: str, session: Session) -> dict[str, ob
         "source": "database",
         "as_of": _isoformat_utc(latest.as_of),
         "indicators": {
-            row.indicator_code: float(row.value_json["value"])
+            row.indicator_code: _serialize_indicator_value(row.value_json["value"])
             for row in rows
             if "value" in row.value_json
         },

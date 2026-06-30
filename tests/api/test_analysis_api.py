@@ -47,7 +47,7 @@ def test_analysis_refresh_orchestrates_market_indicators_news_and_report():
     assert payload["status"] == "refreshed"
     assert payload["ingestion"]["bar_count"] == 20
     assert payload["indicators"]["status"] == "calculated"
-    assert payload["indicators"]["indicator_count"] == 2
+    assert payload["indicators"]["indicator_count"] == 4
     assert payload["news"]["status"] == "ingested"
     assert payload["news"]["sentiment_count"] == 1
     assert "MA 119.00" in payload["report"]["content_markdown"]
