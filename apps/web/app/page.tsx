@@ -18,11 +18,13 @@ type BarsPayload = {
 
 type ReportPayload = {
   content_markdown: string;
+  citations?: string[];
 };
 
 type DailyReportPayload = {
   as_of?: string;
   content_markdown?: string;
+  citations?: string[];
 };
 
 type DailyReportHistoryPayload = {
@@ -79,6 +81,19 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function citationUrl(citation: string): string | null {
+  return citation.match(/https?:\/\/\S+/)?.[0] ?? null;
+}
+
+function renderCitation(citation: string) {
+  const url = citationUrl(citation);
+  if (url === null) {
+    return citation;
+  }
+
+  return <a href={url}>{citation}</a>;
+}
+
 export default async function HomePage() {
   const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
   const primaryInstrument = instrumentsPayload.items[0];
@@ -119,6 +134,8 @@ export default async function HomePage() {
   const rsi = indicatorsPayload.indicators.rsi;
   const fundamentalSummary = fundamentalsPayload.item?.summary;
   const latestNews = newsPayload.items[0];
+  const reportCitations = reportPayload.citations ?? [];
+  const dailyReportCitations = dailyReportPayload.citations ?? [];
 
   return (
     <main>
@@ -182,6 +199,16 @@ export default async function HomePage() {
       <section>
         <h2>AI 报告</h2>
         <p>{reportPayload.content_markdown}</p>
+        {reportCitations.length > 0 ? (
+          <>
+            <h3>报告引用</h3>
+            <ul>
+              {reportCitations.map((citation) => (
+                <li key={citation}>{renderCitation(citation)}</li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
       <section>
         <h2>每日报告</h2>
@@ -189,6 +216,16 @@ export default async function HomePage() {
           <>
             <p>最新日报日期：{dailyReportPayload.as_of}</p>
             <p>{dailyReportPayload.content_markdown}</p>
+            {dailyReportCitations.length > 0 ? (
+              <>
+                <h3>日报引用</h3>
+                <ul>
+                  {dailyReportCitations.map((citation) => (
+                    <li key={citation}>{renderCitation(citation)}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
             <h3>历史日报</h3>
             <ul>
               {dailyReportHistoryPayload.items.map((item) => (

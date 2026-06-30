@@ -38,6 +38,10 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
             report_type: "stock_daily",
             content_markdown:
               "# AAPL AI 个股报告\n\nMA 119.00, RSI 100.00\n\nApple reports strong growth in services revenue",
+            citations: [
+              "bars_1d:AAPL:2026-01-02",
+              "fundamental_metrics:AAPL:2026-01-02",
+            ],
           }),
         ),
       );
@@ -51,7 +55,10 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
             as_of: "2026-01-20",
             content_markdown:
               "# AAPL 每日报告\n\n持久化日报：MA 119.00，Apple reports strong growth in services revenue",
-            citations: ["news_articles:AAPL:https://example.com/aapl-services-growth"],
+            citations: [
+              "technical_indicators:AAPL:2026-01-20T00:00:00+00:00",
+              "news_articles:AAPL:https://example.com/aapl-services-growth",
+            ],
           }),
         ),
       );
@@ -187,12 +194,19 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
       content.includes("Apple reports strong growth in services revenue"),
     ),
   ).toBeInTheDocument();
+  expect(screen.getByText("报告引用")).toBeInTheDocument();
+  expect(screen.getByText("bars_1d:AAPL:2026-01-02")).toBeInTheDocument();
+  expect(screen.getByText("fundamental_metrics:AAPL:2026-01-02")).toBeInTheDocument();
   expect(screen.getByText("最新日报日期：2026-01-20")).toBeInTheDocument();
   expect(
     screen.getByText((content) =>
       content.includes("# AAPL 每日报告") && content.includes("持久化日报：MA 119.00"),
     ),
   ).toBeInTheDocument();
+  expect(screen.getByText("日报引用")).toBeInTheDocument();
+  expect(screen.getByText("technical_indicators:AAPL:2026-01-20T00:00:00+00:00")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "news_articles:AAPL:https://example.com/aapl-services-growth" }))
+    .toHaveAttribute("href", "https://example.com/aapl-services-growth");
   expect(screen.getByText("历史日报：2026-01-20")).toBeInTheDocument();
   expect(screen.getByText("历史日报：2026-01-19")).toBeInTheDocument();
   expect(screen.getByText("自动任务状态")).toBeInTheDocument();
