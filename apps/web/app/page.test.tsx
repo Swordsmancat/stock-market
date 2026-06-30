@@ -98,6 +98,19 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
         ),
       );
     }
+    if (url.endsWith("/fundamentals/AAPL")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "AAPL",
+            source: "mock_fundamentals",
+            item: {
+              summary: "PE 28.40，营收增速 8.00%，净利率 24.00%，资产负债率 31.00%",
+            },
+          }),
+        ),
+      );
+    }
     if (url.endsWith("/news/AAPL")) {
       return Promise.resolve(
         new Response(
@@ -160,6 +173,11 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("AAPL 最新收盘价：102，来源：database")).toBeInTheDocument();
   expect(screen.getByText("MA：119，RSI：100，来源：database")).toBeInTheDocument();
   expect(
+    screen.getByText(
+      "PE 28.40，营收增速 8.00%，净利率 24.00%，资产负债率 31.00%，来源：mock_fundamentals",
+    ),
+  ).toBeInTheDocument();
+  expect(
     screen.getByText("新闻：Apple reports strong growth in services revenue，情绪：positive，置信度：0.6"),
   ).toBeInTheDocument();
   expect(
@@ -194,5 +212,5 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     "/api/analysis/refresh?symbol=AAPL&market=US&start=2026-01-01&end=2026-01-20&ma_window=3",
     { method: "POST" },
   );
-  expect(fetchMock).toHaveBeenCalledTimes(11);
+  expect(fetchMock).toHaveBeenCalledTimes(12);
 });

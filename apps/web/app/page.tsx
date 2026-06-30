@@ -45,6 +45,13 @@ type IndicatorsPayload = {
   };
 };
 
+type FundamentalsPayload = {
+  source: string;
+  item?: {
+    summary: string;
+  } | null;
+};
+
 type NewsPayload = {
   source: string;
   items: Array<{
@@ -82,6 +89,7 @@ export default async function HomePage() {
     dailyReportHistoryPayload,
     portfolioPayload,
     indicatorsPayload,
+    fundamentalsPayload,
     newsPayload,
     taskRunPayload,
   ] =
@@ -98,6 +106,7 @@ export default async function HomePage() {
       ),
       fetchJson<PortfolioPayload>("/portfolios/demo"),
       fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
+      fetchJson<FundamentalsPayload>(`/fundamentals/${primaryInstrument.symbol}`),
       fetchJson<NewsPayload>(`/news/${primaryInstrument.symbol}`),
       fetchJson<TaskRunPayload>(
         "/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis",
@@ -108,6 +117,7 @@ export default async function HomePage() {
   const portfolioValue = portfolioPayload.positions[0]?.market_value;
   const ma = indicatorsPayload.indicators.ma;
   const rsi = indicatorsPayload.indicators.rsi;
+  const fundamentalSummary = fundamentalsPayload.item?.summary;
   const latestNews = newsPayload.items[0];
 
   return (
@@ -147,6 +157,16 @@ export default async function HomePage() {
         <p>
           MA：{ma}，RSI：{rsi}，来源：{indicatorsPayload.source}
         </p>
+      </section>
+      <section>
+        <h2>基本面指标</h2>
+        {fundamentalSummary ? (
+          <p>
+            {fundamentalSummary}，来源：{fundamentalsPayload.source}
+          </p>
+        ) : (
+          <p>暂无基本面指标数据，来源：{fundamentalsPayload.source}</p>
+        )}
       </section>
       <section>
         <h2>新闻舆情</h2>

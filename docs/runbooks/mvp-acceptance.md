@@ -11,6 +11,7 @@
 7. 后台任务可以调度 mock 行情采集、指标计算和报告生成。
 8. AI 组合建议和报告内容保持研究辅助边界，不连接实盘交易，也不自动下单。
 9. AI 个股报告包含基本面指标摘要，并在引用中标明 `fundamental_metrics` 来源。
+10. `/fundamentals/{symbol}` 返回 PE、营收增速、净利率和资产负债率，Web 首页展示同一摘要。
 
 ## 验收命令
 
@@ -23,4 +24,4 @@ npm run test:web
 
 - 后端 pytest 全部通过。
 - 前端 Vitest 全部通过。
-- API、任务、指标、舆情、AI 报告和 Web Dashboard MVP 骨架均可被测试覆盖。
+- API、任务、指标、基本面、舆情、AI 报告和 Web Dashboard MVP 骨架均可被测试覆盖。
