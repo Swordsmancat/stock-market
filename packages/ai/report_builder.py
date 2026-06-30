@@ -9,6 +9,7 @@ class ReportContext:
     indicator_summary: str
     news_summary: str
     citations: list[str]
+    fundamental_summary: str = "No fundamental metrics are available yet."
 
 
 def build_stock_report(context: ReportContext) -> str:
@@ -24,6 +25,10 @@ def build_stock_report(context: ReportContext) -> str:
 ## 技术指标
 
 {context.indicator_summary}
+
+## 基本面指标
+
+{context.fundamental_summary}
 
 ## 新闻舆情
 

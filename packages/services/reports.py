@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from packages.ai.report_builder import ReportContext, build_stock_report
 from packages.domain.models import GeneratedReport
+from packages.services.fundamentals import get_fundamental_payload
 from packages.services.indicators import get_stored_indicators_payload
 from packages.services.market_data import get_bars_payload
 from packages.services.news import get_news_sentiment_payload
@@ -47,6 +48,15 @@ def _news_summary_and_citation(symbol: str, session: Session | None) -> tuple[st
     return summary, citation
 
 
+def _fundamental_summary_and_citation(symbol: str, as_of: date) -> tuple[str, str | None]:
+    fundamental_payload = get_fundamental_payload(symbol, as_of=as_of)
+    item = fundamental_payload["item"]
+    if item is None:
+        return "No stored fundamental metrics are available yet.", None
+
+    return str(item["summary"]), str(fundamental_payload["citation"])
+
+
 def generate_stock_report_payload(
     symbol: str,
     start: date,
@@ -65,11 +75,15 @@ def generate_stock_report_payload(
     news_summary, news_citation = _news_summary_and_citation(symbol, session)
     if news_citation is not None:
         citations.append(news_citation)
+    fundamental_summary, fundamental_citation = _fundamental_summary_and_citation(symbol, end)
+    if fundamental_citation is not None:
+        citations.append(fundamental_citation)
     context = ReportContext(
         symbol=symbol,
         as_of=str(latest_bar["timestamp"]),
         price_summary=f"Close {latest_bar['close']:.2f}, period change {change_pct:.2f}%",
         indicator_summary=indicator_summary,
+        fundamental_summary=fundamental_summary,
         news_summary=news_summary,
         citations=citations,
     )
