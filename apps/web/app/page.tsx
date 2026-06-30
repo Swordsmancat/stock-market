@@ -81,6 +81,14 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, { cache: "no-store" });
+  if (!response.ok) {
+    return fallback;
+  }
+  return response.json() as Promise<T>;
+}
+
 function citationUrl(citation: string): string | null {
   return citation.match(/https?:\/\/\S+/)?.[0] ?? null;
 }
@@ -115,16 +123,30 @@ export default async function HomePage() {
       fetchJson<ReportPayload>(
         `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
       ),
-      fetchJson<DailyReportPayload>(`/reports/${primaryInstrument.symbol}/daily/latest`),
-      fetchJson<DailyReportHistoryPayload>(
+      fetchOptionalJson<DailyReportPayload>(`/reports/${primaryInstrument.symbol}/daily/latest`, {}),
+      fetchOptionalJson<DailyReportHistoryPayload>(
         `/reports/${primaryInstrument.symbol}/daily/history?limit=5`,
+        { items: [] },
       ),
       fetchJson<PortfolioPayload>("/portfolios/demo"),
-      fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
-      fetchJson<FundamentalsPayload>(`/fundamentals/${primaryInstrument.symbol}`),
-      fetchJson<NewsPayload>(`/news/${primaryInstrument.symbol}`),
-      fetchJson<TaskRunPayload>(
+      fetchOptionalJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`, {
+        source: "unavailable",
+        indicators: {},
+      }),
+      fetchOptionalJson<FundamentalsPayload>(`/fundamentals/${primaryInstrument.symbol}`, {
+        source: "unavailable",
+        item: null,
+      }),
+      fetchOptionalJson<NewsPayload>(
+        `/news/${primaryInstrument.symbol}`,
+        {
+          source: "unavailable",
+          items: [],
+        },
+      ),
+      fetchOptionalJson<TaskRunPayload>(
         "/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis",
+        { status: "unknown" },
       ),
     ]);
 
@@ -171,9 +193,13 @@ export default async function HomePage() {
       </section>
       <section>
         <h2>技术指标</h2>
-        <p>
-          MA：{ma}，RSI：{rsi}，来源：{indicatorsPayload.source}
-        </p>
+        {ma !== undefined || rsi !== undefined ? (
+          <p>
+            MA：{ma ?? "暂无"}，RSI：{rsi ?? "暂无"}，来源：{indicatorsPayload.source}
+          </p>
+        ) : (
+          <p>暂无技术指标数据，来源：{indicatorsPayload.source}</p>
+        )}
       </section>
       <section>
         <h2>基本面指标</h2>

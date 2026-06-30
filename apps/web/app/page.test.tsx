@@ -228,3 +228,90 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   );
   expect(fetchMock).toHaveBeenCalledTimes(12);
 });
+
+it("renders the dashboard when optional analysis APIs have no data", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/instruments")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            items: [{ symbol: "600519", name: "Kweichow Moutai", market: "CN" }],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/600519/bars")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "600519",
+            source: "mock",
+            items: [{ close: 1666 }],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/reports/600519/stock")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "600519",
+            report_type: "stock_daily",
+            content_markdown: "# 600519 AI 个股报告",
+            citations: [],
+          }),
+        ),
+      );
+    }
+    if (url.endsWith("/reports/600519/daily/latest")) {
+      return Promise.resolve(new Response("", { status: 404 }));
+    }
+    if (url.endsWith("/reports/600519/daily/history?limit=5")) {
+      return Promise.resolve(new Response("", { status: 404 }));
+    }
+    if (url.endsWith("/portfolios/demo")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: "demo",
+            source: "mock",
+            positions: [{ symbol: "AAPL", market_value: 1020 }],
+          }),
+        ),
+      );
+    }
+    if (url.endsWith("/indicators/600519")) {
+      return Promise.resolve(new Response("", { status: 404 }));
+    }
+    if (url.endsWith("/fundamentals/600519")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "600519",
+            source: "mock_fundamentals",
+            item: {
+              summary: "PE 26.80，营收增速 10.00%，净利率 52.00%，资产负债率 18.00%",
+            },
+          }),
+        ),
+      );
+    }
+    if (url.endsWith("/news/600519")) {
+      return Promise.resolve(new Response("", { status: 404 }));
+    }
+    if (url.endsWith("/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis")) {
+      return Promise.resolve(new Response("", { status: 404 }));
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  render(await HomePage());
+
+  expect(screen.getByText("CN - 600519 - Kweichow Moutai")).toBeInTheDocument();
+  expect(screen.getByText("600519 最新收盘价：1666，来源：mock")).toBeInTheDocument();
+  expect(screen.getByText("暂无技术指标数据，来源：unavailable")).toBeInTheDocument();
+  expect(screen.getByText("暂无新闻舆情数据，来源：unavailable")).toBeInTheDocument();
+  expect(screen.getByText("暂无持久化每日报告")).toBeInTheDocument();
+  expect(screen.getByText("最近日报调度：unknown，处理股票数：0，耗时：0ms")).toBeInTheDocument();
+});
