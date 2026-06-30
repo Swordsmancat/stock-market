@@ -10,6 +10,7 @@ class ReportContext:
     news_summary: str
     citations: list[str]
     fundamental_summary: str = "No fundamental metrics are available yet."
+    combined_summary: str = "No combined analysis is available yet."
 
 
 def build_stock_report(context: ReportContext) -> str:
@@ -17,6 +18,10 @@ def build_stock_report(context: ReportContext) -> str:
     return f"""# {context.symbol} AI 个股报告
 
 数据截止时间：{context.as_of}
+
+## 综合研判
+
+{context.combined_summary}
 
 ## 行情摘要
 

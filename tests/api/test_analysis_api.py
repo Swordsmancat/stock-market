@@ -51,6 +51,8 @@ def test_analysis_refresh_orchestrates_market_indicators_news_and_report():
     assert payload["news"]["status"] == "ingested"
     assert payload["news"]["sentiment_count"] == 1
     assert "MA 119.00" in payload["report"]["content_markdown"]
+    assert "BOLL upper 121.00, middle 119.00, lower 117.00" in payload["report"]["content_markdown"]
+    assert "ATR 3.00" in payload["report"]["content_markdown"]
     assert "Apple reports strong growth in services revenue" in payload["report"]["content_markdown"]
     assert "technical_indicators:AAPL:2026-01-20T00:00:00+00:00" in payload["report"]["citations"]
     assert "news_articles:AAPL:https://example.com/aapl-services-growth" in payload["report"]["citations"]

@@ -40,10 +40,18 @@ type PortfolioPayload = {
 };
 
 type IndicatorsPayload = {
+  symbol?: string;
   source: string;
+  as_of?: string;
   indicators: {
     ma?: number;
     rsi?: number;
+    bollinger?: {
+      upper: number;
+      middle: number;
+      lower: number;
+    };
+    atr?: number;
   };
 };
 
@@ -102,6 +110,29 @@ function renderCitation(citation: string) {
   return <a href={url}>{citation}</a>;
 }
 
+function hasTechnicalIndicators(payload: IndicatorsPayload): boolean {
+  const { ma, rsi, bollinger, atr } = payload.indicators;
+  return ma !== undefined || rsi !== undefined || bollinger !== undefined || atr !== undefined;
+}
+
+function technicalIndicatorText(payload: IndicatorsPayload): string {
+  const { ma, rsi, bollinger, atr } = payload.indicators;
+  const parts = [`MA：${ma ?? "暂无"}`, `RSI：${rsi ?? "暂无"}`];
+  if (bollinger !== undefined) {
+    parts.push(
+      `BOLL：上轨 ${bollinger.upper} / 中轨 ${bollinger.middle} / 下轨 ${bollinger.lower}`,
+    );
+  }
+  if (atr !== undefined) {
+    parts.push(`ATR：${atr}`);
+  }
+  if (payload.as_of !== undefined) {
+    parts.push(`截止：${payload.as_of}`);
+  }
+  parts.push(`来源：${payload.source}`);
+  return parts.join("，");
+}
+
 export default async function HomePage() {
   const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
   const primaryInstrument = instrumentsPayload.items[0];
@@ -152,8 +183,6 @@ export default async function HomePage() {
 
   const latestClose = barsPayload.items.at(-1)?.close;
   const portfolioValue = portfolioPayload.positions[0]?.market_value;
-  const ma = indicatorsPayload.indicators.ma;
-  const rsi = indicatorsPayload.indicators.rsi;
   const fundamentalSummary = fundamentalsPayload.item?.summary;
   const latestNews = newsPayload.items[0];
   const reportCitations = reportPayload.citations ?? [];
@@ -195,10 +224,8 @@ export default async function HomePage() {
       </section>
       <section>
         <h2>技术指标</h2>
-        {ma !== undefined || rsi !== undefined ? (
-          <p>
-            MA：{ma ?? "暂无"}，RSI：{rsi ?? "暂无"}，来源：{indicatorsPayload.source}
-          </p>
+        {hasTechnicalIndicators(indicatorsPayload) ? (
+          <p>{technicalIndicatorText(indicatorsPayload)}</p>
         ) : (
           <p>暂无技术指标数据，来源：{indicatorsPayload.source}</p>
         )}

@@ -10,6 +10,7 @@ from apps.worker.tasks.ingestion import ingest_mock_market_data
 from apps.worker.tasks import reports as report_tasks
 from packages.services.reports import get_latest_daily_report_payload
 from packages.services.task_runs import get_latest_task_run_payload
+from packages.services.watchlists import upsert_watchlist_item
 from packages.shared.database import Base
 
 
@@ -88,6 +89,34 @@ def test_refresh_daily_watchlist_analysis_task_records_succeeded_run(monkeypatch
     assert latest_run["status"] == "succeeded"
     assert latest_run["input_json"]["watchlist"] == "AAPL:US"
     assert latest_run["result_json"]["item_count"] == 1
+
+
+def test_refresh_daily_watchlist_analysis_task_uses_persisted_watchlist(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)
+    upsert_watchlist_item(
+        "0700",
+        "HK",
+        session=session,
+        name="Tencent Holdings",
+        alert_rules={"price_above": 400},
+    )
+
+    result = report_tasks.refresh_daily_watchlist_analysis(
+        start="2026-01-01",
+        end="2026-01-20",
+        ma_window=3,
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_watchlist_analysis",
+    )
+
+    assert result["status"] == "refreshed"
+    assert result["item_count"] == 1
+    assert result["items"][0]["symbol"] == "0700"
+    assert result["items"][0]["market"] == "HK"
+    assert latest_run["input_json"]["watchlist"] == "0700:HK"
 
 
 def test_refresh_daily_watchlist_analysis_task_records_failed_run(monkeypatch):

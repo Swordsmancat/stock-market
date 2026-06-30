@@ -100,7 +100,12 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
             symbol: "AAPL",
             source: "database",
             as_of: "2026-01-20T00:00:00+00:00",
-            indicators: { ma: 119, rsi: 100 },
+            indicators: {
+              ma: 119,
+              rsi: 100,
+              bollinger: { upper: 121, middle: 119, lower: 117 },
+              atr: 3,
+            },
           }),
         ),
       );
@@ -179,7 +184,11 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByRole("link", { name: "US - AAPL - Apple Inc." }))
     .toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("AAPL 最新收盘价：102，来源：database")).toBeInTheDocument();
-  expect(screen.getByText("MA：119，RSI：100，来源：database")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "MA：119，RSI：100，BOLL：上轨 121 / 中轨 119 / 下轨 117，ATR：3，截止：2026-01-20T00:00:00+00:00，来源：database",
+    ),
+  ).toBeInTheDocument();
   expect(
     screen.getByText(
       "PE 28.40，营收增速 8.00%，净利率 24.00%，资产负债率 31.00%，来源：mock_fundamentals",

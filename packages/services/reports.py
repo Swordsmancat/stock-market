@@ -10,6 +10,10 @@ from packages.services.market_data import get_bars_payload
 from packages.services.news import get_news_sentiment_payload
 
 
+def _format_indicator_number(value: object) -> str:
+    return f"{float(value):.2f}"
+
+
 def _indicator_summary_and_citation(symbol: str, session: Session | None) -> tuple[str, str | None]:
     if session is None:
         return "No stored technical indicators are available in the MVP skeleton.", None
@@ -21,11 +25,22 @@ def _indicator_summary_and_citation(symbol: str, session: Session | None) -> tup
 
     ma = indicators.get("ma")
     rsi = indicators.get("rsi")
+    bollinger = indicators.get("bollinger")
+    atr = indicators.get("atr")
     parts = []
     if ma is not None:
-        parts.append(f"MA {ma:.2f}")
+        parts.append(f"MA {_format_indicator_number(ma)}")
     if rsi is not None:
-        parts.append(f"RSI {rsi:.2f}")
+        parts.append(f"RSI {_format_indicator_number(rsi)}")
+    if isinstance(bollinger, dict):
+        parts.append(
+            "BOLL "
+            f"upper {_format_indicator_number(bollinger['upper'])}, "
+            f"middle {_format_indicator_number(bollinger['middle'])}, "
+            f"lower {_format_indicator_number(bollinger['lower'])}"
+        )
+    if atr is not None:
+        parts.append(f"ATR {_format_indicator_number(atr)}")
     citation = f"technical_indicators:{symbol}:{indicator_payload['as_of']}"
     return ", ".join(parts), citation
 
@@ -48,13 +63,29 @@ def _news_summary_and_citation(symbol: str, session: Session | None) -> tuple[st
     return summary, citation
 
 
-def _fundamental_summary_and_citation(symbol: str, as_of: date) -> tuple[str, str | None]:
-    fundamental_payload = get_fundamental_payload(symbol, as_of=as_of)
+def _fundamental_summary_and_citation(
+    symbol: str,
+    as_of: date,
+    session: Session | None,
+) -> tuple[str, str | None]:
+    fundamental_payload = get_fundamental_payload(symbol, as_of=as_of, session=session)
     item = fundamental_payload["item"]
     if item is None:
         return "No stored fundamental metrics are available yet.", None
 
     return str(item["summary"]), str(fundamental_payload["citation"])
+
+
+def _combined_analysis_summary(
+    price_summary: str,
+    indicator_summary: str,
+    fundamental_summary: str,
+    news_summary: str,
+) -> str:
+    return (
+        f"综合来看，行情表现为 {price_summary}；技术面关注 {indicator_summary}；"
+        f"基本面显示 {fundamental_summary}；消息面为 {news_summary}。"
+    )
 
 
 def generate_stock_report_payload(
@@ -75,17 +106,24 @@ def generate_stock_report_payload(
     news_summary, news_citation = _news_summary_and_citation(symbol, session)
     if news_citation is not None:
         citations.append(news_citation)
-    fundamental_summary, fundamental_citation = _fundamental_summary_and_citation(symbol, end)
+    fundamental_summary, fundamental_citation = _fundamental_summary_and_citation(symbol, end, session)
     if fundamental_citation is not None:
         citations.append(fundamental_citation)
+    price_summary = f"Close {latest_bar['close']:.2f}, period change {change_pct:.2f}%"
     context = ReportContext(
         symbol=symbol,
         as_of=str(latest_bar["timestamp"]),
-        price_summary=f"Close {latest_bar['close']:.2f}, period change {change_pct:.2f}%",
+        price_summary=price_summary,
         indicator_summary=indicator_summary,
         fundamental_summary=fundamental_summary,
         news_summary=news_summary,
         citations=citations,
+        combined_summary=_combined_analysis_summary(
+            price_summary,
+            indicator_summary,
+            fundamental_summary,
+            news_summary,
+        ),
     )
     return {
         "symbol": symbol,

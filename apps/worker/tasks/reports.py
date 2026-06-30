@@ -1,8 +1,11 @@
 from datetime import date
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from apps.worker.celery_app import celery_app
 from packages.services.analysis import refresh_stock_analysis
 from packages.services.task_runs import fail_task_run, finish_task_run, start_task_run
+from packages.services.watchlists import format_watchlist_entries, get_active_watchlist_entries
 from packages.shared.config import settings
 from packages.shared.database import SessionLocal
 
@@ -45,6 +48,17 @@ def _parse_watchlist(watchlist: str) -> list[tuple[str, str]]:
     return items
 
 
+def _default_watchlist_value(session) -> str:
+    try:
+        entries = get_active_watchlist_entries(session)
+    except SQLAlchemyError:
+        session.rollback()
+        return settings.daily_report_watchlist
+    if not entries:
+        return settings.daily_report_watchlist
+    return format_watchlist_entries(entries)
+
+
 @celery_app.task(name="reports.refresh_daily_watchlist_analysis")
 def refresh_daily_watchlist_analysis(
     watchlist: str | None = None,
@@ -56,7 +70,7 @@ def refresh_daily_watchlist_analysis(
     start_value = start or settings.daily_report_start
     end_value = end or settings.daily_report_end
     ma_window_value = ma_window or settings.daily_report_ma_window
-    watchlist_value = watchlist or settings.daily_report_watchlist
+    watchlist_value = watchlist or _default_watchlist_value(session)
     task_run = start_task_run(
         "reports.refresh_daily_watchlist_analysis",
         {

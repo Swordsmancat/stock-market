@@ -102,6 +102,58 @@ class TechnicalIndicator(Base):
     value_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
 
 
+class FundamentalSnapshot(Base):
+    __tablename__ = "fundamental_snapshots"
+    __table_args__ = (UniqueConstraint("symbol", "as_of", name="uq_fundamental_snapshots_symbol_as_of"),)
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    symbol: Mapped[str] = mapped_column(String(64))
+    as_of: Mapped[date] = mapped_column(Date)
+    currency: Mapped[str] = mapped_column(String(8))
+    pe_ratio: Mapped[Decimal] = mapped_column(Numeric(20, 6))
+    revenue_growth: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    net_margin: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    debt_to_assets: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    source: Mapped[str] = mapped_column(String(128), default="database")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class Watchlist(Base):
+    __tablename__ = "watchlists"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    items: Mapped[list["WatchlistItem"]] = relationship("WatchlistItem", back_populates="watchlist")
+
+
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+    __table_args__ = (UniqueConstraint("watchlist_id", "symbol", "market", name="uq_watchlist_items_identity"),)
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    watchlist_id: Mapped[PythonUUID] = mapped_column(ForeignKey("watchlists.id"))
+    symbol: Mapped[str] = mapped_column(String(64))
+    market: Mapped[str] = mapped_column(String(32))
+    name: Mapped[str] = mapped_column(String(256))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    alert_rules: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    watchlist: Mapped[Watchlist] = relationship("Watchlist", back_populates="items")
+
+
 class NewsArticle(Base):
     __tablename__ = "news_articles"
 
