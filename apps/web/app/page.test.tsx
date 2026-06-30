@@ -176,7 +176,8 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   render(await HomePage());
 
   expect(screen.getByText("股票分析平台")).toBeInTheDocument();
-  expect(screen.getByText("US - AAPL - Apple Inc.")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "US - AAPL - Apple Inc." }))
+    .toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("AAPL 最新收盘价：102，来源：database")).toBeInTheDocument();
   expect(screen.getByText("MA：119，RSI：100，来源：database")).toBeInTheDocument();
   expect(

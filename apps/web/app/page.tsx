@@ -167,7 +167,9 @@ export default async function HomePage() {
         <ul>
           {instrumentsPayload.items.map((item) => (
             <li key={item.symbol}>
-              {item.market} - {item.symbol} - {item.name}
+              <a href={`/instruments/${item.symbol}`}>
+                {item.market} - {item.symbol} - {item.name}
+              </a>
             </li>
           ))}
         </ul>
