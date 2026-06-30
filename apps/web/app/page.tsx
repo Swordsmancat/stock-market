@@ -18,11 +18,13 @@ type BarsPayload = {
 
 type ReportPayload = {
   content_markdown: string;
+  citations?: string[];
 };
 
 type DailyReportPayload = {
   as_of?: string;
   content_markdown?: string;
+  citations?: string[];
 };
 
 type DailyReportHistoryPayload = {
@@ -38,11 +40,26 @@ type PortfolioPayload = {
 };
 
 type IndicatorsPayload = {
+  symbol?: string;
   source: string;
+  as_of?: string;
   indicators: {
     ma?: number;
     rsi?: number;
+    bollinger?: {
+      upper: number;
+      middle: number;
+      lower: number;
+    };
+    atr?: number;
   };
+};
+
+type FundamentalsPayload = {
+  source: string;
+  item?: {
+    summary: string;
+  } | null;
 };
 
 type NewsPayload = {
@@ -72,6 +89,50 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, { cache: "no-store" });
+  if (!response.ok) {
+    return fallback;
+  }
+  return response.json() as Promise<T>;
+}
+
+function citationUrl(citation: string): string | null {
+  return citation.match(/https?:\/\/\S+/)?.[0] ?? null;
+}
+
+function renderCitation(citation: string) {
+  const url = citationUrl(citation);
+  if (url === null) {
+    return citation;
+  }
+
+  return <a href={url}>{citation}</a>;
+}
+
+function hasTechnicalIndicators(payload: IndicatorsPayload): boolean {
+  const { ma, rsi, bollinger, atr } = payload.indicators;
+  return ma !== undefined || rsi !== undefined || bollinger !== undefined || atr !== undefined;
+}
+
+function technicalIndicatorText(payload: IndicatorsPayload): string {
+  const { ma, rsi, bollinger, atr } = payload.indicators;
+  const parts = [`MA：${ma ?? "暂无"}`, `RSI：${rsi ?? "暂无"}`];
+  if (bollinger !== undefined) {
+    parts.push(
+      `BOLL：上轨 ${bollinger.upper} / 中轨 ${bollinger.middle} / 下轨 ${bollinger.lower}`,
+    );
+  }
+  if (atr !== undefined) {
+    parts.push(`ATR：${atr}`);
+  }
+  if (payload.as_of !== undefined) {
+    parts.push(`截止：${payload.as_of}`);
+  }
+  parts.push(`来源：${payload.source}`);
+  return parts.join("，");
+}
+
 export default async function HomePage() {
   const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
   const primaryInstrument = instrumentsPayload.items[0];
@@ -82,6 +143,7 @@ export default async function HomePage() {
     dailyReportHistoryPayload,
     portfolioPayload,
     indicatorsPayload,
+    fundamentalsPayload,
     newsPayload,
     taskRunPayload,
   ] =
@@ -92,23 +154,39 @@ export default async function HomePage() {
       fetchJson<ReportPayload>(
         `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
       ),
-      fetchJson<DailyReportPayload>(`/reports/${primaryInstrument.symbol}/daily/latest`),
-      fetchJson<DailyReportHistoryPayload>(
+      fetchOptionalJson<DailyReportPayload>(`/reports/${primaryInstrument.symbol}/daily/latest`, {}),
+      fetchOptionalJson<DailyReportHistoryPayload>(
         `/reports/${primaryInstrument.symbol}/daily/history?limit=5`,
+        { items: [] },
       ),
       fetchJson<PortfolioPayload>("/portfolios/demo"),
-      fetchJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`),
-      fetchJson<NewsPayload>(`/news/${primaryInstrument.symbol}`),
-      fetchJson<TaskRunPayload>(
+      fetchOptionalJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`, {
+        source: "unavailable",
+        indicators: {},
+      }),
+      fetchOptionalJson<FundamentalsPayload>(`/fundamentals/${primaryInstrument.symbol}`, {
+        source: "unavailable",
+        item: null,
+      }),
+      fetchOptionalJson<NewsPayload>(
+        `/news/${primaryInstrument.symbol}`,
+        {
+          source: "unavailable",
+          items: [],
+        },
+      ),
+      fetchOptionalJson<TaskRunPayload>(
         "/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis",
+        { status: "unknown" },
       ),
     ]);
 
   const latestClose = barsPayload.items.at(-1)?.close;
   const portfolioValue = portfolioPayload.positions[0]?.market_value;
-  const ma = indicatorsPayload.indicators.ma;
-  const rsi = indicatorsPayload.indicators.rsi;
+  const fundamentalSummary = fundamentalsPayload.item?.summary;
   const latestNews = newsPayload.items[0];
+  const reportCitations = reportPayload.citations ?? [];
+  const dailyReportCitations = dailyReportPayload.citations ?? [];
 
   return (
     <main>
@@ -118,7 +196,9 @@ export default async function HomePage() {
         <ul>
           {instrumentsPayload.items.map((item) => (
             <li key={item.symbol}>
-              {item.market} - {item.symbol} - {item.name}
+              <a href={`/instruments/${item.symbol}`}>
+                {item.market} - {item.symbol} - {item.name}
+              </a>
             </li>
           ))}
         </ul>
@@ -144,9 +224,21 @@ export default async function HomePage() {
       </section>
       <section>
         <h2>技术指标</h2>
-        <p>
-          MA：{ma}，RSI：{rsi}，来源：{indicatorsPayload.source}
-        </p>
+        {hasTechnicalIndicators(indicatorsPayload) ? (
+          <p>{technicalIndicatorText(indicatorsPayload)}</p>
+        ) : (
+          <p>暂无技术指标数据，来源：{indicatorsPayload.source}</p>
+        )}
+      </section>
+      <section>
+        <h2>基本面指标</h2>
+        {fundamentalSummary ? (
+          <p>
+            {fundamentalSummary}，来源：{fundamentalsPayload.source}
+          </p>
+        ) : (
+          <p>暂无基本面指标数据，来源：{fundamentalsPayload.source}</p>
+        )}
       </section>
       <section>
         <h2>新闻舆情</h2>
@@ -162,6 +254,16 @@ export default async function HomePage() {
       <section>
         <h2>AI 报告</h2>
         <p>{reportPayload.content_markdown}</p>
+        {reportCitations.length > 0 ? (
+          <>
+            <h3>报告引用</h3>
+            <ul>
+              {reportCitations.map((citation) => (
+                <li key={citation}>{renderCitation(citation)}</li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
       <section>
         <h2>每日报告</h2>
@@ -169,6 +271,16 @@ export default async function HomePage() {
           <>
             <p>最新日报日期：{dailyReportPayload.as_of}</p>
             <p>{dailyReportPayload.content_markdown}</p>
+            {dailyReportCitations.length > 0 ? (
+              <>
+                <h3>日报引用</h3>
+                <ul>
+                  {dailyReportCitations.map((citation) => (
+                    <li key={citation}>{renderCitation(citation)}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
             <h3>历史日报</h3>
             <ul>
               {dailyReportHistoryPayload.items.map((item) => (

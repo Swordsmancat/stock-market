@@ -28,3 +28,33 @@ def calculate_rsi(close: pd.Series, window: int = 14) -> pd.Series:
     loss = -delta.clip(upper=0).rolling(window=window, min_periods=window).mean()
     rs = gain / loss.where(loss != 0)
     return 100 - (100 / (1 + rs))
+
+
+def calculate_bollinger_bands(
+    close: pd.Series,
+    window: int = 20,
+    std_dev: float = 2.0,
+) -> pd.DataFrame:
+    middle = calculate_ma(close, window)
+    rolling_std = close.rolling(window=window, min_periods=window).std()
+    upper = middle + (rolling_std * std_dev)
+    lower = middle - (rolling_std * std_dev)
+    return pd.DataFrame({"upper": upper, "middle": middle, "lower": lower})
+
+
+def calculate_atr(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    window: int = 14,
+) -> pd.Series:
+    previous_close = close.shift(1)
+    true_range = pd.concat(
+        [
+            high - low,
+            (high - previous_close).abs(),
+            (low - previous_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    return true_range.rolling(window=window, min_periods=window).mean()

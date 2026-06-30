@@ -43,7 +43,9 @@ def test_generate_stock_report_returns_markdown_with_citations():
     assert payload["symbol"] == "AAPL"
     assert payload["report_type"] == "stock_daily"
     assert "# AAPL AI 个股报告" in payload["content_markdown"]
+    assert "PE 28.40" in payload["content_markdown"]
     assert "bars_1d:AAPL:2026-01-15" in payload["citations"]
+    assert "fundamental_metrics:AAPL:2026-01-15" in payload["citations"]
     assert "本报告仅基于平台内可验证数据生成" in payload["content_markdown"]
 
 
@@ -83,7 +85,9 @@ def test_daily_report_generate_then_latest_returns_persisted_report():
     assert latest["symbol"] == "AAPL"
     assert latest["as_of"] == "2026-01-20"
     assert "MA 119.00" in latest["content_markdown"]
+    assert "PE 28.40" in latest["content_markdown"]
     assert "Apple reports strong growth in services revenue" in latest["content_markdown"]
+    assert "fundamental_metrics:AAPL:2026-01-20" in latest["citations"]
     assert "news_articles:AAPL:https://example.com/aapl-services-growth" in latest["citations"]
 
 

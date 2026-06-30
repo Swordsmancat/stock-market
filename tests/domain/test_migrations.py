@@ -46,6 +46,16 @@ def load_task_runs_migration():
     return module
 
 
+def load_fundamentals_watchlists_migration():
+    migration_path = Path("alembic/versions/0005_fundamentals_watchlists.py")
+    spec = importlib.util.spec_from_file_location("fundamentals_watchlists_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -122,3 +132,23 @@ def test_task_runs_migration_creates_task_runs_table():
         tables = set(inspect(connection).get_table_names())
 
     assert "task_runs" in tables
+
+
+def test_fundamentals_watchlists_migration_creates_persistent_analysis_tables():
+    initial_migration = load_initial_migration()
+    news_migration = load_news_migration()
+    generated_reports_migration = load_generated_reports_migration()
+    task_runs_migration = load_task_runs_migration()
+    fundamentals_watchlists_migration = load_fundamentals_watchlists_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(news_migration, connection)
+        run_migration(generated_reports_migration, connection)
+        run_migration(task_runs_migration, connection)
+        run_migration(fundamentals_watchlists_migration, connection)
+
+        tables = set(inspect(connection).get_table_names())
+
+    assert {"fundamental_snapshots", "watchlists", "watchlist_items"}.issubset(tables)
