@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskRunRetryButton } from "@/components/task-run-actions";
 import { EmptyState } from "@/components/empty-state";
+import { backendFetch } from "@/lib/backend-api";
 
 type TaskRun = {
   id: string;
@@ -29,14 +30,12 @@ type TaskRunsPayload = {
   items: TaskRun[];
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchTaskRuns(status?: string): Promise<TaskRunsPayload> {
   const params = new URLSearchParams({ limit: "20" });
   if (status) {
     params.set("status", status);
   }
-  const response = await fetch(`${apiBaseUrl}/task-runs/recent?${params.toString()}`, { cache: "no-store" });
+  const response = await backendFetch(`/task-runs/recent?${params.toString()}`, { cache: "no-store" });
   if (!response.ok) {
     return { items: [] };
   }

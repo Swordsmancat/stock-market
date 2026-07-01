@@ -12,6 +12,7 @@ build/
 
 # Environments and secrets
 .env
+.env.local
 .venv/
 venv/
 data/platform_settings.json
@@ -19,6 +20,7 @@ data/platform_settings.json
 # Node
 node_modules/
 .next/
+*.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/empty-state";
 import { GenerateDailyReportButton } from "@/components/generate-daily-report-button";
 import { getDashboardDateRanges } from "@/lib/dates";
 import { ExternalLink } from "lucide-react";
+import { backendFetch } from "@/lib/backend-api";
 
 type ReportItem = {
   id: string;
@@ -33,11 +34,10 @@ type ReportsPayload = {
   items: ReportItem[];
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const defaultLimit = 10;
 
 async function fetchReports(params: URLSearchParams): Promise<ReportsPayload> {
-  const response = await fetch(`${apiBaseUrl}/reports?${params.toString()}`, { cache: "no-store" });
+  const response = await backendFetch(`/reports?${params.toString()}`, { cache: "no-store" });
   if (!response.ok) {
     return { total: 0, limit: 50, offset: 0, items: [] };
   }

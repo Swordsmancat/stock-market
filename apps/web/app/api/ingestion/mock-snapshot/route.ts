@@ -1,9 +1,9 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 export async function POST(request: Request) {
   const requestUrl = new URL(request.url);
-  const upstreamUrl = new URL("/ingestion/mock-snapshot", apiBaseUrl);
+  const upstreamUrl = new URL("/ingestion/mock-snapshot", getBackendApiUrl());
 
   for (const key of ["market", "start", "end", "provider"]) {
     const value = requestUrl.searchParams.get(key);

@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/empty-state";
 import { getDashboardDateRanges } from "@/lib/dates";
 import { withProviderQuery } from "@/lib/market-data";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
+import { backendFetch } from "@/lib/backend-api";
 
 type Instrument = {
   symbol: string;
@@ -115,10 +116,8 @@ type AlertTriggersPayload = {
   }>;
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, { cache: "no-store" });
+  const response = await backendFetch(`${path}`, { cache: "no-store" });
   if (!response.ok) {
     return fallback;
   }

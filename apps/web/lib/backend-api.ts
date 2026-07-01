@@ -1,4 +1,4 @@
-const DEFAULT_BACKEND = "http://127.0.0.1:8001";
+const DEFAULT_BACKEND = "http://127.0.0.1:8000";
 
 export function getBackendApiUrl(): string {
   return process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_BACKEND;

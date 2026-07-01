@@ -220,3 +220,134 @@ export async function updateWatchlistAlertsAction(formData: FormData) {
   }
   pageRedirect(`/${locale}/watchlist`, { op: "alerts_updated" });
 }
+
+export async function createPortfolioAction(formData: FormData) {
+  const locale = String(formData.get("locale") ?? "zh");
+  const name = String(formData.get("name") ?? "").trim();
+  const baseCurrency = String(formData.get("base_currency") ?? "USD").trim().toUpperCase();
+
+  if (!name) {
+    pageRedirect(`/${locale}/portfolios`, { op: "error", reason: "missing_name" });
+  }
+
+  const response = await backendFetch("/portfolios", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, base_currency: baseCurrency }),
+  });
+
+  revalidatePath(`/${locale}/portfolios`);
+  if (!response.ok) {
+    pageRedirect(`/${locale}/portfolios`, { op: "error", reason: `http_${response.status}` });
+  }
+
+  const created = (await readJsonSafe(response)) as { id?: string };
+  if (created.id) {
+    pageRedirect(`/${locale}/portfolios`, { portfolio: created.id, op: "created" });
+  }
+  pageRedirect(`/${locale}/portfolios`, { op: "created" });
+}
+
+export async function addPortfolioPositionAction(formData: FormData) {
+  const locale = String(formData.get("locale") ?? "zh");
+  const portfolioId = String(formData.get("portfolio_id") ?? "");
+  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
+  const market = String(formData.get("market") ?? "").trim().toUpperCase();
+  const name = String(formData.get("name") ?? "").trim();
+  const quantity = Number(formData.get("quantity"));
+  const avgCost = Number(formData.get("avg_cost"));
+
+  if (!portfolioId || !symbol || !market || !Number.isFinite(quantity) || !Number.isFinite(avgCost)) {
+    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: "missing_fields" });
+  }
+
+  const response = await backendFetch(`/portfolios/${portfolioId}/positions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      symbol,
+      market,
+      name: name || null,
+      quantity,
+      avg_cost: avgCost,
+    }),
+  });
+
+  revalidatePath(`/${locale}/portfolios`);
+  if (!response.ok) {
+    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: `http_${response.status}` });
+  }
+  pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "position_added" });
+}
+
+export async function removePortfolioPositionAction(formData: FormData) {
+  const locale = String(formData.get("locale") ?? "zh");
+  const portfolioId = String(formData.get("portfolio_id") ?? "");
+  const symbol = String(formData.get("symbol") ?? "");
+  const market = String(formData.get("market") ?? "");
+  const params = new URLSearchParams({ symbol, market });
+  const response = await backendFetch(`/portfolios/${portfolioId}/positions?${params.toString()}`, {
+    method: "DELETE",
+  });
+
+  revalidatePath(`/${locale}/portfolios`);
+  if (!response.ok) {
+    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: `http_${response.status}` });
+  }
+  pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "position_removed" });
+}
+
+export async function renamePortfolioAction(formData: FormData) {
+  const locale = String(formData.get("locale") ?? "zh");
+  const portfolioId = String(formData.get("portfolio_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!portfolioId || !name) {
+    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: "missing_name" });
+  }
+
+  const response = await backendFetch(`/portfolios/${portfolioId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  revalidatePath(`/${locale}/portfolios`);
+  if (!response.ok) {
+    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: `http_${response.status}` });
+  }
+  pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "renamed" });
+}
+
+export async function deletePortfolioAction(formData: FormData) {
+  const locale = String(formData.get("locale") ?? "zh");
+  const portfolioId = String(formData.get("portfolio_id") ?? "");
+  const response = await backendFetch(`/portfolios/${portfolioId}`, { method: "DELETE" });
+
+  revalidatePath(`/${locale}/portfolios`);
+  if (!response.ok) {
+    pageRedirect(`/${locale}/portfolios`, { op: "error", reason: `http_${response.status}` });
+  }
+  pageRedirect(`/${locale}/portfolios`, { portfolio: "demo", op: "deleted" });
+}
+
+export async function addInstrumentToWatchlistAction(formData: FormData) {
+  const locale = String(formData.get("locale") ?? "zh");
+  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
+  const market = String(formData.get("market") ?? "").trim().toUpperCase();
+  const name = String(formData.get("name") ?? "").trim();
+  const returnTo = String(formData.get("return_to") ?? `/${locale}/instruments/${symbol}`);
+
+  const response = await backendFetch("/watchlist/items", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ symbol, market, name: name || null, alert_rules: {} }),
+  });
+
+  revalidatePath(returnTo);
+  if (!response.ok) {
+    const body = await readJsonSafe(response);
+    pageRedirect(returnTo, { watchlist: "error", reason: String(body.detail ?? `http_${response.status}`) });
+  }
+  pageRedirect(returnTo, { watchlist: "added" });
+}

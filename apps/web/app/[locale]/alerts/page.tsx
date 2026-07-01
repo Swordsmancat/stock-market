@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { backendFetch } from "@/lib/backend-api";
 
 type AlertTrigger = {
   symbol: string;
@@ -24,10 +25,8 @@ type AlertTriggersPayload = {
   items: AlertTrigger[];
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchAlertTriggers(): Promise<AlertTriggersPayload> {
-  const response = await fetch(`${apiBaseUrl}/alerts/triggers/recent?limit=50`, {
+  const response = await backendFetch(`/alerts/triggers/recent?limit=50`, {
     cache: "no-store",
   });
   if (!response.ok) {

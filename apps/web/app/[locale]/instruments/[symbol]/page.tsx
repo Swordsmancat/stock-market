@@ -8,8 +8,11 @@ import { TrendingUp, FileText, Activity, Briefcase, Newspaper } from "lucide-rea
 import { PriceChart } from "@/components/price-chart";
 import { Link } from "@/src/i18n/routing";
 import { InstrumentQuickActions } from "@/components/instrument-actions";
+import { InstrumentWatchlistForm } from "@/components/instrument-watchlist-form";
+import { FlashBanner } from "@/components/flash-banner";
 import { getInstrumentDateRange, getDashboardDateRanges, parseInstrumentRange, type InstrumentRange } from "@/lib/dates";
 import { getMarketDataProvider, withProviderQuery } from "@/lib/market-data";
+import { backendFetch } from "@/lib/backend-api";
 
 type BarsPayload = {
   source: string;
@@ -66,10 +69,8 @@ type InstrumentsPayload = {
   items: Array<{ symbol: string; name: string; market: string }>;
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, { cache: "no-store" });
+  const response = await backendFetch(`${path}`, { cache: "no-store" });
   if (!response.ok) {
     return fallback;
   }
@@ -103,10 +104,10 @@ export default async function InstrumentDetailPage({
   searchParams = Promise.resolve({}),
 }: {
   params: Promise<{ symbol: string; locale: string }>;
-  searchParams?: Promise<{ range?: string }>;
+  searchParams?: Promise<{ range?: string; watchlist?: string; reason?: string }>;
 }) {
-  const { symbol } = await params;
-  const { range } = await searchParams;
+  const { symbol, locale } = await params;
+  const { range, watchlist, reason } = await searchParams;
   const decodedSymbol = decodeURIComponent(symbol).toUpperCase();
   const selectedRange = parseInstrumentRange(range);
   const dateRange = getInstrumentDateRange(selectedRange);
@@ -157,6 +158,11 @@ export default async function InstrumentDetailPage({
 
   return (
     <div className="space-y-6">
+      {watchlist === "added" ? <FlashBanner variant="success" message={t("watchlistAdded")} /> : null}
+      {watchlist === "error" ? (
+        <FlashBanner variant="error" message={t("watchlistFailedDetail", { reason: reason ?? "unknown" })} />
+      ) : null}
+
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
@@ -176,9 +182,16 @@ export default async function InstrumentDetailPage({
         <InstrumentQuickActions
           symbol={decodedSymbol}
           market={instrumentMeta?.market ?? "US"}
-          name={instrumentMeta?.name}
           analysisStart={analysis.start}
           analysisEnd={analysis.end}
+          watchlistForm={
+            <InstrumentWatchlistForm
+              locale={locale}
+              symbol={decodedSymbol}
+              market={instrumentMeta?.market ?? "US"}
+              name={instrumentMeta?.name ?? ""}
+            />
+          }
         />
       </div>
 

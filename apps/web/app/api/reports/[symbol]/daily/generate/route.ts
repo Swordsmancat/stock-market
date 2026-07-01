@@ -1,5 +1,5 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 export async function POST(
   request: Request,
@@ -7,7 +7,7 @@ export async function POST(
 ) {
   const { symbol } = await context.params;
   const url = new URL(request.url);
-  const upstream = new URL(`/reports/${encodeURIComponent(symbol)}/daily/generate`, apiBaseUrl);
+  const upstream = new URL(`/reports/${encodeURIComponent(symbol)}/daily/generate`, getBackendApiUrl());
   url.searchParams.forEach((value, key) => {
     upstream.searchParams.set(key, value);
   });

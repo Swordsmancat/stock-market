@@ -1,8 +1,8 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 export async function GET() {
-  const response = await fetch(new URL("/portfolios", apiBaseUrl).toString(), {
+  const response = await fetch(new URL("/portfolios", getBackendApiUrl()).toString(), {
     cache: "no-store",
   });
   const body = await response.text();
@@ -16,7 +16,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const upstreamUrl = new URL("/portfolios", apiBaseUrl);
+  const upstreamUrl = new URL("/portfolios", getBackendApiUrl());
   const body = await request.text();
 
   const response = await fetch(upstreamUrl.toString(), {

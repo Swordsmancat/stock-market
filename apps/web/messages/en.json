@@ -140,6 +140,7 @@
     "addingToWatchlist": "Adding...",
     "watchlistAdded": "Added to watchlist.",
     "watchlistFailed": "Failed to add to watchlist.",
+    "watchlistFailedDetail": "Failed to add to watchlist: {reason}.",
     "viewReports": "Stored Reports"
   },
   "TaskRuns": {
@@ -195,7 +196,9 @@
     "addPositionSuccess": "Position added.",
     "removePosition": "Remove position",
     "removingPosition": "Removing...",
+    "removePositionSuccess": "Position removed.",
     "operationFailed": "Operation failed.",
+    "operationFailedDetail": "Operation failed: {reason}.",
     "portfolioNamePlaceholder": "Portfolio name",
     "baseCurrencyPlaceholder": "USD",
     "symbolPlaceholder": "AAPL",
@@ -208,6 +211,7 @@
     "renameSuccess": "Portfolio renamed.",
     "deletePortfolio": "Delete",
     "deletingPortfolio": "Deleting...",
+    "deleteSuccess": "Portfolio deleted.",
     "loadFailed": "Failed to load portfolio",
     "emptyHint": "Add positions or switch to another portfolio."
   },
@@ -288,7 +292,7 @@
     "tushareHint": "Get your free token from https://tushare.pro. Paid tiers unlock more data."
   },
   "System": {
-    "backendOffline": "Cannot reach the API at localhost:8000. Start it with: uvicorn apps.api.main:app --reload --port 8000",
-    "backendOutdated": "The API on port 8000 is outdated (missing watchlist/portfolios endpoints). Restart it from the latest code."
+    "backendOffline": "Cannot reach the API. Start it with: uvicorn apps.api.main:app --reload --port 8000 (or set API_BASE_URL in apps/web/.env.local)",
+    "backendOutdated": "The API is outdated (missing watchlist/portfolios endpoints). Restart from the latest code."
   }
 }

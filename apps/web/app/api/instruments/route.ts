@@ -1,9 +1,8 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const upstream = new URL("/instruments", apiBaseUrl);
+  const upstream = new URL("/instruments", getBackendApiUrl());
   url.searchParams.forEach((value, key) => {
     upstream.searchParams.set(key, value);
   });

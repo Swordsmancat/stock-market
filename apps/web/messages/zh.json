@@ -140,6 +140,7 @@
     "addingToWatchlist": "添加中...",
     "watchlistAdded": "已加入关注列表。",
     "watchlistFailed": "加入关注列表失败。",
+    "watchlistFailedDetail": "加入关注列表失败：{reason}。",
     "viewReports": "历史报告"
   },
   "TaskRuns": {
@@ -195,7 +196,9 @@
     "addPositionSuccess": "持仓已添加。",
     "removePosition": "移除持仓",
     "removingPosition": "移除中...",
+    "removePositionSuccess": "持仓已移除。",
     "operationFailed": "操作失败。",
+    "operationFailedDetail": "操作失败：{reason}。",
     "portfolioNamePlaceholder": "组合名称",
     "baseCurrencyPlaceholder": "USD",
     "symbolPlaceholder": "AAPL",
@@ -208,6 +211,7 @@
     "renameSuccess": "组合已重命名。",
     "deletePortfolio": "删除",
     "deletingPortfolio": "删除中...",
+    "deleteSuccess": "组合已删除。",
     "loadFailed": "加载组合失败",
     "emptyHint": "添加持仓或切换到其他组合。"
   },
@@ -288,7 +292,7 @@
     "tushareHint": "免费 Token 可从 https://tushare.pro 获取，付费等级可解锁更多数据。"
   },
   "System": {
-    "backendOffline": "无法连接 localhost:8000 上的 API。请运行：uvicorn apps.api.main:app --reload --port 8000",
-    "backendOutdated": "8000 端口上的 API 版本过旧（缺少关注列表/组合等接口）。请用最新代码重启 API。"
+    "backendOffline": "无法连接 API。请运行：uvicorn apps.api.main:app --reload --port 8000（或在 apps/web/.env.local 中设置 API_BASE_URL）",
+    "backendOutdated": "API 版本过旧（缺少关注列表/组合等接口）。请用最新代码重启。"
   }
 }

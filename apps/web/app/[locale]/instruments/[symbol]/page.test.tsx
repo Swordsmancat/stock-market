@@ -10,6 +10,15 @@ vi.mock("@/lib/dates", () => ({
   }),
 }));
 
+vi.mock("@/lib/backend-api", () => ({
+  backendFetch: (path: string, init?: RequestInit) => globalThis.fetch(path, init),
+  getBackendApiUrl: () => "http://127.0.0.1:8000",
+}));
+
+vi.mock("@/components/instrument-watchlist-form", () => ({
+  InstrumentWatchlistForm: () => <button type="submit">Add to Watchlist</button>,
+}));
+
 import InstrumentDetailPage from "./page";
 
 afterEach(() => {

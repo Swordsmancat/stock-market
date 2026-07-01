@@ -1,8 +1,8 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 function buildUpstreamUrl(path: string, requestUrl: URL) {
-  const upstreamUrl = new URL(path, apiBaseUrl);
+  const upstreamUrl = new URL(path, getBackendApiUrl());
   for (const key of ["symbol", "market", "start", "end", "ma_window", "provider"]) {
     const value = requestUrl.searchParams.get(key);
     if (value !== null) {
@@ -22,7 +22,7 @@ async function runLegacySyncAnalysis(requestUrl: URL): Promise<Response> {
     return Response.json({ detail: "Missing analysis parameters" }, { status: 400 });
   }
 
-  const ingestUrl = new URL("/ingestion/mock-snapshot", apiBaseUrl);
+  const ingestUrl = new URL("/ingestion/mock-snapshot", getBackendApiUrl());
   ingestUrl.searchParams.set("market", market);
   ingestUrl.searchParams.set("start", start);
   ingestUrl.searchParams.set("end", end);
@@ -39,7 +39,7 @@ async function runLegacySyncAnalysis(requestUrl: URL): Promise<Response> {
     });
   }
 
-  const reportUrl = new URL(`/reports/${encodeURIComponent(symbol)}/stock`, apiBaseUrl);
+  const reportUrl = new URL(`/reports/${encodeURIComponent(symbol)}/stock`, getBackendApiUrl());
   reportUrl.searchParams.set("start", start);
   reportUrl.searchParams.set("end", end);
   const provider = requestUrl.searchParams.get("provider");

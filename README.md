@@ -23,15 +23,26 @@ pip install -e .
 alembic upgrade head
 ```
 
-4. Start backend services (separate terminals):
+4. Start backend API (separate terminal):
 
 ```bash
 uvicorn apps.api.main:app --reload --port 8000
+```
+
+If port 8000 is occupied by an old process, use another port and set `API_BASE_URL` in `apps/web/.env.local`:
+
+```bash
+uvicorn apps.api.main:app --reload --port 8001
+```
+
+5. Start background workers (optional, for async tasks):
+
+```bash
 celery -A apps.worker.celery_app worker --loglevel=info
 celery -A apps.worker.celery_app beat --loglevel=info
 ```
 
-5. Start the web app:
+6. Start the web app:
 
 ```bash
 npm install

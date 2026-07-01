@@ -1,8 +1,8 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 export async function POST(request: Request) {
-  const upstreamUrl = new URL("/watchlist/items", apiBaseUrl);
+  const upstreamUrl = new URL("/watchlist/items", getBackendApiUrl());
   const body = await request.text();
 
   const response = await fetch(upstreamUrl.toString(), {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const requestUrl = new URL(request.url);
-  const upstreamUrl = new URL("/watchlist/items", apiBaseUrl);
+  const upstreamUrl = new URL("/watchlist/items", getBackendApiUrl());
 
   for (const key of ["symbol", "market"]) {
     const value = requestUrl.searchParams.get(key);

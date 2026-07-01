@@ -1,5 +1,5 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 type RouteContext = {
   params: Promise<{ portfolioId: string }>;
@@ -7,7 +7,7 @@ type RouteContext = {
 
 export async function POST(request: Request, context: RouteContext) {
   const { portfolioId } = await context.params;
-  const upstreamUrl = new URL(`/portfolios/${portfolioId}/positions`, apiBaseUrl);
+  const upstreamUrl = new URL(`/portfolios/${portfolioId}/positions`, getBackendApiUrl());
   const body = await request.text();
 
   const response = await fetch(upstreamUrl.toString(), {
@@ -31,7 +31,7 @@ export async function POST(request: Request, context: RouteContext) {
 export async function DELETE(request: Request, context: RouteContext) {
   const { portfolioId } = await context.params;
   const requestUrl = new URL(request.url);
-  const upstreamUrl = new URL(`/portfolios/${portfolioId}/positions`, apiBaseUrl);
+  const upstreamUrl = new URL(`/portfolios/${portfolioId}/positions`, getBackendApiUrl());
 
   for (const key of ["symbol", "market"]) {
     const value = requestUrl.searchParams.get(key);

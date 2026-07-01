@@ -3,6 +3,7 @@ import { Link } from "@/src/i18n/routing";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { backendFetch } from "@/lib/backend-api";
 
 type ReportDetail = {
   id: string;
@@ -15,10 +16,8 @@ type ReportDetail = {
   task_run_id?: string | null;
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchReport(reportId: string): Promise<ReportDetail | null> {
-  const response = await fetch(`${apiBaseUrl}/reports/items/${reportId}`, { cache: "no-store" });
+  const response = await backendFetch(`/reports/items/${reportId}`, { cache: "no-store" });
   if (!response.ok) {
     return null;
   }

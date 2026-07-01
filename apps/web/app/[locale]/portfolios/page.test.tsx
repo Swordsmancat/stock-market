@@ -1,6 +1,19 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/backend-api", () => ({
+  backendFetch: (path: string, init?: RequestInit) => globalThis.fetch(path, init),
+  getBackendApiUrl: () => "http://127.0.0.1:8000",
+}));
+
+vi.mock("@/components/portfolio-forms", () => ({
+  PortfolioCreateForm: () => null,
+  PortfolioAddPositionForm: () => null,
+  PortfolioRemovePositionButton: () => <button title="Remove position">Remove</button>,
+  PortfolioRenameForm: () => null,
+  PortfolioDeleteButton: () => null,
+}));
+
 import PortfoliosPage from "./page";
 
 afterEach(() => {
@@ -66,7 +79,12 @@ it("renders demo portfolio positions and recommendation", async () => {
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
-  render(await PortfoliosPage({ searchParams: Promise.resolve({}) }));
+  render(
+    await PortfoliosPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
 
   expect(screen.getByText("Portfolios")).toBeInTheDocument();
   expect(screen.getAllByText("Demo Portfolio").length).toBeGreaterThan(0);

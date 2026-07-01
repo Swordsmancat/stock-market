@@ -1,12 +1,12 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ taskRunId: string }> },
 ) {
   const { taskRunId } = await params;
-  const upstreamUrl = new URL(`/task-runs/${taskRunId}/retry`, apiBaseUrl);
+  const upstreamUrl = new URL(`/task-runs/${taskRunId}/retry`, getBackendApiUrl());
 
   const response = await fetch(upstreamUrl.toString(), {
     method: "POST",

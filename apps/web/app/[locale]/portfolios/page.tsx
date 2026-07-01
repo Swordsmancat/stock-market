@@ -14,13 +14,15 @@ import { Button } from "@/components/ui/button";
 import { Briefcase } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
+import { FlashBanner } from "@/components/flash-banner";
 import {
   PortfolioAddPositionForm,
   PortfolioCreateForm,
   PortfolioDeleteButton,
   PortfolioRemovePositionButton,
   PortfolioRenameForm,
-} from "@/components/portfolio-actions";
+} from "@/components/portfolio-forms";
+import { backendFetch } from "@/lib/backend-api";
 
 type PortfolioPosition = {
   symbol: string;
@@ -58,8 +60,6 @@ type PortfolioListPayload = {
   items: Array<{ id: string; name: string; base_currency: string; is_default?: boolean }>;
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 function withComputedPositionMetrics(
   pos: PortfolioPosition,
   totalValue: number,
@@ -87,7 +87,7 @@ function withComputedPositionMetrics(
 }
 
 async function fetchPortfolio(portfolioId: string): Promise<PortfolioPayload | null> {
-  const response = await fetch(`${apiBaseUrl}/portfolios/${portfolioId}`, { cache: "no-store" });
+  const response = await backendFetch(`/portfolios/${portfolioId}`, { cache: "no-store" });
   if (!response.ok) {
     return null;
   }
@@ -95,7 +95,7 @@ async function fetchPortfolio(portfolioId: string): Promise<PortfolioPayload | n
 }
 
 async function fetchPortfolioList(): Promise<PortfolioListPayload> {
-  const response = await fetch(`${apiBaseUrl}/portfolios`, { cache: "no-store" });
+  const response = await backendFetch(`/portfolios`, { cache: "no-store" });
   if (!response.ok) {
     return { items: [] };
   }
@@ -103,12 +103,16 @@ async function fetchPortfolioList(): Promise<PortfolioListPayload> {
 }
 
 export default async function PortfoliosPage({
+  params,
   searchParams = Promise.resolve({}),
 }: {
-  searchParams?: Promise<{ portfolio?: string }>;
+  params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ portfolio?: string; op?: string; reason?: string }>;
 } = {}) {
-  const params = await searchParams;
-  const selectedPortfolioId = params.portfolio ?? "demo";
+  const { locale } = await params;
+  const query = await searchParams;
+  const selectedPortfolioId = query.portfolio ?? "demo";
+  const { op, reason } = query;
   const [payload, portfolioList] = await Promise.all([
     fetchPortfolio(selectedPortfolioId),
     fetchPortfolioList(),
@@ -128,12 +132,21 @@ export default async function PortfoliosPage({
 
   return (
     <div className="space-y-6">
+      {op === "created" ? <FlashBanner variant="success" message={t("createSuccess")} /> : null}
+      {op === "position_added" ? <FlashBanner variant="success" message={t("addPositionSuccess")} /> : null}
+      {op === "position_removed" ? <FlashBanner variant="success" message={t("removePositionSuccess")} /> : null}
+      {op === "renamed" ? <FlashBanner variant="success" message={t("renameSuccess")} /> : null}
+      {op === "deleted" ? <FlashBanner variant="success" message={t("deleteSuccess")} /> : null}
+      {op === "error" ? (
+        <FlashBanner variant="error" message={t("operationFailedDetail", { reason: reason ?? "unknown" })} />
+      ) : null}
+
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
           <p className="text-muted-foreground">{t("description")}</p>
         </div>
-        <PortfolioCreateForm className="w-full md:w-auto" />
+        <PortfolioCreateForm locale={locale} className="w-full md:w-auto" />
       </div>
 
       {portfolioList.items.length > 0 ? (
@@ -166,11 +179,13 @@ export default async function PortfoliosPage({
         <>
           <div className="flex flex-wrap items-center gap-3">
             <PortfolioRenameForm
+              locale={locale}
               portfolioId={payload.id}
               currentName={payload.name}
               isDefault={payload.is_default ?? payload.id === "demo"}
             />
             <PortfolioDeleteButton
+              locale={locale}
               portfolioId={payload.id}
               isDefault={payload.is_default ?? payload.id === "demo"}
             />
@@ -231,7 +246,7 @@ export default async function PortfoliosPage({
               <CardDescription>{payload.name}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <PortfolioAddPositionForm portfolioId={payload.id} />
+              <PortfolioAddPositionForm locale={locale} portfolioId={payload.id} />
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -294,6 +309,7 @@ export default async function PortfoliosPage({
                           </TableCell>
                           <TableCell className="text-right">
                             <PortfolioRemovePositionButton
+                              locale={locale}
                               portfolioId={payload.id}
                               symbol={pos.symbol}
                               market={pos.market}

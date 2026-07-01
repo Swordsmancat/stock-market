@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskRunRetryButton } from "@/components/task-run-actions";
+import { backendFetch } from "@/lib/backend-api";
 
 type TaskRunDetail = {
   id: string;
@@ -17,10 +18,8 @@ type TaskRunDetail = {
   error_message: string | null;
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchTaskRun(taskRunId: string): Promise<TaskRunDetail | null> {
-  const response = await fetch(`${apiBaseUrl}/task-runs/${taskRunId}`, { cache: "no-store" });
+  const response = await backendFetch(`/task-runs/${taskRunId}`, { cache: "no-store" });
   if (!response.ok) {
     return null;
   }

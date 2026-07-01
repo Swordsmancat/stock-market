@@ -1,5 +1,5 @@
-const apiBaseUrl =
-  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { getBackendApiUrl } from "@/lib/backend-api";
+
 
 type RouteContext = {
   params: Promise<{ portfolioId: string }>;
@@ -7,7 +7,7 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { portfolioId } = await context.params;
-  const response = await fetch(new URL(`/portfolios/${portfolioId}`, apiBaseUrl).toString(), {
+  const response = await fetch(new URL(`/portfolios/${portfolioId}`, getBackendApiUrl()).toString(), {
     cache: "no-store",
   });
   const body = await response.text();
@@ -22,7 +22,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { portfolioId } = await context.params;
-  const upstreamUrl = new URL(`/portfolios/${portfolioId}`, apiBaseUrl);
+  const upstreamUrl = new URL(`/portfolios/${portfolioId}`, getBackendApiUrl());
   const body = await request.text();
 
   const response = await fetch(upstreamUrl.toString(), {
@@ -45,7 +45,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   const { portfolioId } = await context.params;
-  const response = await fetch(new URL(`/portfolios/${portfolioId}`, apiBaseUrl).toString(), {
+  const response = await fetch(new URL(`/portfolios/${portfolioId}`, getBackendApiUrl()).toString(), {
     method: "DELETE",
     cache: "no-store",
   });

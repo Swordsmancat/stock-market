@@ -1,6 +1,26 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/backend-api", () => ({
+  backendFetch: (path: string, init?: RequestInit) => globalThis.fetch(path, init),
+  getBackendApiUrl: () => "http://127.0.0.1:8000",
+}));
+
+vi.mock("@/components/watchlist-forms", () => ({
+  WatchlistAddForm: () => null,
+  WatchlistRemoveButton: () => <button title="Remove">Remove</button>,
+  WatchlistEditAlertRulesForm: ({ alertRules = {} }: { alertRules?: Record<string, number> }) => (
+    <div>
+      {alertRules.price_above !== undefined ? (
+        <input readOnly value={String(alertRules.price_above)} />
+      ) : null}
+      {alertRules.rsi_below !== undefined ? (
+        <input readOnly value={String(alertRules.rsi_below)} />
+      ) : null}
+    </div>
+  ),
+}));
+
 import WatchlistPage from "./page";
 
 afterEach(() => {
@@ -71,7 +91,12 @@ it("renders watchlist instruments with alert status from enriched API payload", 
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
-  render(await WatchlistPage());
+  render(
+    await WatchlistPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
 
   expect(screen.getAllByText("Watchlist")[0]).toBeInTheDocument();
   expect(screen.getByText("Track your favorite stocks and their latest performance.")).toBeInTheDocument();
