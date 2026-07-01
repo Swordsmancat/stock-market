@@ -82,3 +82,13 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 pytest
 npm run test:web
 ```
+
+## MVP 验收
+
+```bash
+python scripts/mvp_acceptance.py
+```
+
+需先启动 API（默认 `http://127.0.0.1:8000`，可通过 `API_BASE_URL` 覆盖）。
+
+完整清单见 [docs/runbooks/mvp-acceptance.md](docs/runbooks/mvp-acceptance.md)。

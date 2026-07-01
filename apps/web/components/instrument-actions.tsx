@@ -13,6 +13,7 @@ type InstrumentQuickActionsProps = {
   market: string;
   analysisStart: string;
   analysisEnd: string;
+  provider: string;
   watchlistForm: React.ReactNode;
 };
 
@@ -21,6 +22,7 @@ export function InstrumentQuickActions({
   market,
   analysisStart,
   analysisEnd,
+  provider,
   watchlistForm,
 }: InstrumentQuickActionsProps) {
   const t = useTranslations("InstrumentDetail");
@@ -41,6 +43,7 @@ export function InstrumentQuickActions({
         start={analysisStart}
         end={analysisEnd}
         maWindow={3}
+        provider={provider}
       />
     </div>
   );

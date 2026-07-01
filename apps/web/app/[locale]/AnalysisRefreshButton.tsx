@@ -15,6 +15,7 @@ type AnalysisRefreshButtonProps = {
   start: string;
   end: string;
   maWindow: number;
+  provider?: string;
 };
 
 export function AnalysisRefreshButton({
@@ -23,6 +24,7 @@ export function AnalysisRefreshButton({
   start,
   end,
   maWindow,
+  provider,
 }: AnalysisRefreshButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export function AnalysisRefreshButton({
         start,
         end,
         ma_window: String(maWindow),
-        provider: getMarketDataProvider(),
+        provider: provider ?? getMarketDataProvider(),
       });
       const taskRun = await enqueueAndPoll(
         `/api/analysis/refresh?${params.toString()}`,

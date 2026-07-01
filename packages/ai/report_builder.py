@@ -13,7 +13,37 @@ class ReportContext:
     combined_summary: str = "No combined analysis is available yet."
 
 
+def _llm_analysis_prompt(context: ReportContext) -> str:
+    return (
+        f"你是股票研究助手。基于以下结构化数据，撰写一段 300 字以内的中文综合研判。"
+        f"不要编造数据外的事实，不要给出买卖建议。\n\n"
+        f"标的：{context.symbol}\n"
+        f"截止：{context.as_of}\n"
+        f"行情：{context.price_summary}\n"
+        f"技术面：{context.indicator_summary}\n"
+        f"基本面：{context.fundamental_summary}\n"
+        f"消息面：{context.news_summary}\n"
+    )
+
+
+def resolve_combined_summary(context: ReportContext) -> str:
+    from packages.ai.llm_factory import get_llm_provider
+    from packages.services.platform_settings import get_platform_settings
+
+    settings = get_platform_settings()
+    if settings["llm_provider"] != "openai" or not str(settings["llm_api_key"]).strip():
+        return context.combined_summary
+
+    try:
+        llm = get_llm_provider()
+        generated = llm.generate(_llm_analysis_prompt(context)).strip()
+        return generated or context.combined_summary
+    except Exception:
+        return context.combined_summary
+
+
 def build_stock_report(context: ReportContext) -> str:
+    combined_summary = resolve_combined_summary(context)
     citations = "\n".join(f"- {citation}" for citation in context.citations)
     return f"""# {context.symbol} AI 个股报告
 
@@ -21,7 +51,7 @@ def build_stock_report(context: ReportContext) -> str:
 
 ## 综合研判
 
-{context.combined_summary}
+{combined_summary}
 
 ## 行情摘要
 

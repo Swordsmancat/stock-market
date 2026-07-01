@@ -11,7 +11,8 @@ import { InstrumentQuickActions } from "@/components/instrument-actions";
 import { InstrumentWatchlistForm } from "@/components/instrument-watchlist-form";
 import { FlashBanner } from "@/components/flash-banner";
 import { getInstrumentDateRange, getDashboardDateRanges, parseInstrumentRange, type InstrumentRange } from "@/lib/dates";
-import { getMarketDataProvider, withProviderQuery } from "@/lib/market-data";
+import { getPlatformSettings } from "@/lib/platform-settings-store";
+import { withProviderQuery } from "@/lib/market-data";
 import { backendFetch } from "@/lib/backend-api";
 
 type BarsPayload = {
@@ -112,7 +113,8 @@ export default async function InstrumentDetailPage({
   const selectedRange = parseInstrumentRange(range);
   const dateRange = getInstrumentDateRange(selectedRange);
   const { analysis } = getDashboardDateRanges();
-  const provider = getMarketDataProvider();
+  const settings = await getPlatformSettings();
+  const provider = settings.market_data_provider;
   const t = await getTranslations("InstrumentDetail");
 
   const instrumentsPayload = await fetchOptionalJson<InstrumentsPayload>("/instruments", { items: [] });
@@ -184,6 +186,7 @@ export default async function InstrumentDetailPage({
           market={instrumentMeta?.market ?? "US"}
           analysisStart={analysis.start}
           analysisEnd={analysis.end}
+          provider={provider}
           watchlistForm={
             <InstrumentWatchlistForm
               locale={locale}

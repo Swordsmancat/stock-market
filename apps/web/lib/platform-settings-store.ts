@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+/** Shared with Python backend at repo/data/platform_settings.json */
+
 export type PlatformSettings = {
   market_data_provider: string;
   llm_provider: string;

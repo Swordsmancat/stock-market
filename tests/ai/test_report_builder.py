@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from packages.ai.report_builder import ReportContext, build_stock_report
 
 
@@ -12,7 +14,11 @@ def test_build_stock_report_includes_citations_and_cutoff():
         citations=["news_articles:1", "bars_1d:AAPL:2026-06-29"],
         combined_summary="综合来看，技术面偏强，基本面稳定，消息面积极。",
     )
-    report = build_stock_report(context)
+    with patch(
+        "packages.services.platform_settings.get_platform_settings",
+        return_value={"llm_provider": "mock", "llm_api_key": ""},
+    ):
+        report = build_stock_report(context)
     assert "AAPL" in report
     assert "2026-06-29" in report
     assert "## 综合研判" in report

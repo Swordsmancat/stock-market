@@ -15,6 +15,18 @@ vi.mock("@/lib/backend-api", () => ({
   getBackendApiUrl: () => "http://127.0.0.1:8000",
 }));
 
+vi.mock("@/lib/platform-settings-store", () => ({
+  getPlatformSettings: async () => ({
+    market_data_provider: "yfinance",
+    llm_provider: "mock",
+    llm_api_key: "",
+    llm_api_base: "https://api.openai.com/v1",
+    akshare_enabled: false,
+    tushare_token: "",
+    llm_api_key_configured: false,
+  }),
+}));
+
 vi.mock("@/components/instrument-watchlist-form", () => ({
   InstrumentWatchlistForm: () => <button type="submit">Add to Watchlist</button>,
 }));
