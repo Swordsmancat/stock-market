@@ -38,9 +38,12 @@ class AkShareProvider:
             return []
         bars: list[ProviderBar] = []
         for _, row in df.iterrows():
+            ts = row["timestamp"]
+            trade_date = ts.date() if hasattr(ts, "date") else ts
             bars.append(
                 ProviderBar(
-                    timestamp=row["timestamp"],
+                    symbol=symbol,
+                    timestamp=trade_date,
                     open=Decimal(str(row["open"])),
                     high=Decimal(str(row["high"])),
                     low=Decimal(str(row["low"])),
@@ -58,11 +61,13 @@ class AkShareProvider:
 
             end_str = end.isoformat().replace("-", "")
             start_str = start.isoformat().replace("-", "")
-
-            if symbol.startswith("6"):
-                df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_str, end_date=end_str, adjust="qfq")
-            else:
-                df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_str, end_date=end_str, adjust="qfq")
+            df = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=start_str,
+                end_date=end_str,
+                adjust="qfq",
+            )
 
             if df is None or df.empty:
                 return pd.DataFrame()

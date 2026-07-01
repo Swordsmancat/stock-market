@@ -10,10 +10,18 @@ Internal research platform for multi-market stock analysis: market data ingestio
 cp .env.example .env
 ```
 
-2. Start infrastructure (PostgreSQL + Redis):
+2. Start infrastructure (PostgreSQL + Redis + optional API/workers):
 
 ```bash
-docker compose up -d
+docker compose up -d db redis
+# full stack with API:
+docker compose up -d db redis api worker beat
+```
+
+For A-share data providers:
+
+```bash
+pip install -e ".[cn-market]"
 ```
 
 3. Install Python dependencies and run migrations:

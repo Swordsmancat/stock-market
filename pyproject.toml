@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+cn-market = ["akshare", "tushare"]
 
 [build-system]
 requires = ["setuptools>=68"]

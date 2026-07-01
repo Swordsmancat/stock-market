@@ -42,6 +42,28 @@ celery -A apps.worker.celery_app.celery_app beat --loglevel=info
 docker compose up -d db redis worker beat
 ```
 
+## Docker 启动完整栈（含 API）
+
+```bash
+docker compose up -d db redis api worker beat
+```
+
+API 将在 http://localhost:8000 可用（含 `/watchlist`、`/settings/platform` 等完整路由）。
+
+## 验证 Celery 连接
+
+```bash
+python scripts/verify_celery.py
+```
+
+## A 股数据源（AkShare / Tushare）
+
+```bash
+python -m pip install -e ".[cn-market]"
+```
+
+在设置页选择 `akshare` 或 `tushare` 作为行情数据源。Tushare 需在设置页填写 Token。
+
 ## 数据库迁移
 
 首次启动或拉取新代码后执行：

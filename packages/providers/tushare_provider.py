@@ -41,9 +41,12 @@ class TushareProvider:
             return []
         bars: list[ProviderBar] = []
         for _, row in df.iterrows():
+            ts = row["timestamp"]
+            trade_date = ts.date() if hasattr(ts, "date") else ts
             bars.append(
                 ProviderBar(
-                    timestamp=row["timestamp"],
+                    symbol=symbol,
+                    timestamp=trade_date,
                     open=Decimal(str(row["open"])),
                     high=Decimal(str(row["high"])),
                     low=Decimal(str(row["low"])),
