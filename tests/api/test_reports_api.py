@@ -129,3 +129,49 @@ def test_daily_report_history_returns_persisted_reports_in_descending_order():
     assert "Apple reports strong growth in services revenue" in payload["items"][0][
         "content_markdown"
     ]
+
+
+def test_reports_list_filters_and_detail_returns_persisted_report():
+    session = make_session()
+    ingest_mock_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 20), session=session)
+    calculate_and_store_daily_indicators(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 20),
+        session=session,
+        ma_window=3,
+    )
+    ingest_mock_news("AAPL", session=session)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        client.post(
+            "/reports/AAPL/daily/generate",
+            params={"start": "2026-01-01", "end": "2026-01-20"},
+        )
+        list_response = client.get(
+            "/reports",
+            params={"symbol": "AAPL", "q": "Apple", "limit": 10, "offset": 0},
+        )
+        report_id = list_response.json()["items"][0]["id"]
+        detail_response = client.get(f"/reports/items/{report_id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["source"] == "database"
+    assert payload["total"] == 1
+    assert payload["limit"] == 10
+    assert payload["offset"] == 0
+    assert payload["items"][0]["symbol"] == "AAPL"
+    assert payload["items"][0]["report_type"] == "stock_daily"
+
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["id"] == report_id
+    assert "Apple reports strong growth in services revenue" in detail["content_markdown"]

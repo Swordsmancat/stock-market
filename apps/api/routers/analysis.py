@@ -16,6 +16,7 @@ def refresh_analysis(
     start: date = Query(...),
     end: date = Query(...),
     ma_window: int = Query(default=20, ge=1),
+    provider: str = Query(default="mock"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return refresh_stock_analysis(
@@ -25,4 +26,5 @@ def refresh_analysis(
         end=end,
         session=session,
         ma_window=ma_window,
+        provider_name=provider,
     )

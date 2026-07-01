@@ -58,8 +58,17 @@ def _active_items(watchlist: Watchlist, session: Session) -> list[WatchlistItem]
     )
 
 
+def _has_any_items(watchlist: Watchlist, session: Session) -> bool:
+    return (
+        session.query(WatchlistItem.id)
+        .filter(WatchlistItem.watchlist_id == watchlist.id)
+        .first()
+        is not None
+    )
+
+
 def _seed_default_items_if_empty(watchlist: Watchlist, session: Session) -> None:
-    if _active_items(watchlist, session):
+    if _has_any_items(watchlist, session):
         return
 
     for item in _parse_watchlist_config(settings.daily_report_watchlist):
@@ -121,6 +130,38 @@ def upsert_watchlist_item(
     session.commit()
 
     return {"source": "database", "item": _serialize_item(item)}
+
+
+def remove_watchlist_item(
+    symbol: str,
+    market: str,
+    session: Session,
+) -> dict[str, object]:
+    watchlist = _get_or_create_default_watchlist(session)
+    normalized_symbol = symbol.upper()
+    normalized_market = market.upper()
+    item = (
+        session.query(WatchlistItem)
+        .filter(WatchlistItem.watchlist_id == watchlist.id)
+        .filter(WatchlistItem.symbol == normalized_symbol)
+        .filter(WatchlistItem.market == normalized_market)
+        .first()
+    )
+    if item is None:
+        return {
+            "source": "database",
+            "status": "not_found",
+            "symbol": normalized_symbol,
+            "market": normalized_market,
+        }
+
+    item.is_active = False
+    session.commit()
+    return {
+        "source": "database",
+        "status": "removed",
+        "item": _serialize_item(item),
+    }
 
 
 def get_active_watchlist_entries(session: Session) -> list[tuple[str, str]]:

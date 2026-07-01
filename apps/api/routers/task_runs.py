@@ -10,9 +10,10 @@ router = APIRouter(prefix="/task-runs", tags=["task-runs"])
 @router.get("/recent")
 def get_recent_task_runs(
     limit: int = Query(default=10, ge=1, le=100),
+    status: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return get_recent_task_runs_payload(session=session, limit=limit)
+    return get_recent_task_runs_payload(session=session, limit=limit, status=status)
 
 
 @router.get("/latest")

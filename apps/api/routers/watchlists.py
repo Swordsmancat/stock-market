@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from packages.services.watchlists import get_default_watchlist_payload, upsert_watchlist_item
+from packages.services.watchlists import (
+    get_default_watchlist_payload,
+    remove_watchlist_item,
+    upsert_watchlist_item,
+)
 from packages.shared.database import get_session
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
@@ -36,3 +40,12 @@ def upsert_default_watchlist_item(
         alert_rules=payload.alert_rules,
         session=session,
     )
+
+
+@router.delete("/items")
+def remove_default_watchlist_item(
+    symbol: str,
+    market: str,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return remove_watchlist_item(symbol=symbol, market=market, session=session)

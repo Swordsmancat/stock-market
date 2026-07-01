@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   const requestUrl = new URL(request.url);
   const upstreamUrl = new URL("/ingestion/mock-snapshot", apiBaseUrl);
 
-  for (const key of ["market", "start", "end"]) {
+  for (const key of ["market", "start", "end", "provider"]) {
     const value = requestUrl.searchParams.get(key);
     if (value !== null) {
       upstreamUrl.searchParams.set(key, value);

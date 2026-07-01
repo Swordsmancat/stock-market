@@ -15,9 +15,10 @@ def get_bars(
     timeframe: str = Query(default="1d"),
     start: date = Query(...),
     end: date = Query(...),
+    provider: str = Query(default="mock"),
     session: Session = Depends(get_session),
 ) -> dict:
-    return get_bars_payload(symbol, timeframe, start, end, session=session)
+    return get_bars_payload(symbol, timeframe, start, end, session=session, provider_name=provider)
 
 
 @router.get("/{symbol}/indicators")

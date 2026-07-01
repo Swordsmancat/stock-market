@@ -6,6 +6,7 @@ import packages.domain.models  # noqa: F401
 from packages.services.watchlists import (
     get_active_watchlist_entries,
     get_default_watchlist_payload,
+    remove_watchlist_item,
     upsert_watchlist_item,
 )
 from packages.shared.database import Base
@@ -56,3 +57,15 @@ def test_upsert_watchlist_item_persists_alert_rules():
     assert result["item"]["market"] == "HK"
     assert result["item"]["alert_rules"] == {"price_above": 400, "rsi_below": 30}
     assert entries == [("0700", "HK")]
+
+
+def test_remove_watchlist_item_marks_item_inactive():
+    session = make_session()
+    upsert_watchlist_item("AAPL", "US", session=session, name="Apple Inc.")
+
+    result = remove_watchlist_item("AAPL", "US", session=session)
+    entries = get_active_watchlist_entries(session=session)
+
+    assert result["status"] == "removed"
+    assert result["item"]["is_active"] is False
+    assert entries == []

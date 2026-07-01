@@ -15,8 +15,15 @@ def refresh_stock_analysis(
     end: date,
     session: Session,
     ma_window: int = 20,
+    provider_name: str = "mock",
 ) -> dict[str, object]:
-    ingestion = ingest_mock_market_snapshot(market, start, end, session=session)
+    ingestion = ingest_mock_market_snapshot(
+        market,
+        start,
+        end,
+        session=session,
+        provider_name=provider_name,
+    )
     indicators = calculate_and_store_daily_indicators(
         symbol,
         start,

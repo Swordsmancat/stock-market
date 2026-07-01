@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   const requestUrl = new URL(request.url);
   const upstreamUrl = new URL("/analysis/refresh", apiBaseUrl);
 
-  for (const key of ["symbol", "market", "start", "end", "ma_window"]) {
+  for (const key of ["symbol", "market", "start", "end", "ma_window", "provider"]) {
     const value = requestUrl.searchParams.get(key);
     if (value !== null) {
       upstreamUrl.searchParams.set(key, value);

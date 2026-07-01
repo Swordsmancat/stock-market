@@ -76,8 +76,15 @@ def fail_task_run(task_run: TaskRun, error_message: str, session: Session) -> di
     return _serialize_task_run(task_run)
 
 
-def get_recent_task_runs_payload(session: Session, limit: int = 10) -> dict[str, object]:
-    rows = session.query(TaskRun).order_by(TaskRun.started_at.desc()).limit(limit).all()
+def get_recent_task_runs_payload(
+    session: Session,
+    limit: int = 10,
+    status: str | None = None,
+) -> dict[str, object]:
+    query = session.query(TaskRun)
+    if status:
+        query = query.filter(TaskRun.status == status)
+    rows = query.order_by(TaskRun.started_at.desc()).limit(limit).all()
     return {"source": "database", "items": [_serialize_task_run(row) for row in rows]}
 
 

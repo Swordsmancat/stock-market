@@ -1,14 +1,16 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from packages.services.instruments import list_instruments_payload
+from packages.shared.database import get_session
 
 router = APIRouter(prefix="/instruments", tags=["instruments"])
 
 
 @router.get("")
-def list_instruments() -> dict[str, list[dict[str, str]]]:
-    return {
-        "items": [
-            {"symbol": "600519", "name": "Kweichow Moutai", "market": "CN"},
-            {"symbol": "0700", "name": "Tencent Holdings", "market": "HK"},
-            {"symbol": "AAPL", "name": "Apple Inc.", "market": "US"},
-        ]
-    }
+def list_instruments(
+    q: str | None = Query(default=None),
+    market: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return list_instruments_payload(session=session, query=q, market=market)

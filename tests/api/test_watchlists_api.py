@@ -76,3 +76,31 @@ def test_watchlist_api_upserts_item_with_alert_rules():
             "alert_rules": {"price_above": 400},
         }
     ]
+
+
+def test_watchlist_api_removes_item_from_active_list():
+    session = make_session()
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        upsert_response = client.post(
+            "/watchlist/items",
+            json={"symbol": "AAPL", "market": "US", "name": "Apple Inc."},
+        )
+        remove_response = client.delete(
+            "/watchlist/items",
+            params={"symbol": "AAPL", "market": "US"},
+        )
+        list_response = client.get("/watchlist")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert upsert_response.status_code == 200
+    assert remove_response.status_code == 200
+    assert remove_response.json()["status"] == "removed"
+    assert list_response.status_code == 200
+    assert list_response.json()["items"] == []

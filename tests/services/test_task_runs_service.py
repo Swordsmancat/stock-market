@@ -65,3 +65,16 @@ def test_task_run_service_records_failure_and_recent_payload():
     assert failed["error_message"] == "provider timeout"
     assert recent["items"][0]["status"] == "failed"
     assert recent["items"][0]["input_json"] == {"watchlist": "0700:HK"}
+
+
+def test_recent_task_runs_can_filter_by_status():
+    session = make_session()
+    succeeded_run = start_task_run("reports.refresh_daily_watchlist_analysis", {}, session=session)
+    finish_task_run(succeeded_run, {"item_count": 1}, session=session)
+    failed_run = start_task_run("reports.refresh_daily_watchlist_analysis", {}, session=session)
+    fail_task_run(failed_run, "provider timeout", session=session)
+
+    payload = get_recent_task_runs_payload(session=session, status="failed")
+
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["status"] == "failed"

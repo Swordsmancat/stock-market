@@ -74,6 +74,7 @@ def get_bars_payload(
     start: date,
     end: date,
     session: Session | None = None,
+    provider_name: str = "mock",
 ) -> dict[str, object]:
     if timeframe == "1d" and session is not None:
         try:
@@ -88,11 +89,12 @@ def get_bars_payload(
                 "items": [serialize_daily_bar(bar) for bar in db_bars],
             }
 
-    bars = _provider().fetch_bars(symbol, timeframe, start, end)
+    provider = get_provider(provider_name)
+    bars = provider.fetch_bars(symbol, timeframe, start, end)
     return {
         "symbol": symbol,
         "timeframe": timeframe,
-        "source": "mock",
+        "source": provider_name.lower(),
         "items": [serialize_bar(bar) for bar in bars],
     }
 

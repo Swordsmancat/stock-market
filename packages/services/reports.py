@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,66 @@ from packages.services.fundamentals import get_fundamental_payload
 from packages.services.indicators import get_stored_indicators_payload
 from packages.services.market_data import get_bars_payload
 from packages.services.news import get_news_sentiment_payload
+
+
+def _serialize_generated_report(report: GeneratedReport) -> dict[str, object]:
+    return {
+        "id": str(report.id),
+        "symbol": report.symbol,
+        "report_type": report.report_type,
+        "as_of": report.as_of.isoformat(),
+        "content_markdown": report.content_markdown,
+        "citations": report.citations,
+        "source_summary": report.source_summary,
+        "created_at": report.created_at.isoformat(),
+    }
+
+
+def list_reports_payload(
+    session: Session,
+    symbol: str | None = None,
+    report_type: str | None = None,
+    query: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, object]:
+    report_query = session.query(GeneratedReport)
+    if symbol:
+        report_query = report_query.filter(GeneratedReport.symbol == symbol.upper())
+    if report_type:
+        report_query = report_query.filter(GeneratedReport.report_type == report_type)
+    if query:
+        like_query = f"%{query.strip()}%"
+        report_query = report_query.filter(
+            (GeneratedReport.symbol.ilike(like_query))
+            | (GeneratedReport.content_markdown.ilike(like_query))
+        )
+
+    total = report_query.count()
+    reports = (
+        report_query.order_by(GeneratedReport.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "source": "database",
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "items": [_serialize_generated_report(report) for report in reports],
+    }
+
+
+def get_report_payload(report_id: str, session: Session) -> dict[str, object] | None:
+    try:
+        report_uuid = UUID(report_id)
+    except ValueError:
+        return None
+    report = session.get(GeneratedReport, report_uuid)
+    if report is None:
+        return None
+    return _serialize_generated_report(report)
 
 
 def _format_indicator_number(value: object) -> str:
