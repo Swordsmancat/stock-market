@@ -44,10 +44,21 @@ def _dispatch_market_ingestion(input_json: dict[str, Any], task_run_id: str) -> 
     return async_result.id
 
 
+def _dispatch_alert_evaluation(input_json: dict[str, Any], task_run_id: str) -> str:
+    from apps.worker.tasks.alerts import evaluate_watchlist_alerts
+
+    async_result = evaluate_watchlist_alerts.delay(
+        provider=input_json.get("provider"),
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
 _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "reports.refresh_daily_watchlist_analysis": _dispatch_watchlist_analysis,
     "reports.refresh_daily_stock_analysis": _dispatch_stock_analysis,
     "ingestion.ingest_market_data": _dispatch_market_ingestion,
+    "alerts.evaluate_watchlist_alerts": _dispatch_alert_evaluation,
 }
 
 

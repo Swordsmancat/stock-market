@@ -12,6 +12,7 @@ def main() -> int:
         from apps.worker.celery_app import celery_app
         import apps.worker.tasks.ingestion  # noqa: F401
         import apps.worker.tasks.reports  # noqa: F401
+        import apps.worker.tasks.alerts  # noqa: F401
     except Exception as exc:
         print(f"FAIL: cannot import celery app: {exc}")
         return 1
@@ -28,6 +29,7 @@ def main() -> int:
         "ingestion.ingest_market_data",
         "reports.refresh_daily_stock_analysis",
         "reports.refresh_daily_watchlist_analysis",
+        "alerts.evaluate_watchlist_alerts",
     }
     missing = expected - set(registered)
     if missing:

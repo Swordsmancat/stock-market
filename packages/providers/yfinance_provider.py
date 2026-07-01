@@ -36,7 +36,7 @@ class YFinanceProvider:
             raise ValueError(msg)
 
         ticker = map_symbol_to_ticker(symbol)
-        frame = self._downloader(ticker, start, end)
+        frame = _normalize_downloaded_frame(self._downloader(ticker, start, end), ticker)
         bars: list[ProviderBar] = []
 
         for timestamp, row in frame.iterrows():
@@ -63,3 +63,37 @@ class YFinanceProvider:
 
 def _decimal(value: object) -> Decimal:
     return Decimal(str(value))
+
+
+def _normalize_downloaded_frame(frame: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    if not isinstance(frame.columns, pd.MultiIndex):
+        return frame
+
+    price_level_index = _find_price_level_index(frame.columns)
+    if price_level_index is None:
+        return frame
+
+    ticker_level_indices = [
+        level_index
+        for level_index in range(frame.columns.nlevels)
+        if level_index != price_level_index
+    ]
+    if len(ticker_level_indices) == 1:
+        ticker_level_index = ticker_level_indices[0]
+        try:
+            return frame.xs(ticker, axis=1, level=ticker_level_index, drop_level=True)
+        except KeyError:
+            pass
+
+    normalized_frame = frame.copy()
+    normalized_frame.columns = frame.columns.get_level_values(price_level_index)
+    return normalized_frame
+
+
+def _find_price_level_index(columns: pd.MultiIndex) -> int | None:
+    required_price_columns = {"Open", "High", "Low", "Close", "Volume"}
+    for level_index in range(columns.nlevels):
+        level_values = {str(value) for value in columns.get_level_values(level_index)}
+        if required_price_columns.issubset(level_values):
+            return level_index
+    return None

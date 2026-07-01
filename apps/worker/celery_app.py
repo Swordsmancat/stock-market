@@ -55,5 +55,12 @@ celery_app.conf.beat_schedule = {
             "provider": settings.market_data_provider,
         },
     },
+    "watchlist-alert-evaluation": {
+        "task": "alerts.evaluate_watchlist_alerts",
+        "schedule": crontab(minute="*/15"),
+        "kwargs": {
+            "provider": settings.market_data_provider,
+        },
+    },
 }
 celery_app.autodiscover_tasks(["apps.worker.tasks"])

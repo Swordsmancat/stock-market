@@ -33,7 +33,7 @@ export function IngestionButton({ market, start, end }: IngestionButtonProps) {
         provider: getMarketDataProvider(),
       });
       const taskRun = await enqueueAndPoll(
-        `/api/ingestion/mock-snapshot?${params.toString()}`,
+        `/api/ingestion/snapshot?${params.toString()}`,
         { taskName: "ingestion.ingest_market_data" },
       );
       const result = taskRun.result_json as { market?: string; bar_count?: number } | null;

@@ -122,13 +122,15 @@ flowchart TD
 | `report_subscriptions` | 每日报告订阅 | `user_id`, `scope_type`, `scope_id`, `schedule`, `delivery_channel` |
 | `job_runs` | 后台任务审计 | `id`, `job_type`, `status`, `started_at`, `finished_at`, `error_message`, `metadata_json` |
 
+> 实现状态说明：当前代码已将早期设计中的 `job_runs` 术语演进为 `task_runs`，并通过 `TaskRun` 模型、`/task-runs` API、Celery task id、任务重试和运行状态页面承载后台任务审计能力。后续文档和实现应以 `task_runs` 作为 canonical term，`job_runs` 仅视为早期设计名称。
+
 ### 4.5 数据建模原则
 
 1. 多市场字段必须显式建模，包括 `market_id`、`exchange_id`、`currency`、`timezone`。
 2. 日线和分钟线必须幂等写入，重复采集不能产生重复 K 线。
 3. 新闻和报告必须保存引用，AI 生成内容不能脱离可验证来源。
 4. 财报原始数据和标准化指标同时保留，避免因为标准化过程丢失上下文。
-5. 后台任务必须写入 `job_runs`，用于追踪失败、重试和数据质量问题。
+5. 后台任务必须写入 `task_runs`，用于追踪失败、重试和数据质量问题。
 
 ## 5. 模块详细设计
 
@@ -310,7 +312,7 @@ MVP 必须完成：
 | AI 幻觉 | 报告事实必须来自数据库，并保存引用和数据截止时间 |
 | 投资建议合规 | 第一阶段仅做模拟组合建议，不自动下单 |
 | 成本膨胀 | 对分钟线、新闻全文和 LLM 调用设置缓存、批处理和保留策略 |
-| 数据质量 | 采集任务写入 `job_runs`，并增加缺口检测和重复检测 |
+| 数据质量 | 采集任务写入 `task_runs`，并增加缺口检测和重复检测 |
 
 ## 10. 验收标准
 

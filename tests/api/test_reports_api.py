@@ -10,6 +10,8 @@ from apps.api.main import app
 from packages.services.indicators import calculate_and_store_daily_indicators
 from packages.services.ingestion import ingest_mock_market_snapshot
 from packages.services.news import ingest_mock_news
+from packages.services.reports import generate_and_store_daily_report
+from packages.services.task_runs import finish_task_run, start_task_run
 from packages.shared.database import Base, get_session
 
 
@@ -183,3 +185,50 @@ def test_reports_list_filters_and_detail_returns_persisted_report():
     detail = detail_response.json()
     assert detail["id"] == report_id
     assert "Apple reports strong growth in services revenue" in detail["content_markdown"]
+
+
+def test_reports_list_and_detail_include_task_run_id_lineage():
+    session = make_session()
+    ingest_mock_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 20), session=session)
+    calculate_and_store_daily_indicators(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 20),
+        session=session,
+        ma_window=3,
+    )
+    ingest_mock_news("AAPL", session=session)
+    task_run = start_task_run(
+        "reports.refresh_daily_stock_analysis",
+        {"symbol": "AAPL", "market": "US"},
+        session=session,
+    )
+    generated = generate_and_store_daily_report(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 20),
+        session=session,
+        task_run_id=task_run.id,
+    )
+    finish_task_run(task_run, {"report": {"id": generated["id"]}}, session=session)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        list_response = client.get("/reports", params={"symbol": "AAPL", "limit": 10, "offset": 0})
+        detail_response = client.get(f"/reports/items/{generated['id']}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert list_response.status_code == 200
+    list_payload = list_response.json()
+    assert list_payload["items"][0]["id"] == generated["id"]
+    assert list_payload["items"][0]["task_run_id"] == str(task_run.id)
+
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["id"] == generated["id"]
+    assert detail["task_run_id"] == str(task_run.id)

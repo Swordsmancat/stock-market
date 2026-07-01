@@ -90,7 +90,7 @@ REDIS_URL=redis://localhost:6379/0
 默认推荐使用 `yfinance`（`.env.example` 已配置）。采集与分析刷新均会走该 provider：
 
 ```bash
-curl -X POST "http://localhost:8000/ingestion/mock-snapshot?market=US&provider=yfinance&start=2026-01-01&end=2026-01-20"
+curl -X POST "http://localhost:8000/ingestion/snapshot?market=US&provider=yfinance&start=2026-01-01&end=2026-01-20"
 ```
 
 分析刷新会同时 ingest 新闻（yfinance headlines）与基本面（yfinance `.info`），并写入 DB。
@@ -98,8 +98,10 @@ curl -X POST "http://localhost:8000/ingestion/mock-snapshot?market=US&provider=y
 Mock 仍可用于离线测试：
 
 ```bash
-curl -X POST "http://localhost:8000/ingestion/mock-snapshot?market=US&provider=mock&start=2026-01-01&end=2026-01-20"
+curl -X POST "http://localhost:8000/ingestion/snapshot?market=US&provider=mock&start=2026-01-01&end=2026-01-20"
 ```
+
+兼容入口 `POST /ingestion/mock-snapshot` 暂时保留给旧脚本和旧前端代理，但新代码和文档应优先使用 `POST /ingestion/snapshot`。
 
 ## 异步任务（Dashboard 按钮）
 
@@ -107,13 +109,13 @@ Dashboard「采集 / 刷新分析」通过 Celery 异步执行，并在任务监
 
 ```bash
 curl -X POST "http://localhost:8000/analysis/refresh?symbol=AAPL&market=US&provider=yfinance"
-curl -X POST "http://localhost:8000/ingestion/mock-snapshot?market=US&provider=yfinance"
+curl -X POST "http://localhost:8000/ingestion/snapshot?market=US&provider=yfinance&start=2026-01-01&end=2026-01-20"
 curl "http://localhost:8000/task-runs/recent"
 ```
 
 需同时运行 **Worker** 与 **Beat**（见上文）。
 
-Beat 定时任务包括：关注列表分析、默认个股分析、US/HK/CN 市场日线采集。
+Beat 定时任务包括：关注列表分析、默认个股分析、US/HK/CN 市场日线采集、**关注列表告警评估**（每 15 分钟，`alerts.evaluate_watchlist_alerts`）。
 
 ## 组合与告警 API
 

@@ -36,6 +36,39 @@ def test_yfinance_provider_returns_provider_bars_from_downloaded_dataframe():
     assert bars[0].volume == Decimal("1000")
 
 
+def test_yfinance_provider_accepts_multi_index_downloaded_dataframe():
+    def fake_download(ticker: str, start: date, end: date) -> pd.DataFrame:
+        assert ticker == "AAPL"
+        columns = pd.MultiIndex.from_tuples(
+            [
+                ("Close", "AAPL"),
+                ("High", "AAPL"),
+                ("Low", "AAPL"),
+                ("Open", "AAPL"),
+                ("Volume", "AAPL"),
+            ],
+            names=["Price", "Ticker"],
+        )
+        return pd.DataFrame(
+            [[102.0, 103.0, 99.0, 100.0, 1000]],
+            columns=columns,
+            index=pd.to_datetime(["2026-01-01"]),
+        )
+
+    provider = YFinanceProvider(downloader=fake_download)
+
+    bars = provider.fetch_bars("AAPL", "1d", date(2026, 1, 1), date(2026, 1, 3))
+
+    assert len(bars) == 1
+    assert bars[0].symbol == "AAPL"
+    assert bars[0].timestamp == date(2026, 1, 1)
+    assert bars[0].open == Decimal("100.0")
+    assert bars[0].high == Decimal("103.0")
+    assert bars[0].low == Decimal("99.0")
+    assert bars[0].close == Decimal("102.0")
+    assert bars[0].volume == Decimal("1000")
+
+
 def test_yfinance_provider_maps_known_market_instruments():
     provider = YFinanceProvider(downloader=lambda ticker, start, end: pd.DataFrame())
 

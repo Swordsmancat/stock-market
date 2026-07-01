@@ -9,14 +9,24 @@ vi.mock("@/lib/backend-api", () => ({
 vi.mock("@/components/watchlist-forms", () => ({
   WatchlistAddForm: () => null,
   WatchlistRemoveButton: () => <button title="Remove">Remove</button>,
-  WatchlistEditAlertRulesForm: ({ alertRules = {} }: { alertRules?: Record<string, number> }) => (
+  WatchlistEditAlertRulesForm: ({
+    symbol,
+    market,
+    alertRules = {},
+  }: {
+    symbol: string;
+    market: string;
+    alertRules?: Record<string, number>;
+  }) => (
     <div>
+      <span>{`Edit alerts ${symbol} ${market}`}</span>
       {alertRules.price_above !== undefined ? (
         <input readOnly value={String(alertRules.price_above)} />
       ) : null}
       {alertRules.rsi_below !== undefined ? (
         <input readOnly value={String(alertRules.rsi_below)} />
       ) : null}
+      <button type="button">Save</button>
     </div>
   ),
 }));
@@ -111,5 +121,43 @@ it("renders watchlist instruments with alert status from enriched API payload", 
   expect(screen.getByText("$420.50")).toBeInTheDocument();
   expect(screen.getByText("$102.00")).toBeInTheDocument();
   expect(screen.getByText("35.0")).toBeInTheDocument();
+  expect(screen.getByText("Edit alerts 0700 HK")).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(3);
   expect(screen.getAllByTitle("Remove")).toHaveLength(3);
+});
+
+it("renders success and failure feedback for alert rule updates", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/watchlist")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            name: "default",
+            source: "database",
+            items: [],
+          }),
+        ),
+      );
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  const successRender = render(
+    await WatchlistPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({ op: "alerts_updated" }),
+    }),
+  );
+  expect(screen.getByText("Alert rules updated.")).toBeInTheDocument();
+
+  successRender.unmount();
+
+  render(
+    await WatchlistPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({ op: "error", reason: "http_500" }),
+    }),
+  );
+  expect(screen.getByText("Operation failed: http_500.")).toBeInTheDocument();
 });

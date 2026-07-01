@@ -18,12 +18,26 @@ type TaskRunDetail = {
   error_message: string | null;
 };
 
+type TaskRunDetailPayload = {
+  item?: TaskRunDetail;
+};
+
 async function fetchTaskRun(taskRunId: string): Promise<TaskRunDetail | null> {
   const response = await backendFetch(`/task-runs/${taskRunId}`, { cache: "no-store" });
   if (!response.ok) {
     return null;
   }
-  return response.json() as Promise<TaskRunDetail>;
+  const payload = (await response.json()) as TaskRunDetail | TaskRunDetailPayload;
+  return "item" in payload && payload.item ? payload.item : (payload as TaskRunDetail);
+}
+
+function extractReportId(taskRun: TaskRunDetail): string | null {
+  const report = taskRun.result_json?.report;
+  if (typeof report !== "object" || report === null || !("id" in report)) {
+    return null;
+  }
+  const reportId = report.id;
+  return typeof reportId === "string" && reportId.length > 0 ? reportId : null;
 }
 
 export default async function TaskRunDetailPage({
@@ -47,6 +61,8 @@ export default async function TaskRunDetailPage({
       </div>
     );
   }
+
+  const reportId = extractReportId(taskRun);
 
   return (
     <div className="space-y-6">
@@ -100,6 +116,14 @@ export default async function TaskRunDetailPage({
               {taskRun.result_json ? JSON.stringify(taskRun.result_json, null, 2) : "—"}
             </pre>
           </div>
+          {reportId ? (
+            <div>
+              <h3 className="mb-1 text-sm font-medium">{t("generatedReport")}</h3>
+              <Button variant="link" className="h-auto p-0" asChild>
+                <Link href={`/reports/${reportId}` as any}>{reportId}</Link>
+              </Button>
+            </div>
+          ) : null}
           {taskRun.error_message ? (
             <div>
               <h3 className="mb-1 text-sm font-medium text-destructive">{t("error")}</h3>

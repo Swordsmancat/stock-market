@@ -11,13 +11,13 @@ router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 TASK_NAME = "ingestion.ingest_market_data"
 
 
-@router.post("/mock-snapshot")
-def ingest_mock_snapshot(
-    market: str = Query(...),
-    provider: str = Query(default="mock"),
-    start: date = Query(...),
-    end: date = Query(...),
-    session: Session = Depends(get_session),
+def _enqueue_market_snapshot_ingestion(
+    *,
+    market: str,
+    provider: str,
+    start: date,
+    end: date,
+    session: Session,
 ) -> dict[str, object]:
     return enqueue_task_run(
         TASK_NAME,
@@ -27,5 +27,39 @@ def ingest_mock_snapshot(
             "end": end.isoformat(),
             "provider": provider,
         },
+        session=session,
+    )
+
+
+@router.post("/snapshot")
+def ingest_market_snapshot(
+    market: str = Query(...),
+    provider: str = Query(default="mock"),
+    start: date = Query(...),
+    end: date = Query(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return _enqueue_market_snapshot_ingestion(
+        market=market,
+        provider=provider,
+        start=start,
+        end=end,
+        session=session,
+    )
+
+
+@router.post("/mock-snapshot")
+def ingest_mock_snapshot(
+    market: str = Query(...),
+    provider: str = Query(default="mock"),
+    start: date = Query(...),
+    end: date = Query(...),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return _enqueue_market_snapshot_ingestion(
+        market=market,
+        provider=provider,
+        start=start,
+        end=end,
         session=session,
     )

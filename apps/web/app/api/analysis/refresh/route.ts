@@ -22,7 +22,7 @@ async function runLegacySyncAnalysis(requestUrl: URL): Promise<Response> {
     return Response.json({ detail: "Missing analysis parameters" }, { status: 400 });
   }
 
-  const ingestUrl = new URL("/ingestion/mock-snapshot", getBackendApiUrl());
+  const ingestUrl = new URL("/ingestion/snapshot", getBackendApiUrl());
   ingestUrl.searchParams.set("market", market);
   ingestUrl.searchParams.set("start", start);
   ingestUrl.searchParams.set("end", end);

@@ -32,3 +32,10 @@ def test_celery_beat_schedules_hk_and_cn_market_data_ingestion():
 
     assert hk["kwargs"] == {"market": "HK", "provider": "yfinance"}
     assert cn["kwargs"] == {"market": "CN", "provider": "yfinance"}
+
+
+def test_celery_beat_schedules_watchlist_alert_evaluation():
+    schedule = celery_app.conf.beat_schedule["watchlist-alert-evaluation"]
+
+    assert schedule["task"] == "alerts.evaluate_watchlist_alerts"
+    assert schedule["kwargs"] == {"provider": "yfinance"}

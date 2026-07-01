@@ -174,7 +174,8 @@
     "detailTitle": "Task Run Detail",
     "backToList": "Back to task runs",
     "notFound": "Task run not found.",
-    "celeryTaskId": "Celery Task ID"
+    "celeryTaskId": "Celery Task ID",
+    "generatedReport": "Generated Report"
   },
   "Portfolios": {
     "title": "Portfolios",

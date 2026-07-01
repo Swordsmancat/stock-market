@@ -7,6 +7,7 @@ def test_is_dispatchable_task_supports_registered_tasks():
     assert is_dispatchable_task("reports.refresh_daily_watchlist_analysis") is True
     assert is_dispatchable_task("reports.refresh_daily_stock_analysis") is True
     assert is_dispatchable_task("ingestion.ingest_market_data") is True
+    assert is_dispatchable_task("alerts.evaluate_watchlist_alerts") is True
     assert is_dispatchable_task("unknown.task") is False
 
 

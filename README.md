@@ -46,8 +46,8 @@ uvicorn apps.api.main:app --reload --port 8001
 5. Start background workers (optional, for async tasks):
 
 ```bash
-celery -A apps.worker.celery_app worker --loglevel=info
-celery -A apps.worker.celery_app beat --loglevel=info
+celery -A apps.worker.celery_app.celery_app worker --loglevel=info
+celery -A apps.worker.celery_app.celery_app beat --loglevel=info
 ```
 
 6. Start the web app:
@@ -67,10 +67,11 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | [docs/runbooks/mvp-acceptance.md](docs/runbooks/mvp-acceptance.md) | Acceptance checklist |
 | [CONTEXT.md](CONTEXT.md) | Domain terminology |
 | [docs/superpowers/plans/2026-07-01-priority-5-6-7.md](docs/superpowers/plans/2026-07-01-priority-5-6-7.md) | Latest implementation plan |
+| [docs/superpowers/plans/2026-07-01-implementation-gap-closure.md](docs/superpowers/plans/2026-07-01-implementation-gap-closure.md) | Current implementation status and gap-closure plan |
 
 ## Key features
 
-- **Market data**: yfinance provider (US/HK/CN), Celery scheduled ingestion
+- **Market data**: yfinance provider (US/HK/CN), provider-neutral `/ingestion/snapshot`, Celery scheduled ingestion
 - **Analysis pipeline**: indicators, fundamentals, news, AI daily reports
 - **Watchlist alerts**: price/RSI rules with trigger history
 - **Portfolios**: multi-portfolio CRUD with demo fallback

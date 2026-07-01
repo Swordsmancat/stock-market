@@ -211,3 +211,51 @@ def test_refresh_daily_watchlist_analysis_reuses_existing_task_run(monkeypatch):
     assert latest_run["id"] == str(existing_run.id)
     assert latest_run["status"] == "succeeded"
     assert latest_run["result_json"]["item_count"] == 1
+
+
+def test_evaluate_watchlist_alerts_task_records_trigger_and_task_run(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import alerts as alert_tasks
+
+    monkeypatch.setattr(alert_tasks, "SessionLocal", lambda: session)
+    upsert_watchlist_item(
+        "AAPL",
+        "US",
+        session=session,
+        alert_rules={"price_above": 1},
+    )
+
+    def fake_evaluate(session, provider_name=None):
+        from packages.services.alert_triggers import record_triggered_alerts
+
+        record_triggered_alerts(
+            "AAPL",
+            "US",
+            {
+                "triggered": True,
+                "rules": [
+                    {"key": "price_above", "threshold": 1, "value": 120, "triggered": True},
+                ],
+            },
+            session=session,
+        )
+        return {
+            "status": "evaluated",
+            "provider": provider_name or "mock",
+            "item_count": 1,
+            "triggered_count": 1,
+            "items": [{"symbol": "AAPL", "market": "US", "alert_status": {"triggered": True}}],
+        }
+
+    monkeypatch.setattr(alert_tasks, "evaluate_all_watchlist_alerts", fake_evaluate)
+
+    result = alert_tasks.evaluate_watchlist_alerts(provider="mock")
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="alerts.evaluate_watchlist_alerts",
+    )
+
+    assert result["status"] == "evaluated"
+    assert result["triggered_count"] == 1
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"]["triggered_count"] == 1

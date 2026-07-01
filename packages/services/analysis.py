@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from packages.services.fundamentals import ingest_fundamentals
 from packages.services.indicators import calculate_and_store_daily_indicators
-from packages.services.ingestion import ingest_mock_market_snapshot
+from packages.services.ingestion import ingest_market_snapshot
 from packages.services.news import ingest_news
 from packages.services.reports import generate_and_store_daily_report
 
@@ -20,7 +20,7 @@ def refresh_stock_analysis(
     provider_name: str = "mock",
     task_run_id: UUID | str | None = None,
 ) -> dict[str, object]:
-    ingestion = ingest_mock_market_snapshot(
+    ingestion = ingest_market_snapshot(
         market,
         start,
         end,

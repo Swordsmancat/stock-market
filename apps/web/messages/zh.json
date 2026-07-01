@@ -174,7 +174,8 @@
     "detailTitle": "任务详情",
     "backToList": "返回任务列表",
     "notFound": "未找到该任务。",
-    "celeryTaskId": "Celery 任务 ID"
+    "celeryTaskId": "Celery 任务 ID",
+    "generatedReport": "生成报告"
   },
   "Portfolios": {
     "title": "模拟组合",

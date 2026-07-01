@@ -189,7 +189,7 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     if (url.endsWith("/alerts/triggers/recent?limit=5")) {
       return Promise.resolve(new Response(JSON.stringify({ items: [] })));
     }
-    if (url.includes("/api/ingestion/mock-snapshot")) {
+    if (url.includes("/api/ingestion/snapshot")) {
       return Promise.resolve(
         new Response(
           JSON.stringify({

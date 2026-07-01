@@ -38,7 +38,7 @@ def test_ingestion_api_dispatches_task_run_and_writes_database(monkeypatch):
     try:
         client = TestClient(app)
         ingest_response = client.post(
-            "/ingestion/mock-snapshot",
+            "/ingestion/snapshot",
             params={
                 "market": "US",
                 "provider": "mock",
@@ -69,3 +69,39 @@ def test_ingestion_api_dispatches_task_run_and_writes_database(monkeypatch):
     assert bars_payload["source"] == "database"
     assert len(bars_payload["items"]) == 2
     assert bars_payload["items"][-1]["close"] == 102.0
+
+
+def test_legacy_mock_snapshot_endpoint_remains_compatible(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        lambda task_name, input_json, task_run_id: dispatch_task_run_sync(
+            task_name,
+            input_json,
+            task_run_id,
+            session,
+        ),
+    )
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/ingestion/mock-snapshot",
+            params={
+                "market": "US",
+                "provider": "mock",
+                "start": "2026-01-01",
+                "end": "2026-01-02",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "dispatched"
+    assert payload["task_run"]["task_name"] == "ingestion.ingest_market_data"

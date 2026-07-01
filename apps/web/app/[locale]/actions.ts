@@ -33,7 +33,7 @@ export async function triggerIngestionAction(formData: FormData) {
   const provider = String(formData.get("provider") ?? settings.market_data_provider);
 
   const params = new URLSearchParams({ market, start, end, provider });
-  const response = await backendFetch(`/ingestion/mock-snapshot?${params.toString()}`, {
+  const response = await backendFetch(`/ingestion/snapshot?${params.toString()}`, {
     method: "POST",
   });
   const body = await readJsonSafe(response);
@@ -93,7 +93,7 @@ export async function refreshAnalysisAction(formData: FormData) {
 
   if (response.status === 404) {
     const ingestParams = new URLSearchParams({ market, start, end, provider });
-    const ingestResponse = await backendFetch(`/ingestion/mock-snapshot?${ingestParams.toString()}`, {
+    const ingestResponse = await backendFetch(`/ingestion/snapshot?${ingestParams.toString()}`, {
       method: "POST",
     });
     if (!ingestResponse.ok) {
