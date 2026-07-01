@@ -10,7 +10,7 @@ afterEach(() => {
 it("renders latest report, history, and citations", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
-    if (url.endsWith("/reports?limit=50&offset=0")) {
+    if (url.endsWith("/reports?limit=10&offset=0")) {
       return Promise.resolve(
         new Response(
           JSON.stringify({
@@ -44,6 +44,7 @@ it("renders latest report, history, and citations", async () => {
 
   expect(screen.getAllByText("Reports Center")[0]).toBeInTheDocument();
   expect(screen.getByText("2 reports found")).toBeInTheDocument();
+  expect(screen.getByText("Showing 1-2 of 2")).toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: "AAPL" })[0]).toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText(/Persisted report: MA 119.00/)).toBeInTheDocument();
   expect(screen.getAllByTitle("View Full Report")[0]).toHaveAttribute("href", "/reports/report-1");

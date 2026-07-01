@@ -155,7 +155,15 @@ def test_reports_list_filters_and_detail_returns_persisted_report():
         )
         list_response = client.get(
             "/reports",
-            params={"symbol": "AAPL", "q": "Apple", "limit": 10, "offset": 0},
+            params={
+                "symbol": "AAPL",
+                "report_type": "stock_daily",
+                "q": "Apple",
+                "as_of_start": "2026-01-20",
+                "as_of_end": "2026-01-20",
+                "limit": 10,
+                "offset": 0,
+            },
         )
         report_id = list_response.json()["items"][0]["id"]
         detail_response = client.get(f"/reports/items/{report_id}")

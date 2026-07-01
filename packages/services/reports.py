@@ -20,6 +20,7 @@ def _serialize_generated_report(report: GeneratedReport) -> dict[str, object]:
         "content_markdown": report.content_markdown,
         "citations": report.citations,
         "source_summary": report.source_summary,
+        "task_run_id": str(report.task_run_id) if report.task_run_id else None,
         "created_at": report.created_at.isoformat(),
     }
 
@@ -29,6 +30,8 @@ def list_reports_payload(
     symbol: str | None = None,
     report_type: str | None = None,
     query: str | None = None,
+    as_of_start: date | None = None,
+    as_of_end: date | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, object]:
@@ -37,6 +40,10 @@ def list_reports_payload(
         report_query = report_query.filter(GeneratedReport.symbol == symbol.upper())
     if report_type:
         report_query = report_query.filter(GeneratedReport.report_type == report_type)
+    if as_of_start:
+        report_query = report_query.filter(GeneratedReport.as_of >= as_of_start)
+    if as_of_end:
+        report_query = report_query.filter(GeneratedReport.as_of <= as_of_end)
     if query:
         like_query = f"%{query.strip()}%"
         report_query = report_query.filter(
@@ -201,8 +208,12 @@ def generate_and_store_daily_report(
     start: date,
     end: date,
     session: Session,
+    task_run_id: UUID | str | None = None,
 ) -> dict[str, object]:
     payload = generate_stock_report_payload(symbol, start, end, session=session)
+    parsed_task_run_id: UUID | None = None
+    if task_run_id is not None:
+        parsed_task_run_id = task_run_id if isinstance(task_run_id, UUID) else UUID(str(task_run_id))
     report = GeneratedReport(
         symbol=symbol,
         report_type=str(payload["report_type"]),
@@ -210,15 +221,18 @@ def generate_and_store_daily_report(
         content_markdown=str(payload["content_markdown"]),
         citations=list(payload["citations"]),
         source_summary={"source": payload["source"]},
+        task_run_id=parsed_task_run_id,
     )
     session.add(report)
     session.commit()
 
     return {
+        "id": str(report.id),
         "symbol": symbol,
         "report_type": payload["report_type"],
         "as_of": end.isoformat(),
         "status": "stored",
+        "task_run_id": str(report.task_run_id) if report.task_run_id else None,
         "content_markdown": payload["content_markdown"],
         "citations": payload["citations"],
     }

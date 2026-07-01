@@ -1,4 +1,4 @@
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/src/i18n/routing";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,13 +12,28 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { WatchlistAddForm, WatchlistRemoveButton } from "@/components/watchlist-actions";
+import { WatchlistAddForm, WatchlistEditAlertRulesForm, WatchlistRemoveButton } from "@/components/watchlist-actions";
+import { EmptyState } from "@/components/empty-state";
+
+type AlertRuleStatus = {
+  key: string;
+  threshold: number;
+  value?: number | null;
+  triggered: boolean;
+};
 
 type WatchlistItem = {
   symbol: string;
   market: string;
   name: string;
   is_active: boolean;
+  alert_rules?: Record<string, number>;
+  latest_price?: number | null;
+  rsi?: number | null;
+  alert_status?: {
+    triggered: boolean;
+    rules: AlertRuleStatus[];
+  };
 };
 
 type WatchlistPayload = {
@@ -37,9 +52,21 @@ async function fetchWatchlist(): Promise<WatchlistPayload> {
   return response.json() as Promise<WatchlistPayload>;
 }
 
+function formatRuleLabel(
+  rule: AlertRuleStatus,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
+  if (rule.key === "price_above") {
+    return t("priceAboveRule", { value: rule.threshold });
+  }
+  if (rule.key === "rsi_below") {
+    return t("rsiBelowRule", { value: rule.threshold });
+  }
+  return `${rule.key} ${rule.threshold}`;
+}
+
 export default async function WatchlistPage() {
   const payload = await fetchWatchlist();
-  const { getTranslations } = await import("next-intl/server");
   const t = await getTranslations("Watchlist");
 
   return (
@@ -55,9 +82,7 @@ export default async function WatchlistPage() {
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
-          <CardDescription>
-            {payload.items.length} items in your watchlist.
-          </CardDescription>
+          <CardDescription>{payload.items.length} items in your watchlist.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -67,31 +92,70 @@ export default async function WatchlistPage() {
                 <TableHead>{t("name")}</TableHead>
                 <TableHead>{t("market")}</TableHead>
                 <TableHead>{t("price")}</TableHead>
+                <TableHead>{t("rsi")}</TableHead>
+                <TableHead>{t("alertRules")}</TableHead>
                 <TableHead className="text-right">{t("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {payload.items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    {t("noData")}
+                  <TableCell colSpan={7}>
+                    <EmptyState title={t("noData")} description={t("emptyHint")} />
                   </TableCell>
                 </TableRow>
               ) : (
                 payload.items.map((item) => (
                   <TableRow key={`${item.market}-${item.symbol}`}>
                     <TableCell className="font-medium">
-                      <Link href={`/instruments/${item.symbol}` as any} className="hover:underline">
-                        {item.symbol}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/instruments/${item.symbol}` as any} className="hover:underline">
+                          {item.symbol}
+                        </Link>
+                        {item.alert_status?.triggered ? (
+                          <Badge variant="destructive">{t("alertTriggered")}</Badge>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell>{item.name}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{item.market}</Badge>
                     </TableCell>
                     <TableCell>
-                      {/* Placeholder for real-time price */}
-                      <span className="text-muted-foreground">--</span>
+                      {item.latest_price !== undefined && item.latest_price !== null ? (
+                        <span className="font-medium">${item.latest_price.toFixed(2)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">{t("priceUnavailable")}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.rsi !== undefined && item.rsi !== null ? (
+                        <span>{item.rsi.toFixed(1)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">{t("rsiUnavailable")}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-2">
+                        {item.alert_status?.rules?.length ? (
+                          <div className="flex flex-wrap gap-1">
+                            {item.alert_status.rules.map((rule) => (
+                              <Badge
+                                key={`${item.symbol}-${rule.key}`}
+                                variant={rule.triggered ? "destructive" : "secondary"}
+                              >
+                                {formatRuleLabel(rule, t)}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                        <WatchlistEditAlertRulesForm
+                          symbol={item.symbol}
+                          market={item.market}
+                          name={item.name}
+                          alertRules={item.alert_rules}
+                        />
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

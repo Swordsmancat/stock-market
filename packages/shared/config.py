@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     daily_report_ma_window: int = 3
     daily_report_cron_hour: int = 21
     daily_report_cron_minute: int = 30
+    market_data_provider: str = "yfinance"
+    task_run_stale_minutes: int = 30
 
     model_config = SettingsConfigDict(
         env_file=".env",

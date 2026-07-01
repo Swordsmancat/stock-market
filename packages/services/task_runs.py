@@ -1,8 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from packages.domain.models import TaskRun
+from packages.services.task_dispatch import is_dispatchable_task
+from packages.shared.config import settings
 
 
 def _utc_now() -> datetime:
@@ -35,6 +38,7 @@ def _serialize_task_run(task_run: TaskRun) -> dict[str, object]:
         "input_json": task_run.input_json,
         "result_json": task_run.result_json,
         "error_message": task_run.error_message,
+        "celery_task_id": task_run.celery_task_id,
         "created_at": created_at.isoformat() if created_at is not None else None,
     }
 
@@ -76,11 +80,81 @@ def fail_task_run(task_run: TaskRun, error_message: str, session: Session) -> di
     return _serialize_task_run(task_run)
 
 
+def expire_stale_task_runs(session: Session, timeout_minutes: int | None = None) -> int:
+    cutoff = _utc_now() - timedelta(minutes=timeout_minutes or settings.task_run_stale_minutes)
+    stale_runs = (
+        session.query(TaskRun)
+        .filter(TaskRun.status == "running")
+        .filter(TaskRun.started_at < cutoff)
+        .all()
+    )
+    for task_run in stale_runs:
+        fail_task_run(task_run, "Task run timed out while waiting for worker", session=session)
+    return len(stale_runs)
+
+
+def enqueue_task_run(task_name: str, input_json: dict, session: Session) -> dict[str, object]:
+    from packages.services.task_dispatch import dispatch_task_run
+
+    expire_stale_task_runs(session)
+    task_run = start_task_run(task_name, input_json, session=session)
+
+    if not is_dispatchable_task(task_name):
+        fail_task_run(
+            task_run,
+            f"Task '{task_name}' is not configured for Celery dispatch",
+            session=session,
+        )
+        return {
+            "source": "database",
+            "status": "dispatch_failed",
+            "task_run": _serialize_task_run(task_run),
+        }
+
+    try:
+        celery_task_id = dispatch_task_run(task_name, input_json, str(task_run.id))
+    except Exception as exc:
+        fail_task_run(task_run, f"Failed to dispatch Celery task: {exc}", session=session)
+        return {
+            "source": "database",
+            "status": "dispatch_failed",
+            "task_run": _serialize_task_run(session.get(TaskRun, task_run.id) or task_run),
+            "error": str(exc),
+        }
+
+    updated_task_run = session.get(TaskRun, task_run.id)
+    if updated_task_run is None:
+        msg = f"Task run not found after dispatch: {task_run.id}"
+        raise RuntimeError(msg)
+    updated_task_run.celery_task_id = celery_task_id
+    session.commit()
+    session.refresh(updated_task_run)
+    return {
+        "source": "database",
+        "status": "dispatched",
+        "task_run": _serialize_task_run(updated_task_run),
+        "celery_task_id": celery_task_id,
+    }
+
+
+def get_task_run_payload(session: Session, task_run_id: str) -> dict[str, object] | None:
+    expire_stale_task_runs(session)
+    try:
+        task_run_uuid = UUID(task_run_id)
+    except ValueError:
+        return None
+    task_run = session.get(TaskRun, task_run_uuid)
+    if task_run is None:
+        return None
+    return {"source": "database", "item": _serialize_task_run(task_run)}
+
+
 def get_recent_task_runs_payload(
     session: Session,
     limit: int = 10,
     status: str | None = None,
 ) -> dict[str, object]:
+    expire_stale_task_runs(session)
     query = session.query(TaskRun)
     if status:
         query = query.filter(TaskRun.status == status)
@@ -89,6 +163,7 @@ def get_recent_task_runs_payload(
 
 
 def get_latest_task_run_payload(session: Session, task_name: str) -> dict[str, object]:
+    expire_stale_task_runs(session)
     task_run = (
         session.query(TaskRun)
         .filter(TaskRun.task_name == task_name)
@@ -98,3 +173,31 @@ def get_latest_task_run_payload(session: Session, task_name: str) -> dict[str, o
     if task_run is None:
         return {"task_name": task_name, "status": "not_found", "source": "database"}
     return {**_serialize_task_run(task_run), "source": "database"}
+
+
+def retry_task_run_payload(session: Session, task_run_id: str) -> dict[str, object] | None:
+    try:
+        task_run_uuid = UUID(task_run_id)
+    except ValueError:
+        return None
+
+    original = session.get(TaskRun, task_run_uuid)
+    if original is None:
+        return None
+
+    retry_input = {
+        **(original.input_json or {}),
+        "retry_of": str(original.id),
+    }
+    result = enqueue_task_run(original.task_name, retry_input, session=session)
+    if result["status"] == "dispatched":
+        return {
+            **result,
+            "status": "retry_started",
+            "item": result["task_run"],
+        }
+    return {
+        **result,
+        "status": "retry_dispatch_failed",
+        "item": result["task_run"],
+    }

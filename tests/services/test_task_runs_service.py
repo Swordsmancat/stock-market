@@ -1,13 +1,17 @@
+from unittest.mock import patch
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from packages.services.task_runs import (
+    expire_stale_task_runs,
     fail_task_run,
     finish_task_run,
     get_latest_task_run_payload,
     get_recent_task_runs_payload,
+    retry_task_run_payload,
     start_task_run,
 )
 from packages.shared.database import Base
@@ -78,3 +82,64 @@ def test_recent_task_runs_can_filter_by_status():
 
     assert len(payload["items"]) == 1
     assert payload["items"][0]["status"] == "failed"
+
+
+def test_expire_stale_task_runs_marks_old_running_tasks_failed():
+    session = make_session()
+    task_run = start_task_run("ingestion.ingest_market_data", {"market": "US"}, session=session)
+    task_run.started_at = task_run.started_at.replace(year=2020)
+    session.commit()
+
+    expired_count = expire_stale_task_runs(session, timeout_minutes=30)
+    latest = get_latest_task_run_payload(session, "ingestion.ingest_market_data")
+
+    assert expired_count == 1
+    assert latest["status"] == "failed"
+    assert "timed out" in latest["error_message"]
+
+
+@patch("packages.services.task_dispatch.dispatch_task_run", return_value="celery-task-id-123")
+def test_retry_task_run_starts_new_run_with_original_input(mock_dispatch):
+    session = make_session()
+    failed_run = start_task_run(
+        "reports.refresh_daily_watchlist_analysis",
+        {"watchlist": "0700:HK"},
+        session=session,
+    )
+    fail_task_run(failed_run, "provider timeout", session=session)
+
+    payload = retry_task_run_payload(session=session, task_run_id=str(failed_run.id))
+
+    assert payload is not None
+    assert payload["status"] == "retry_started"
+    assert payload["celery_task_id"] == "celery-task-id-123"
+    retry_item = payload["item"]
+    assert retry_item["task_name"] == "reports.refresh_daily_watchlist_analysis"
+    assert retry_item["status"] == "running"
+    assert retry_item["input_json"] == {
+        "watchlist": "0700:HK",
+        "retry_of": str(failed_run.id),
+    }
+    mock_dispatch.assert_called_once()
+
+
+@patch(
+    "packages.services.task_dispatch.dispatch_task_run",
+    side_effect=RuntimeError("redis unavailable"),
+)
+def test_retry_task_run_marks_failed_when_dispatch_fails(mock_dispatch):
+    session = make_session()
+    failed_run = start_task_run(
+        "reports.refresh_daily_watchlist_analysis",
+        {"watchlist": "AAPL:US"},
+        session=session,
+    )
+    fail_task_run(failed_run, "provider timeout", session=session)
+
+    payload = retry_task_run_payload(session=session, task_run_id=str(failed_run.id))
+
+    assert payload is not None
+    assert payload["status"] == "retry_dispatch_failed"
+    assert payload["item"]["status"] == "failed"
+    assert "redis unavailable" in payload["item"]["error_message"]
+    mock_dispatch.assert_called_once()

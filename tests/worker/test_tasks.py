@@ -24,8 +24,36 @@ def make_session():
     return sessionmaker(bind=engine)()
 
 
-def test_ingest_mock_market_data_returns_summary():
-    result = ingest_mock_market_data("US")
+def test_ingest_market_data_records_succeeded_task_run(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    result = ingestion_tasks.ingest_market_data(
+        market="US",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="mock",
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.ingest_market_data",
+    )
+
+    assert result["status"] == "ingested"
+    assert result["bar_count"] == 2
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"]["bar_count"] == 2
+
+
+def test_ingest_mock_market_data_returns_summary(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    result = ingest_mock_market_data("US", start="2026-01-01", end="2026-01-03")
     assert result["market"] == "US"
     assert result["instrument_count"] >= 1
     assert result["bar_count"] >= 1
@@ -41,13 +69,19 @@ def test_refresh_daily_stock_analysis_task_stores_latest_daily_report(monkeypatc
         start="2026-01-01",
         end="2026-01-20",
         ma_window=3,
+        provider="mock",
     )
     latest = get_latest_daily_report_payload("AAPL", session=session)
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_stock_analysis",
+    )
 
     assert result["symbol"] == "AAPL"
     assert result["status"] == "refreshed"
     assert result["report"]["status"] == "stored"
     assert latest["as_of"] == date(2026, 1, 20).isoformat()
+    assert latest_run["status"] == "succeeded"
     assert "Apple reports strong growth in services revenue" in latest["content_markdown"]
 
 
@@ -60,6 +94,7 @@ def test_refresh_daily_watchlist_analysis_task_stores_reports_for_each_symbol(mo
         start="2026-01-01",
         end="2026-01-20",
         ma_window=3,
+        provider="mock",
     )
     aapl_latest = get_latest_daily_report_payload("AAPL", session=session)
     hk_latest = get_latest_daily_report_payload("0700", session=session)
@@ -80,6 +115,7 @@ def test_refresh_daily_watchlist_analysis_task_records_succeeded_run(monkeypatch
         start="2026-01-01",
         end="2026-01-20",
         ma_window=3,
+        provider="mock",
     )
     latest_run = get_latest_task_run_payload(
         session=session,
@@ -106,6 +142,7 @@ def test_refresh_daily_watchlist_analysis_task_uses_persisted_watchlist(monkeypa
         start="2026-01-01",
         end="2026-01-20",
         ma_window=3,
+        provider="mock",
     )
     latest_run = get_latest_task_run_payload(
         session=session,
@@ -134,6 +171,7 @@ def test_refresh_daily_watchlist_analysis_task_records_failed_run(monkeypatch):
             start="2026-01-01",
             end="2026-01-20",
             ma_window=3,
+            provider="mock",
         )
     latest_run = get_latest_task_run_payload(
         session=session,
@@ -143,3 +181,33 @@ def test_refresh_daily_watchlist_analysis_task_records_failed_run(monkeypatch):
     assert latest_run["status"] == "failed"
     assert latest_run["error_message"] == "provider timeout"
     assert latest_run["input_json"]["watchlist"] == "AAPL:US"
+
+
+def test_refresh_daily_watchlist_analysis_reuses_existing_task_run(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)
+    from packages.services.task_runs import start_task_run
+
+    existing_run = start_task_run(
+        "reports.refresh_daily_watchlist_analysis",
+        {"watchlist": "AAPL:US", "retry_of": "original-id"},
+        session=session,
+    )
+
+    result = report_tasks.refresh_daily_watchlist_analysis(
+        watchlist="AAPL:US",
+        start="2026-01-01",
+        end="2026-01-20",
+        ma_window=3,
+        provider="mock",
+        task_run_id=str(existing_run.id),
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_watchlist_analysis",
+    )
+
+    assert result["status"] == "refreshed"
+    assert latest_run["id"] == str(existing_run.id)
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"]["item_count"] == 1

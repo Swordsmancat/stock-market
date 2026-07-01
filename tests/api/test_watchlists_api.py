@@ -67,15 +67,14 @@ def test_watchlist_api_upserts_item_with_alert_rules():
     assert upsert_payload["item"]["alert_rules"] == {"price_above": 400}
     assert list_response.status_code == 200
     list_payload = list_response.json()
-    assert list_payload["items"] == [
-        {
-            "symbol": "0700",
-            "market": "HK",
-            "name": "Tencent Holdings",
-            "is_active": True,
-            "alert_rules": {"price_above": 400},
-        }
-    ]
+    assert len(list_payload["items"]) == 1
+    item = list_payload["items"][0]
+    assert item["symbol"] == "0700"
+    assert item["market"] == "HK"
+    assert item["name"] == "Tencent Holdings"
+    assert item["is_active"] is True
+    assert item["alert_rules"] == {"price_above": 400}
+    assert "alert_status" in item
 
 
 def test_watchlist_api_removes_item_from_active_list():

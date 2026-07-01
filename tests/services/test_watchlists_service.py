@@ -29,15 +29,15 @@ def test_get_default_watchlist_seeds_from_settings_when_empty():
 
     assert payload["source"] == "database"
     assert payload["name"] == "default"
-    assert payload["items"] == [
-        {
-            "symbol": "AAPL",
-            "market": "US",
-            "name": "Apple Inc.",
-            "is_active": True,
-            "alert_rules": {},
-        }
-    ]
+    assert len(payload["items"]) == 1
+    item = payload["items"][0]
+    assert item["symbol"] == "AAPL"
+    assert item["market"] == "US"
+    assert item["name"] == "Apple Inc."
+    assert item["is_active"] is True
+    assert item["alert_rules"] == {}
+    assert "latest_price" in item
+    assert "alert_status" in item
 
 
 def test_upsert_watchlist_item_persists_alert_rules():
