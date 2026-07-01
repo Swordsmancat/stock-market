@@ -10,18 +10,27 @@ from packages.providers.base import ProviderAdapter
 from packages.providers.base import ProviderBar
 from packages.providers.mock_provider import MockProvider
 from packages.providers.yfinance_provider import YFinanceProvider
+from packages.providers.akshare_provider import AkShareProvider
+from packages.providers.tushare_provider import TushareProvider
 
 
 def _provider() -> MockProvider:
     return MockProvider()
 
 
+from packages.services.platform_settings import get_effective_market_data_provider
+
+
 def get_provider(provider_name: str = "mock") -> ProviderAdapter:
-    normalized = provider_name.lower()
+    normalized = get_effective_market_data_provider(provider_name)
     if normalized == "mock":
         return MockProvider()
     if normalized == "yfinance":
         return YFinanceProvider()
+    if normalized == "akshare":
+        return AkShareProvider()
+    if normalized == "tushare":
+        return TushareProvider()
     msg = f"Unsupported market data provider: {provider_name}"
     raise ValueError(msg)
 

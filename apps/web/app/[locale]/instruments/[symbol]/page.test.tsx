@@ -4,6 +4,10 @@ import { afterEach, expect, it, vi } from "vitest";
 vi.mock("@/lib/dates", () => ({
   parseInstrumentRange: () => "20d",
   getInstrumentDateRange: () => ({ start: "2026-01-01", end: "2026-01-20" }),
+  getDashboardDateRanges: () => ({
+    recent: { start: "2026-01-01", end: "2026-01-02" },
+    analysis: { start: "2026-01-01", end: "2026-01-20" },
+  }),
 }));
 
 import InstrumentDetailPage from "./page";
@@ -119,6 +123,8 @@ it("renders instrument detail with market, indicators, fundamentals, news, and r
   render(await InstrumentDetailPage({ params: Promise.resolve({ symbol: "AAPL", locale: "en" }) }));
 
   expect(screen.getByText("AAPL")).toBeInTheDocument();
+  expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+  expect(screen.getByText("US")).toBeInTheDocument();
   expect(screen.getByText("$102.00")).toBeInTheDocument();
   expect(screen.getByText("Price History")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Candles" })).toBeInTheDocument();

@@ -4,11 +4,19 @@
     "watchlist": "关注列表",
     "portfolios": "模拟组合",
     "reports": "报告中心",
-    "taskRuns": "任务监控"
+    "alerts": "告警中心",
+    "taskRuns": "任务监控",
+    "settings": "设置"
   },
   "TopNav": {
     "title": "股票分析平台",
     "searchPlaceholder": "搜索股票...",
+    "noResults": "未找到结果。",
+    "searchLoading": "正在加载标的...",
+    "searchLoadFailed": "无法加载标的，请确认 API 服务已启动。",
+    "searchGroup": "股票标的",
+    "searchGo": "跳转",
+    "searchInputPlaceholder": "输入代码，如 AAPL",
     "toggleTheme": "切换主题",
     "profile": "个人资料",
     "settings": "设置",
@@ -48,7 +56,22 @@
     "confidence": "置信度：{score}%",
     "noNews": "暂无新闻舆情数据。",
     "activeAlerts": "活跃告警",
-    "activeAlertsDesc": "关注列表中当前触发的规则"
+    "activeAlertsDesc": "关注列表中当前触发的规则",
+    "viewAlerts": "查看告警历史",
+    "viewPortfolios": "管理组合",
+    "viewTaskRuns": "查看任务详情",
+    "viewAllReports": "查看全部报告",
+    "dailyReport": "每日报告 ({symbol})",
+    "dailyReportDesc": "最新持久化的每日分析报告。",
+    "dailyReportAsOf": "报告日期：{date}",
+    "noDailyReport": "暂无已存储的每日报告。",
+    "dailyReportHistory": "近期历史",
+    "noInstruments": "暂无可用标的",
+    "noInstrumentsHint": "请在后端配置标的或运行行情采集任务。",
+    "ingestSuccess": "已为 {market} 采集 {count} 条行情。",
+    "ingestFailed": "行情采集失败。",
+    "analysisSuccess": "已刷新 {symbol} 的分析。",
+    "analysisFailed": "分析刷新失败。"
   },
   "Breadcrumbs": {
     "home": "首页"
@@ -82,7 +105,7 @@
     "removing": "移除中...",
     "addSuccess": "已添加到关注列表。",
     "removeSuccess": "已从关注列表移除。",
-    "operationFailed": "操作失败。",
+    "operationFailed": "操作失败：{reason}。",
     "saveAlerts": "保存",
     "savingAlerts": "保存中...",
     "updateAlertSuccess": "告警规则已更新。",
@@ -112,7 +135,12 @@
     "latestNews": "最新新闻舆情",
     "latestNewsDesc": "近期新闻文章及情绪分析。",
     "confidence": "置信度：{score}%",
-    "noNews": "暂无新闻舆情数据。"
+    "noNews": "暂无新闻舆情数据。",
+    "addToWatchlist": "加入关注列表",
+    "addingToWatchlist": "添加中...",
+    "watchlistAdded": "已加入关注列表。",
+    "watchlistFailed": "加入关注列表失败。",
+    "viewReports": "历史报告"
   },
   "TaskRuns": {
     "title": "任务监控",
@@ -134,7 +162,12 @@
     "succeeded": "成功",
     "failed": "失败",
     "noData": "暂无近期任务记录。",
-    "emptyHint": "暂时没有匹配的后台任务。执行采集或分析后会生成任务记录。"
+    "emptyHint": "暂时没有匹配的后台任务。执行采集或分析后会生成任务记录。",
+    "viewDetail": "详情",
+    "detailTitle": "任务详情",
+    "backToList": "返回任务列表",
+    "notFound": "未找到该任务。",
+    "celeryTaskId": "Celery 任务 ID"
   },
   "Portfolios": {
     "title": "模拟组合",
@@ -202,6 +235,60 @@
     "backToReports": "返回报告中心",
     "citations": "报告引用",
     "noData": "暂无报告数据。",
-    "emptyHint": "可以调整筛选条件，或先生成新的每日报告。"
+    "emptyHint": "可以调整筛选条件，或先生成新的每日报告。",
+    "generateReport": "生成每日报告",
+    "generating": "生成中...",
+    "generateSuccess": "每日报告已生成。",
+    "generateFailed": "报告生成失败。",
+    "viewInstrument": "查看标的详情"
+  },
+  "Alerts": {
+    "title": "告警中心",
+    "description": "关注列表告警触发记录与规则历史。",
+    "triggerHistory": "触发历史",
+    "triggerHistoryDesc": "价格或 RSI 规则满足时触发的告警。",
+    "symbol": "代码",
+    "market": "市场",
+    "rule": "规则",
+    "threshold": "阈值",
+    "triggeredAt": "触发时间",
+    "noTriggers": "暂无近期告警触发。",
+    "emptyHint": "在关注列表中配置告警规则后即可追踪触发记录。",
+    "recentTriggers": "近期告警",
+    "viewAll": "查看全部告警"
+  },
+  "Settings": {
+    "title": "设置",
+    "description": "配置平台偏好。",
+    "dataProviderTitle": "行情数据源",
+    "dataProviderDesc": "用于行情采集与分析刷新，保存在服务端 data/platform_settings.json。",
+    "save": "保存设置",
+    "saveSuccess": "设置已保存。",
+    "saveFailed": "设置保存失败。",
+    "llmTitle": "模型 API",
+    "llmDesc": "配置 AI 报告生成所使用的 LLM 接口。",
+    "llmProvider": "LLM 提供商",
+    "llmApiBase": "API 地址",
+    "llmApiKey": "API Key",
+    "llmApiKeyPlaceholder": "sk-...",
+    "llmApiKeyConfigured": "已保存密钥，留空则保持不变",
+    "aboutTitle": "关于",
+    "aboutDesc": "股票分析平台",
+    "aboutLine1": "可在首页使用按钮触发行情采集和刷新分析。",
+    "aboutLine2": "异步任务模式需要 Redis 和 Celery Worker。",
+    "akshareTitle": "AkShare（A 股行情）",
+    "akshareDesc": "通过 AkShare 库获取免费 A 股数据。需 pip install akshare。",
+    "akshareEnableLabel": "启用 AkShare 数据源",
+    "akshareHint": "选择 akshare 作为数据源时，将对 A 股标的生效。",
+    "tushareTitle": "Tushare（A 股行情）",
+    "tushareDesc": "通过 Tushare Pro 获取 A 股数据。需在 tushare.pro 注册。",
+    "tushareToken": "Tushare Token",
+    "tushareTokenPlaceholder": "您的 Tushare Pro API Token",
+    "tushareTokenConfigured": "已保存 Token，留空则保持不变",
+    "tushareHint": "免费 Token 可从 https://tushare.pro 获取，付费等级可解锁更多数据。"
+  },
+  "System": {
+    "backendOffline": "无法连接 localhost:8000 上的 API。请运行：uvicorn apps.api.main:app --reload --port 8000",
+    "backendOutdated": "8000 端口上的 API 版本过旧（缺少关注列表/组合等接口）。请用最新代码重启 API。"
   }
 }

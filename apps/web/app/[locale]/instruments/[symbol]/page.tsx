@@ -7,7 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { TrendingUp, FileText, Activity, Briefcase, Newspaper } from "lucide-react";
 import { PriceChart } from "@/components/price-chart";
 import { Link } from "@/src/i18n/routing";
-import { getInstrumentDateRange, parseInstrumentRange, type InstrumentRange } from "@/lib/dates";
+import { InstrumentQuickActions } from "@/components/instrument-actions";
+import { getInstrumentDateRange, getDashboardDateRanges, parseInstrumentRange, type InstrumentRange } from "@/lib/dates";
 import { getMarketDataProvider, withProviderQuery } from "@/lib/market-data";
 
 type BarsPayload = {
@@ -61,6 +62,10 @@ type NewsPayload = {
   }>;
 };
 
+type InstrumentsPayload = {
+  items: Array<{ symbol: string; name: string; market: string }>;
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
@@ -105,8 +110,14 @@ export default async function InstrumentDetailPage({
   const decodedSymbol = decodeURIComponent(symbol).toUpperCase();
   const selectedRange = parseInstrumentRange(range);
   const dateRange = getInstrumentDateRange(selectedRange);
+  const { analysis } = getDashboardDateRanges();
   const provider = getMarketDataProvider();
   const t = await getTranslations("InstrumentDetail");
+
+  const instrumentsPayload = await fetchOptionalJson<InstrumentsPayload>("/instruments", { items: [] });
+  const instrumentMeta = instrumentsPayload.items.find(
+    (item) => item.symbol.toUpperCase() === decodedSymbol,
+  );
 
   const [
     barsPayload,
@@ -150,12 +161,25 @@ export default async function InstrumentDetailPage({
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             {decodedSymbol}
+            {instrumentMeta?.name ? (
+              <span className="text-lg font-normal text-muted-foreground">{instrumentMeta.name}</span>
+            ) : null}
             <Badge variant="outline" className="text-lg px-3 py-1">
               {latestClose ? `$${latestClose.toFixed(2)}` : "N/A"}
             </Badge>
+            {instrumentMeta?.market ? (
+              <Badge variant="secondary">{instrumentMeta.market}</Badge>
+            ) : null}
           </h1>
           <p className="text-muted-foreground">{t("latestPrice")}</p>
         </div>
+        <InstrumentQuickActions
+          symbol={decodedSymbol}
+          market={instrumentMeta?.market ?? "US"}
+          name={instrumentMeta?.name}
+          analysisStart={analysis.start}
+          analysisEnd={analysis.end}
+        />
       </div>
 
       <Tabs defaultValue="overview" className="w-full">

@@ -1,5 +1,7 @@
+"use client"
+
 import { Link } from "@/src/i18n/routing"
-import { Bell, User } from "lucide-react"
+import { NotificationBell } from "@/components/notification-bell"
 import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
@@ -33,11 +35,7 @@ export function TopNavBar() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="sr-only">Notifications</span>
-            <div className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" />
-          </Button>
+          <NotificationBell />
           <LanguageSwitcher />
           <ModeToggle />
           <DropdownMenu>
@@ -49,7 +47,7 @@ export function TopNavBar() {
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuContent className="w-56" align="end">
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">User</p>
@@ -59,10 +57,14 @@ export function TopNavBar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>{t("profile")}</DropdownMenuItem>
-              <DropdownMenuItem>{t("settings")}</DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings">{t("profile")}</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings">{t("settings")}</Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>{t("logout")}</DropdownMenuItem>
+              <DropdownMenuItem disabled>{t("logout")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

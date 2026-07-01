@@ -4,11 +4,19 @@
     "watchlist": "Watchlist",
     "portfolios": "Portfolios",
     "reports": "Reports",
-    "taskRuns": "Task Runs"
+    "alerts": "Alerts",
+    "taskRuns": "Task Runs",
+    "settings": "Settings"
   },
   "TopNav": {
     "title": "Stock Analysis Platform",
     "searchPlaceholder": "Search stocks...",
+    "noResults": "No results found.",
+    "searchLoading": "Loading instruments...",
+    "searchLoadFailed": "Could not load instruments. Check that the API is running.",
+    "searchGroup": "Instruments",
+    "searchGo": "Go",
+    "searchInputPlaceholder": "Enter symbol, e.g. AAPL",
     "toggleTheme": "Toggle theme",
     "profile": "Profile",
     "settings": "Settings",
@@ -48,7 +56,22 @@
     "confidence": "Confidence: {score}%",
     "noNews": "No news sentiment available.",
     "activeAlerts": "Active Alerts",
-    "activeAlertsDesc": "Watchlist rules currently triggered"
+    "activeAlertsDesc": "Watchlist rules currently triggered",
+    "viewAlerts": "View alert history",
+    "viewPortfolios": "Manage portfolios",
+    "viewTaskRuns": "View task runs",
+    "viewAllReports": "View all reports",
+    "dailyReport": "Daily Report ({symbol})",
+    "dailyReportDesc": "Latest persisted daily analysis report.",
+    "dailyReportAsOf": "As of {date}",
+    "noDailyReport": "No daily report stored yet.",
+    "dailyReportHistory": "Recent History",
+    "noInstruments": "No instruments available",
+    "noInstrumentsHint": "Configure instruments in the backend or run market data ingestion.",
+    "ingestSuccess": "Ingested {count} bars for {market}.",
+    "ingestFailed": "Market data ingestion failed.",
+    "analysisSuccess": "Analysis refreshed for {symbol}.",
+    "analysisFailed": "Analysis refresh failed."
   },
   "Breadcrumbs": {
     "home": "Home"
@@ -82,7 +105,7 @@
     "removing": "Removing...",
     "addSuccess": "Added to watchlist.",
     "removeSuccess": "Removed from watchlist.",
-    "operationFailed": "Operation failed.",
+    "operationFailed": "Operation failed: {reason}.",
     "saveAlerts": "Save",
     "savingAlerts": "Saving...",
     "updateAlertSuccess": "Alert rules updated.",
@@ -112,7 +135,12 @@
     "latestNews": "Latest News",
     "latestNewsDesc": "Recent news articles and sentiment analysis.",
     "confidence": "Confidence: {score}%",
-    "noNews": "No news sentiment available."
+    "noNews": "No news sentiment available.",
+    "addToWatchlist": "Add to Watchlist",
+    "addingToWatchlist": "Adding...",
+    "watchlistAdded": "Added to watchlist.",
+    "watchlistFailed": "Failed to add to watchlist.",
+    "viewReports": "Stored Reports"
   },
   "TaskRuns": {
     "title": "Task Runs",
@@ -134,7 +162,12 @@
     "succeeded": "Succeeded",
     "failed": "Failed",
     "noData": "No recent task runs.",
-    "emptyHint": "No matching background tasks yet. Run ingestion or analysis to create task records."
+    "emptyHint": "No matching background tasks yet. Run ingestion or analysis to create task records.",
+    "viewDetail": "Details",
+    "detailTitle": "Task Run Detail",
+    "backToList": "Back to task runs",
+    "notFound": "Task run not found.",
+    "celeryTaskId": "Celery Task ID"
   },
   "Portfolios": {
     "title": "Portfolios",
@@ -202,6 +235,60 @@
     "backToReports": "Back to reports",
     "citations": "Citations",
     "noData": "No reports available.",
-    "emptyHint": "Try changing filters or generating a new daily report."
+    "emptyHint": "Try changing filters or generating a new daily report.",
+    "generateReport": "Generate Daily Report",
+    "generating": "Generating...",
+    "generateSuccess": "Daily report generated.",
+    "generateFailed": "Failed to generate report.",
+    "viewInstrument": "View instrument"
+  },
+  "Alerts": {
+    "title": "Alerts",
+    "description": "Recent watchlist alert triggers and rule history.",
+    "triggerHistory": "Trigger History",
+    "triggerHistoryDesc": "Alerts fired when price or RSI rules were met.",
+    "symbol": "Symbol",
+    "market": "Market",
+    "rule": "Rule",
+    "threshold": "Threshold",
+    "triggeredAt": "Triggered At",
+    "noTriggers": "No recent alert triggers.",
+    "emptyHint": "Configure alert rules on the watchlist to start tracking triggers.",
+    "recentTriggers": "Recent Alerts",
+    "viewAll": "View all alerts"
+  },
+  "Settings": {
+    "title": "Settings",
+    "description": "Configure platform preferences.",
+    "dataProviderTitle": "Market Data Provider",
+    "dataProviderDesc": "Used by ingestion and analysis. Saved to data/platform_settings.json on the server.",
+    "save": "Save Settings",
+    "saveSuccess": "Settings saved.",
+    "saveFailed": "Failed to save settings.",
+    "llmTitle": "Model API",
+    "llmDesc": "Configure the LLM provider used for AI report generation.",
+    "llmProvider": "LLM Provider",
+    "llmApiBase": "API Base URL",
+    "llmApiKey": "API Key",
+    "llmApiKeyPlaceholder": "sk-...",
+    "llmApiKeyConfigured": "Key already saved — leave blank to keep unchanged",
+    "aboutTitle": "About",
+    "aboutDesc": "Stock Analysis Platform",
+    "aboutLine1": "Use Dashboard buttons to ingest market data and refresh analysis.",
+    "aboutLine2": "Background tasks require Redis and a Celery worker when async mode is enabled.",
+    "akshareTitle": "AkShare (CN Market)",
+    "akshareDesc": "Free Chinese market data via AkShare library. Install with pip install akshare.",
+    "akshareEnableLabel": "Enable AkShare as data source",
+    "akshareHint": "When enabled, AkShare will be used for CN-market instruments when selected as the provider.",
+    "tushareTitle": "Tushare (CN Market)",
+    "tushareDesc": "Chinese market data via Tushare Pro. Requires registration at tushare.pro.",
+    "tushareToken": "Tushare Token",
+    "tushareTokenPlaceholder": "Your Tushare Pro API token",
+    "tushareTokenConfigured": "Token already saved — leave blank to keep unchanged",
+    "tushareHint": "Get your free token from https://tushare.pro. Paid tiers unlock more data."
+  },
+  "System": {
+    "backendOffline": "Cannot reach the API at localhost:8000. Start it with: uvicorn apps.api.main:app --reload --port 8000",
+    "backendOutdated": "The API on port 8000 is outdated (missing watchlist/portfolios endpoints). Restart it from the latest code."
   }
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { Link, usePathname } from "@/src/i18n/routing"
-import { Activity, BarChart3, Home, LayoutDashboard, List, PieChart } from "lucide-react"
+import { Activity, BarChart3, Bell, Home, List, PieChart, Settings } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
@@ -28,9 +28,19 @@ const navItems = [
     icon: BarChart3,
   },
   {
+    titleKey: "alerts",
+    href: "/alerts",
+    icon: Bell,
+  },
+  {
     titleKey: "taskRuns",
     href: "/task-runs",
     icon: Activity,
+  },
+  {
+    titleKey: "settings",
+    href: "/settings",
+    icon: Settings,
   },
 ]
 

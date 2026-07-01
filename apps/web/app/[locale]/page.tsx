@@ -1,15 +1,17 @@
 import { Link } from "@/src/i18n/routing";
 import { TrendingUp, Activity, Briefcase, Newspaper, FileText, List, Bell } from "lucide-react";
-import { useTranslations } from "next-intl";
 
-import { AnalysisRefreshButton } from "./AnalysisRefreshButton";
-import { IngestionButton } from "./IngestionButton";
+import { AnalysisTriggerForm } from "@/components/analysis-trigger-form";
+import { IngestionTriggerForm } from "@/components/ingestion-trigger-form";
+import { FlashBanner } from "@/components/flash-banner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MiniPriceChart } from "@/components/mini-price-chart";
+import { EmptyState } from "@/components/empty-state";
 import { getDashboardDateRanges } from "@/lib/dates";
-import { getMarketDataProvider, withProviderQuery } from "@/lib/market-data";
+import { withProviderQuery } from "@/lib/market-data";
+import { getPlatformSettings } from "@/lib/platform-settings-store";
 
 type Instrument = {
   symbol: string;
@@ -87,6 +89,7 @@ type NewsPayload = {
 };
 
 type TaskRunPayload = {
+  id?: string;
   status: string;
   duration_ms?: number;
   result_json?: {
@@ -114,20 +117,17 @@ type AlertTriggersPayload = {
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`API request failed: ${path}`);
-  }
-  return response.json() as Promise<T>;
-}
-
 async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, { cache: "no-store" });
   if (!response.ok) {
     return fallback;
   }
   return response.json() as Promise<T>;
+}
+
+async function fetchPlatformProvider(): Promise<string> {
+  const settings = await getPlatformSettings();
+  return settings.market_data_provider;
 }
 
 function citationUrl(citation: string): string | null {
@@ -152,10 +152,40 @@ function hasTechnicalIndicators(payload: IndicatorsPayload): boolean {
   return ma !== undefined || rsi !== undefined || bollinger !== undefined || atr !== undefined;
 }
 
-export default async function HomePage() {
+export default async function HomePage({
+  params,
+  searchParams = Promise.resolve({}),
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams?: Promise<{
+    ingest?: string;
+    analysis?: string;
+    bars?: string;
+    market?: string;
+    symbol?: string;
+    msg?: string;
+  }>;
+}) {
+  const { locale } = await params;
+  const flash = await searchParams;
   const { recent, analysis } = getDashboardDateRanges();
-  const provider = getMarketDataProvider();
-  const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
+  const provider = await fetchPlatformProvider();
+  const { getTranslations } = await import("next-intl/server");
+  const t = await getTranslations("Dashboard");
+
+  const instrumentsPayload = await fetchOptionalJson<InstrumentsPayload>("/instruments", { items: [] });
+  if (instrumentsPayload.items.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("description")}</p>
+        </div>
+        <EmptyState title={t("noInstruments")} description={t("noInstrumentsHint")} />
+      </div>
+    );
+  }
+
   const primaryInstrument = instrumentsPayload.items[0];
   const [
     latestBarPayload,
@@ -192,7 +222,10 @@ export default async function HomePage() {
         `/reports/${primaryInstrument.symbol}/daily/history?limit=5`,
         { items: [] },
       ),
-      fetchJson<PortfolioPayload>("/portfolios/demo"),
+      fetchOptionalJson<PortfolioPayload>("/portfolios/demo", {
+        source: "unavailable",
+        positions: [],
+      }),
       fetchOptionalJson<IndicatorsPayload>(`/indicators/${primaryInstrument.symbol}`, {
         source: "unavailable",
         indicators: {},
@@ -222,7 +255,10 @@ export default async function HomePage() {
     latestBarPayload.item !== undefined && latestBarPayload.item !== null
       ? latestBarPayload.source
       : barsPayload.source;
-  const portfolioValue = portfolioPayload.positions[0]?.market_value;
+  const portfolioValue = portfolioPayload.positions.reduce(
+    (sum, position) => sum + (position.market_value ?? 0),
+    0,
+  );
   const triggeredWatchlistCount = watchlistPayload.items.filter(
     (item) => item.alert_status?.triggered,
   ).length;
@@ -231,15 +267,30 @@ export default async function HomePage() {
   const reportCitations = reportPayload.citations ?? [];
   const dailyReportCitations = dailyReportPayload.citations ?? [];
 
-  // We cannot use useTranslations in an async Server Component directly without awaiting it.
-  // In next-intl for App Router, we use `getTranslations` for async components.
-  // However, for simplicity, we can pass translations or just use the hook in a client component.
-  // Since this is a server component, we need to import `getTranslations`
-  const { getTranslations } = await import("next-intl/server");
-  const t = await getTranslations("Dashboard");
-
   return (
     <div className="space-y-6">
+      {flash.ingest === "ok" ? (
+        <FlashBanner
+          variant="success"
+          message={t("ingestSuccess", {
+            market: flash.market ?? primaryInstrument.market,
+            count: Number(flash.bars ?? 0),
+          })}
+        />
+      ) : null}
+      {flash.ingest === "error" ? (
+        <FlashBanner variant="error" message={t("ingestFailed")} />
+      ) : null}
+      {flash.analysis === "ok" ? (
+        <FlashBanner
+          variant="success"
+          message={t("analysisSuccess", { symbol: flash.symbol ?? primaryInstrument.symbol })}
+        />
+      ) : null}
+      {flash.analysis === "error" ? (
+        <FlashBanner variant="error" message={t("analysisFailed")} />
+      ) : null}
+
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
@@ -248,19 +299,29 @@ export default async function HomePage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <IngestionButton market={primaryInstrument.market} start={recent.start} end={recent.end} />
-          <AnalysisRefreshButton
+          <IngestionTriggerForm
+            locale={locale}
+            market={primaryInstrument.market}
+            start={recent.start}
+            end={recent.end}
+            provider={provider}
+            label={t("triggerIngestion")}
+          />
+          <AnalysisTriggerForm
+            locale={locale}
             symbol={primaryInstrument.symbol}
             market={primaryInstrument.market}
             start={analysis.start}
             end={analysis.end}
             maWindow={3}
+            provider={provider}
+            label={t("refreshAnalysis")}
           />
         </div>
       </div>
 
       {/* Row 1: KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -281,9 +342,12 @@ export default async function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {portfolioValue ? `$${portfolioValue.toLocaleString()}` : "N/A"}
+              {portfolioValue > 0 ? `$${portfolioValue.toLocaleString()}` : "N/A"}
             </div>
             <p className="text-xs text-muted-foreground">{t("source", { source: portfolioPayload.source })}</p>
+            <Link href="/portfolios" className="mt-2 inline-block text-xs text-primary hover:underline">
+              {t("viewPortfolios")}
+            </Link>
           </CardContent>
         </Card>
         <Card>
@@ -298,7 +362,7 @@ export default async function HomePage() {
               <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
                 {alertTriggersPayload.items.slice(0, 3).map((trigger) => (
                   <li key={`${trigger.symbol}-${trigger.rule_key}-${trigger.triggered_at}`}>
-                    <Link href="/watchlist" className="hover:underline">
+                    <Link href="/alerts" className="hover:underline">
                       {trigger.symbol}
                     </Link>{" "}
                     {trigger.rule_key} @ {trigger.threshold}
@@ -306,6 +370,9 @@ export default async function HomePage() {
                 ))}
               </ul>
             ) : null}
+            <Link href="/alerts" className="mt-2 inline-block text-xs text-primary hover:underline">
+              {t("viewAlerts")}
+            </Link>
           </CardContent>
         </Card>
         <Card>
@@ -321,9 +388,65 @@ export default async function HomePage() {
                 time: taskRunPayload.duration_ms ?? 0,
               })}
             </p>
+            <Link
+              href={taskRunPayload.id ? (`/task-runs/${taskRunPayload.id}` as any) : "/task-runs"}
+              className="mt-2 inline-block text-xs text-primary hover:underline"
+            >
+              {t("viewTaskRuns")}
+            </Link>
           </CardContent>
         </Card>
       </div>
+
+      {/* Daily Report */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            {t("dailyReport", { symbol: primaryInstrument.symbol })}
+          </CardTitle>
+          <CardDescription>
+            {dailyReportPayload.as_of
+              ? t("dailyReportAsOf", { date: new Date(dailyReportPayload.as_of).toLocaleDateString() })
+              : t("dailyReportDesc")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[280px] w-full rounded-md border p-4">
+            <pre className="whitespace-pre-wrap font-sans text-sm">
+              {dailyReportPayload.content_markdown || t("noDailyReport")}
+            </pre>
+            {dailyReportCitations.length > 0 && (
+              <div className="mt-4 border-t pt-4">
+                <h4 className="mb-2 text-sm font-semibold">{t("citations")}</h4>
+                <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                  {dailyReportCitations.map((citation) => (
+                    <li key={citation}>{renderCitation(citation)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </ScrollArea>
+          {dailyReportHistoryPayload.items.length > 0 ? (
+            <div className="mt-4">
+              <h4 className="mb-2 text-sm font-semibold">{t("dailyReportHistory")}</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {dailyReportHistoryPayload.items.map((item) => (
+                  <li key={item.as_of} className="rounded-md border p-2">
+                    <span className="font-medium text-foreground">
+                      {new Date(item.as_of).toLocaleDateString()}
+                    </span>
+                    <p className="mt-1 line-clamp-2">{item.content_markdown.substring(0, 120)}...</p>
+                  </li>
+                ))}
+              </ul>
+              <Link href={`/reports?symbol=${primaryInstrument.symbol}` as any} className="mt-2 inline-block text-xs text-primary hover:underline">
+                {t("viewAllReports")}
+              </Link>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {/* Row 2: Main Content */}
       <div className="grid gap-4 md:grid-cols-3">

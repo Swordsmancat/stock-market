@@ -1,14 +1,36 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from packages.services.analysis import refresh_stock_analysis
 from packages.services.task_runs import enqueue_task_run
 from packages.shared.database import get_session
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 TASK_NAME = "reports.refresh_daily_stock_analysis"
+
+
+@router.post("/refresh-sync")
+def refresh_analysis_sync(
+    symbol: str = Query(...),
+    market: str = Query(...),
+    start: date = Query(...),
+    end: date = Query(...),
+    ma_window: int = Query(default=20, ge=1),
+    provider: str = Query(default="mock"),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return refresh_stock_analysis(
+        symbol=symbol,
+        market=market,
+        start=start,
+        end=end,
+        session=session,
+        ma_window=ma_window,
+        provider_name=provider,
+    )
 
 
 @router.post("/refresh")

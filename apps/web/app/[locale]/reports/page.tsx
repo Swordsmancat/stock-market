@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
+import { GenerateDailyReportButton } from "@/components/generate-daily-report-button";
+import { getDashboardDateRanges } from "@/lib/dates";
 import { ExternalLink } from "lucide-react";
 
 type ReportItem = {
@@ -68,6 +70,8 @@ export default async function ReportsCenterPage({
   const payload = await fetchReports(apiParams);
   const { getTranslations } = await import("next-intl/server");
   const t = await getTranslations("ReportsCenter");
+  const { analysis } = getDashboardDateRanges();
+  const generateSymbol = params.symbol?.trim().toUpperCase() || "AAPL";
   const currentOffset = payload.offset;
   const currentLimit = payload.limit;
   const visibleStart = payload.total === 0 ? 0 : currentOffset + 1;
@@ -86,6 +90,15 @@ export default async function ReportsCenterPage({
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
           <p className="text-muted-foreground">{t("description")}</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <GenerateDailyReportButton
+            symbol={generateSymbol}
+            start={analysis.start}
+            end={analysis.end}
+            variant="default"
+            size="default"
+          />
         </div>
       </div>
 
@@ -177,7 +190,10 @@ export default async function ReportsCenterPage({
                     </TableCell>
                     <TableCell>
                       {item.task_run_id ? (
-                        <Link href="/task-runs" className="text-sm text-primary hover:underline">
+                        <Link
+                          href={`/task-runs/${item.task_run_id}` as any}
+                          className="text-sm text-primary hover:underline"
+                        >
                           {item.task_run_id.slice(0, 8)}
                         </Link>
                       ) : (

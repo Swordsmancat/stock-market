@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { ActionFeedback } from "@/components/action-feedback";
 import { getMarketDataProvider } from "@/lib/market-data";
 import { enqueueAndPoll } from "@/lib/task-run-poll";
 
@@ -24,6 +26,7 @@ export function AnalysisRefreshButton({
 }: AnalysisRefreshButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const router = useRouter();
   const t = useTranslations("Dashboard");
 
   async function handleClick() {
@@ -39,9 +42,13 @@ export function AnalysisRefreshButton({
         ma_window: String(maWindow),
         provider: getMarketDataProvider(),
       });
-      const taskRun = await enqueueAndPoll(`/api/analysis/refresh?${params.toString()}`);
+      const taskRun = await enqueueAndPoll(
+        `/api/analysis/refresh?${params.toString()}`,
+        { taskName: "reports.refresh_daily_stock_analysis" },
+      );
       const result = taskRun.result_json as { symbol?: string } | null;
       setMessage(`✅ ${result?.symbol ?? symbol} refreshed`);
+      router.refresh();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Request failed";
       setMessage(`❌ ${detail}`);
@@ -51,12 +58,12 @@ export function AnalysisRefreshButton({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <Button onClick={handleClick} disabled={isLoading} className="w-fit">
+    <div className="flex w-full max-w-md flex-col gap-2">
+      <Button type="button" onClick={handleClick} disabled={isLoading} className="w-fit">
         <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
         {isLoading ? t("refreshing") : t("refreshAnalysis")}
       </Button>
-      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+      <ActionFeedback message={message} />
     </div>
   );
 }

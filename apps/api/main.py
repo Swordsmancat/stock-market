@@ -11,6 +11,7 @@ from apps.api.routers.market_data import router as market_data_router
 from apps.api.routers.news import router as news_router
 from apps.api.routers.portfolios import router as portfolios_router
 from apps.api.routers.reports import router as reports_router
+from apps.api.routers.settings import router as settings_router
 from apps.api.routers.task_runs import router as task_runs_router
 from apps.api.routers.watchlists import router as watchlists_router
 
@@ -25,6 +26,7 @@ app.include_router(instruments_router)
 app.include_router(market_data_router)
 app.include_router(news_router)
 app.include_router(portfolios_router)
+app.include_router(settings_router)
 app.include_router(reports_router)
 app.include_router(task_runs_router)
 app.include_router(watchlists_router)

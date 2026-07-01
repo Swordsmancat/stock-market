@@ -9,7 +9,9 @@ import { routing } from "@/src/i18n/routing"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TopNavBar } from "@/components/top-nav-bar"
 import { SidebarNavigation } from "@/components/sidebar-navigation"
+import { MobileNavigation } from "@/components/mobile-navigation"
 import { Breadcrumbs } from "@/components/breadcrumbs"
+import { BackendStatusBanner } from "@/components/backend-status-banner"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -46,11 +48,13 @@ export default async function RootLayout({
               <TopNavBar />
               <div className="flex flex-1 overflow-hidden">
                 <SidebarNavigation />
-                <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+                <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
                   <Breadcrumbs />
+                  <BackendStatusBanner />
                   {children}
                 </main>
               </div>
+              <MobileNavigation />
             </div>
           </ThemeProvider>
         </NextIntlClientProvider>

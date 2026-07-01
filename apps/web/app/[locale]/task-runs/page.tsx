@@ -107,7 +107,11 @@ export default async function TaskRunsPage({
               ) : (
                 payload.items.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.task_name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/task-runs/${item.id}` as any} className="hover:underline">
+                        {item.task_name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -135,7 +139,12 @@ export default async function TaskRunsPage({
                       {item.error_message ?? "--"}
                     </TableCell>
                     <TableCell className="text-right">
-                      {item.status === "failed" ? <TaskRunRetryButton taskRunId={item.id} /> : "--"}
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/task-runs/${item.id}` as any}>{t("viewDetail")}</Link>
+                        </Button>
+                        {item.status === "failed" ? <TaskRunRetryButton taskRunId={item.id} /> : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

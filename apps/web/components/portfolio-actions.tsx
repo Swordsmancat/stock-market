@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/src/i18n/routing";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -155,8 +155,12 @@ export function PortfolioCreateForm({ className }: PortfolioCreateFormProps) {
         return;
       }
 
+      const created = (await response.json()) as { id?: string };
       form.reset();
       setMessage(t("createSuccess"));
+      if (created.id) {
+        router.push(`/portfolios?portfolio=${created.id}` as any);
+      }
       router.refresh();
     });
   }

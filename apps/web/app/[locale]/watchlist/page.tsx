@@ -12,8 +12,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { WatchlistAddForm, WatchlistEditAlertRulesForm, WatchlistRemoveButton } from "@/components/watchlist-actions";
+import { FlashBanner } from "@/components/flash-banner";
 import { EmptyState } from "@/components/empty-state";
+import {
+  WatchlistAddForm,
+  WatchlistEditAlertRulesForm,
+  WatchlistRemoveButton,
+} from "@/components/watchlist-forms";
+import { backendFetch } from "@/lib/backend-api";
 
 type AlertRuleStatus = {
   key: string;
@@ -42,10 +48,8 @@ type WatchlistPayload = {
   items: WatchlistItem[];
 };
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-
 async function fetchWatchlist(): Promise<WatchlistPayload> {
-  const response = await fetch(`${apiBaseUrl}/watchlist`, { cache: "no-store" });
+  const response = await backendFetch("/watchlist");
   if (!response.ok) {
     return { name: "default", source: "error", items: [] };
   }
@@ -65,18 +69,33 @@ function formatRuleLabel(
   return `${rule.key} ${rule.threshold}`;
 }
 
-export default async function WatchlistPage() {
+export default async function WatchlistPage({
+  params,
+  searchParams = Promise.resolve({}),
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ op?: string; reason?: string }>;
+}) {
+  const { locale } = await params;
+  const { op, reason } = await searchParams;
   const payload = await fetchWatchlist();
   const t = await getTranslations("Watchlist");
 
   return (
     <div className="space-y-6">
+      {op === "added" ? <FlashBanner variant="success" message={t("addSuccess")} /> : null}
+      {op === "removed" ? <FlashBanner variant="success" message={t("removeSuccess")} /> : null}
+      {op === "alerts_updated" ? <FlashBanner variant="success" message={t("updateAlertSuccess")} /> : null}
+      {op === "error" ? (
+        <FlashBanner variant="error" message={t("operationFailed", { reason: reason ?? "unknown" })} />
+      ) : null}
+
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
           <p className="text-muted-foreground">{t("description")}</p>
         </div>
-        <WatchlistAddForm className="w-full md:w-auto" />
+        <WatchlistAddForm locale={locale} className="w-full md:w-auto" />
       </div>
 
       <Card>
@@ -150,6 +169,7 @@ export default async function WatchlistPage() {
                           </div>
                         ) : null}
                         <WatchlistEditAlertRulesForm
+                          locale={locale}
                           symbol={item.symbol}
                           market={item.market}
                           name={item.name}
@@ -165,7 +185,7 @@ export default async function WatchlistPage() {
                             <span className="sr-only">{t("viewDetails")}</span>
                           </Link>
                         </Button>
-                        <WatchlistRemoveButton symbol={item.symbol} market={item.market} />
+                        <WatchlistRemoveButton locale={locale} symbol={item.symbol} market={item.market} />
                       </div>
                     </TableCell>
                   </TableRow>

@@ -1,19 +1,19 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useRouter } from "@/src/i18n/routing"
-import { Search } from "lucide-react"
-import { useTranslations } from "next-intl"
+import * as React from "react";
+import { useRouter } from "@/src/i18n/routing";
+import { Loader2, Search } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 
+import { searchInstrumentAction } from "@/app/[locale]/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import { Button } from "@/components/ui/button"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Instrument = {
   symbol: string;
@@ -22,77 +22,117 @@ type Instrument = {
 };
 
 export function GlobalSearch() {
-  const [open, setOpen] = React.useState(false)
-  const [instruments, setInstruments] = React.useState<Instrument[]>([])
-  const router = useRouter()
-  const t = useTranslations("TopNav")
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [instruments, setInstruments] = React.useState<Instrument[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("TopNav");
 
   React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        setOpen((open) => !open)
+    const down = (event: KeyboardEvent) => {
+      if (event.key === "k" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setOpen(true);
       }
-    }
-
-    document.addEventListener("keydown", down)
-    return () => document.removeEventListener("keydown", down)
-  }, [])
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
 
   React.useEffect(() => {
-    if (open && instruments.length === 0) {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-      fetch(`${apiBaseUrl}/instruments`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.items) {
-            setInstruments(data.items)
-          }
-        })
-        .catch(console.error)
+    if (!open || instruments.length > 0) {
+      return;
     }
-  }, [open, instruments.length])
+    setIsLoading(true);
+    setLoadError(null);
+    fetch("/api/instruments")
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("load failed");
+        }
+        const data = (await response.json()) as { items?: Instrument[] };
+        setInstruments(data.items ?? []);
+      })
+      .catch(() => setLoadError(t("searchLoadFailed")))
+      .finally(() => setIsLoading(false));
+  }, [open, instruments.length, t]);
 
-  const runCommand = React.useCallback((command: () => unknown) => {
-    setOpen(false)
-    command()
-  }, [])
+  const filtered = instruments.filter((item) => {
+    const haystack = `${item.symbol} ${item.name} ${item.market}`.toLowerCase();
+    return haystack.includes(query.trim().toLowerCase());
+  });
 
   return (
     <>
       <Button
+        type="button"
         variant="outline"
         className="relative h-9 w-full justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none sm:pr-12 md:w-40 lg:w-64"
         onClick={() => setOpen(true)}
       >
-        <span className="hidden lg:inline-flex">{t("searchPlaceholder")}</span>
-        <span className="inline-flex lg:hidden">Search...</span>
+        <Search className="mr-2 h-4 w-4 shrink-0" />
+        <span className="truncate">{t("searchPlaceholder")}</span>
         <kbd className="pointer-events-none absolute right-[0.3rem] top-[0.3rem] hidden h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
           <span className="text-xs">⌘</span>K
         </kbd>
       </Button>
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder={t("searchPlaceholder")} />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Instruments">
-            {instruments.map((instrument) => (
-              <CommandItem
-                key={instrument.symbol}
-                value={`${instrument.symbol} ${instrument.name}`}
-                onSelect={() => {
-                  runCommand(() => router.push(`/instruments/${instrument.symbol}` as any))
-                }}
-              >
-                <Search className="mr-2 h-4 w-4" />
-                <span>{instrument.symbol}</span>
-                <span className="ml-2 text-muted-foreground">{instrument.name}</span>
-                <span className="ml-auto text-xs text-muted-foreground">{instrument.market}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="z-[200] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("searchPlaceholder")}</DialogTitle>
+          </DialogHeader>
+
+          <form action={searchInstrumentAction} className="flex gap-2">
+            <input type="hidden" name="locale" value={locale} />
+            <Input
+              name="symbol"
+              value={query}
+              onChange={(event) => setQuery(event.target.value.toUpperCase())}
+              placeholder={t("searchInputPlaceholder")}
+              autoFocus
+            />
+            <Button type="submit">{t("searchGo")}</Button>
+          </form>
+
+          {isLoading ? (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t("searchLoading")}
+            </div>
+          ) : null}
+
+          {loadError ? <p className="py-2 text-sm text-destructive">{loadError}</p> : null}
+
+          {!isLoading && !loadError ? (
+            <ul className="max-h-72 space-y-1 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <li className="py-4 text-center text-sm text-muted-foreground">{t("noResults")}</li>
+              ) : (
+                filtered.map((instrument) => (
+                  <li key={`${instrument.symbol}-${instrument.market}`}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
+                      onClick={() => {
+                        setOpen(false);
+                        router.push(`/instruments/${instrument.symbol}` as any);
+                      }}
+                    >
+                      <span className="font-medium">{instrument.symbol}</span>
+                      <span className="ml-2 text-muted-foreground">{instrument.name}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">{instrument.market}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
-  )
+  );
 }

@@ -12,6 +12,7 @@ type ReportDetail = {
   content_markdown: string;
   citations: string[];
   created_at: string;
+  task_run_id?: string | null;
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -68,7 +69,20 @@ export default async function ReportDetailPage({
           </div>
           <CardDescription>
             {t("asOf")}: {new Date(report.as_of).toLocaleDateString()}
+            {report.task_run_id ? (
+              <>
+                {" · "}
+                <Link href={`/task-runs/${report.task_run_id}` as any} className="text-primary hover:underline">
+                  {t("taskRun")}: {report.task_run_id.slice(0, 8)}
+                </Link>
+              </>
+            ) : null}
           </CardDescription>
+          <div className="pt-2">
+            <Button variant="link" className="h-auto p-0" asChild>
+              <Link href={`/instruments/${report.symbol}` as any}>{t("viewInstrument")}</Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <pre className="whitespace-pre-wrap font-sans text-sm leading-7">
