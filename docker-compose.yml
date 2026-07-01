@@ -30,7 +30,7 @@ services:
       - db
       - redis
     command: >
-      sh -c "python -m pip install -e . &&
+      sh -c "python -m pip install -e '.[cn-market]' &&
       alembic upgrade head &&
       uvicorn apps.api.main:app --host 0.0.0.0 --port 8000"
 
@@ -47,7 +47,7 @@ services:
       - db
       - redis
     command: >
-      sh -c "python -m pip install -e . &&
+      sh -c "python -m pip install -e '.[cn-market]' &&
       celery -A apps.worker.celery_app.celery_app worker --loglevel=info"
 
   beat:
@@ -63,7 +63,7 @@ services:
       - db
       - redis
     command: >
-      sh -c "python -m pip install -e . &&
+      sh -c "python -m pip install -e '.[cn-market]' &&
       celery -A apps.worker.celery_app.celery_app beat --loglevel=info"
 
 volumes:

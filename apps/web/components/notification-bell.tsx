@@ -25,13 +25,22 @@ type AlertTrigger = {
 
 export function NotificationBell() {
   const [triggers, setTriggers] = React.useState<AlertTrigger[]>([]);
+  const [loadError, setLoadError] = React.useState(false);
   const t = useTranslations("Alerts");
 
   React.useEffect(() => {
     fetch("/api/alerts/triggers/recent?limit=5")
-      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("load failed");
+        }
+        return res.json();
+      })
       .then((data) => setTriggers(data.items ?? []))
-      .catch(() => setTriggers([]));
+      .catch(() => {
+        setTriggers([]);
+        setLoadError(true);
+      });
   }, []);
 
   const hasTriggers = triggers.length > 0;
@@ -50,7 +59,9 @@ export function NotificationBell() {
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel>{t("recentTriggers")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {hasTriggers ? (
+        {loadError ? (
+          <DropdownMenuItem disabled>{t("loadFailed")}</DropdownMenuItem>
+        ) : hasTriggers ? (
           triggers.map((trigger) => (
             <DropdownMenuItem key={`${trigger.symbol}-${trigger.rule_key}-${trigger.triggered_at}`} asChild>
               <Link href="/watchlist" className="flex flex-col items-start gap-0.5">

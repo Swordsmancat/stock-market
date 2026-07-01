@@ -105,10 +105,10 @@ export default async function InstrumentDetailPage({
   searchParams = Promise.resolve({}),
 }: {
   params: Promise<{ symbol: string; locale: string }>;
-  searchParams?: Promise<{ range?: string; watchlist?: string; reason?: string }>;
+  searchParams?: Promise<{ range?: string; watchlist?: string; reason?: string; analysis?: string; report?: string; msg?: string }>;
 }) {
   const { symbol, locale } = await params;
-  const { range, watchlist, reason } = await searchParams;
+  const { range, watchlist, reason, analysis: analysisStatus, report, msg } = await searchParams;
   const decodedSymbol = decodeURIComponent(symbol).toUpperCase();
   const selectedRange = parseInstrumentRange(range);
   const dateRange = getInstrumentDateRange(selectedRange);
@@ -164,6 +164,14 @@ export default async function InstrumentDetailPage({
       {watchlist === "error" ? (
         <FlashBanner variant="error" message={t("watchlistFailedDetail", { reason: reason ?? "unknown" })} />
       ) : null}
+      {analysisStatus === "ok" ? (
+        <FlashBanner variant="success" message={t("analysisSuccess", { symbol: decodedSymbol })} />
+      ) : null}
+      {analysisStatus === "error" ? (
+        <FlashBanner variant="error" message={t("analysisFailedDetail", { reason: msg ?? "unknown" })} />
+      ) : null}
+      {report === "ok" ? <FlashBanner variant="success" message={t("reportSuccess")} /> : null}
+      {report === "error" ? <FlashBanner variant="error" message={t("reportFailed")} /> : null}
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -182,6 +190,7 @@ export default async function InstrumentDetailPage({
           <p className="text-muted-foreground">{t("latestPrice")}</p>
         </div>
         <InstrumentQuickActions
+          locale={locale}
           symbol={decodedSymbol}
           market={instrumentMeta?.market ?? "US"}
           analysisStart={analysis.start}

@@ -141,7 +141,13 @@
     "watchlistAdded": "Added to watchlist.",
     "watchlistFailed": "Failed to add to watchlist.",
     "watchlistFailedDetail": "Failed to add to watchlist: {reason}.",
-    "viewReports": "Stored Reports"
+    "viewReports": "Stored Reports",
+    "refreshAnalysis": "Refresh Analysis",
+    "generateReport": "Generate Daily Report",
+    "analysisSuccess": "Analysis refreshed for {symbol}.",
+    "analysisFailedDetail": "Analysis refresh failed: {reason}.",
+    "reportSuccess": "Daily report generated.",
+    "reportFailed": "Failed to generate daily report."
   },
   "TaskRuns": {
     "title": "Task Runs",
@@ -259,7 +265,8 @@
     "noTriggers": "No recent alert triggers.",
     "emptyHint": "Configure alert rules on the watchlist to start tracking triggers.",
     "recentTriggers": "Recent Alerts",
-    "viewAll": "View all alerts"
+    "viewAll": "View all alerts",
+    "loadFailed": "Could not load alerts. Check that the API is running."
   },
   "Settings": {
     "title": "Settings",

@@ -31,6 +31,16 @@ vi.mock("@/components/instrument-watchlist-form", () => ({
   InstrumentWatchlistForm: () => <button type="submit">Add to Watchlist</button>,
 }));
 
+vi.mock("@/components/instrument-actions", () => ({
+  InstrumentQuickActions: () => (
+    <div>
+      <button type="submit">Add to Watchlist</button>
+      <button type="submit">Generate Daily Report</button>
+      <button type="submit">Refresh Analysis</button>
+    </div>
+  ),
+}));
+
 import InstrumentDetailPage from "./page";
 
 afterEach(() => {

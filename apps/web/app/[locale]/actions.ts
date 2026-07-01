@@ -66,8 +66,16 @@ export async function refreshAnalysisAction(formData: FormData) {
   const start = String(formData.get("start") ?? "");
   const end = String(formData.get("end") ?? "");
   const maWindow = String(formData.get("ma_window") ?? "3");
+  const returnTo = String(formData.get("return_to") ?? "").trim();
   const settings = await getPlatformSettings();
   const provider = String(formData.get("provider") ?? settings.market_data_provider);
+
+  const redirectWithFlash = (params: Record<string, string>) => {
+    if (returnTo) {
+      pageRedirect(returnTo, params);
+    }
+    flashRedirect(locale, params);
+  };
 
   const params = new URLSearchParams({
     symbol,
@@ -89,33 +97,56 @@ export async function refreshAnalysisAction(formData: FormData) {
       method: "POST",
     });
     if (!ingestResponse.ok) {
-      flashRedirect(locale, { analysis: "error", msg: "ingestion failed" });
+      redirectWithFlash({ analysis: "error", msg: "ingestion failed" });
     }
     const reportResponse = await backendFetch(
       `/reports/${encodeURIComponent(symbol)}/stock?start=${start}&end=${end}`,
     );
     if (!reportResponse.ok) {
-      flashRedirect(locale, { analysis: "error", msg: "report failed" });
+      redirectWithFlash({ analysis: "error", msg: "report failed" });
     }
-    flashRedirect(locale, { analysis: "ok", symbol });
+    redirectWithFlash({ analysis: "ok", symbol });
   }
 
   const body = await readJsonSafe(response);
   if (!response.ok) {
-    flashRedirect(locale, { analysis: "error", msg: String(body.detail ?? "refresh failed") });
+    redirectWithFlash({ analysis: "error", msg: String(body.detail ?? "refresh failed") });
   }
 
   if (body.status === "dispatched" && body.task_run && typeof body.task_run === "object") {
     const taskRun = body.task_run as Record<string, unknown>;
     if (taskRun.status === "failed") {
-      flashRedirect(locale, {
+      redirectWithFlash({
         analysis: "error",
         msg: String(taskRun.error_message ?? "task failed"),
       });
     }
   }
 
-  flashRedirect(locale, { analysis: "ok", symbol: String(body.symbol ?? symbol) });
+  if (returnTo) {
+    revalidatePath(returnTo);
+  }
+  redirectWithFlash({ analysis: "ok", symbol: String(body.symbol ?? symbol) });
+}
+
+export async function generateDailyReportAction(formData: FormData) {
+  const locale = String(formData.get("locale") ?? "zh");
+  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
+  const start = String(formData.get("start") ?? "");
+  const end = String(formData.get("end") ?? "");
+  const returnTo = String(formData.get("return_to") ?? `/${locale}/instruments/${encodeURIComponent(symbol)}`);
+
+  const params = new URLSearchParams({ start, end });
+  const response = await backendFetch(
+    `/reports/${encodeURIComponent(symbol)}/daily/generate?${params.toString()}`,
+    { method: "POST" },
+  );
+
+  revalidatePath(returnTo);
+  if (!response.ok) {
+    pageRedirect(returnTo, { report: "error" });
+  }
+  pageRedirect(returnTo, { report: "ok" });
 }
 
 export async function savePlatformSettingsAction(formData: FormData) {

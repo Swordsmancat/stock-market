@@ -141,7 +141,13 @@
     "watchlistAdded": "已加入关注列表。",
     "watchlistFailed": "加入关注列表失败。",
     "watchlistFailedDetail": "加入关注列表失败：{reason}。",
-    "viewReports": "历史报告"
+    "viewReports": "历史报告",
+    "refreshAnalysis": "刷新分析",
+    "generateReport": "生成每日报告",
+    "analysisSuccess": "已刷新 {symbol} 的分析。",
+    "analysisFailedDetail": "分析刷新失败：{reason}。",
+    "reportSuccess": "每日报告已生成。",
+    "reportFailed": "报告生成失败。"
   },
   "TaskRuns": {
     "title": "任务监控",
@@ -259,7 +265,8 @@
     "noTriggers": "暂无近期告警触发。",
     "emptyHint": "在关注列表中配置告警规则后即可追踪触发记录。",
     "recentTriggers": "近期告警",
-    "viewAll": "查看全部告警"
+    "viewAll": "查看全部告警",
+    "loadFailed": "无法加载告警，请确认 API 服务已启动。"
   },
   "Settings": {
     "title": "设置",

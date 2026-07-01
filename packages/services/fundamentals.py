@@ -11,6 +11,12 @@ from packages.analytics.fundamentals import (
     summarize_fundamentals,
 )
 from packages.domain.models import FundamentalSnapshot as FundamentalSnapshotModel
+from packages.providers.cn_market_helpers import (
+    find_column,
+    normalize_cn_symbol,
+    safe_pct_ratio,
+    tushare_ts_code,
+)
 from packages.providers.yfinance_helpers import map_symbol_to_ticker
 from packages.shared.config import settings
 
@@ -166,6 +172,10 @@ def ingest_fundamentals(
     provider = (provider_name or settings.market_data_provider).lower()
     if provider == "yfinance":
         return ingest_yfinance_fundamentals(symbol, session=session, as_of=as_of)
+    if provider == "akshare":
+        return ingest_akshare_fundamentals(symbol, session=session, as_of=as_of)
+    if provider == "tushare":
+        return ingest_tushare_fundamentals(symbol, session=session, as_of=as_of)
     return {"symbol": symbol, "status": "skipped", "source": provider}
 
 
@@ -199,3 +209,118 @@ def ingest_yfinance_fundamentals(
     )
     payload = upsert_fundamental_snapshot(snapshot, session=session, source="yfinance")
     return {"symbol": symbol, "status": "ingested", "source": "yfinance", "item": payload.get("item")}
+
+
+def _row_value(row, columns: list[str], *substrings: str) -> object | None:
+    column = find_column(columns, *substrings)
+    if column is None:
+        return None
+    return row[column]
+
+
+def ingest_akshare_fundamentals(
+    symbol: str,
+    session: Session,
+    as_of: date | None = None,
+) -> dict[str, object]:
+    try:
+        import akshare as ak
+    except ImportError:
+        return {"symbol": symbol, "status": "skipped", "source": "akshare", "reason": "akshare not installed"}
+
+    code = normalize_cn_symbol(symbol)
+    effective_as_of = as_of or date.today()
+    try:
+        df = ak.stock_financial_analysis_indicator(symbol=code, start_year=str(effective_as_of.year - 1))
+    except Exception:
+        return {"symbol": symbol, "status": "empty", "source": "akshare"}
+
+    if df is None or df.empty:
+        return {"symbol": symbol, "status": "empty", "source": "akshare"}
+
+    columns = [str(column) for column in df.columns]
+    row = df.iloc[-1]
+    date_col = find_column(columns, "日期")
+    if date_col is not None:
+        raw_date = row[date_col]
+        if hasattr(raw_date, "date"):
+            effective_as_of = raw_date.date()
+
+    revenue_growth = safe_pct_ratio(_row_value(row, columns, "主营业务", "增长"))
+    net_margin = safe_pct_ratio(_row_value(row, columns, "销售", "净利率"))
+    debt_to_assets = safe_pct_ratio(_row_value(row, columns, "资产负债率"))
+
+    if all(value is None for value in (revenue_growth, net_margin, debt_to_assets)):
+        return {"symbol": symbol, "status": "empty", "source": "akshare"}
+
+    snapshot = FundamentalMetricsSnapshot(
+        symbol=code,
+        as_of=effective_as_of,
+        currency="CNY",
+        pe_ratio=0.0,
+        revenue_growth=revenue_growth or 0.0,
+        net_margin=net_margin or 0.0,
+        debt_to_assets=debt_to_assets or 0.0,
+    )
+    payload = upsert_fundamental_snapshot(snapshot, session=session, source="akshare")
+    return {"symbol": symbol, "status": "ingested", "source": "akshare", "item": payload.get("item")}
+
+
+def ingest_tushare_fundamentals(
+    symbol: str,
+    session: Session,
+    as_of: date | None = None,
+) -> dict[str, object]:
+    try:
+        import tushare as ts
+    except ImportError:
+        return {"symbol": symbol, "status": "skipped", "source": "tushare", "reason": "tushare not installed"}
+
+    from packages.services.platform_settings import get_platform_settings
+
+    token = str(get_platform_settings().get("tushare_token", "") or "").strip()
+    if not token:
+        return {"symbol": symbol, "status": "skipped", "source": "tushare", "reason": "missing token"}
+
+    effective_as_of = as_of or date.today()
+    ts_code = tushare_ts_code(symbol)
+    try:
+        ts.set_token(token)
+        pro = ts.pro_api()
+        basic = pro.daily_basic(ts_code=ts_code, trade_date=effective_as_of.strftime("%Y%m%d"))
+        if basic is None or basic.empty:
+            basic = pro.daily_basic(ts_code=ts_code, limit=1)
+        fina = pro.fina_indicator(ts_code=ts_code, limit=1)
+    except Exception:
+        return {"symbol": symbol, "status": "empty", "source": "tushare"}
+
+    pe_ratio = _safe_float(basic.iloc[-1].get("pe_ttm")) if basic is not None and not basic.empty else None
+    revenue_growth = None
+    net_margin = None
+    debt_to_assets = None
+    if fina is not None and not fina.empty:
+        fina_row = fina.iloc[-1]
+        revenue_growth = _safe_float(fina_row.get("tr_yoy"))
+        net_margin = _safe_float(fina_row.get("netprofit_margin"))
+        debt_to_assets = _safe_float(fina_row.get("debt_to_assets"))
+        if revenue_growth is not None:
+            revenue_growth = revenue_growth / 100.0
+        if net_margin is not None:
+            net_margin = net_margin / 100.0
+        if debt_to_assets is not None:
+            debt_to_assets = debt_to_assets / 100.0
+
+    if all(value is None for value in (pe_ratio, revenue_growth, net_margin, debt_to_assets)):
+        return {"symbol": symbol, "status": "empty", "source": "tushare"}
+
+    snapshot = FundamentalMetricsSnapshot(
+        symbol=normalize_cn_symbol(symbol),
+        as_of=effective_as_of,
+        currency="CNY",
+        pe_ratio=pe_ratio or 0.0,
+        revenue_growth=revenue_growth or 0.0,
+        net_margin=net_margin or 0.0,
+        debt_to_assets=debt_to_assets or 0.0,
+    )
+    payload = upsert_fundamental_snapshot(snapshot, session=session, source="tushare")
+    return {"symbol": symbol, "status": "ingested", "source": "tushare", "item": payload.get("item")}

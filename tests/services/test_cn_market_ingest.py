@@ -1,0 +1,98 @@
+from datetime import date
+from unittest.mock import patch
+
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import packages.domain.models  # noqa: F401
+from packages.services.fundamentals import ingest_akshare_fundamentals, ingest_fundamentals
+from packages.services.news import ingest_akshare_news, ingest_news
+from packages.shared.database import Base
+
+
+def make_session():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
+def test_ingest_fundamentals_routes_to_akshare(monkeypatch):
+    session = make_session()
+
+    def fake_akshare_ingest(symbol, session, as_of=None):
+        return {"symbol": symbol, "status": "ingested", "source": "akshare"}
+
+    monkeypatch.setattr(
+        "packages.services.fundamentals.ingest_akshare_fundamentals",
+        fake_akshare_ingest,
+    )
+
+    result = ingest_fundamentals("600519", session=session, provider_name="akshare", as_of=date(2026, 1, 20))
+
+    assert result["status"] == "ingested"
+    assert result["source"] == "akshare"
+
+
+def test_ingest_akshare_fundamentals_persists_snapshot():
+    session = make_session()
+    frame = pd.DataFrame(
+        [
+            {
+                "日期": "2026-03-31",
+                "主营业务收入增长(%)": 10.5,
+                "销售净利率(%)": 52.2,
+                "资产负债率(%)": 12.1,
+            }
+        ]
+    )
+
+    with patch("akshare.stock_financial_analysis_indicator", return_value=frame):
+        result = ingest_akshare_fundamentals("600519", session=session, as_of=date(2026, 3, 31))
+
+    assert result["status"] == "ingested"
+    assert result["source"] == "akshare"
+    assert result["item"]["pe_ratio"] == 0.0
+    assert result["item"]["revenue_growth"] == 0.105
+
+
+def test_ingest_news_routes_to_akshare(monkeypatch):
+    session = make_session()
+
+    def fake_akshare_news(symbol, session):
+        return {"symbol": symbol, "status": "ingested", "source": "akshare", "article_count": 1}
+
+    monkeypatch.setattr("packages.services.news.ingest_akshare_news", fake_akshare_news)
+
+    result = ingest_news("600519", session=session, provider_name="akshare")
+
+    assert result["status"] == "ingested"
+    assert result["source"] == "akshare"
+    assert result["article_count"] == 1
+
+
+def test_ingest_akshare_news_persists_articles():
+    session = make_session()
+    frame = pd.DataFrame(
+        [
+            {
+                "新闻标题": "Moutai revenue grows",
+                "新闻链接": "https://example.com/moutai-news",
+                "发布时间": "2026-06-29 14:13:41",
+                "文章来源": "eastmoney",
+                "新闻内容": "Moutai revenue grows strongly in the quarter.",
+            }
+        ]
+    )
+
+    with patch("akshare.stock_news_em", return_value=frame):
+        result = ingest_akshare_news("600519", session=session)
+
+    assert result["status"] == "ingested"
+    assert result["article_count"] == 1
+    assert result["sentiment_count"] == 1
