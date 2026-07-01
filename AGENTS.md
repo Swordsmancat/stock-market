@@ -15,7 +15,9 @@ Activate the Python venv first for backend commands: `source .venv/bin/activate`
   daemon must be running: `sudo service docker start`; use `sudo docker ...`).
 - Migrations (run after infra is up / on new migrations): `alembic upgrade head`.
 - API: `uvicorn apps.api.main:app --reload --port 8000` (http://localhost:8000).
-- Web: `npm run dev:web` → http://localhost:3000/en.
+- Web: export the API URL first, then start (see web env caveat below):
+  `export API_BASE_URL=http://127.0.0.1:8000 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000 NEXT_PUBLIC_MARKET_DATA_PROVIDER=mock && npm run dev:web`
+  → http://localhost:3000/en.
 - Worker: see the `--include` caveat below.
 - Beat (optional, scheduler only): `celery -A apps.worker.celery_app.celery_app beat --loglevel=info`.
 
@@ -35,6 +37,13 @@ Activate the Python venv first for backend commands: `source .venv/bin/activate`
   `provider=mock` per request (endpoints accept a `provider` query param) instead
   of changing `.env`. `LLM_PROVIDER=mock` is the default and needs no API key.
 - `yfinance` needs internet; `mock` provider works fully offline for E2E/tests.
+- Web env caveat: `next dev` runs from `apps/web/`, so it does NOT read the repo
+  root `.env`. Without an API URL in its own environment, `apps/web/lib/backend-api.ts`
+  falls back to `http://127.0.0.1:8001` (wrong port) and the dashboard shows a
+  "Cannot reach the API" banner. Export `API_BASE_URL`/`NEXT_PUBLIC_API_BASE_URL`
+  for the web process (as shown above). Use `127.0.0.1`, not `localhost`: the API
+  (`uvicorn --host 0.0.0.0`) listens on IPv4 only, and some clients resolve
+  `localhost` to IPv6 `::1` first, which is refused.
 - Dashboard "采集 / 刷新分析" buttons dispatch async Celery tasks; do NOT fire
   ingestion and analysis for the same market concurrently on a fresh DB — both
   try to insert the same `markets.code` row and one fails with a UniqueViolation.
