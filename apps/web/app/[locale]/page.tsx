@@ -1,5 +1,5 @@
 import { Link } from "@/src/i18n/routing";
-import { TrendingUp, Activity, Briefcase, Newspaper, FileText, List } from "lucide-react";
+import { TrendingUp, Activity, Briefcase, Newspaper, FileText, List, Bell } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { AnalysisRefreshButton } from "./AnalysisRefreshButton";
@@ -7,6 +7,9 @@ import { IngestionButton } from "./IngestionButton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { MiniPriceChart } from "@/components/mini-price-chart";
+import { getDashboardDateRanges } from "@/lib/dates";
+import { getMarketDataProvider, withProviderQuery } from "@/lib/market-data";
 
 type Instrument = {
   symbol: string;
@@ -20,7 +23,12 @@ type InstrumentsPayload = {
 
 type BarsPayload = {
   source: string;
-  items: Array<{ close: number }>;
+  items: Array<{ timestamp: string; close: number }>;
+};
+
+type LatestBarPayload = {
+  source: string;
+  item?: { close: number } | null;
 };
 
 type ReportPayload = {
@@ -86,6 +94,24 @@ type TaskRunPayload = {
   };
 };
 
+type WatchlistPayload = {
+  items: Array<{
+    symbol: string;
+    market: string;
+    alert_status?: { triggered?: boolean };
+  }>;
+};
+
+type AlertTriggersPayload = {
+  items: Array<{
+    symbol: string;
+    market: string;
+    rule_key: string;
+    threshold: number;
+    triggered_at: string;
+  }>;
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -127,9 +153,12 @@ function hasTechnicalIndicators(payload: IndicatorsPayload): boolean {
 }
 
 export default async function HomePage() {
+  const { recent, analysis } = getDashboardDateRanges();
+  const provider = getMarketDataProvider();
   const instrumentsPayload = await fetchJson<InstrumentsPayload>("/instruments");
   const primaryInstrument = instrumentsPayload.items[0];
   const [
+    latestBarPayload,
     barsPayload,
     reportPayload,
     dailyReportPayload,
@@ -139,13 +168,24 @@ export default async function HomePage() {
     fundamentalsPayload,
     newsPayload,
     taskRunPayload,
+    watchlistPayload,
+    alertTriggersPayload,
   ] =
     await Promise.all([
-      fetchJson<BarsPayload>(
-        `/market-data/${primaryInstrument.symbol}/bars?timeframe=1d&start=2026-01-01&end=2026-01-02`,
+      fetchOptionalJson<LatestBarPayload>(
+        withProviderQuery(`/market-data/${primaryInstrument.symbol}/latest`, provider),
+        { source: "unavailable", item: null },
       ),
-      fetchJson<ReportPayload>(
-        `/reports/${primaryInstrument.symbol}/stock?start=2026-01-01&end=2026-01-02`,
+      fetchOptionalJson<BarsPayload>(
+        withProviderQuery(
+          `/market-data/${primaryInstrument.symbol}/bars?timeframe=1d&start=${recent.start}&end=${recent.end}`,
+          provider,
+        ),
+        { source: "unavailable", items: [] },
+      ),
+      fetchOptionalJson<ReportPayload>(
+        `/reports/${primaryInstrument.symbol}/stock?start=${recent.start}&end=${recent.end}`,
+        { content_markdown: "", citations: [] },
       ),
       fetchOptionalJson<DailyReportPayload>(`/reports/${primaryInstrument.symbol}/daily/latest`, {}),
       fetchOptionalJson<DailyReportHistoryPayload>(
@@ -172,10 +212,20 @@ export default async function HomePage() {
         "/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis",
         { status: "unknown" },
       ),
+      fetchOptionalJson<WatchlistPayload>("/watchlist", { items: [] }),
+      fetchOptionalJson<AlertTriggersPayload>("/alerts/triggers/recent?limit=5", { items: [] }),
     ]);
 
-  const latestClose = barsPayload.items.at(-1)?.close;
+  const latestClose =
+    latestBarPayload.item?.close ?? barsPayload.items.at(-1)?.close;
+  const priceSource =
+    latestBarPayload.item !== undefined && latestBarPayload.item !== null
+      ? latestBarPayload.source
+      : barsPayload.source;
   const portfolioValue = portfolioPayload.positions[0]?.market_value;
+  const triggeredWatchlistCount = watchlistPayload.items.filter(
+    (item) => item.alert_status?.triggered,
+  ).length;
   const fundamentalSummary = fundamentalsPayload.item?.summary;
   const latestNews = newsPayload.items[0];
   const reportCitations = reportPayload.citations ?? [];
@@ -198,19 +248,19 @@ export default async function HomePage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <IngestionButton market={primaryInstrument.market} start="2026-01-01" end="2026-01-02" />
+          <IngestionButton market={primaryInstrument.market} start={recent.start} end={recent.end} />
           <AnalysisRefreshButton
             symbol={primaryInstrument.symbol}
             market={primaryInstrument.market}
-            start="2026-01-01"
-            end="2026-01-20"
+            start={analysis.start}
+            end={analysis.end}
             maWindow={3}
           />
         </div>
       </div>
 
       {/* Row 1: KPIs */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -220,7 +270,8 @@ export default async function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{latestClose ? `$${latestClose.toFixed(2)}` : "N/A"}</div>
-            <p className="text-xs text-muted-foreground">{t("source", { source: barsPayload.source })}</p>
+            <MiniPriceChart items={barsPayload.items} className="mt-3 h-16 w-full" />
+            <p className="mt-2 text-xs text-muted-foreground">{t("source", { source: priceSource })}</p>
           </CardContent>
         </Card>
         <Card>
@@ -237,13 +288,38 @@ export default async function HomePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t("activeAlerts")}</CardTitle>
+            <Bell className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{triggeredWatchlistCount}</div>
+            <p className="text-xs text-muted-foreground">{t("activeAlertsDesc")}</p>
+            {alertTriggersPayload.items.length > 0 ? (
+              <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                {alertTriggersPayload.items.slice(0, 3).map((trigger) => (
+                  <li key={`${trigger.symbol}-${trigger.rule_key}-${trigger.triggered_at}`}>
+                    <Link href="/watchlist" className="hover:underline">
+                      {trigger.symbol}
+                    </Link>{" "}
+                    {trigger.rule_key} @ {trigger.threshold}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t("latestTaskRun")}</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold capitalize">{taskRunPayload.status}</div>
             <p className="text-xs text-muted-foreground">
-              {t("itemsInTime", { count: taskRunPayload.result_json?.item_count ?? 0, time: taskRunPayload.duration_ms ?? 0 })}
+              {t("itemsInTime", {
+                count: taskRunPayload.result_json?.item_count ?? 0,
+                time: taskRunPayload.duration_ms ?? 0,
+              })}
             </p>
           </CardContent>
         </Card>

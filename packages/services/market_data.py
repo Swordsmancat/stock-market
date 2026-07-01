@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 from sqlalchemy.exc import SQLAlchemyError
@@ -124,7 +124,11 @@ def get_indicator_payload(
     }
 
 
-def get_latest_bar_payload(symbol: str, session: Session | None = None) -> dict[str, object]:
+def get_latest_bar_payload(
+    symbol: str,
+    session: Session | None = None,
+    provider_name: str = "mock",
+) -> dict[str, object]:
     if session is not None:
         try:
             db_bar = (
@@ -144,12 +148,48 @@ def get_latest_bar_payload(symbol: str, session: Session | None = None) -> dict[
                 "item": serialize_daily_bar(db_bar),
             }
 
-    fallback = get_bars_payload(symbol, "1d", date(2026, 1, 1), date(2026, 1, 1))
+    end = date.today()
+    start = end - timedelta(days=7)
+    fallback = get_bars_payload(
+        symbol,
+        "1d",
+        start,
+        end,
+        session=session,
+        provider_name=provider_name,
+    )
+    items = fallback["items"]
     return {
         "symbol": symbol,
         "timeframe": "1d",
         "source": fallback["source"],
-        "item": fallback["items"][-1],
+        "item": items[-1] if items else None,
+    }
+
+
+def get_latest_bars_batch_payload(
+    symbols: list[str],
+    session: Session | None = None,
+    provider_name: str = "mock",
+) -> dict[str, object]:
+    items: list[dict[str, object]] = []
+    sources: set[str] = set()
+
+    for symbol in symbols:
+        payload = get_latest_bar_payload(symbol, session=session, provider_name=provider_name)
+        source = str(payload["source"])
+        sources.add(source)
+        items.append(
+            {
+                "symbol": symbol,
+                "source": source,
+                "item": payload["item"],
+            }
+        )
+
+    return {
+        "source": sources.pop() if len(sources) == 1 else "mixed",
+        "items": items,
     }
 
 

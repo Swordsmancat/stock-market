@@ -3,10 +3,12 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from packages.services.ingestion import ingest_mock_market_snapshot
+from packages.services.task_runs import enqueue_task_run
 from packages.shared.database import get_session
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
+
+TASK_NAME = "ingestion.ingest_market_data"
 
 
 @router.post("/mock-snapshot")
@@ -17,4 +19,13 @@ def ingest_mock_snapshot(
     end: date = Query(...),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return ingest_mock_market_snapshot(market, start, end, session=session, provider_name=provider)
+    return enqueue_task_run(
+        TASK_NAME,
+        {
+            "market": market,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "provider": provider,
+        },
+        session=session,
+    )

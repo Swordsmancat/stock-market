@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TaskRunRetryButton } from "@/components/task-run-actions";
+import { EmptyState } from "@/components/empty-state";
 
 type TaskRun = {
   id: string;
@@ -92,13 +94,14 @@ export default async function TaskRunsPage({
                 <TableHead>{t("input")}</TableHead>
                 <TableHead>{t("result")}</TableHead>
                 <TableHead>{t("error")}</TableHead>
+                <TableHead className="text-right">{t("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {payload.items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    {t("noData")}
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <EmptyState title={t("noData")} description={t("emptyHint")} />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -130,6 +133,9 @@ export default async function TaskRunsPage({
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate text-destructive" title={item.error_message ?? ""}>
                       {item.error_message ?? "--"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.status === "failed" ? <TaskRunRetryButton taskRunId={item.id} /> : "--"}
                     </TableCell>
                   </TableRow>
                 ))

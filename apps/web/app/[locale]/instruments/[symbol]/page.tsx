@@ -7,11 +7,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { TrendingUp, FileText, Activity, Briefcase, Newspaper } from "lucide-react";
 import { PriceChart } from "@/components/price-chart";
 import { Link } from "@/src/i18n/routing";
+import { getInstrumentDateRange, parseInstrumentRange, type InstrumentRange } from "@/lib/dates";
+import { getMarketDataProvider, withProviderQuery } from "@/lib/market-data";
 
 type BarsPayload = {
   source: string;
-  items: Array<{ timestamp: string; close: number }>;
+  items: Array<{
+    timestamp: string;
+    open?: number;
+    high?: number;
+    low?: number;
+    close: number;
+    volume?: number;
+  }>;
 };
+
+const RANGE_OPTIONS: InstrumentRange[] = ["5d", "20d", "1m", "3m", "1y"];
 
 type ReportPayload = {
   content_markdown: string;
@@ -92,11 +103,9 @@ export default async function InstrumentDetailPage({
   const { symbol } = await params;
   const { range } = await searchParams;
   const decodedSymbol = decodeURIComponent(symbol).toUpperCase();
-  const selectedRange = range === "5d" ? "5d" : "20d";
-  const dateRange =
-    selectedRange === "5d"
-      ? { start: "2026-01-16", end: "2026-01-20" }
-      : { start: "2026-01-01", end: "2026-01-20" };
+  const selectedRange = parseInstrumentRange(range);
+  const dateRange = getInstrumentDateRange(selectedRange);
+  const provider = getMarketDataProvider();
   const t = await getTranslations("InstrumentDetail");
 
   const [
@@ -107,7 +116,10 @@ export default async function InstrumentDetailPage({
     newsPayload,
   ] = await Promise.all([
     fetchOptionalJson<BarsPayload>(
-      `/market-data/${decodedSymbol}/bars?timeframe=1d&start=${dateRange.start}&end=${dateRange.end}`,
+      withProviderQuery(
+        `/market-data/${decodedSymbol}/bars?timeframe=1d&start=${dateRange.start}&end=${dateRange.end}`,
+        provider,
+      ),
       { source: "unavailable", items: [] }
     ),
     fetchOptionalJson<ReportPayload>(
@@ -161,13 +173,19 @@ export default async function InstrumentDetailPage({
                 <TrendingUp className="h-5 w-5" />
                 {t("priceHistory")}
               </CardTitle>
-              <div className="mt-3 flex gap-2">
-                <Button variant={selectedRange === "5d" ? "default" : "outline"} size="sm" asChild>
-                  <Link href={`/instruments/${decodedSymbol}?range=5d` as any}>5D</Link>
-                </Button>
-                <Button variant={selectedRange === "20d" ? "default" : "outline"} size="sm" asChild>
-                  <Link href={`/instruments/${decodedSymbol}?range=20d` as any}>20D</Link>
-                </Button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {RANGE_OPTIONS.map((option) => (
+                  <Button
+                    key={option}
+                    variant={selectedRange === option ? "default" : "outline"}
+                    size="sm"
+                    asChild
+                  >
+                    <Link href={`/instruments/${decodedSymbol}?range=${option}` as any}>
+                      {option.toUpperCase()}
+                    </Link>
+                  </Button>
+                ))}
               </div>
             </CardHeader>
             <CardContent>

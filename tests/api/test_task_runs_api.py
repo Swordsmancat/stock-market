@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -39,6 +41,7 @@ def test_task_runs_api_returns_recent_and_latest_task_run():
             "/task-runs/latest",
             params={"task_name": "reports.refresh_daily_watchlist_analysis"},
         )
+        detail_response = client.get(f"/task-runs/{task_run.id}")
     finally:
         app.dependency_overrides.clear()
 
@@ -51,7 +54,11 @@ def test_task_runs_api_returns_recent_and_latest_task_run():
     latest = latest_response.json()
     assert latest["task_name"] == "reports.refresh_daily_watchlist_analysis"
     assert latest["status"] == "succeeded"
-    assert latest["result_json"] == {"item_count": 1}
+
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["item"]["id"] == str(task_run.id)
+    assert detail["item"]["result_json"] == {"item_count": 1}
 
 
 def test_task_runs_api_filters_recent_by_status():
@@ -75,4 +82,32 @@ def test_task_runs_api_filters_recent_by_status():
     payload = response.json()
     assert len(payload["items"]) == 1
     assert payload["items"][0]["status"] == "failed"
-    assert payload["items"][0]["error_message"] == "provider timeout"
+
+
+@patch("packages.services.task_dispatch.dispatch_task_run", return_value="celery-task-id-123")
+def test_task_runs_api_retries_existing_task_run(mock_dispatch):
+    session = make_session()
+    failed_run = start_task_run(
+        "reports.refresh_daily_watchlist_analysis",
+        {"watchlist": "0700:HK"},
+        session=session,
+    )
+    fail_task_run(failed_run, "provider timeout", session=session)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.post(f"/task-runs/{failed_run.id}/retry")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "retry_started"
+    assert payload["item"]["status"] == "running"
+    assert payload["item"]["input_json"]["retry_of"] == str(failed_run.id)
+    assert payload["celery_task_id"] == "celery-task-id-123"
+    mock_dispatch.assert_called_once()

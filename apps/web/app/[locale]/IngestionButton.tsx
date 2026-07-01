@@ -4,12 +4,8 @@ import { useState } from "react";
 import { Database } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-
-type IngestionPayload = {
-  status: string;
-  market: string;
-  bar_count: number;
-};
+import { getMarketDataProvider } from "@/lib/market-data";
+import { enqueueAndPoll } from "@/lib/task-run-poll";
 
 type IngestionButtonProps = {
   market: string;
@@ -31,18 +27,19 @@ export function IngestionButton({ market, start, end }: IngestionButtonProps) {
         market,
         start,
         end,
-        provider: process.env.NEXT_PUBLIC_MARKET_DATA_PROVIDER ?? "mock",
+        provider: getMarketDataProvider(),
       });
-      const response = await fetch(`/api/ingestion/mock-snapshot?${params.toString()}`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new Error("Ingestion request failed");
+      const taskRun = await enqueueAndPoll(`/api/ingestion/mock-snapshot?${params.toString()}`);
+      const result = taskRun.result_json as { market?: string; bar_count?: number } | null;
+      const barCount = result?.bar_count ?? 0;
+      if (barCount === 0) {
+        setMessage(t("ingestionEmpty"));
+        return;
       }
-      const payload = (await response.json()) as IngestionPayload;
-      setMessage(`✅ ${payload.market}: ${payload.bar_count} bars`);
-    } catch {
-      setMessage("❌ Failed");
+      setMessage(`✅ ${result?.market ?? market}: ${barCount} bars`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Request failed";
+      setMessage(`❌ ${detail}`);
     } finally {
       setIsLoading(false);
     }

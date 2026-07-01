@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from packages.domain.models import Watchlist, WatchlistItem
+from packages.services.watchlist_alerts import enrich_watchlist_items
 from packages.shared.config import settings
 
 DEFAULT_WATCHLIST_NAME = "default"
@@ -89,10 +90,11 @@ def get_default_watchlist_payload(session: Session) -> dict[str, object]:
     watchlist = _get_or_create_default_watchlist(session)
     _seed_default_items_if_empty(watchlist, session)
     items = _active_items(watchlist, session)
+    serialized = [_serialize_item(item) for item in items]
     return {
         "name": watchlist.name,
         "source": "database",
-        "items": [_serialize_item(item) for item in items],
+        "items": enrich_watchlist_items(serialized, session=session),
     }
 
 

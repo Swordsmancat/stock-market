@@ -1,0 +1,91 @@
+from unittest.mock import MagicMock, patch
+
+from packages.services.task_dispatch import dispatch_task_run, is_dispatchable_task
+
+
+def test_is_dispatchable_task_supports_registered_tasks():
+    assert is_dispatchable_task("reports.refresh_daily_watchlist_analysis") is True
+    assert is_dispatchable_task("reports.refresh_daily_stock_analysis") is True
+    assert is_dispatchable_task("ingestion.ingest_market_data") is True
+    assert is_dispatchable_task("unknown.task") is False
+
+
+@patch("apps.worker.tasks.reports.refresh_daily_watchlist_analysis")
+def test_dispatch_task_run_enqueues_watchlist_analysis(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-abc"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "reports.refresh_daily_watchlist_analysis",
+        {"watchlist": "AAPL:US", "start": "2026-01-01", "end": "2026-01-20", "ma_window": 3},
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-abc"
+    mock_task.delay.assert_called_once_with(
+        watchlist="AAPL:US",
+        start="2026-01-01",
+        end="2026-01-20",
+        ma_window=3,
+        provider=None,
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.reports.refresh_daily_stock_analysis")
+def test_dispatch_task_run_enqueues_stock_analysis(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-stock"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "reports.refresh_daily_stock_analysis",
+        {
+            "symbol": "AAPL",
+            "market": "US",
+            "start": "2026-01-01",
+            "end": "2026-01-20",
+            "ma_window": 3,
+            "provider": "mock",
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-stock"
+    mock_task.delay.assert_called_once_with(
+        symbol="AAPL",
+        market="US",
+        start="2026-01-01",
+        end="2026-01-20",
+        ma_window=3,
+        provider="mock",
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.ingestion.ingest_market_data")
+def test_dispatch_task_run_enqueues_market_ingestion(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-ingest"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.ingest_market_data",
+        {
+            "market": "US",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "provider": "yfinance",
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-ingest"
+    mock_task.delay.assert_called_once_with(
+        market="US",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="yfinance",
+        task_run_id="task-run-id",
+    )

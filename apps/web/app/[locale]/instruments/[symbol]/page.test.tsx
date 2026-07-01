@@ -1,6 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/dates", () => ({
+  parseInstrumentRange: () => "20d",
+  getInstrumentDateRange: () => ({ start: "2026-01-01", end: "2026-01-20" }),
+}));
+
 import InstrumentDetailPage from "./page";
 
 afterEach(() => {
@@ -26,8 +31,22 @@ it("renders instrument detail with market, indicators, fundamentals, news, and r
             symbol: "AAPL",
             source: "database",
             items: [
-              { timestamp: "2026-01-19", close: 101 },
-              { timestamp: "2026-01-20", close: 102 },
+              {
+                timestamp: "2026-01-19",
+                open: 100,
+                high: 103,
+                low: 99,
+                close: 101,
+                volume: 1000,
+              },
+              {
+                timestamp: "2026-01-20",
+                open: 101,
+                high: 104,
+                low: 100,
+                close: 102,
+                volume: 1200,
+              },
             ],
           }),
         ),
@@ -102,6 +121,11 @@ it("renders instrument detail with market, indicators, fundamentals, news, and r
   expect(screen.getByText("AAPL")).toBeInTheDocument();
   expect(screen.getByText("$102.00")).toBeInTheDocument();
   expect(screen.getByText("Price History")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Candles" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "MA(20)" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "BOLL" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "RSI" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Volume" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Technical" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Fundamentals" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "News" })).toBeInTheDocument();

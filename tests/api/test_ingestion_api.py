@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
 from packages.shared.database import Base, get_session
+from tests.helpers.celery_sync import dispatch_task_run_sync
 
 
 def make_session():
@@ -18,8 +19,17 @@ def make_session():
     return sessionmaker(bind=engine)()
 
 
-def test_ingestion_api_writes_mock_snapshot_then_market_data_reads_database():
+def test_ingestion_api_dispatches_task_run_and_writes_database(monkeypatch):
     session = make_session()
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        lambda task_name, input_json, task_run_id: dispatch_task_run_sync(
+            task_name,
+            input_json,
+            task_run_id,
+            session,
+        ),
+    )
 
     def override_session():
         yield session
@@ -45,10 +55,14 @@ def test_ingestion_api_writes_mock_snapshot_then_market_data_reads_database():
 
     assert ingest_response.status_code == 200
     ingest_payload = ingest_response.json()
-    assert ingest_payload["status"] == "ingested"
-    assert ingest_payload["market"] == "US"
-    assert ingest_payload["provider"] == "mock"
-    assert ingest_payload["bar_count"] == 2
+    assert ingest_payload["status"] == "dispatched"
+    task_run = ingest_payload["task_run"]
+    assert task_run["task_name"] == "ingestion.ingest_market_data"
+    assert task_run["status"] == "succeeded"
+    result = task_run["result_json"]
+    assert result["status"] == "ingested"
+    assert result["market"] == "US"
+    assert result["bar_count"] == 2
 
     assert bars_response.status_code == 200
     bars_payload = bars_response.json()

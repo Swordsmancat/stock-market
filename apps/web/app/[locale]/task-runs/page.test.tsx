@@ -52,4 +52,5 @@ it("renders latest watchlist run and recent task runs", async () => {
   expect(screen.getByText("succeeded")).toBeInTheDocument();
   expect(screen.getByText("failed")).toBeInTheDocument();
   expect(screen.getByText("provider timeout")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
 });

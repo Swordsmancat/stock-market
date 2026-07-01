@@ -4,12 +4,8 @@ import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-
-type AnalysisRefreshPayload = {
-  symbol: string;
-  status: string;
-  report: { report_type: string };
-};
+import { getMarketDataProvider } from "@/lib/market-data";
+import { enqueueAndPoll } from "@/lib/task-run-poll";
 
 type AnalysisRefreshButtonProps = {
   symbol: string;
@@ -41,18 +37,14 @@ export function AnalysisRefreshButton({
         start,
         end,
         ma_window: String(maWindow),
-        provider: process.env.NEXT_PUBLIC_MARKET_DATA_PROVIDER ?? "mock",
+        provider: getMarketDataProvider(),
       });
-      const response = await fetch(`/api/analysis/refresh?${params.toString()}`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new Error("Analysis refresh request failed");
-      }
-      const payload = (await response.json()) as AnalysisRefreshPayload;
-      setMessage(`✅ ${payload.symbol} refreshed`);
-    } catch {
-      setMessage("❌ Failed");
+      const taskRun = await enqueueAndPoll(`/api/analysis/refresh?${params.toString()}`);
+      const result = taskRun.result_json as { symbol?: string } | null;
+      setMessage(`✅ ${result?.symbol ?? symbol} refreshed`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Request failed";
+      setMessage(`❌ ${detail}`);
     } finally {
       setIsLoading(false);
     }

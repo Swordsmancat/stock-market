@@ -154,6 +154,48 @@ class WatchlistItem(Base):
     watchlist: Mapped[Watchlist] = relationship("Watchlist", back_populates="items")
 
 
+class Portfolio(Base):
+    __tablename__ = "portfolios"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(String(128))
+    base_currency: Mapped[str] = mapped_column(String(8), default="USD")
+    risk_profile: Mapped[str | None] = mapped_column(String(64), default=None)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    positions: Mapped[list["PortfolioPosition"]] = relationship(
+        "PortfolioPosition",
+        back_populates="portfolio",
+    )
+
+
+class PortfolioPosition(Base):
+    __tablename__ = "portfolio_positions"
+    __table_args__ = (
+        UniqueConstraint("portfolio_id", "symbol", "market", name="uq_portfolio_positions_identity"),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    portfolio_id: Mapped[PythonUUID] = mapped_column(ForeignKey("portfolios.id"))
+    symbol: Mapped[str] = mapped_column(String(64))
+    market: Mapped[str] = mapped_column(String(32))
+    name: Mapped[str] = mapped_column(String(256))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(20, 4))
+    avg_cost: Mapped[Decimal] = mapped_column(Numeric(20, 6))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    portfolio: Mapped[Portfolio] = relationship("Portfolio", back_populates="positions")
+
+
 class NewsArticle(Base):
     __tablename__ = "news_articles"
 
@@ -197,9 +239,26 @@ class GeneratedReport(Base):
         JSON().with_variant(JSONB, "postgresql"),
         default=dict,
     )
+    task_run_id: Mapped[PythonUUID | None] = mapped_column(ForeignKey("task_runs.id"), default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class AlertTrigger(Base):
+    __tablename__ = "alert_triggers"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    symbol: Mapped[str] = mapped_column(String(64), index=True)
+    market: Mapped[str] = mapped_column(String(32))
+    rule_key: Mapped[str] = mapped_column(String(64))
+    threshold: Mapped[Decimal] = mapped_column(Numeric(20, 6))
+    observed_value: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), default=None)
+    triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
 
 
@@ -218,6 +277,7 @@ class TaskRun(Base):
         default=None,
     )
     error_message: Mapped[str | None] = mapped_column(Text, default=None)
+    celery_task_id: Mapped[str | None] = mapped_column(String(128), default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

@@ -14,6 +14,7 @@ it("renders demo portfolio positions and recommendation", async () => {
       return Promise.resolve(
         new Response(
           JSON.stringify({
+            id: "demo",
             name: "Demo Portfolio",
             base_currency: "USD",
             source: "database",
@@ -52,13 +53,23 @@ it("renders demo portfolio positions and recommendation", async () => {
         ),
       );
     }
+    if (url.endsWith("/portfolios")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            source: "database",
+            items: [{ id: "demo", name: "Demo Portfolio", base_currency: "USD", is_default: true }],
+          }),
+        ),
+      );
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
-  render(await PortfoliosPage());
+  render(await PortfoliosPage({ searchParams: Promise.resolve({}) }));
 
   expect(screen.getByText("Portfolios")).toBeInTheDocument();
-  expect(screen.getByText("Demo Portfolio")).toBeInTheDocument();
+  expect(screen.getAllByText("Demo Portfolio").length).toBeGreaterThan(0);
   expect(screen.getAllByText("$1,020").length).toBeGreaterThan(0);
   expect(screen.getAllByText("$20").length).toBeGreaterThan(0);
   expect(screen.getAllByText("2.00%").length).toBeGreaterThan(0);

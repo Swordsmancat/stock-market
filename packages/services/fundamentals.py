@@ -11,6 +11,8 @@ from packages.analytics.fundamentals import (
     summarize_fundamentals,
 )
 from packages.domain.models import FundamentalSnapshot as FundamentalSnapshotModel
+from packages.providers.yfinance_helpers import map_symbol_to_ticker
+from packages.shared.config import settings
 
 
 _FUNDAMENTAL_FIXTURES = {
@@ -141,3 +143,59 @@ def get_fundamental_payload(
         return {"symbol": symbol, "source": "mock_fundamentals", "item": None}
 
     return _payload_from_snapshot(snapshot, source="mock_fundamentals", as_of=as_of)
+
+
+def _safe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed != parsed:  # NaN
+        return None
+    return parsed
+
+
+def ingest_fundamentals(
+    symbol: str,
+    session: Session,
+    provider_name: str | None = None,
+    as_of: date | None = None,
+) -> dict[str, object]:
+    provider = (provider_name or settings.market_data_provider).lower()
+    if provider == "yfinance":
+        return ingest_yfinance_fundamentals(symbol, session=session, as_of=as_of)
+    return {"symbol": symbol, "status": "skipped", "source": provider}
+
+
+def ingest_yfinance_fundamentals(
+    symbol: str,
+    session: Session,
+    as_of: date | None = None,
+) -> dict[str, object]:
+    import yfinance as yf
+
+    effective_as_of = as_of or date.today()
+    info = yf.Ticker(map_symbol_to_ticker(symbol)).info or {}
+    pe_ratio = _safe_float(info.get("trailingPE") or info.get("forwardPE"))
+    revenue_growth = _safe_float(info.get("revenueGrowth"))
+    net_margin = _safe_float(info.get("profitMargins"))
+    debt_to_equity = _safe_float(info.get("debtToEquity"))
+    if debt_to_equity is not None:
+        debt_to_equity = debt_to_equity / 100.0
+
+    if all(value is None for value in (pe_ratio, revenue_growth, net_margin, debt_to_equity)):
+        return {"symbol": symbol, "status": "empty", "source": "yfinance"}
+
+    snapshot = FundamentalMetricsSnapshot(
+        symbol=symbol.upper(),
+        as_of=effective_as_of,
+        currency=str(info.get("currency") or "USD"),
+        pe_ratio=pe_ratio or 0.0,
+        revenue_growth=revenue_growth or 0.0,
+        net_margin=net_margin or 0.0,
+        debt_to_assets=debt_to_equity or 0.0,
+    )
+    payload = upsert_fundamental_snapshot(snapshot, session=session, source="yfinance")
+    return {"symbol": symbol, "status": "ingested", "source": "yfinance", "item": payload.get("item")}

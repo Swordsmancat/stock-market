@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/dates", () => ({
+  getDashboardDateRanges: () => ({
+    recent: { start: "2026-01-01", end: "2026-01-02" },
+    analysis: { start: "2026-01-01", end: "2026-01-20" },
+  }),
+}));
+
 import HomePage from "./page";
 
 afterEach(() => {
@@ -15,6 +22,17 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
         new Response(
           JSON.stringify({
             items: [{ symbol: "AAPL", name: "Apple Inc.", market: "US" }],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/AAPL/latest")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "AAPL",
+            source: "database",
+            item: { close: 102 },
           }),
         ),
       );
@@ -153,13 +171,36 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
         ),
       );
     }
+    if (url.endsWith("/watchlist")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+    }
+    if (url.endsWith("/alerts/triggers/recent?limit=5")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+    }
     if (url.includes("/api/ingestion/mock-snapshot")) {
       return Promise.resolve(
         new Response(
           JSON.stringify({
-            status: "ingested",
-            market: "US",
-            bar_count: 2,
+            status: "dispatched",
+            task_run: {
+              id: "ingest-task-id",
+              status: "running",
+              task_name: "ingestion.ingest_market_data",
+            },
+          }),
+        ),
+      );
+    }
+    if (url.includes("/api/task-runs/ingest-task-id")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            item: {
+              id: "ingest-task-id",
+              status: "succeeded",
+              task_name: "ingestion.ingest_market_data",
+              result_json: { market: "US", bar_count: 2 },
+            },
           }),
         ),
       );
@@ -168,9 +209,26 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
       return Promise.resolve(
         new Response(
           JSON.stringify({
-            symbol: "AAPL",
-            status: "refreshed",
-            report: { report_type: "stock_daily" },
+            status: "dispatched",
+            task_run: {
+              id: "analysis-task-id",
+              status: "running",
+              task_name: "reports.refresh_daily_stock_analysis",
+            },
+          }),
+        ),
+      );
+    }
+    if (url.includes("/api/task-runs/analysis-task-id")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            item: {
+              id: "analysis-task-id",
+              status: "succeeded",
+              task_name: "reports.refresh_daily_stock_analysis",
+              result_json: { symbol: "AAPL", status: "refreshed" },
+            },
           }),
         ),
       );
@@ -204,17 +262,17 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
 
   expect(await screen.findByText("✅ US: 2 bars")).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledWith(
-    "/api/ingestion/mock-snapshot?market=US&start=2026-01-01&end=2026-01-02&provider=mock",
+    "/api/ingestion/mock-snapshot?market=US&start=2026-01-01&end=2026-01-02&provider=yfinance",
     { method: "POST" },
   );
   fireEvent.click(screen.getByRole("button", { name: "Refresh Analysis" }));
 
   expect(await screen.findByText("✅ AAPL refreshed")).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledWith(
-    "/api/analysis/refresh?symbol=AAPL&market=US&start=2026-01-01&end=2026-01-20&ma_window=3&provider=mock",
+    "/api/analysis/refresh?symbol=AAPL&market=US&start=2026-01-01&end=2026-01-20&ma_window=3&provider=yfinance",
     { method: "POST" },
   );
-  expect(fetchMock).toHaveBeenCalledTimes(12);
+  expect(fetchMock).toHaveBeenCalledTimes(17);
 });
 
 it("renders the dashboard when optional analysis APIs have no data", async () => {
@@ -228,6 +286,9 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
           }),
         ),
       );
+    }
+    if (url.includes("/market-data/600519/latest")) {
+      return Promise.resolve(new Response("", { status: 404 }));
     }
     if (url.includes("/market-data/600519/bars")) {
       return Promise.resolve(
@@ -290,6 +351,12 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
     }
     if (url.endsWith("/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis")) {
       return Promise.resolve(new Response("", { status: 404 }));
+    }
+    if (url.endsWith("/watchlist")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+    }
+    if (url.endsWith("/alerts/triggers/recent?limit=5")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });

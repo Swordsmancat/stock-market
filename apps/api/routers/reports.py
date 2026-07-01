@@ -21,6 +21,8 @@ def list_reports(
     symbol: str | None = Query(default=None),
     report_type: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    as_of_start: date | None = Query(default=None),
+    as_of_end: date | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
@@ -30,6 +32,8 @@ def list_reports(
         symbol=symbol,
         report_type=report_type,
         query=q,
+        as_of_start=as_of_start,
+        as_of_end=as_of_end,
         limit=limit,
         offset=offset,
     )

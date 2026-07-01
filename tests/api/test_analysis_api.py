@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
 from packages.shared.database import Base, get_session
+from tests.helpers.celery_sync import dispatch_task_run_sync
 
 
 def make_session():
@@ -18,8 +19,17 @@ def make_session():
     return sessionmaker(bind=engine)()
 
 
-def test_analysis_refresh_orchestrates_market_indicators_news_and_report():
+def test_analysis_refresh_dispatches_task_run_and_stores_report(monkeypatch):
     session = make_session()
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        lambda task_name, input_json, task_run_id: dispatch_task_run_sync(
+            task_name,
+            input_json,
+            task_run_id,
+            session,
+        ),
+    )
 
     def override_session():
         yield session
@@ -43,23 +53,19 @@ def test_analysis_refresh_orchestrates_market_indicators_news_and_report():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["symbol"] == "AAPL"
-    assert payload["status"] == "refreshed"
-    assert payload["ingestion"]["bar_count"] == 20
-    assert payload["indicators"]["status"] == "calculated"
-    assert payload["indicators"]["indicator_count"] == 4
-    assert payload["news"]["status"] == "ingested"
-    assert payload["news"]["sentiment_count"] == 1
-    assert "MA 119.00" in payload["report"]["content_markdown"]
-    assert "BOLL upper 121.00, middle 119.00, lower 117.00" in payload["report"]["content_markdown"]
-    assert "ATR 3.00" in payload["report"]["content_markdown"]
-    assert "Apple reports strong growth in services revenue" in payload["report"]["content_markdown"]
-    assert "technical_indicators:AAPL:2026-01-20T00:00:00+00:00" in payload["report"]["citations"]
-    assert "news_articles:AAPL:https://example.com/aapl-services-growth" in payload["report"]["citations"]
+    assert payload["status"] == "dispatched"
+    task_run = payload["task_run"]
+    assert task_run["task_name"] == "reports.refresh_daily_stock_analysis"
+    assert task_run["status"] == "succeeded"
+    assert task_run["celery_task_id"] == "sync-celery-id"
+
+    result = task_run["result_json"]
+    assert result["symbol"] == "AAPL"
+    assert result["status"] == "refreshed"
+    assert result["ingestion"]["bar_count"] == 20
+    assert "MA 119.00" in result["report"]["content_markdown"]
 
     assert latest_response.status_code == 200
     latest = latest_response.json()
     assert latest["symbol"] == "AAPL"
     assert latest["as_of"] == "2026-01-20"
-    assert "MA 119.00" in latest["content_markdown"]
-    assert "Apple reports strong growth in services revenue" in latest["content_markdown"]

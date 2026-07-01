@@ -5,6 +5,7 @@ from decimal import Decimal
 import pandas as pd
 
 from packages.providers.base import ProviderBar, ProviderInstrument
+from packages.providers.yfinance_helpers import map_symbol_to_ticker
 
 
 Downloader = Callable[[str, date, date], pd.DataFrame]
@@ -34,7 +35,7 @@ class YFinanceProvider:
             msg = f"Unsupported timeframe for yfinance provider: {timeframe}"
             raise ValueError(msg)
 
-        ticker = _map_symbol_to_ticker(symbol)
+        ticker = map_symbol_to_ticker(symbol)
         frame = self._downloader(ticker, start, end)
         bars: list[ProviderBar] = []
 
@@ -58,14 +59,6 @@ class YFinanceProvider:
         import yfinance as yf
 
         return yf.download(ticker, start=start.isoformat(), end=end.isoformat(), progress=False)
-
-
-def _map_symbol_to_ticker(symbol: str) -> str:
-    if symbol == "0700":
-        return "0700.HK"
-    if symbol == "600519":
-        return "600519.SS"
-    return symbol
 
 
 def _decimal(value: object) -> Decimal:
