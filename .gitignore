@@ -36,5 +36,20 @@ Thumbs.db
 .claude/
 .codex/
 .cursor/
-.trellis/
 AGENTS.md
+
+# Trellis local runtime/cache metadata
+.trellis/.developer
+.trellis/.current-task
+.trellis/.runtime/
+.trellis/.cache/
+.trellis/.backup-*/
+.trellis/worktrees/
+.trellis/.template-hashes.json
+.trellis/.ralph-state.json
+.trellis/.agent-log
+.trellis/.session-id
+.trellis/**/*.tmp
+.trellis/**/*.new
+.trellis/**/__pycache__/
+.trellis/**/*.pyc

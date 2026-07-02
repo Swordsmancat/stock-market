@@ -1,5 +1,7 @@
 # Dev Health Check Implementation Plan
 
+> **Status: completed.** This plan was implemented and committed in `94a4e74 feat: add local dev health check`. The unchecked boxes below are preserved as the original TDD execution plan, not as the current backlog. Implemented artifacts include `scripts/dev_health_check.py`, `tests/scripts/test_dev_health_check.py`, README quick-start guidance, and local development runbook troubleshooting notes.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a non-mutating local development health check command that diagnoses frontend, API, Redis, and Celery readiness before a developer opens the web app.

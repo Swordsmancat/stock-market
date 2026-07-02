@@ -1,5 +1,7 @@
 # Next Stability Automation Implementation Plan
 
+> **Status: completed.** This plan was executed through subagent lanes and committed in `ed0276f feat: add stability automation diagnostics`. The unchecked boxes below are preserved as the original execution checklist, not as the current backlog. Implemented artifacts include `.github/workflows/dev-health.yml`, `scripts/provider_readiness.py`, `packages/services/data_quality.py`, `scripts/task_run_health.py`, their focused tests, and the local development runbook updates. Final verification reported focused backend tests, health checks, adjacent regression tests, and `npm run test:web` passing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the next stabilization backlog into automated, verifiable workstreams that keep the stock analysis platform bootable, observable, and safe to extend.
