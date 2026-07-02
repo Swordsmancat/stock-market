@@ -113,10 +113,18 @@ jobs:
       - name: Run dev health check
         run: python scripts/dev_health_check.py
 
+      - name: Run mock provider readiness
+        run: python scripts/provider_readiness.py --provider mock --market US
+
+      - name: Run TaskRun health diagnostics
+        run: python scripts/task_run_health.py
+
       - name: Run focused health tests
         run: >-
           python -m pytest
           tests/scripts/test_dev_health_check.py
+          tests/scripts/test_provider_readiness.py
+          tests/scripts/test_task_run_health.py
           tests/api/test_health.py
           tests/services/test_task_dispatch.py
           -v
