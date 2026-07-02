@@ -104,6 +104,8 @@ Remaining deferred implementation items:
 
 ## Phase 5: Commit and Push Policy
 
-- [ ] Ask user before committing.
-- [ ] Commit reviewed scope only.
-- [ ] Push only after explicit user approval.
+- [x] Ask user before committing.
+- [x] Commit reviewed scope only.
+- [x] Push only after explicit user approval.
+
+Committed and pushed as `7e8e4b9 feat: bootstrap Trellis specs and proxy tests`.
