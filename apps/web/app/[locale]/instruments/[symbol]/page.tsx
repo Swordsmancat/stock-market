@@ -4,6 +4,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { TrendingUp, FileText, Activity, Briefcase, Newspaper } from "lucide-react";
 import { PriceChart } from "@/components/price-chart";
 import { Link } from "@/src/i18n/routing";
@@ -17,6 +27,11 @@ import { backendFetch } from "@/lib/backend-api";
 
 type BarsPayload = {
   source: string;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  status?: "ok" | "no_data" | string;
+  no_data_reason?: string | null;
   items: Array<{
     timestamp: string;
     open?: number;
@@ -26,6 +41,15 @@ type BarsPayload = {
     volume?: number;
   }>;
 };
+
+type BarsLoadResult =
+  | { status: "loaded"; payload: BarsPayload }
+  | { status: "failed" };
+
+type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const RECENT_OHLCV_ROW_LIMIT = 10;
 
 const RANGE_OPTIONS: InstrumentRange[] = ["5d", "20d", "1m", "3m", "1y"];
 
@@ -78,6 +102,22 @@ async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function fetchBarsPayload(path: string): Promise<BarsLoadResult> {
+  try {
+    const response = await backendFetch(path, { cache: "no-store" });
+    if (!response.ok) {
+      return { status: "failed" };
+    }
+
+    return {
+      status: "loaded",
+      payload: (await response.json()) as BarsPayload,
+    };
+  } catch {
+    return { status: "failed" };
+  }
+}
+
 function citationUrl(citation: string): string | null {
   return citation.match(/https?:\/\/\S+/)?.[0] ?? null;
 }
@@ -98,6 +138,100 @@ function renderCitation(citation: string) {
 function hasTechnicalIndicators(payload: IndicatorsPayload): boolean {
   const { ma, rsi, bollinger, atr } = payload.indicators;
   return ma !== undefined || rsi !== undefined || bollinger !== undefined || atr !== undefined;
+}
+
+function getDailyBarItems(barsResult: BarsLoadResult): BarsPayload["items"] {
+  return barsResult.status === "loaded" ? barsResult.payload.items : [];
+}
+
+function parseDailyBarTimestamp(timestamp: string | undefined): Date | null {
+  if (!timestamp) {
+    return null;
+  }
+
+  const parsedTimestamp = new Date(timestamp);
+  return Number.isNaN(parsedTimestamp.getTime()) ? null : parsedTimestamp;
+}
+
+function formatDailyBarDate(timestamp: string | undefined, locale: string, unavailableLabel: string): string {
+  const parsedTimestamp = parseDailyBarTimestamp(timestamp);
+  return parsedTimestamp === null ? unavailableLabel : parsedTimestamp.toLocaleDateString(locale);
+}
+
+function formatNumberValue(value: number | undefined, locale: string, unavailableLabel: string): string {
+  if (typeof value !== "number") {
+    return unavailableLabel;
+  }
+
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatVolumeValue(value: number | undefined, locale: string, unavailableLabel: string): string {
+  if (typeof value !== "number") {
+    return unavailableLabel;
+  }
+
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function getFreshnessStatus(barsResult: BarsLoadResult): FreshnessStatus {
+  if (barsResult.status === "failed") {
+    return "unavailable";
+  }
+
+  const latestDailyBar = barsResult.payload.items.at(-1);
+  if (barsResult.payload.status === "no_data" || latestDailyBar === undefined) {
+    return "no_data";
+  }
+
+  const parsedTimestamp = parseDailyBarTimestamp(latestDailyBar.timestamp);
+  if (parsedTimestamp === null) {
+    return "unavailable";
+  }
+
+  const daysSinceLatestDailyBar = (Date.now() - parsedTimestamp.getTime()) / MILLISECONDS_PER_DAY;
+  return daysSinceLatestDailyBar <= 3 ? "fresh" : "stale";
+}
+
+function getFreshnessBadgeVariant(freshnessStatus: FreshnessStatus): "secondary" | "outline" | "destructive" {
+  if (freshnessStatus === "fresh") {
+    return "secondary";
+  }
+  if (freshnessStatus === "stale") {
+    return "outline";
+  }
+  return "destructive";
+}
+
+function getDailyBarSource(barsResult: BarsLoadResult): string {
+  return barsResult.status === "loaded" ? barsResult.payload.source : "unavailable";
+}
+
+function getDailyBarProvider(barsResult: BarsLoadResult, configuredProvider: string): string {
+  if (barsResult.status === "failed") {
+    return configuredProvider;
+  }
+
+  return barsResult.payload.effective_provider ?? barsResult.payload.provider ?? configuredProvider;
+}
+
+function formatChartRange(dailyBars: BarsPayload["items"], locale: string, unavailableLabel: string): string {
+  const firstDailyBar = dailyBars[0];
+  const latestDailyBar = dailyBars.at(-1);
+  if (firstDailyBar === undefined || latestDailyBar === undefined) {
+    return unavailableLabel;
+  }
+
+  return `${formatDailyBarDate(firstDailyBar.timestamp, locale, unavailableLabel)} - ${formatDailyBarDate(
+    latestDailyBar.timestamp,
+    locale,
+    unavailableLabel,
+  )}`;
 }
 
 export default async function InstrumentDetailPage({
@@ -123,18 +257,17 @@ export default async function InstrumentDetailPage({
   );
 
   const [
-    barsPayload,
+    barsResult,
     reportPayload,
     indicatorsPayload,
     fundamentalsPayload,
     newsPayload,
   ] = await Promise.all([
-    fetchOptionalJson<BarsPayload>(
+    fetchBarsPayload(
       withProviderQuery(
         `/market-data/${decodedSymbol}/bars?timeframe=1d&start=${dateRange.start}&end=${dateRange.end}`,
         provider,
       ),
-      { source: "unavailable", items: [] }
     ),
     fetchOptionalJson<ReportPayload>(
       `/reports/${decodedSymbol}/stock?start=${dateRange.start}&end=${dateRange.end}`,
@@ -154,7 +287,32 @@ export default async function InstrumentDetailPage({
     }),
   ]);
 
-  const latestClose = barsPayload.items.at(-1)?.close;
+  const dailyBars = getDailyBarItems(barsResult);
+  const latestDailyBar = dailyBars.at(-1);
+  const latestClose = latestDailyBar?.close;
+  const unavailableLabel = t("unavailableShort");
+  const freshnessStatus = getFreshnessStatus(barsResult);
+  const dailyBarProvider = getDailyBarProvider(barsResult, provider);
+  const dailyBarSource = getDailyBarSource(barsResult);
+  const latestCloseLabel = latestClose === undefined ? unavailableLabel : `$${formatNumberValue(latestClose, locale, unavailableLabel)}`;
+  const latestDailyBarDateLabel = formatDailyBarDate(latestDailyBar?.timestamp, locale, unavailableLabel);
+  const chartRangeLabel = formatChartRange(dailyBars, locale, unavailableLabel);
+  const dailyBarCountLabel = new Intl.NumberFormat(locale).format(dailyBars.length);
+  const recentDailyBars = dailyBars.slice(-RECENT_OHLCV_ROW_LIMIT).reverse();
+  const chartLabels = {
+    candles: t("chartCandles"),
+    movingAverage: t("chartMovingAverage"),
+    bollingerBands: t("chartBollingerBands"),
+    rsi: t("chartRsi"),
+    volume: t("chartVolume"),
+    empty: t("chartEmpty"),
+    open: t("openShort"),
+    high: t("highShort"),
+    low: t("lowShort"),
+    close: t("closeShort"),
+    movingAverageShort: t("chartMovingAverageShort"),
+    volumeShort: t("volumeShort"),
+  };
   const fundamentalSummary = fundamentalsPayload.item?.summary;
   const reportCitations = reportPayload.citations ?? [];
 
@@ -181,7 +339,7 @@ export default async function InstrumentDetailPage({
               <span className="text-lg font-normal text-muted-foreground">{instrumentMeta.name}</span>
             ) : null}
             <Badge variant="outline" className="text-lg px-3 py-1">
-              {latestClose ? `$${latestClose.toFixed(2)}` : "N/A"}
+              {latestCloseLabel}
             </Badge>
             {instrumentMeta?.market ? (
               <Badge variant="secondary">{instrumentMeta.market}</Badge>
@@ -206,6 +364,36 @@ export default async function InstrumentDetailPage({
           }
         />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("dailyBarSummary")}</CardTitle>
+          <CardDescription>{t("dailyBarSummaryDesc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border p-4">
+              <div className="text-sm font-medium text-muted-foreground mb-1">{t("latestClose")}</div>
+              <div className="text-2xl font-bold">{latestCloseLabel}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{t("latestDailyBarAsOf", { date: latestDailyBarDateLabel })}</div>
+            </div>
+            <div className="rounded-lg border p-4">
+              <div className="text-sm font-medium text-muted-foreground mb-1">{t("sourceProvider")}</div>
+              <div className="text-sm font-semibold">{t("sourceValue", { source: dailyBarSource })}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{t("providerValue", { provider: dailyBarProvider })}</div>
+            </div>
+            <div className="rounded-lg border p-4">
+              <div className="text-sm font-medium text-muted-foreground mb-1">{t("freshness")}</div>
+              <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
+            </div>
+            <div className="rounded-lg border p-4">
+              <div className="text-sm font-medium text-muted-foreground mb-1">{t("barCoverage")}</div>
+              <div className="text-sm font-semibold">{t("barCount", { count: dailyBarCountLabel })}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{t("chartRange", { range: chartRangeLabel })}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-4 md:w-auto md:inline-grid">
@@ -238,7 +426,52 @@ export default async function InstrumentDetailPage({
               </div>
             </CardHeader>
             <CardContent>
-              <PriceChart data={barsPayload.items} />
+              {barsResult.status === "failed" ? (
+                <ErrorState title={t("barsLoadFailed")} description={t("barsLoadFailedHint")} />
+              ) : dailyBars.length === 0 ? (
+                <EmptyState title={t("noDailyBars")} description={t("noDailyBarsHint")} />
+              ) : (
+                <PriceChart data={dailyBars} labels={chartLabels} />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("recentOhlcv")}</CardTitle>
+              <CardDescription>{t("recentOhlcvDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {barsResult.status === "failed" ? (
+                <ErrorState title={t("barsLoadFailed")} description={t("barsLoadFailedHint")} />
+              ) : recentDailyBars.length === 0 ? (
+                <EmptyState title={t("noDailyBars")} description={t("noDailyBarsHint")} />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("date")}</TableHead>
+                      <TableHead className="text-right">{t("open")}</TableHead>
+                      <TableHead className="text-right">{t("high")}</TableHead>
+                      <TableHead className="text-right">{t("low")}</TableHead>
+                      <TableHead className="text-right">{t("close")}</TableHead>
+                      <TableHead className="text-right">{t("volume")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentDailyBars.map((dailyBar) => (
+                      <TableRow key={dailyBar.timestamp}>
+                        <TableCell>{formatDailyBarDate(dailyBar.timestamp, locale, unavailableLabel)}</TableCell>
+                        <TableCell className="text-right">{formatNumberValue(dailyBar.open, locale, unavailableLabel)}</TableCell>
+                        <TableCell className="text-right">{formatNumberValue(dailyBar.high, locale, unavailableLabel)}</TableCell>
+                        <TableCell className="text-right">{formatNumberValue(dailyBar.low, locale, unavailableLabel)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatNumberValue(dailyBar.close, locale, unavailableLabel)}</TableCell>
+                        <TableCell className="text-right">{formatVolumeValue(dailyBar.volume, locale, unavailableLabel)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
 

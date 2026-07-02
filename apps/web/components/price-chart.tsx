@@ -23,6 +23,37 @@ import {
 
 type PriceChartProps = {
   data: Array<Partial<OhlcBar> & { timestamp: string; close: number }>;
+  labels?: Partial<PriceChartLabels>;
+};
+
+export type PriceChartLabels = {
+  candles: string;
+  movingAverage: string;
+  bollingerBands: string;
+  rsi: string;
+  volume: string;
+  empty: string;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  movingAverageShort: string;
+  volumeShort: string;
+};
+
+const DEFAULT_PRICE_CHART_LABELS: PriceChartLabels = {
+  candles: "Candles",
+  movingAverage: "MA(20)",
+  bollingerBands: "BOLL",
+  rsi: "RSI",
+  volume: "Volume",
+  empty: "No price data available for chart.",
+  open: "O",
+  high: "H",
+  low: "L",
+  close: "C",
+  movingAverageShort: "MA20",
+  volumeShort: "Vol",
 };
 
 type CandleShapeProps = {
@@ -75,12 +106,13 @@ function CandlestickShape(props: CandleShapeProps) {
   );
 }
 
-export function PriceChart({ data }: PriceChartProps) {
+export function PriceChart({ data, labels }: PriceChartProps) {
   const [showCandles, setShowCandles] = React.useState(true);
   const [showMa, setShowMa] = React.useState(true);
   const [showBoll, setShowBoll] = React.useState(false);
   const [showRsi, setShowRsi] = React.useState(false);
   const [showVolume, setShowVolume] = React.useState(true);
+  const chartLabels: PriceChartLabels = { ...DEFAULT_PRICE_CHART_LABELS, ...labels };
 
   const normalized = React.useMemo(
     () => data.map((bar) => deriveOhlcBar(bar)),
@@ -91,7 +123,7 @@ export function PriceChart({ data }: PriceChartProps) {
   if (!chartData.length) {
     return (
       <div className="flex h-[300px] items-center justify-center rounded-md border text-sm text-muted-foreground">
-        No price data available for chart.
+        {chartLabels.empty}
       </div>
     );
   }
@@ -113,7 +145,7 @@ export function PriceChart({ data }: PriceChartProps) {
           variant={showCandles ? "default" : "outline"}
           onClick={() => setShowCandles((value) => !value)}
         >
-          Candles
+          {chartLabels.candles}
         </Button>
         <Button
           type="button"
@@ -121,7 +153,7 @@ export function PriceChart({ data }: PriceChartProps) {
           variant={showMa ? "default" : "outline"}
           onClick={() => setShowMa((value) => !value)}
         >
-          MA(20)
+          {chartLabels.movingAverage}
         </Button>
         <Button
           type="button"
@@ -129,7 +161,7 @@ export function PriceChart({ data }: PriceChartProps) {
           variant={showBoll ? "default" : "outline"}
           onClick={() => setShowBoll((value) => !value)}
         >
-          BOLL
+          {chartLabels.bollingerBands}
         </Button>
         <Button
           type="button"
@@ -137,7 +169,7 @@ export function PriceChart({ data }: PriceChartProps) {
           variant={showRsi ? "default" : "outline"}
           onClick={() => setShowRsi((value) => !value)}
         >
-          RSI
+          {chartLabels.rsi}
         </Button>
         <Button
           type="button"
@@ -146,7 +178,7 @@ export function PriceChart({ data }: PriceChartProps) {
           onClick={() => setShowVolume((value) => !value)}
           disabled={!hasVolume}
         >
-          Volume
+          {chartLabels.volume}
         </Button>
       </div>
 
@@ -197,13 +229,13 @@ export function PriceChart({ data }: PriceChartProps) {
                   <div className="rounded-lg border bg-background p-2 shadow-sm">
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="col-span-2 font-medium">{label}</div>
-                      <div>O: ${point.open.toFixed(2)}</div>
-                      <div>H: ${point.high.toFixed(2)}</div>
-                      <div>L: ${point.low.toFixed(2)}</div>
-                      <div>C: ${point.close.toFixed(2)}</div>
-                      {point.ma20 ? <div>MA20: ${point.ma20.toFixed(2)}</div> : null}
-                      {point.rsi ? <div>RSI: {point.rsi.toFixed(1)}</div> : null}
-                      {point.volume ? <div>Vol: {point.volume.toLocaleString()}</div> : null}
+                      <div>{chartLabels.open}: ${point.open.toFixed(2)}</div>
+                      <div>{chartLabels.high}: ${point.high.toFixed(2)}</div>
+                      <div>{chartLabels.low}: ${point.low.toFixed(2)}</div>
+                      <div>{chartLabels.close}: ${point.close.toFixed(2)}</div>
+                      {point.ma20 ? <div>{chartLabels.movingAverageShort}: ${point.ma20.toFixed(2)}</div> : null}
+                      {point.rsi ? <div>{chartLabels.rsi}: {point.rsi.toFixed(1)}</div> : null}
+                      {point.volume ? <div>{chartLabels.volumeShort}: {point.volume.toLocaleString()}</div> : null}
                     </div>
                   </div>
                 );
