@@ -47,6 +47,7 @@ def refresh_stock_analysis(
         end,
         session=session,
         task_run_id=task_run_id,
+        provider_name=provider_name,
     )
 
     return {

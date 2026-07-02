@@ -161,8 +161,16 @@ def generate_stock_report_payload(
     start: date,
     end: date,
     session: Session | None = None,
+    provider_name: str = "mock",
 ) -> dict[str, object]:
-    bars_payload = get_bars_payload(symbol, "1d", start, end, session=session)
+    bars_payload = get_bars_payload(
+        symbol,
+        "1d",
+        start,
+        end,
+        session=session,
+        provider_name=provider_name,
+    )
     items = bars_payload["items"]
     first_bar = items[0]
     latest_bar = items[-1]
@@ -198,8 +206,26 @@ def generate_stock_report_payload(
         "report_type": "stock_daily",
         "as_of": context.as_of,
         "source": bars_payload["source"],
+        "provider": provider_name,
         "content_markdown": build_stock_report(context),
         "citations": context.citations,
+    }
+
+
+def _build_report_source_summary(
+    payload: dict[str, object],
+    provider_name: str,
+    task_run_id: UUID | None,
+) -> dict[str, object]:
+    price_source = str(payload["source"])
+
+    return {
+        "source": price_source,
+        "price_source": price_source,
+        "provider": provider_name,
+        "requested_provider": provider_name,
+        "task_run_id": str(task_run_id) if task_run_id else None,
+        "citations": list(payload["citations"]),
     }
 
 
@@ -209,18 +235,26 @@ def generate_and_store_daily_report(
     end: date,
     session: Session,
     task_run_id: UUID | str | None = None,
+    provider_name: str = "mock",
 ) -> dict[str, object]:
-    payload = generate_stock_report_payload(symbol, start, end, session=session)
+    payload = generate_stock_report_payload(
+        symbol,
+        start,
+        end,
+        session=session,
+        provider_name=provider_name,
+    )
     parsed_task_run_id: UUID | None = None
     if task_run_id is not None:
         parsed_task_run_id = task_run_id if isinstance(task_run_id, UUID) else UUID(str(task_run_id))
+    source_summary = _build_report_source_summary(payload, provider_name, parsed_task_run_id)
     report = GeneratedReport(
         symbol=symbol,
         report_type=str(payload["report_type"]),
         as_of=end,
         content_markdown=str(payload["content_markdown"]),
         citations=list(payload["citations"]),
-        source_summary={"source": payload["source"]},
+        source_summary=source_summary,
         task_run_id=parsed_task_run_id,
     )
     session.add(report)
@@ -233,6 +267,7 @@ def generate_and_store_daily_report(
         "as_of": end.isoformat(),
         "status": "stored",
         "task_run_id": str(report.task_run_id) if report.task_run_id else None,
+        "source_summary": report.source_summary,
         "content_markdown": payload["content_markdown"],
         "citations": payload["citations"],
     }
@@ -262,6 +297,7 @@ def get_latest_daily_report_payload(symbol: str, session: Session) -> dict[str, 
         "content_markdown": report.content_markdown,
         "citations": report.citations,
         "source_summary": report.source_summary,
+        "task_run_id": str(report.task_run_id) if report.task_run_id else None,
     }
 
 
@@ -290,6 +326,7 @@ def get_daily_report_history_payload(
                 "content_markdown": report.content_markdown,
                 "citations": report.citations,
                 "source_summary": report.source_summary,
+                "task_run_id": str(report.task_run_id) if report.task_run_id else None,
             }
             for report in reports
         ],

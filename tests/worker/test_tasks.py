@@ -223,6 +223,11 @@ def test_refresh_daily_stock_analysis_task_stores_latest_daily_report(monkeypatc
     assert result["report"]["status"] == "stored"
     assert latest["as_of"] == date(2026, 1, 20).isoformat()
     assert latest_run["status"] == "succeeded"
+    assert result["report"]["task_run_id"] == latest_run["id"]
+    assert result["report"]["source_summary"]["provider"] == "mock"
+    assert result["report"]["source_summary"]["task_run_id"] == latest_run["id"]
+    assert latest["task_run_id"] == latest_run["id"]
+    assert latest["source_summary"]["task_run_id"] == latest_run["id"]
     assert "Apple reports strong growth in services revenue" in latest["content_markdown"]
 
 
@@ -239,12 +244,23 @@ def test_refresh_daily_watchlist_analysis_task_stores_reports_for_each_symbol(mo
     )
     aapl_latest = get_latest_daily_report_payload("AAPL", session=session)
     hk_latest = get_latest_daily_report_payload("0700", session=session)
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_watchlist_analysis",
+    )
 
     assert result["status"] == "refreshed"
     assert result["item_count"] == 2
     assert [item["symbol"] for item in result["items"]] == ["AAPL", "0700"]
+    assert latest_run["status"] == "succeeded"
+    assert result["items"][0]["report"]["task_run_id"] == latest_run["id"]
+    assert result["items"][1]["report"]["task_run_id"] == latest_run["id"]
+    assert result["items"][0]["report"]["source_summary"]["provider"] == "mock"
+    assert result["items"][1]["report"]["source_summary"]["provider"] == "mock"
     assert aapl_latest["as_of"] == date(2026, 1, 20).isoformat()
     assert hk_latest["as_of"] == date(2026, 1, 20).isoformat()
+    assert aapl_latest["task_run_id"] == latest_run["id"]
+    assert hk_latest["task_run_id"] == latest_run["id"]
 
 
 def test_refresh_daily_watchlist_analysis_task_records_succeeded_run(monkeypatch):

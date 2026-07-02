@@ -81,11 +81,18 @@ def test_daily_report_generate_then_latest_returns_persisted_report():
     generated = generated_response.json()
     assert generated["status"] == "stored"
     assert generated["report_type"] == "stock_daily"
+    assert generated["task_run_id"] is None
+    assert generated["source_summary"]["source"] == "database"
+    assert generated["source_summary"]["price_source"] == "database"
+    assert generated["source_summary"]["provider"] == "mock"
+    assert generated["source_summary"]["task_run_id"] is None
 
     assert latest_response.status_code == 200
     latest = latest_response.json()
     assert latest["symbol"] == "AAPL"
     assert latest["as_of"] == "2026-01-20"
+    assert latest["task_run_id"] is None
+    assert latest["source_summary"]["provider"] == "mock"
     assert "MA 119.00" in latest["content_markdown"]
     assert "PE 28.40" in latest["content_markdown"]
     assert "Apple reports strong growth in services revenue" in latest["content_markdown"]
@@ -128,6 +135,8 @@ def test_daily_report_history_returns_persisted_reports_in_descending_order():
     assert payload["symbol"] == "AAPL"
     assert [item["as_of"] for item in payload["items"]] == ["2026-01-20", "2026-01-19"]
     assert payload["items"][0]["report_type"] == "stock_daily"
+    assert payload["items"][0]["task_run_id"] is None
+    assert payload["items"][0]["source_summary"]["provider"] == "mock"
     assert "Apple reports strong growth in services revenue" in payload["items"][0][
         "content_markdown"
     ]
@@ -220,6 +229,8 @@ def test_reports_list_and_detail_include_task_run_id_lineage():
         client = TestClient(app)
         list_response = client.get("/reports", params={"symbol": "AAPL", "limit": 10, "offset": 0})
         detail_response = client.get(f"/reports/items/{generated['id']}")
+        latest_response = client.get("/reports/AAPL/daily/latest")
+        history_response = client.get("/reports/AAPL/daily/history", params={"limit": 1})
     finally:
         app.dependency_overrides.clear()
 
@@ -227,8 +238,23 @@ def test_reports_list_and_detail_include_task_run_id_lineage():
     list_payload = list_response.json()
     assert list_payload["items"][0]["id"] == generated["id"]
     assert list_payload["items"][0]["task_run_id"] == str(task_run.id)
+    assert list_payload["items"][0]["source_summary"]["source"] == "database"
+    assert list_payload["items"][0]["source_summary"]["price_source"] == "database"
+    assert list_payload["items"][0]["source_summary"]["provider"] == "mock"
+    assert list_payload["items"][0]["source_summary"]["task_run_id"] == str(task_run.id)
 
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["id"] == generated["id"]
     assert detail["task_run_id"] == str(task_run.id)
+    assert detail["source_summary"] == list_payload["items"][0]["source_summary"]
+
+    assert latest_response.status_code == 200
+    latest = latest_response.json()
+    assert latest["task_run_id"] == str(task_run.id)
+    assert latest["source_summary"]["task_run_id"] == str(task_run.id)
+
+    assert history_response.status_code == 200
+    history = history_response.json()
+    assert history["items"][0]["task_run_id"] == str(task_run.id)
+    assert history["items"][0]["source_summary"]["task_run_id"] == str(task_run.id)

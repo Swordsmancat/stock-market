@@ -127,6 +127,7 @@ def refresh_daily_watchlist_analysis(
                 "start": start_value,
                 "end": end_value,
                 "ma_window": ma_window_value,
+                "provider": provider_value,
             },
             session=session,
         )
@@ -142,6 +143,7 @@ def refresh_daily_watchlist_analysis(
                 session=session,
                 ma_window=ma_window_value,
                 provider_name=provider_value,
+                task_run_id=task_run.id,
             )
             items.append(
                 {

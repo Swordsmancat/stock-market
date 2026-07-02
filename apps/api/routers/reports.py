@@ -52,9 +52,16 @@ def generate_daily_report(
     symbol: str,
     start: date = Query(...),
     end: date = Query(...),
+    provider: str = Query(default="mock"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return generate_and_store_daily_report(symbol, start, end, session=session)
+    return generate_and_store_daily_report(
+        symbol,
+        start,
+        end,
+        session=session,
+        provider_name=provider,
+    )
 
 
 @router.get("/{symbol}/daily/latest")
@@ -79,6 +86,13 @@ def generate_stock_report(
     symbol: str,
     start: date = Query(...),
     end: date = Query(...),
+    provider: str = Query(default="mock"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return generate_stock_report_payload(symbol, start, end, session=session)
+    return generate_stock_report_payload(
+        symbol,
+        start,
+        end,
+        session=session,
+        provider_name=provider,
+    )
