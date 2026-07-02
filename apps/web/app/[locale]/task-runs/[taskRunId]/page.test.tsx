@@ -90,6 +90,52 @@ it("unwraps task-run API payloads and links generated reports", async () => {
   expect(screen.getByRole("link", { name: "report-1" })).toHaveAttribute("href", "/reports/report-1");
 });
 
+it("links every generated report from watchlist task result items", async () => {
+  mockTaskRunDetailResponse(
+    buildMockTaskRunDetail({
+      task_name: "reports.refresh_daily_watchlist_analysis",
+      input_json: { watchlist: "AAPL:US,0700:HK" },
+      result_json: {
+        status: "refreshed",
+        item_count: 3,
+        items: [
+          {
+            symbol: "AAPL",
+            market: "US",
+            status: "refreshed",
+            report: { id: "report-aapl", symbol: "AAPL", status: "stored" },
+          },
+          {
+            symbol: "0700",
+            market: "HK",
+            status: "refreshed",
+            report: { id: "report-0700", symbol: "0700", status: "stored" },
+          },
+          {
+            symbol: "AAPL",
+            market: "US",
+            status: "refreshed",
+            report: { id: "report-aapl", symbol: "AAPL", status: "stored" },
+          },
+        ],
+      },
+    }),
+  );
+
+  await renderTaskRunDetailPage();
+
+  expect(screen.getByText("Generated Report")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "AAPL · report-aapl" })).toHaveAttribute(
+    "href",
+    "/reports/report-aapl",
+  );
+  expect(screen.getByRole("link", { name: "0700 · report-0700" })).toHaveAttribute(
+    "href",
+    "/reports/report-0700",
+  );
+  expect(screen.getAllByRole("link", { name: "AAPL · report-aapl" })).toHaveLength(1);
+});
+
 it("renders OK quality diagnostics and keeps the raw result visible", async () => {
   mockTaskRunDetailResponse(
     buildMockTaskRunDetail({

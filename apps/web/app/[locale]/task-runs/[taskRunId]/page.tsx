@@ -248,13 +248,63 @@ async function fetchTaskRun(taskRunId: string): Promise<TaskRunDetail | null> {
   return "item" in payload && payload.item ? payload.item : (payload as TaskRunDetail);
 }
 
-function extractReportId(taskRun: TaskRunDetail): string | null {
-  const report = taskRun.result_json?.report;
-  if (typeof report !== "object" || report === null || !("id" in report)) {
+type GeneratedReportLink = {
+  id: string;
+  label: string;
+  symbol: string | null;
+};
+
+function extractGeneratedReportLink(value: unknown): GeneratedReportLink | null {
+  if (!isRecord(value)) {
     return null;
   }
-  const reportId = report.id;
-  return typeof reportId === "string" && reportId.length > 0 ? reportId : null;
+
+  const reportId = value.id;
+  if (typeof reportId !== "string" || reportId.length === 0) {
+    return null;
+  }
+
+  const symbol = normalizeOptionalDisplayText(value.symbol);
+  const label = symbol !== null ? `${symbol} · ${reportId}` : reportId;
+
+  return {
+    id: reportId,
+    label,
+    symbol,
+  };
+}
+
+function appendGeneratedReportLink(
+  links: GeneratedReportLink[],
+  seenReportIds: Set<string>,
+  value: unknown,
+): void {
+  const reportLink = extractGeneratedReportLink(value);
+  if (reportLink === null || seenReportIds.has(reportLink.id)) {
+    return;
+  }
+
+  seenReportIds.add(reportLink.id);
+  links.push(reportLink);
+}
+
+function extractGeneratedReportLinks(taskRun: TaskRunDetail): GeneratedReportLink[] {
+  const links: GeneratedReportLink[] = [];
+  const seenReportIds = new Set<string>();
+  const resultJson = taskRun.result_json;
+
+  appendGeneratedReportLink(links, seenReportIds, resultJson?.report);
+
+  const resultItems = resultJson?.items;
+  if (Array.isArray(resultItems)) {
+    for (const resultItem of resultItems) {
+      if (isRecord(resultItem)) {
+        appendGeneratedReportLink(links, seenReportIds, resultItem.report);
+      }
+    }
+  }
+
+  return links;
 }
 
 function QualityIssueList({
@@ -543,7 +593,7 @@ export default async function TaskRunDetailPage({
     );
   }
 
-  const reportId = extractReportId(taskRun);
+  const generatedReportLinks = extractGeneratedReportLinks(taskRun);
   const qualityDiagnostics = extractQualityDiagnostics(taskRun.result_json);
   const resultInstrumentCount = extractTaskResultInstrumentCount(taskRun.result_json);
 
@@ -604,12 +654,16 @@ export default async function TaskRunDetailPage({
               {taskRun.result_json ? JSON.stringify(taskRun.result_json, null, 2) : "—"}
             </pre>
           </div>
-          {reportId ? (
+          {generatedReportLinks.length > 0 ? (
             <div>
               <h3 className="mb-1 text-sm font-medium">{t("generatedReport")}</h3>
-              <Button variant="link" className="h-auto p-0" asChild>
-                <Link href={`/reports/${reportId}` as any}>{reportId}</Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {generatedReportLinks.map((reportLink) => (
+                  <Button key={reportLink.id} variant="link" className="h-auto p-0" asChild>
+                    <Link href={`/reports/${reportLink.id}` as any}>{reportLink.label}</Link>
+                  </Button>
+                ))}
+              </div>
             </div>
           ) : null}
           {taskRun.error_message ? (
