@@ -157,3 +157,36 @@ npm run test:web
 ```bash
 npm run dev:web
 ```
+
+## 本地一键自检
+
+当前端打不开、页面请求超时，或不确定 API / Redis / Celery 是否可用时，先运行：
+
+```bash
+python scripts/dev_health_check.py
+```
+
+脚本只做诊断，不会自动杀进程或启动服务。检查结果分为：
+
+- `OK`：该项可用。
+- `WARN`：依赖不可用，但不一定阻止前端页面渲染。
+- `FAIL`：核心前端可用性失败，需要优先处理。
+
+如果输出显示 `frontend page timed out`，通常表示旧 Next.js dev server 仍占用 `3000` 端口但已经无响应。按脚本建议停止对应 PID 后重新运行：
+
+```bash
+npm run dev:web
+```
+
+如果输出显示 API 不可用，启动：
+
+```bash
+uvicorn apps.api.main:app --reload --port 8000
+```
+
+如果输出显示 Redis 或 Celery broker 不可用，启动：
+
+```bash
+docker compose up -d redis
+celery -A apps.worker.celery_app.celery_app worker --loglevel=info
+```

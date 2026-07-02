@@ -57,6 +57,14 @@ npm install
 npm run dev:web
 ```
 
+If the frontend does not open, run the local health check before restarting services:
+
+```bash
+python scripts/dev_health_check.py
+```
+
+The check reports whether port 3000 is listening, whether `/zh` responds, and whether API/Redis/Celery dependencies are reachable.
+
 Open [http://localhost:3000/en](http://localhost:3000/en).
 
 ## Documentation
