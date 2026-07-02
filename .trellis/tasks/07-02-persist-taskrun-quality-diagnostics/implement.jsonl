@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Load backend service and worker conventions for TaskRun result payload updates."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Preserve TaskRun success/failure semantics while adding diagnostics payloads."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Add focused tests for TaskRun and dispatch behavior without broad changes."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-taskrun-quality-diagnostics/design.md","reason":"Source design for result_json.quality_diagnostics contract and compatibility rules."}

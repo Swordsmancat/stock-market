@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend implementation lanes must follow project FastAPI, SQLAlchemy, worker, diagnostics, and pytest conventions."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend lanes must follow project Next.js App Router, next-intl, API proxy, component, state, type-safety, and Vitest conventions."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-ingestion-single-fetch/design.md","reason":"Source design for the ingestion single-fetch refactor and data consistency invariant."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-taskrun-quality-diagnostics/design.md","reason":"Source design for TaskRun quality diagnostics persistence and frontend display."}

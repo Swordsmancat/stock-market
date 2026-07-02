@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Review backend changes against focused pytest and non-mutating diagnostics expectations."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Review frontend changes against Vitest, i18n, page, route-proxy, and interaction testing expectations."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-ingestion-single-fetch/design.md","reason":"Verify implementation preserves the approved single-fetch compatibility contract."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-taskrun-quality-diagnostics/design.md","reason":"Verify TaskRun diagnostics persistence and UI behavior preserve approved compatibility rules."}

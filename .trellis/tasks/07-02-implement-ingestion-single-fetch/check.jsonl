@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check that DB writes preserve current SQLAlchemy and upsert patterns."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check timestamp/numeric parsing failures are explicit and consistent with service errors."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check focused pytest coverage and no broad unrelated changes."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-ingestion-single-fetch/design.md","reason":"Check single-fetch implementation against approved design, risks, and compatibility contract."}

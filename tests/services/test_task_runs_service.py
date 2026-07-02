@@ -107,6 +107,8 @@ def test_retry_task_run_starts_new_run_with_original_input(mock_dispatch):
         session=session,
     )
     fail_task_run(failed_run, "provider timeout", session=session)
+    failed_run.result_json = {"item_count": 1, "quality_diagnostics": {"status": "FAIL"}}
+    session.commit()
 
     payload = retry_task_run_payload(session=session, task_run_id=str(failed_run.id))
 
@@ -120,6 +122,7 @@ def test_retry_task_run_starts_new_run_with_original_input(mock_dispatch):
         "watchlist": "0700:HK",
         "retry_of": str(failed_run.id),
     }
+    assert retry_item["result_json"] is None
     mock_dispatch.assert_called_once()
 
 

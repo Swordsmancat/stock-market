@@ -1,11 +1,11 @@
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy.orm import Session
 
 from packages.domain.models import DailyBar, Instrument, Market
-from packages.providers.base import ProviderAdapter
 from packages.services.data_quality import DataQualityStatus, check_daily_bar_quality
-from packages.services.market_data import get_market_snapshot, get_provider
+from packages.services.market_data import get_market_snapshot
 
 
 MARKET_META = {
@@ -59,40 +59,136 @@ def _get_or_create_instrument(
     return instrument
 
 
-def _write_snapshot_to_database(
+def _get_serialized_instruments(snapshot: dict[str, object]) -> list[dict[str, object]]:
+    serialized_instruments = snapshot.get("instruments")
+    if not isinstance(serialized_instruments, list):
+        msg = "Serialized market snapshot must contain an instruments list."
+        raise ValueError(msg)
+
+    for serialized_instrument in serialized_instruments:
+        if not isinstance(serialized_instrument, dict):
+            msg = "Serialized market snapshot instruments must be objects."
+            raise ValueError(msg)
+
+    return serialized_instruments
+
+
+def _get_serialized_bars(serialized_instrument: dict[str, object]) -> list[dict[str, object]]:
+    serialized_bars = serialized_instrument.get("bars", [])
+    if not isinstance(serialized_bars, list):
+        symbol = serialized_instrument.get("symbol", "<unknown>")
+        msg = f"Serialized instrument {symbol!r} must contain a bars list."
+        raise ValueError(msg)
+
+    for serialized_bar in serialized_bars:
+        if not isinstance(serialized_bar, dict):
+            symbol = serialized_instrument.get("symbol", "<unknown>")
+            msg = f"Serialized bars for instrument {symbol!r} must be objects."
+            raise ValueError(msg)
+
+    return serialized_bars
+
+
+def _get_required_string(serialized_payload: dict[str, object], field_name: str) -> str:
+    value = serialized_payload.get(field_name)
+    if isinstance(value, str) and value:
+        return value
+
+    msg = f"Serialized payload field {field_name!r} must be a non-empty string."
+    raise ValueError(msg)
+
+
+def _parse_serialized_bar_date(serialized_timestamp: object) -> date:
+    if isinstance(serialized_timestamp, datetime):
+        return serialized_timestamp.date()
+    if isinstance(serialized_timestamp, date):
+        return serialized_timestamp
+    if isinstance(serialized_timestamp, str):
+        try:
+            return date.fromisoformat(serialized_timestamp)
+        except ValueError:
+            try:
+                return datetime.fromisoformat(
+                    serialized_timestamp.replace("Z", "+00:00")
+                ).date()
+            except ValueError as timestamp_error:
+                msg = f"Unsupported serialized bar timestamp: {serialized_timestamp!r}"
+                raise ValueError(msg) from timestamp_error
+
+    msg = f"Unsupported serialized bar timestamp: {serialized_timestamp!r}"
+    raise ValueError(msg)
+
+
+def _parse_serialized_decimal(serialized_value: object, field_name: str) -> Decimal:
+    if serialized_value is None:
+        msg = f"Serialized bar field {field_name!r} is required."
+        raise ValueError(msg)
+
+    try:
+        parsed_value = Decimal(str(serialized_value))
+    except (InvalidOperation, ValueError) as decimal_error:
+        msg = f"Unsupported serialized numeric value for {field_name!r}: {serialized_value!r}"
+        raise ValueError(msg) from decimal_error
+
+    if not parsed_value.is_finite():
+        msg = f"Unsupported serialized numeric value for {field_name!r}: {serialized_value!r}"
+        raise ValueError(msg)
+
+    return parsed_value
+
+
+def _parse_optional_serialized_decimal(
+    serialized_value: object,
+    field_name: str,
+) -> Decimal | None:
+    if serialized_value is None:
+        return None
+    return _parse_serialized_decimal(serialized_value, field_name)
+
+
+def _count_serialized_snapshot_bars(snapshot: dict[str, object]) -> int:
+    return sum(
+        len(_get_serialized_bars(serialized_instrument))
+        for serialized_instrument in _get_serialized_instruments(snapshot)
+    )
+
+
+def _write_serialized_snapshot_to_database(
     market_code: str,
-    start: date,
-    end: date,
+    snapshot: dict[str, object],
     session: Session,
-    provider: ProviderAdapter,
 ) -> int:
     market = _get_or_create_market(session, market_code)
+    daily_bars_by_key: dict[tuple[int, date], DailyBar] = {}
     bar_count = 0
-    for provider_instrument in provider.fetch_instruments(market_code):
+    for serialized_instrument in _get_serialized_instruments(snapshot):
         instrument = _get_or_create_instrument(
             session=session,
             market=market,
-            symbol=provider_instrument.symbol,
-            name=provider_instrument.name,
-            asset_type=provider_instrument.asset_type,
-            currency=provider_instrument.currency,
+            symbol=_get_required_string(serialized_instrument, "symbol"),
+            name=_get_required_string(serialized_instrument, "name"),
+            asset_type=_get_required_string(serialized_instrument, "asset_type"),
+            currency=_get_required_string(serialized_instrument, "currency"),
         )
-        for provider_bar in provider.fetch_bars(provider_instrument.symbol, "1d", start, end):
-            trade_date = (
-                provider_bar.timestamp
-                if isinstance(provider_bar.timestamp, date)
-                else provider_bar.timestamp.date()
-            )
-            daily_bar = session.get(DailyBar, (instrument.id, trade_date))
+        for serialized_bar in _get_serialized_bars(serialized_instrument):
+            trade_date = _parse_serialized_bar_date(serialized_bar.get("timestamp"))
+            daily_bar_key = (instrument.id, trade_date)
+            daily_bar = daily_bars_by_key.get(daily_bar_key)
+            if daily_bar is None:
+                daily_bar = session.get(DailyBar, daily_bar_key)
             if daily_bar is None:
                 daily_bar = DailyBar(instrument_id=instrument.id, trade_date=trade_date)
                 session.add(daily_bar)
-            daily_bar.open = provider_bar.open
-            daily_bar.high = provider_bar.high
-            daily_bar.low = provider_bar.low
-            daily_bar.close = provider_bar.close
-            daily_bar.volume = provider_bar.volume
-            daily_bar.amount = provider_bar.amount
+            daily_bars_by_key[daily_bar_key] = daily_bar
+            daily_bar.open = _parse_serialized_decimal(serialized_bar.get("open"), "open")
+            daily_bar.high = _parse_serialized_decimal(serialized_bar.get("high"), "high")
+            daily_bar.low = _parse_serialized_decimal(serialized_bar.get("low"), "low")
+            daily_bar.close = _parse_serialized_decimal(serialized_bar.get("close"), "close")
+            daily_bar.volume = _parse_serialized_decimal(serialized_bar.get("volume"), "volume")
+            daily_bar.amount = _parse_optional_serialized_decimal(
+                serialized_bar.get("amount"),
+                "amount",
+            )
             bar_count += 1
     session.commit()
     return bar_count
@@ -176,12 +272,11 @@ def ingest_market_snapshot(
     provider_name: str = "mock",
 ) -> dict[str, object]:
     provider_name = provider_name.lower()
-    provider = get_provider(provider_name)
     snapshot = get_market_snapshot(market, start, end, provider_name=provider_name)
     bar_count = (
-        _write_snapshot_to_database(market, start, end, session, provider)
+        _write_serialized_snapshot_to_database(market, snapshot, session)
         if session is not None
-        else sum(len(instrument["bars"]) for instrument in snapshot["instruments"])
+        else _count_serialized_snapshot_bars(snapshot)
     )
     return {
         **snapshot,

@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check focused API proxy/client interaction coverage and no broad UI rewrites."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check route handler test typing and payload assertions remain maintainable."}

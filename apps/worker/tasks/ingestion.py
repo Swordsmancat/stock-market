@@ -9,6 +9,25 @@ from packages.shared.config import settings
 from packages.shared.database import SessionLocal
 
 
+def _extract_quality_diagnostics(snapshot: dict[str, object]) -> dict[str, object]:
+    quality_diagnostics = snapshot.get("quality_diagnostics")
+    if isinstance(quality_diagnostics, dict):
+        return quality_diagnostics
+
+    return {
+        "status": "FAIL",
+        "instrument_count": 0,
+        "instruments": [],
+        "errors": [
+            {
+                "code": "QUALITY_DIAGNOSTICS_MISSING",
+                "message": "Ingestion completed without quality diagnostics.",
+            },
+        ],
+        "warnings": [],
+    }
+
+
 @celery_app.task(name="ingestion.ingest_market_data")
 def ingest_market_data(
     market: str,
@@ -54,6 +73,7 @@ def ingest_market_data(
             "bar_count": int(snapshot["bar_count"]),
             "status": str(snapshot["status"]),
             "provider": provider_value,
+            "quality_diagnostics": _extract_quality_diagnostics(snapshot),
         }
         finish_task_run(task_run, result_payload, session=session)
         return result_payload
@@ -70,7 +90,7 @@ def ingest_mock_market_data(
     start: str | None = None,
     end: str | None = None,
     provider: str | None = None,
-) -> dict[str, int | str]:
+) -> dict[str, object]:
     return ingest_market_data(
         market=market,
         start=start,

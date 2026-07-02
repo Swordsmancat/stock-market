@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Load frontend App Router, next-intl, component, state, type-safety, and test conventions."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Quality diagnostics UI must follow existing component and empty/error state patterns."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"TaskRun result_json diagnostics require defensive typing for unknown JSON."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Add page behavior tests and translations consistently."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-taskrun-quality-diagnostics/design.md","reason":"Source design for TaskRun detail diagnostics UI shape and compatibility rules."}

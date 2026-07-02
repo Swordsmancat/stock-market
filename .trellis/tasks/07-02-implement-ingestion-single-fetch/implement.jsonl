@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Load backend project conventions for services, database writes, diagnostics, and tests."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Ingestion writer changes must preserve SQLAlchemy session, upsert, and transaction conventions."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Implementation requires focused pytest coverage for ingestion and data quality behavior."}
+{"file":".trellis/tasks/archive/2026-07/07-02-design-ingestion-single-fetch/design.md","reason":"Source design for replacing duplicate provider fetches with serialized snapshot writes."}

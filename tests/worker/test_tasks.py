@@ -47,6 +47,147 @@ def test_ingest_market_data_records_succeeded_task_run(monkeypatch):
     assert latest_run["result_json"]["bar_count"] == 2
 
 
+@pytest.mark.parametrize("quality_status", ["WARN", "FAIL"])
+def test_ingest_market_data_persists_quality_diagnostics_without_failing_task_run(
+    monkeypatch,
+    quality_status,
+):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    quality_diagnostics = {
+        "status": quality_status,
+        "instrument_count": 1,
+        "instruments": [
+            {
+                "symbol": "AAPL",
+                "status": quality_status,
+                "checked_bars": 2,
+                "missing_dates": ["2026-01-02"] if quality_status == "WARN" else [],
+                "invalid_ohlc": [{"timestamp": "2026-01-02"}]
+                if quality_status == "FAIL"
+                else [],
+                "volume_warnings": [],
+                "quality_error": None,
+            },
+        ],
+        "errors": [
+            {
+                "symbol": "AAPL",
+                "code": "INVALID_OHLC",
+                "message": "Invalid OHLC rows were found.",
+                "count": 1,
+            },
+        ]
+        if quality_status == "FAIL"
+        else [],
+        "warnings": [
+            {
+                "symbol": "AAPL",
+                "code": "MISSING_DATES",
+                "message": "Missing daily bars were found.",
+                "count": 1,
+            },
+        ]
+        if quality_status == "WARN"
+        else [],
+    }
+
+    def fake_ingest_market_snapshot(
+        market,
+        start,
+        end,
+        session,
+        provider_name,
+    ):
+        return {
+            "market": market,
+            "instrument_count": 1,
+            "bar_count": 2,
+            "status": "ingested",
+            "quality_diagnostics": quality_diagnostics,
+        }
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "ingest_market_snapshot",
+        fake_ingest_market_snapshot,
+    )
+
+    result = ingestion_tasks.ingest_market_data(
+        market="US",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="mock",
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.ingest_market_data",
+    )
+
+    assert result == latest_run["result_json"]
+    assert result["market"] == "US"
+    assert result["instrument_count"] == 1
+    assert result["bar_count"] == 2
+    assert result["status"] == "ingested"
+    assert result["provider"] == "mock"
+    assert result["quality_diagnostics"] == quality_diagnostics
+    assert latest_run["status"] == "succeeded"
+
+
+def test_ingest_market_data_persists_fallback_when_quality_diagnostics_are_missing(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    def fake_ingest_market_snapshot(
+        market,
+        start,
+        end,
+        session,
+        provider_name,
+    ):
+        return {
+            "market": market,
+            "instrument_count": 1,
+            "bar_count": 2,
+            "status": "ingested",
+        }
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "ingest_market_snapshot",
+        fake_ingest_market_snapshot,
+    )
+
+    result = ingestion_tasks.ingest_market_data(
+        market="US",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="mock",
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.ingest_market_data",
+    )
+
+    assert latest_run["status"] == "succeeded"
+    assert result["quality_diagnostics"] == {
+        "status": "FAIL",
+        "instrument_count": 0,
+        "instruments": [],
+        "errors": [
+            {
+                "code": "QUALITY_DIAGNOSTICS_MISSING",
+                "message": "Ingestion completed without quality diagnostics.",
+            },
+        ],
+        "warnings": [],
+    }
+    assert latest_run["result_json"] == result
+
+
 def test_ingest_mock_market_data_returns_summary(monkeypatch):
     session = make_session()
     from apps.worker.tasks import ingestion as ingestion_tasks
