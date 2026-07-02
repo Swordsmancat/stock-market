@@ -9,6 +9,7 @@ from packages.domain.models import DailyBar, Instrument, Market
 from packages.providers.akshare_provider import AkShareProvider
 from packages.providers.base import ProviderAdapter
 from packages.providers.base import ProviderBar
+from packages.providers.base import ProviderInstrument
 from packages.providers.mock_provider import MockProvider
 from packages.providers.tushare_provider import TushareProvider
 from packages.providers.yfinance_provider import YFinanceProvider
@@ -23,15 +24,37 @@ DEFAULT_RSI_WINDOW = 14
 
 
 class MarketDataProviderError(RuntimeError):
+    category = "provider_error"
+    http_status_code = 502
+
     def __init__(self, provider_name: str, operation: str, original_error: Exception) -> None:
         self.provider_name = provider_name
         self.operation = operation
         self.original_error = original_error
-        message = (
-            f"Market data provider '{provider_name}' failed while {operation}: "
-            f"{original_error}"
-        )
+        self.category = self.__class__.category
+        self.http_status_code = self.__class__.http_status_code
+        message = f"Market data provider '{provider_name}' failed while {operation}."
         super().__init__(message)
+
+
+class MarketDataProviderTimeoutError(MarketDataProviderError):
+    category = "timeout"
+    http_status_code = 504
+
+
+class MarketDataProviderRateLimitError(MarketDataProviderError):
+    category = "rate_limited"
+    http_status_code = 429
+
+
+class MarketDataProviderUnavailableError(MarketDataProviderError):
+    category = "unavailable"
+    http_status_code = 503
+
+
+class MarketDataProviderPayloadError(MarketDataProviderError):
+    category = "malformed_payload"
+    http_status_code = 502
 
 
 def resolve_market_data_provider_name(provider_name: str | None = "mock") -> str:
@@ -52,6 +75,27 @@ def get_provider(provider_name: str = "mock") -> ProviderAdapter:
     raise ValueError(msg)
 
 
+def _classify_provider_error(
+    provider_name: str,
+    operation: str,
+    original_error: Exception,
+) -> MarketDataProviderError:
+    if isinstance(original_error, TimeoutError):
+        return MarketDataProviderTimeoutError(provider_name, operation, original_error)
+    if isinstance(original_error, ConnectionError):
+        return MarketDataProviderUnavailableError(provider_name, operation, original_error)
+
+    normalized_message = str(original_error).lower()
+    if (
+        "rate limit" in normalized_message
+        or "too many requests" in normalized_message
+        or "429" in normalized_message
+    ):
+        return MarketDataProviderRateLimitError(provider_name, operation, original_error)
+
+    return MarketDataProviderError(provider_name, operation, original_error)
+
+
 def _fetch_provider_bars(
     provider: ProviderAdapter,
     provider_name: str,
@@ -65,20 +109,20 @@ def _fetch_provider_bars(
     except ValueError:
         raise
     except Exception as error:
-        raise MarketDataProviderError(provider_name, "fetching bars", error) from error
+        raise _classify_provider_error(provider_name, "fetching bars", error) from error
 
 
 def _fetch_provider_instruments(
     provider: ProviderAdapter,
     provider_name: str,
     market: str,
-) -> list:
+) -> list[ProviderInstrument]:
     try:
         return provider.fetch_instruments(market)
     except ValueError:
         raise
     except Exception as error:
-        raise MarketDataProviderError(provider_name, "fetching instruments", error) from error
+        raise _classify_provider_error(provider_name, "fetching instruments", error) from error
 
 
 def _latest_numeric_value_or_none(values: pd.Series) -> float | None:
@@ -112,6 +156,17 @@ def serialize_bar(bar: ProviderBar) -> dict[str, float | str | None]:
         "volume": float(bar.volume),
         "amount": float(bar.amount) if bar.amount is not None else None,
     }
+
+
+def _serialize_provider_bars(
+    bars: list[ProviderBar],
+    provider_name: str,
+    operation: str,
+) -> list[dict[str, float | str | None]]:
+    try:
+        return [serialize_bar(bar) for bar in bars]
+    except Exception as error:
+        raise MarketDataProviderPayloadError(provider_name, operation, error) from error
 
 
 def serialize_daily_bar(bar: DailyBar) -> dict[str, float | str | None]:
@@ -179,7 +234,11 @@ def get_bars_payload(
         "symbol": symbol,
         "timeframe": timeframe,
         "source": effective_provider_name,
-        "items": [serialize_bar(bar) for bar in bars],
+        "items": _serialize_provider_bars(
+            bars,
+            effective_provider_name,
+            "serializing bars",
+        ),
     }
 
 
@@ -300,17 +359,18 @@ def get_market_snapshot(
                 "exchange": instrument.exchange,
                 "asset_type": instrument.asset_type,
                 "currency": instrument.currency,
-                "bars": [
-                    serialize_bar(bar)
-                    for bar in _fetch_provider_bars(
+                "bars": _serialize_provider_bars(
+                    _fetch_provider_bars(
                         provider,
                         effective_provider_name,
                         instrument.symbol,
                         timeframe,
                         start,
                         end,
-                    )
-                ],
+                    ),
+                    effective_provider_name,
+                    "serializing snapshot bars",
+                ),
             }
             for instrument in instruments
         ],

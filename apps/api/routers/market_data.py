@@ -21,11 +21,12 @@ def _call_market_data_service(service_call: Callable[[], dict]) -> dict:
         return service_call()
     except MarketDataProviderError as error:
         raise HTTPException(
-            status_code=502,
+            status_code=error.http_status_code,
             detail={
                 "message": str(error),
                 "provider": error.provider_name,
                 "operation": error.operation,
+                "category": error.category,
             },
         ) from error
     except ValueError as error:

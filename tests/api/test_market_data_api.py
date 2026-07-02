@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from apps.api.main import app
 from packages.services import market_data as market_data_service
@@ -70,7 +71,7 @@ def test_get_bars_maps_provider_failure_to_bad_gateway(monkeypatch):
             return []
 
         def fetch_bars(self, symbol: str, timeframe: str, start, end) -> list:
-            raise RuntimeError("provider unavailable")
+            raise RuntimeError("provider unavailable token=secret123")
 
     def get_failing_provider(provider_name: str = "mock") -> FailingProvider:
         return FailingProvider()
@@ -91,7 +92,108 @@ def test_get_bars_maps_provider_failure_to_bad_gateway(monkeypatch):
     payload = response.json()
     assert payload["detail"]["provider"] == "mock"
     assert payload["detail"]["operation"] == "fetching bars"
-    assert "provider unavailable" in payload["detail"]["message"]
+    assert payload["detail"]["category"] == "provider_error"
+    assert "secret123" not in payload["detail"]["message"]
+
+
+def test_get_bars_preserves_provider_value_errors_as_bad_request(monkeypatch):
+    class FailingProvider:
+        def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
+            return []
+
+        def fetch_bars(self, symbol: str, timeframe: str, start, end) -> list:
+            raise ValueError("unsupported timeframe")
+
+    def get_failing_provider(provider_name: str = "mock") -> FailingProvider:
+        return FailingProvider()
+
+    monkeypatch.setattr(market_data_service, "get_provider", get_failing_provider)
+
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/market-data/AAPL/bars",
+            params={"timeframe": "1h", "start": "2026-01-01", "end": "2026-01-01"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "unsupported timeframe"
+
+
+@pytest.mark.parametrize(
+    ("provider_exception", "expected_status_code", "expected_category"),
+    [
+        (TimeoutError("request timed out"), 504, "timeout"),
+        (ConnectionError("connection refused"), 503, "unavailable"),
+        (RuntimeError("too many requests"), 429, "rate_limited"),
+    ],
+)
+def test_get_bars_maps_provider_taxonomy_to_http_status(
+    monkeypatch,
+    provider_exception,
+    expected_status_code,
+    expected_category,
+):
+    class FailingProvider:
+        def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
+            return []
+
+        def fetch_bars(self, symbol: str, timeframe: str, start, end) -> list:
+            raise provider_exception
+
+    def get_failing_provider(provider_name: str = "mock") -> FailingProvider:
+        return FailingProvider()
+
+    monkeypatch.setattr(market_data_service, "get_provider", get_failing_provider)
+
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/market-data/AAPL/bars",
+            params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-01"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == expected_status_code
+    payload = response.json()
+    assert payload["detail"]["provider"] == "mock"
+    assert payload["detail"]["operation"] == "fetching bars"
+    assert payload["detail"]["category"] == expected_category
+
+
+def test_get_bars_maps_malformed_provider_payload_to_bad_gateway(monkeypatch):
+    class MalformedProvider:
+        def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
+            return []
+
+        def fetch_bars(self, symbol: str, timeframe: str, start, end) -> list:
+            return [object()]
+
+    def get_malformed_provider(provider_name: str = "mock") -> MalformedProvider:
+        return MalformedProvider()
+
+    monkeypatch.setattr(market_data_service, "get_provider", get_malformed_provider)
+
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/market-data/AAPL/bars",
+            params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-01"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 502
+    payload = response.json()
+    assert payload["detail"]["provider"] == "mock"
+    assert payload["detail"]["operation"] == "serializing bars"
+    assert payload["detail"]["category"] == "malformed_payload"
 
 
 def test_get_latest_bar_returns_mock_price():

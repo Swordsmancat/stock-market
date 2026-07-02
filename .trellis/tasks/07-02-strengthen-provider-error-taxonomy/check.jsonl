@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/error-handling.md","reason":"Review provider taxonomy against existing ValueError, provider error, and API mapping semantics."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Review focused tests and ensure no unrelated backend/frontend changes."}
