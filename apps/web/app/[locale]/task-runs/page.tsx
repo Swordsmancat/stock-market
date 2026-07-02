@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskRunRetryButton } from "@/components/task-run-actions";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { backendFetch } from "@/lib/backend-api";
 
 type TaskRun = {
@@ -30,16 +31,38 @@ type TaskRunsPayload = {
   items: TaskRun[];
 };
 
-async function fetchTaskRuns(status?: string): Promise<TaskRunsPayload> {
+type TaskRunsFetchResult = TaskRunsPayload & {
+  hasError: boolean;
+};
+
+async function fetchTaskRuns(status?: string): Promise<TaskRunsFetchResult> {
   const params = new URLSearchParams({ limit: "20" });
   if (status) {
     params.set("status", status);
   }
-  const response = await backendFetch(`/task-runs/recent?${params.toString()}`, { cache: "no-store" });
-  if (!response.ok) {
-    return { items: [] };
+
+  try {
+    const response = await backendFetch(`/task-runs/recent?${params.toString()}`, { cache: "no-store" });
+    if (!response.ok) {
+      return { items: [], hasError: true };
+    }
+
+    const payload = (await response.json()) as TaskRunsPayload;
+    return { items: payload.items, hasError: false };
+  } catch {
+    return { items: [], hasError: true };
   }
-  return response.json() as Promise<TaskRunsPayload>;
+}
+
+function formatTaskRunStatus(
+  status: string,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
+  if (status === "running" || status === "succeeded" || status === "failed") {
+    return t(status);
+  }
+
+  return status;
 }
 
 export default async function TaskRunsPage({
@@ -78,9 +101,9 @@ export default async function TaskRunsPage({
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
-          <CardDescription>
-            {payload.items.length} recent task runs.
-          </CardDescription>
+          {!payload.hasError ? (
+            <CardDescription>{t("recentCount", { count: payload.items.length })}</CardDescription>
+          ) : null}
         </CardHeader>
         <CardContent>
           <Table>
@@ -97,7 +120,13 @@ export default async function TaskRunsPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payload.items.length === 0 ? (
+              {payload.hasError ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <ErrorState title={t("loadFailed")} description={t("loadFailedHint")} />
+                  </TableCell>
+                </TableRow>
+              ) : payload.items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     <EmptyState title={t("noData")} description={t("emptyHint")} />
@@ -121,7 +150,7 @@ export default async function TaskRunsPage({
                             : "secondary"
                         }
                       >
-                        {item.status}
+                        {formatTaskRunStatus(item.status, t)}
                       </Badge>
                     </TableCell>
                     <TableCell>

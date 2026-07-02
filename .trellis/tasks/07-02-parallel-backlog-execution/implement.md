@@ -13,9 +13,9 @@ After Phase 1, launch only non-overlapping lanes.
 
 ### Candidate Lane B: Backend indicator/provider resilience
 
-- [ ] Add tests for empty bars, insufficient indicator data, and provider failure paths.
-- [ ] Implement graceful responses or explicit errors for those cases.
-- [ ] Validate with focused backend tests.
+- [x] Add tests for empty bars, insufficient indicator data, and provider failure paths.
+- [x] Implement graceful responses or explicit errors for those cases.
+- [x] Validate with focused backend tests.
 
 Suggested validation:
 
@@ -25,9 +25,9 @@ python -m pytest tests/services/test_market_data_service.py tests/api/test_marke
 
 ### Candidate Lane C: Data quality integration
 
-- [ ] Decide whether quality diagnostics should be attached to ingestion result or TaskRun result first.
-- [ ] Add focused tests around ingestion result diagnostics.
-- [ ] Wire the existing pure data quality service into the selected path.
+- [x] Decide whether quality diagnostics should be attached to ingestion result or TaskRun result first.
+- [x] Add focused tests around ingestion result diagnostics.
+- [x] Wire the existing pure data quality service into the selected path.
 
 Suggested validation:
 
@@ -37,9 +37,9 @@ python -m pytest tests/services/test_ingestion_service.py tests/services/test_da
 
 ### Candidate Lane D: Frontend error/i18n cleanup
 
-- [ ] Identify high-value hardcoded text and formatting issues.
-- [ ] Add or update translations.
-- [ ] Improve at least one key page to distinguish empty state from error state.
+- [x] Identify high-value hardcoded text and formatting issues.
+- [x] Add or update translations.
+- [x] Improve at least one key page to distinguish empty state from error state.
 
 Suggested validation:
 
@@ -48,6 +48,8 @@ npm run test:web
 ```
 
 ### Candidate Lane E: API proxy/client interaction tests
+
+Status: deferred to a later task to avoid overlapping frontend test and component files with Lane D in the same implementation wave.
 
 - [ ] Add tests for one or two high-value API route proxies.
 - [ ] Add tests for one high-value client form or polling behavior.
@@ -60,16 +62,16 @@ npm run test:web
 
 ## Phase 3: Reviews
 
-- [ ] Run one spec review subagent per implementation lane.
-- [ ] Run one quality review subagent per implementation lane.
-- [ ] Resolve blocking review findings before combining lanes.
+- [x] Run one spec review subagent per implementation lane.
+- [x] Run one quality review subagent per implementation lane.
+- [x] Resolve blocking review findings before combining lanes.
 
 ## Phase 4: Final Verification
 
-- [ ] Run focused backend tests touched by implementation lanes.
-- [ ] Run `npm run test:web` if frontend files changed.
-- [ ] Run `python scripts/dev_health_check.py` only if local services are available; otherwise record environment limitation.
-- [ ] Review `git diff --stat` and `git status --short --branch`.
+- [x] Run focused backend tests touched by implementation lanes.
+- [x] Run `npm run test:web` if frontend files changed.
+- [x] Run `python scripts/dev_health_check.py` only if local services are available; otherwise record environment limitation.
+- [x] Review `git diff --stat` and `git status --short --branch`.
 
 ## Phase 5: Commit Policy
 

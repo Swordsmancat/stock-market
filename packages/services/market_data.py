@@ -6,23 +6,40 @@ from sqlalchemy.orm import Session
 
 from packages.analytics.indicators import calculate_ma, calculate_rsi
 from packages.domain.models import DailyBar, Instrument, Market
+from packages.providers.akshare_provider import AkShareProvider
 from packages.providers.base import ProviderAdapter
 from packages.providers.base import ProviderBar
 from packages.providers.mock_provider import MockProvider
-from packages.providers.yfinance_provider import YFinanceProvider
-from packages.providers.akshare_provider import AkShareProvider
 from packages.providers.tushare_provider import TushareProvider
+from packages.providers.yfinance_provider import YFinanceProvider
+from packages.services.platform_settings import get_effective_market_data_provider
 
 
 def _provider() -> MockProvider:
     return MockProvider()
 
 
-from packages.services.platform_settings import get_effective_market_data_provider
+DEFAULT_RSI_WINDOW = 14
+
+
+class MarketDataProviderError(RuntimeError):
+    def __init__(self, provider_name: str, operation: str, original_error: Exception) -> None:
+        self.provider_name = provider_name
+        self.operation = operation
+        self.original_error = original_error
+        message = (
+            f"Market data provider '{provider_name}' failed while {operation}: "
+            f"{original_error}"
+        )
+        super().__init__(message)
+
+
+def resolve_market_data_provider_name(provider_name: str | None = "mock") -> str:
+    return get_effective_market_data_provider(provider_name)
 
 
 def get_provider(provider_name: str = "mock") -> ProviderAdapter:
-    normalized = get_effective_market_data_provider(provider_name)
+    normalized = resolve_market_data_provider_name(provider_name)
     if normalized == "mock":
         return MockProvider()
     if normalized == "yfinance":
@@ -33,6 +50,56 @@ def get_provider(provider_name: str = "mock") -> ProviderAdapter:
         return TushareProvider()
     msg = f"Unsupported market data provider: {provider_name}"
     raise ValueError(msg)
+
+
+def _fetch_provider_bars(
+    provider: ProviderAdapter,
+    provider_name: str,
+    symbol: str,
+    timeframe: str,
+    start: date,
+    end: date,
+) -> list[ProviderBar]:
+    try:
+        return provider.fetch_bars(symbol, timeframe, start, end)
+    except ValueError:
+        raise
+    except Exception as error:
+        raise MarketDataProviderError(provider_name, "fetching bars", error) from error
+
+
+def _fetch_provider_instruments(
+    provider: ProviderAdapter,
+    provider_name: str,
+    market: str,
+) -> list:
+    try:
+        return provider.fetch_instruments(market)
+    except ValueError:
+        raise
+    except Exception as error:
+        raise MarketDataProviderError(provider_name, "fetching instruments", error) from error
+
+
+def _latest_numeric_value_or_none(values: pd.Series) -> float | None:
+    non_null_values = values.dropna()
+    if non_null_values.empty:
+        return None
+    return float(non_null_values.iloc[-1])
+
+
+def _calculate_latest_rsi_or_none(close_prices: pd.Series) -> float | None:
+    if close_prices.empty:
+        return None
+
+    latest_rsi = _latest_numeric_value_or_none(calculate_rsi(close_prices))
+    if latest_rsi is not None:
+        return latest_rsi
+
+    if len(close_prices) > DEFAULT_RSI_WINDOW:
+        return 100.0
+
+    return None
 
 
 def serialize_bar(bar: ProviderBar) -> dict[str, float | str | None]:
@@ -85,6 +152,7 @@ def get_bars_payload(
     session: Session | None = None,
     provider_name: str = "mock",
 ) -> dict[str, object]:
+    effective_provider_name = resolve_market_data_provider_name(provider_name)
     if timeframe == "1d" and session is not None:
         try:
             db_bars = _fetch_daily_bars_from_database(symbol, start, end, session)
@@ -98,12 +166,19 @@ def get_bars_payload(
                 "items": [serialize_daily_bar(bar) for bar in db_bars],
             }
 
-    provider = get_provider(provider_name)
-    bars = provider.fetch_bars(symbol, timeframe, start, end)
+    provider = get_provider(effective_provider_name)
+    bars = _fetch_provider_bars(
+        provider,
+        effective_provider_name,
+        symbol,
+        timeframe,
+        start,
+        end,
+    )
     return {
         "symbol": symbol,
         "timeframe": timeframe,
-        "source": provider_name.lower(),
+        "source": effective_provider_name,
         "items": [serialize_bar(bar) for bar in bars],
     }
 
@@ -117,18 +192,17 @@ def get_indicator_payload(
 ) -> dict[str, object]:
     bars_payload = get_bars_payload(symbol, "1d", start, end, session=session)
     items = bars_payload["items"]
-    close = pd.Series([float(item["close"]) for item in items])
-    latest_ma = calculate_ma(close, ma_window).dropna().iloc[-1]
-    rsi_series = calculate_rsi(close)
-    latest_rsi = rsi_series.dropna().iloc[-1] if not rsi_series.dropna().empty else 100.0
+    close_prices = pd.Series([float(item["close"]) for item in items], dtype="float64")
+    latest_ma = _latest_numeric_value_or_none(calculate_ma(close_prices, ma_window))
+    latest_rsi = _calculate_latest_rsi_or_none(close_prices)
 
     return {
         "symbol": symbol,
-        "as_of": str(items[-1]["timestamp"]),
+        "as_of": str(items[-1]["timestamp"]) if items else None,
         "source": bars_payload["source"],
         "indicators": {
-            "ma": float(latest_ma),
-            "rsi": float(latest_rsi),
+            "ma": latest_ma,
+            "rsi": latest_rsi,
         },
     }
 
@@ -209,11 +283,12 @@ def get_market_snapshot(
     timeframe: str = "1d",
     provider_name: str = "mock",
 ) -> dict[str, object]:
-    provider = get_provider(provider_name)
-    instruments = provider.fetch_instruments(market)
+    effective_provider_name = resolve_market_data_provider_name(provider_name)
+    provider = get_provider(effective_provider_name)
+    instruments = _fetch_provider_instruments(provider, effective_provider_name, market)
     return {
         "market": market,
-        "provider": provider_name.lower(),
+        "provider": effective_provider_name,
         "timeframe": timeframe,
         "start": start.isoformat(),
         "end": end.isoformat(),
@@ -227,7 +302,14 @@ def get_market_snapshot(
                 "currency": instrument.currency,
                 "bars": [
                     serialize_bar(bar)
-                    for bar in provider.fetch_bars(instrument.symbol, timeframe, start, end)
+                    for bar in _fetch_provider_bars(
+                        provider,
+                        effective_provider_name,
+                        instrument.symbol,
+                        timeframe,
+                        start,
+                        end,
+                    )
                 ],
             }
             for instrument in instruments

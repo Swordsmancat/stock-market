@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from packages.domain.models import DailyBar, Instrument, Market
 from packages.providers.base import ProviderAdapter
+from packages.services.data_quality import DataQualityStatus, check_daily_bar_quality
 from packages.services.market_data import get_market_snapshot, get_provider
 
 
@@ -97,6 +98,60 @@ def _write_snapshot_to_database(
     return bar_count
 
 
+def _combine_quality_statuses(quality_statuses: list[DataQualityStatus]) -> DataQualityStatus:
+    if not quality_statuses:
+        return "FAIL"
+    if "FAIL" in quality_statuses:
+        return "FAIL"
+    if "WARN" in quality_statuses:
+        return "WARN"
+    return "OK"
+
+
+def _build_quality_diagnostics(snapshot: dict[str, object]) -> dict[str, object]:
+    instrument_diagnostics: list[dict[str, object]] = []
+    quality_statuses: list[DataQualityStatus] = []
+    serialized_instruments = snapshot["instruments"]
+
+    if not serialized_instruments:
+        return {
+            "status": "FAIL",
+            "instrument_count": 0,
+            "instruments": [],
+            "quality_error": "No instruments available for quality diagnostics.",
+        }
+
+    for serialized_instrument in serialized_instruments:
+        serialized_bars = serialized_instrument.get("bars", [])
+        try:
+            quality_result_payload = check_daily_bar_quality(serialized_bars).to_dict()
+        except Exception as quality_error:
+            # Diagnostics should surface quality-check failures without interrupting ingestion.
+            quality_result_payload = {
+                "checked_bars": len(serialized_bars) if isinstance(serialized_bars, list) else 0,
+                "missing_dates": [],
+                "invalid_ohlc": [],
+                "volume_warnings": [],
+                "status": "FAIL",
+                "quality_error": str(quality_error),
+            }
+
+        quality_status = quality_result_payload["status"]
+        quality_statuses.append(quality_status)
+        instrument_diagnostics.append(
+            {
+                "symbol": serialized_instrument.get("symbol"),
+                **quality_result_payload,
+            }
+        )
+
+    return {
+        "status": _combine_quality_statuses(quality_statuses),
+        "instrument_count": len(instrument_diagnostics),
+        "instruments": instrument_diagnostics,
+    }
+
+
 def ingest_mock_market_snapshot(
     market: str,
     start: date,
@@ -131,5 +186,6 @@ def ingest_market_snapshot(
     return {
         **snapshot,
         "bar_count": bar_count,
+        "quality_diagnostics": _build_quality_diagnostics(snapshot),
         "status": "ingested",
     }
