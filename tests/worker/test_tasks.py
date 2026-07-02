@@ -200,6 +200,33 @@ def test_ingest_mock_market_data_returns_summary(monkeypatch):
     assert result["bar_count"] >= 1
 
 
+def test_ingest_symbol_daily_bars_task_records_succeeded_task_run(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    result = ingestion_tasks.ingest_symbol_daily_bars_task(
+        symbol="aapl",
+        market="us",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="mock",
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.ingest_symbol_daily_bars",
+    )
+
+    assert result["status"] == "ingested"
+    assert result["symbol"] == "AAPL"
+    assert result["market"] == "US"
+    assert result["provider"] == "mock"
+    assert result["bar_count"] == 2
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"] == result
+
+
 def test_refresh_daily_stock_analysis_task_stores_latest_daily_report(monkeypatch):
     session = make_session()
     monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)

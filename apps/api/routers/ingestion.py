@@ -9,6 +9,7 @@ from packages.shared.database import get_session
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
 TASK_NAME = "ingestion.ingest_market_data"
+SYMBOL_DAILY_BARS_TASK_NAME = "ingestion.ingest_symbol_daily_bars"
 
 
 def _enqueue_market_snapshot_ingestion(
@@ -27,6 +28,45 @@ def _enqueue_market_snapshot_ingestion(
             "end": end.isoformat(),
             "provider": provider,
         },
+        session=session,
+    )
+
+
+def _normalize_optional_query_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _enqueue_symbol_daily_bars_ingestion(
+    *,
+    symbol: str,
+    market: str,
+    provider: str | None,
+    start: date,
+    end: date,
+    exchange: str | None,
+    timeframe: str,
+    session: Session,
+) -> dict[str, object]:
+    task_input = {
+        "symbol": symbol.strip().upper(),
+        "market": market.strip().upper(),
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "timeframe": timeframe.strip().lower(),
+    }
+    normalized_provider = _normalize_optional_query_value(provider)
+    normalized_exchange = _normalize_optional_query_value(exchange)
+    if normalized_provider is not None:
+        task_input["provider"] = normalized_provider
+    if normalized_exchange is not None:
+        task_input["exchange"] = normalized_exchange
+
+    return enqueue_task_run(
+        SYMBOL_DAILY_BARS_TASK_NAME,
+        task_input,
         session=session,
     )
 
@@ -61,5 +101,28 @@ def ingest_mock_snapshot(
         provider=provider,
         start=start,
         end=end,
+        session=session,
+    )
+
+
+@router.post("/symbol-daily-bars")
+def ingest_symbol_daily_bars(
+    symbol: str = Query(...),
+    market: str = Query(...),
+    provider: str | None = Query(default=None),
+    start: date = Query(...),
+    end: date = Query(...),
+    exchange: str | None = Query(default=None),
+    timeframe: str = Query(default="1d"),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return _enqueue_symbol_daily_bars_ingestion(
+        symbol=symbol,
+        market=market,
+        provider=provider,
+        start=start,
+        end=end,
+        exchange=exchange,
+        timeframe=timeframe,
         session=session,
     )

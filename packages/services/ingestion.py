@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 
 from packages.domain.models import DailyBar, Instrument, Market
 from packages.services.data_quality import DataQualityStatus, check_daily_bar_quality
-from packages.services.market_data import get_market_snapshot
+from packages.providers.base import ProviderBar
+from packages.services.market_data import get_market_snapshot, get_provider, resolve_market_data_provider_name
+from packages.services.market_data import serialize_bar
 
 
 MARKET_META = {
@@ -153,6 +155,58 @@ def _count_serialized_snapshot_bars(snapshot: dict[str, object]) -> int:
     )
 
 
+def _normalize_optional_provider_name(provider_name: str | None) -> str | None:
+    if provider_name is None:
+        return None
+    normalized = provider_name.strip().lower()
+    return normalized or None
+
+
+def _normalize_optional_exchange(exchange: str | None, market_code: str) -> str:
+    if exchange is None or not exchange.strip():
+        return market_code
+    return exchange.strip().upper()
+
+
+def _get_market_currency(market_code: str) -> str:
+    return MARKET_META.get(market_code, {"currency": "USD"})["currency"]
+
+
+def _build_symbol_daily_bars_snapshot(
+    *,
+    symbol: str,
+    market: str,
+    exchange: str | None,
+    timeframe: str,
+    start: date,
+    end: date,
+    requested_provider: str | None,
+    effective_provider: str,
+    bars: list[ProviderBar],
+) -> dict[str, object]:
+    serialized_bars = [serialize_bar(bar) for bar in bars]
+    return {
+        "market": market,
+        "provider": effective_provider,
+        "requested_provider": requested_provider,
+        "effective_provider": effective_provider,
+        "timeframe": timeframe,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "instrument_count": 1,
+        "instruments": [
+            {
+                "symbol": symbol,
+                "name": symbol,
+                "exchange": _normalize_optional_exchange(exchange, market),
+                "asset_type": "stock",
+                "currency": _get_market_currency(market),
+                "bars": serialized_bars,
+            }
+        ],
+    }
+
+
 def _write_serialized_snapshot_to_database(
     market_code: str,
     snapshot: dict[str, object],
@@ -283,4 +337,52 @@ def ingest_market_snapshot(
         "bar_count": bar_count,
         "quality_diagnostics": _build_quality_diagnostics(snapshot),
         "status": "ingested",
+    }
+
+
+def ingest_symbol_daily_bars(
+    symbol: str,
+    market: str,
+    start: date,
+    end: date,
+    session: Session | None = None,
+    provider_name: str | None = None,
+    exchange: str | None = None,
+    timeframe: str = "1d",
+) -> dict[str, object]:
+    normalized_symbol = symbol.strip().upper()
+    normalized_market = market.strip().upper()
+    normalized_timeframe = timeframe.strip().lower()
+    if normalized_timeframe != "1d":
+        msg = f"Only daily bar ingestion is supported. Received timeframe: {timeframe}"
+        raise ValueError(msg)
+
+    requested_provider_name = _normalize_optional_provider_name(provider_name)
+    effective_provider_name = resolve_market_data_provider_name(provider_name)
+    provider = get_provider(effective_provider_name)
+    bars = provider.fetch_bars(normalized_symbol, normalized_timeframe, start, end)
+    snapshot = _build_symbol_daily_bars_snapshot(
+        symbol=normalized_symbol,
+        market=normalized_market,
+        exchange=exchange,
+        timeframe=normalized_timeframe,
+        start=start,
+        end=end,
+        requested_provider=requested_provider_name,
+        effective_provider=effective_provider_name,
+        bars=bars,
+    )
+    bar_count = (
+        _write_serialized_snapshot_to_database(normalized_market, snapshot, session)
+        if session is not None
+        else _count_serialized_snapshot_bars(snapshot)
+    )
+    no_data_reason = None if bars else "Provider returned no daily bars for the requested symbol/date range."
+    return {
+        **snapshot,
+        "symbol": normalized_symbol,
+        "bar_count": bar_count,
+        "quality_diagnostics": _build_quality_diagnostics(snapshot),
+        "status": "ingested" if bars else "no_data",
+        "no_data_reason": no_data_reason,
     }

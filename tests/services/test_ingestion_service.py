@@ -12,6 +12,7 @@ from packages.services import market_data as market_data_service
 from packages.services import ingestion as ingestion_service
 from packages.shared.database import Base
 from packages.services.ingestion import ingest_market_snapshot, ingest_mock_market_snapshot
+from packages.services.ingestion import ingest_symbol_daily_bars
 
 
 @pytest.fixture
@@ -74,6 +75,44 @@ class CountingSnapshotProvider:
                 amount=Decimal("101000"),
             )
         ]
+
+
+class TargetedBarsProvider:
+    def __init__(self, bars: list[ProviderBar]) -> None:
+        self.bars = bars
+        self.fetch_bars_count = 0
+        self.fetch_instruments_count = 0
+
+    def fetch_instruments(
+        self,
+        market: str,
+        exchange: str | None = None,
+    ) -> list[ProviderInstrument]:
+        self.fetch_instruments_count += 1
+        raise AssertionError("single-symbol ingestion must not fetch provider instruments")
+
+    def fetch_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: date,
+        end: date,
+    ) -> list[ProviderBar]:
+        self.fetch_bars_count += 1
+        return self.bars
+
+
+def _provider_bar(symbol: str, timestamp: date, close_price: Decimal) -> ProviderBar:
+    return ProviderBar(
+        symbol=symbol,
+        timestamp=timestamp,
+        open=close_price - Decimal("1.00"),
+        high=close_price + Decimal("1.00"),
+        low=close_price - Decimal("2.00"),
+        close=close_price,
+        volume=Decimal("1000"),
+        amount=close_price * Decimal("1000"),
+    )
 
 
 def _serialized_bar(
@@ -294,6 +333,66 @@ def test_session_backed_ingestion_writes_database_from_returned_snapshot(
     ]
     assert [returned_bar["close"] for returned_bar in returned_bars] == [111.25, 112.5]
     assert quality_diagnostics["checked_bars"] == len(returned_bars)
+
+
+def test_symbol_daily_bar_ingestion_fetches_bars_without_instrument_universe(
+    monkeypatch,
+    sqlite_session: Session,
+):
+    provider = TargetedBarsProvider(
+        [_provider_bar("AAPL", date(2026, 1, 5), Decimal("123.45"))]
+    )
+    monkeypatch.setattr(ingestion_service, "get_provider", lambda provider_name: provider)
+
+    first_result = ingest_symbol_daily_bars(
+        "aapl",
+        "us",
+        date(2026, 1, 5),
+        date(2026, 1, 5),
+        session=sqlite_session,
+        provider_name="mock",
+    )
+    second_result = ingest_symbol_daily_bars(
+        "AAPL",
+        "US",
+        date(2026, 1, 5),
+        date(2026, 1, 5),
+        session=sqlite_session,
+        provider_name="mock",
+    )
+
+    assert provider.fetch_bars_count == 2
+    assert provider.fetch_instruments_count == 0
+    assert first_result["status"] == "ingested"
+    assert first_result["bar_count"] == 1
+    assert second_result["bar_count"] == 1
+    assert sqlite_session.query(Instrument).filter(Instrument.symbol == "AAPL").count() == 1
+    assert sqlite_session.query(DailyBar).count() == 1
+    database_bar = sqlite_session.query(DailyBar).one()
+    assert database_bar.close == Decimal("123.45")
+
+
+def test_symbol_daily_bar_ingestion_returns_no_data_without_daily_rows(
+    monkeypatch,
+    sqlite_session: Session,
+):
+    provider = TargetedBarsProvider([])
+    monkeypatch.setattr(ingestion_service, "get_provider", lambda provider_name: provider)
+
+    result = ingest_symbol_daily_bars(
+        "missing",
+        "us",
+        date(2026, 1, 5),
+        date(2026, 1, 5),
+        session=sqlite_session,
+        provider_name="mock",
+    )
+
+    assert result["status"] == "no_data"
+    assert result["symbol"] == "MISSING"
+    assert result["bar_count"] == 0
+    assert result["no_data_reason"] == "Provider returned no daily bars for the requested symbol/date range."
+    assert sqlite_session.query(DailyBar).count() == 0
 
 
 def test_duplicate_serialized_bars_preserve_processed_count_and_last_write_wins(

@@ -3,7 +3,7 @@
   "name": "single-symbol-daily-bar-ingestion",
   "title": "Single-symbol daily-bar ingestion workflow",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

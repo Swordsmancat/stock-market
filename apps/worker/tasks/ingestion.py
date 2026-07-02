@@ -3,7 +3,7 @@ from uuid import UUID
 
 from apps.worker.celery_app import celery_app
 from packages.domain.models import TaskRun
-from packages.services.ingestion import ingest_market_snapshot
+from packages.services.ingestion import ingest_market_snapshot, ingest_symbol_daily_bars
 from packages.services.task_runs import fail_task_run, finish_task_run, start_task_run
 from packages.shared.config import settings
 from packages.shared.database import SessionLocal
@@ -97,3 +97,76 @@ def ingest_mock_market_data(
         end=end,
         provider=provider or "mock",
     )
+
+
+@celery_app.task(name="ingestion.ingest_symbol_daily_bars")
+def ingest_symbol_daily_bars_task(
+    symbol: str,
+    market: str,
+    start: str | None = None,
+    end: str | None = None,
+    provider: str | None = None,
+    exchange: str | None = None,
+    timeframe: str = "1d",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    end_date = date.fromisoformat(end) if end else date.today()
+    start_date = date.fromisoformat(start) if start else end_date - timedelta(days=2)
+    normalized_symbol = symbol.strip().upper()
+    normalized_market = market.strip().upper()
+    session = SessionLocal()
+
+    if task_run_id:
+        task_run = session.get(TaskRun, UUID(task_run_id))
+        if task_run is None:
+            session.close()
+            msg = f"Task run not found: {task_run_id}"
+            raise ValueError(msg)
+    else:
+        task_run = start_task_run(
+            "ingestion.ingest_symbol_daily_bars",
+            {
+                "symbol": normalized_symbol,
+                "market": normalized_market,
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+                "provider": provider,
+                "exchange": exchange,
+                "timeframe": timeframe,
+            },
+            session=session,
+        )
+
+    try:
+        ingestion_result = ingest_symbol_daily_bars(
+            symbol=normalized_symbol,
+            market=normalized_market,
+            start=start_date,
+            end=end_date,
+            session=session,
+            provider_name=provider,
+            exchange=exchange,
+            timeframe=timeframe,
+        )
+        result_payload = {
+            "symbol": str(ingestion_result["symbol"]),
+            "market": str(ingestion_result["market"]),
+            "instrument_count": int(ingestion_result["instrument_count"]),
+            "bar_count": int(ingestion_result["bar_count"]),
+            "status": str(ingestion_result["status"]),
+            "provider": str(ingestion_result["provider"]),
+            "requested_provider": ingestion_result.get("requested_provider"),
+            "effective_provider": str(ingestion_result["effective_provider"]),
+            "timeframe": str(ingestion_result["timeframe"]),
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+            "no_data_reason": ingestion_result.get("no_data_reason"),
+            "quality_diagnostics": _extract_quality_diagnostics(ingestion_result),
+        }
+        finish_task_run(task_run, result_payload, session=session)
+        return result_payload
+    except Exception as exc:
+        fail_task_run(task_run, str(exc), session=session)
+        raise
+    finally:
+        session.close()
