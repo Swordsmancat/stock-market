@@ -15,12 +15,12 @@ Design how ingestion `quality_diagnostics` should be persisted into TaskRun resu
 
 ## Acceptance Criteria
 
-- [ ] Current TaskRun result flow is documented with file/function references.
-- [ ] Proposed `quality_diagnostics` result contract is documented.
-- [ ] TaskRun detail UI display shape is documented.
-- [ ] Required backend and frontend tests are listed.
-- [ ] Compatibility with existing report lineage and retry behavior is addressed.
-- [ ] No production code is modified by this design-only task.
+- [x] Current TaskRun result flow is documented with file/function references.
+- [x] Proposed `quality_diagnostics` result contract is documented.
+- [x] TaskRun detail UI display shape is documented.
+- [x] Required backend and frontend tests are listed.
+- [x] Compatibility with existing report lineage and retry behavior is addressed.
+- [x] No production code is modified by this design-only task.
 
 ## Notes
 
