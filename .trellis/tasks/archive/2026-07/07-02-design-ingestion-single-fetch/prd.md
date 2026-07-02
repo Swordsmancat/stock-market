@@ -15,12 +15,12 @@ Design a minimal refactor path for ingestion so real providers are fetched once,
 
 ## Acceptance Criteria
 
-- [ ] Current double-fetch flow is documented with file/function references.
-- [ ] Proposed single-fetch data flow is documented.
-- [ ] Backward compatibility and migration risks are listed.
-- [ ] Required service tests are listed.
-- [ ] The design clarifies how `quality_diagnostics`, `bar_count`, and database writes share the same snapshot.
-- [ ] No production code is modified by this design-only task.
+- [x] Current double-fetch flow is documented with file/function references.
+- [x] Proposed single-fetch data flow is documented.
+- [x] Backward compatibility and migration risks are listed.
+- [x] Required service tests are listed.
+- [x] The design clarifies how `quality_diagnostics`, `bar_count`, and database writes share the same snapshot.
+- [x] No production code is modified by this design-only task.
 
 ## Notes
 
