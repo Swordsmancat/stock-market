@@ -1,12 +1,33 @@
 # Backend Development Guidelines
 
-> Best practices for backend development in this project.
+> Current backend conventions for the stock analysis platform.
 
 ---
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+The backend is a Python service stack built around FastAPI routers, SQLAlchemy ORM models and sessions, provider adapters for market data, service-layer business logic, Celery worker tasks, diagnostic scripts, and focused pytest coverage. These guidelines document patterns already present in the repository; they are not a wishlist for a future architecture.
+
+Primary examples:
+
+- `apps/api/main.py` wires the FastAPI app and routers.
+- `apps/api/routers/task_runs.py`, `apps/api/routers/fundamentals.py`, and `apps/api/routers/ingestion.py` show router-to-service wiring.
+- `packages/services/market_data.py`, `packages/services/task_runs.py`, and `packages/services/news.py` hold backend business logic.
+- `packages/providers/yfinance_provider.py`, `packages/providers/tushare_provider.py`, and `packages/providers/base.py` define external data boundaries.
+- `packages/domain/models.py` contains SQLAlchemy domain models.
+- `packages/shared/database.py` owns the SQLAlchemy engine, `SessionLocal`, and FastAPI session dependency.
+- `apps/worker/tasks.py`, `apps/worker/tasks/`, and `apps/worker/celery_app.py` contain worker execution and schedule wiring.
+- `scripts/provider_readiness.py`, `scripts/dev_health_check.py`, and `scripts/task_run_health.py` are lightweight diagnostics.
+- `tests/api/`, `tests/services/`, `tests/scripts/`, and `tests/worker/` provide focused regression coverage.
+
+---
+
+## Pre-Development Checklist
+
+- Identify the layer being changed: API router, service, provider, domain model, shared config/database, worker, script, or test.
+- Read the matching guideline file below before editing backend code.
+- Prefer adding behavior at the same layer used by nearby examples instead of bypassing routers, services, or providers.
+- Do not commit or push from backend subagent work unless the user explicitly asks for it.
 
 ---
 
@@ -14,24 +35,19 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | To fill |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Directory Structure](./directory-structure.md) | Actual FastAPI, service, provider, domain, worker, script, and test layout | Filled |
+| [Database Guidelines](./database-guidelines.md) | SQLAlchemy sessions, ORM models, migrations, and SQLite test fixtures | Filled |
+| [Error Handling](./error-handling.md) | HTTPException mapping, provider boundary errors, and diagnostic WARN/FAIL semantics | Filled |
+| [Quality Guidelines](./quality-guidelines.md) | Focused pytest, non-mutating diagnostics, and subagent safety boundaries | Filled |
+| [Logging Guidelines](./logging-guidelines.md) | Current logging state and sensitive-data boundaries | Filled |
 
 ---
 
-## How to Fill These Guidelines
+## Quality Check
 
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
+- Specs should point to real files instead of generic best practices.
+- New backend guidance should include multiple repository path examples.
+- Lightweight validation can use `python ./.trellis/scripts/task.py validate 00-bootstrap-guidelines`; if another layer is still unfilled, record that validation failure instead of editing out-of-scope specs.
 
 ---
 

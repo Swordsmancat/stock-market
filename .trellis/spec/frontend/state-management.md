@@ -6,46 +6,44 @@
 
 ## Overview
 
-<!--
-Document your project's state management conventions here.
-
-Questions to answer:
-- What state management solution do you use?
-- How is local vs global state decided?
-- How do you handle server state?
-- What are the patterns for derived state?
--->
-
-(To be filled by the team)
+The project does not currently use a global frontend state library or React Query. Most state is either server-rendered data, URL query state, Server Action form state, or small local client component state.
 
 ---
 
 ## State Categories
 
-<!-- Local state, global state, server state, URL state -->
-
-(To be filled by the team)
+- Server data: fetched in server pages using backend helpers, for example `apps/web/app/[locale]/page.tsx` and `apps/web/app/[locale]/task-runs/page.tsx`.
+- URL state: filters and selected items use query parameters, for example `status` on the task-runs page and portfolio selection on the portfolios page.
+- Mutation state: Server Actions in `apps/web/app/[locale]/actions.ts` mutate backend data and redirect with query-string flash state.
+- Local component state: client buttons/forms use `useState`, `useTransition`, or pending flags for loading and user feedback.
 
 ---
 
 ## When to Use Global State
 
-<!-- Criteria for promoting state to global -->
-
-(To be filled by the team)
+There is no current global client store. Do not introduce one for isolated page behavior. Consider shared state only if multiple unrelated routes need the same live client-side data and existing server fetch/query state cannot cover it.
 
 ---
 
 ## Server State
 
-<!-- How server data is cached and synchronized -->
-
-(To be filled by the team)
+- Prefer server-rendered fetches for page data.
+- Use `cache: "no-store"` for task/market data that must reflect backend updates.
+- After client mutations, call `router.refresh()` or use Server Actions with `revalidatePath` and `redirect`.
 
 ---
 
 ## Common Mistakes
 
-<!-- State management mistakes your team has made -->
+- Do not keep backend copies in local state when a server refresh is simpler.
+- Do not conflate empty results with failed requests.
+- Do not introduce broad global state for a single form or button.
 
-(To be filled by the team)
+---
+
+## Examples
+
+- URL filter state: `apps/web/app/[locale]/task-runs/page.tsx`
+- Server Actions with redirects: `apps/web/app/[locale]/actions.ts`
+- Local pending state: `apps/web/components/generate-daily-report-button.tsx`
+- Retry interaction state: `apps/web/components/task-run-actions.tsx`

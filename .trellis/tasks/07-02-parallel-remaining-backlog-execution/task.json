@@ -1,0 +1,32 @@
+{
+  "id": "parallel-remaining-backlog-execution",
+  "name": "parallel-remaining-backlog-execution",
+  "title": "Parallel remaining backlog execution",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "何剑锋",
+  "assignee": "何剑锋",
+  "createdAt": "2026-07-02",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-02-bootstrap-backend-guidelines",
+    "07-02-bootstrap-frontend-guidelines",
+    "07-02-add-deferred-api-proxy-tests",
+    "07-02-design-ingestion-single-fetch",
+    "07-02-design-taskrun-quality-diagnostics"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

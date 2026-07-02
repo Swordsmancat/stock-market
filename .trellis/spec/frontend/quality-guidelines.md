@@ -6,46 +6,51 @@
 
 ## Overview
 
-<!--
-Document your project's quality standards here.
-
-Questions to answer:
-- What patterns are forbidden?
-- What linting rules do you enforce?
-- What are your testing requirements?
-- What code review standards apply?
--->
-
-(To be filled by the team)
-
----
-
-## Forbidden Patterns
-
-<!-- Patterns that should never be used and why -->
-
-(To be filled by the team)
+Frontend quality is enforced mainly through Vitest, Testing Library, and focused page/component tests. Tests should cover behavior that can regress, including request forwarding, user-visible messages, i18n strings, and empty/error state distinctions.
 
 ---
 
 ## Required Patterns
 
-<!-- Patterns that must always be used -->
+- Run `npm run test:web` after frontend behavior changes.
+- Update `apps/web/messages/en.json` and `apps/web/messages/zh.json` together for user-visible text.
+- Add or update colocated tests when page rendering behavior changes.
+- Use `cleanup()` and mock restoration when a test file renders multiple components/pages.
+- Prefer focused assertions on visible behavior and request calls over snapshot-like tests.
 
-(To be filled by the team)
+---
+
+## Forbidden Patterns
+
+- Do not add hardcoded UI text when a translation namespace already exists.
+- Do not silently render empty state on fetch failures.
+- Do not change backend API contracts from frontend tests.
+- Do not commit or push from implementation subagents.
 
 ---
 
 ## Testing Requirements
 
-<!-- What level of testing is expected -->
-
-(To be filled by the team)
+- Page tests should render the server component and assert important visible text, table rows, links, and state branches.
+- Client interaction tests should mock `fetch`, click controls, and assert loading/success/failure messages.
+- Route proxy tests should call exported route handlers directly and assert upstream URL, method, status, content type, and payload propagation.
+- Server Action tests should mock `backendFetch`, `redirect`, and `revalidatePath`, following `apps/web/app/[locale]/actions.test.ts`.
 
 ---
 
 ## Code Review Checklist
 
-<!-- What reviewers should check -->
+- Are user-visible strings localized in both languages?
+- Are loading, empty, and error states distinct where users need diagnostics?
+- Are mocks reset between tests?
+- Does the test verify behavior rather than implementation details only?
+- Are dynamic route casts or `any` uses existing debt, or did this change introduce new ones?
 
-(To be filled by the team)
+---
+
+## Examples
+
+- Page behavior tests: `apps/web/app/[locale]/task-runs/page.test.tsx`
+- Server Action tests: `apps/web/app/[locale]/actions.test.ts`
+- API proxy test: `apps/web/app/api/task-runs/[taskRunId]/retry/route.test.ts`
+- Vitest config and aliases: `vitest.config.ts`
