@@ -1,8 +1,9 @@
 import { AlertCircle, CheckCircle2 } from "lucide-react";
+import type { ReactNode } from "react";
 
 type FlashBannerProps = {
   variant: "success" | "error";
-  message: string;
+  message: ReactNode;
 };
 
 export function FlashBanner({ variant, message }: FlashBannerProps) {

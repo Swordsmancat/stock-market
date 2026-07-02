@@ -164,7 +164,7 @@ it("renders instrument detail with market, indicators, fundamentals, news, and r
   expect(screen.getByText("AAPL")).toBeInTheDocument();
   expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
   expect(screen.getByText("US")).toBeInTheDocument();
-  expect(screen.getByText("$102.00")).toBeInTheDocument();
+  expect(screen.getAllByText("$102.00").length).toBeGreaterThan(0);
   expect(screen.getByText("Daily Bar Summary")).toBeInTheDocument();
   expect(screen.getByText("Source: database")).toBeInTheDocument();
   expect(screen.getByText("Provider: yfinance")).toBeInTheDocument();

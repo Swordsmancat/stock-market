@@ -14,6 +14,43 @@ async function readJsonSafe(response: Response): Promise<Record<string, unknown>
   }
 }
 
+function readNestedString(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function extractTaskRunId(payload: Record<string, unknown>): string | null {
+  const taskRun = payload.task_run;
+  if (taskRun && typeof taskRun === "object") {
+    const taskRunId = readNestedString(taskRun as Record<string, unknown>, "id");
+    if (taskRunId !== null) {
+      return taskRunId;
+    }
+  }
+
+  return readNestedString(payload, "task_run_id");
+}
+
+function extractReportId(payload: Record<string, unknown>): string | null {
+  return readNestedString(payload, "id") ?? readNestedString(payload, "report_id");
+}
+
+function extractActionErrorMessage(payload: Record<string, unknown>, fallback: string): string {
+  const detail = payload.detail;
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+  if (detail && typeof detail === "object") {
+    const detailPayload = detail as Record<string, unknown>;
+    const detailReason = readNestedString(detailPayload, "no_data_reason") ?? readNestedString(detailPayload, "message");
+    if (detailReason !== null) {
+      return detailReason;
+    }
+  }
+
+  return readNestedString(payload, "error") ?? fallback;
+}
+
 function flashRedirect(locale: string, params: Record<string, string>) {
   const query = new URLSearchParams(params).toString();
   redirect(`/${locale}?${query}`);
@@ -39,17 +76,22 @@ export async function triggerIngestionAction(formData: FormData) {
   const body = await readJsonSafe(response);
 
   if (!response.ok) {
-    flashRedirect(locale, { ingest: "error", msg: "ingestion failed" });
+    flashRedirect(locale, { ingest: "error", msg: extractActionErrorMessage(body, "ingestion failed") });
   }
 
   if (body.status === "dispatched" && body.task_run && typeof body.task_run === "object") {
     const taskRun = body.task_run as Record<string, unknown>;
     const result = (taskRun.result_json ?? {}) as Record<string, unknown>;
-    flashRedirect(locale, {
+    const redirectParams: Record<string, string> = {
       ingest: "ok",
       bars: String(result.bar_count ?? 0),
       market: String(result.market ?? market),
-    });
+    };
+    const taskRunId = extractTaskRunId(body);
+    if (taskRunId !== null) {
+      redirectParams.task_run_id = taskRunId;
+    }
+    flashRedirect(locale, redirectParams);
   }
 
   flashRedirect(locale, {
@@ -96,21 +138,28 @@ export async function refreshAnalysisAction(formData: FormData) {
     const ingestResponse = await backendFetch(`/ingestion/snapshot?${ingestParams.toString()}`, {
       method: "POST",
     });
+    const ingestBody = await readJsonSafe(ingestResponse);
     if (!ingestResponse.ok) {
-      redirectWithFlash({ analysis: "error", msg: "ingestion failed" });
+      redirectWithFlash({ analysis: "error", msg: extractActionErrorMessage(ingestBody, "ingestion failed") });
     }
     const reportResponse = await backendFetch(
       `/reports/${encodeURIComponent(symbol)}/stock?start=${start}&end=${end}`,
     );
     if (!reportResponse.ok) {
-      redirectWithFlash({ analysis: "error", msg: "report failed" });
+      const reportBody = await readJsonSafe(reportResponse);
+      redirectWithFlash({ analysis: "error", msg: extractActionErrorMessage(reportBody, "report failed") });
     }
-    redirectWithFlash({ analysis: "ok", symbol });
+    const redirectParams: Record<string, string> = { analysis: "ok", symbol };
+    const taskRunId = extractTaskRunId(ingestBody);
+    if (taskRunId !== null) {
+      redirectParams.task_run_id = taskRunId;
+    }
+    redirectWithFlash(redirectParams);
   }
 
   const body = await readJsonSafe(response);
   if (!response.ok) {
-    redirectWithFlash({ analysis: "error", msg: String(body.detail ?? "refresh failed") });
+    redirectWithFlash({ analysis: "error", msg: extractActionErrorMessage(body, "refresh failed") });
   }
 
   if (body.status === "dispatched" && body.task_run && typeof body.task_run === "object") {
@@ -126,7 +175,12 @@ export async function refreshAnalysisAction(formData: FormData) {
   if (returnTo) {
     revalidatePath(returnTo);
   }
-  redirectWithFlash({ analysis: "ok", symbol: String(body.symbol ?? symbol) });
+  const redirectParams: Record<string, string> = { analysis: "ok", symbol: String(body.symbol ?? symbol) };
+  const taskRunId = extractTaskRunId(body);
+  if (taskRunId !== null) {
+    redirectParams.task_run_id = taskRunId;
+  }
+  redirectWithFlash(redirectParams);
 }
 
 export async function generateDailyReportAction(formData: FormData) {
@@ -141,12 +195,23 @@ export async function generateDailyReportAction(formData: FormData) {
     `/reports/${encodeURIComponent(symbol)}/daily/generate?${params.toString()}`,
     { method: "POST" },
   );
+  const body = await readJsonSafe(response);
 
   revalidatePath(returnTo);
   if (!response.ok) {
-    pageRedirect(returnTo, { report: "error" });
+    pageRedirect(returnTo, { report: "error", msg: extractActionErrorMessage(body, "report failed") });
   }
-  pageRedirect(returnTo, { report: "ok" });
+
+  const redirectParams: Record<string, string> = { report: "ok" };
+  const reportId = extractReportId(body);
+  const taskRunId = extractTaskRunId(body);
+  if (reportId !== null) {
+    redirectParams.report_id = reportId;
+  }
+  if (taskRunId !== null) {
+    redirectParams.task_run_id = taskRunId;
+  }
+  pageRedirect(returnTo, redirectParams);
 }
 
 export async function savePlatformSettingsAction(formData: FormData) {

@@ -10,6 +10,9 @@ const translationMessages: Record<string, string> = {
   generating: "Generating...",
   generateSuccess: "Report generation started.",
   generateFailed: "Could not generate report.",
+  generateFailedDetail: "Could not generate report: {reason}.",
+  viewGeneratedReport: "View generated report",
+  viewTaskRun: "View task run",
 };
 
 vi.mock("next/navigation", () => ({
@@ -19,7 +22,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => translationMessages[key] ?? key,
+  useTranslations: () => (key: string, values?: Record<string, string>) => {
+    const template = translationMessages[key] ?? key;
+    if (!values) {
+      return template;
+    }
+    return Object.entries(values).reduce(
+      (message, [name, value]) => message.replace(`{${name}}`, value),
+      template,
+    );
+  },
 }));
 
 import { GenerateDailyReportButton } from "./generate-daily-report-button";
@@ -70,13 +82,15 @@ it("posts to the encoded report generation proxy and refreshes after success", a
   );
 
   deferredResponse.resolve(
-    new Response(JSON.stringify({ status: "queued" }), {
+    new Response(JSON.stringify({ id: "report-123", task_run_id: "task-123", status: "stored" }), {
       status: 202,
       headers: { "content-type": "application/json" },
     }),
   );
 
   expect(await screen.findByText("Report generation started.")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "View generated report" })).toHaveAttribute("href", "/reports/report-123");
+  expect(screen.getByRole("link", { name: "View task run" })).toHaveAttribute("href", "/task-runs/task-123");
   expect(screen.getByRole("button", { name: "Generate report" })).not.toBeDisabled();
   expect(routerRefreshMock).toHaveBeenCalledOnce();
 });
@@ -99,7 +113,7 @@ it("shows a failure message and does not refresh after failed generation", async
 
   fireEvent.click(screen.getByRole("button", { name: "Generate report" }));
 
-  expect(await screen.findByText("Could not generate report.")).toBeInTheDocument();
+  expect(await screen.findByText("Could not generate report: provider unavailable.")).toBeInTheDocument();
   await waitFor(() => {
     expect(screen.getByRole("button", { name: "Generate report" })).not.toBeDisabled();
   });

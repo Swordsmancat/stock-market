@@ -61,6 +61,7 @@
     "viewAlerts": "View alert history",
     "viewPortfolios": "Manage portfolios",
     "viewTaskRuns": "View task runs",
+    "viewTaskRun": "View task run",
     "viewAllReports": "View all reports",
     "dailyReport": "Daily Report ({symbol})",
     "dailyReportDesc": "Latest persisted daily analysis report.",
@@ -71,8 +72,10 @@
     "noInstrumentsHint": "Configure instruments in the backend or run market data ingestion.",
     "ingestSuccess": "Ingested {count} bars for {market}.",
     "ingestFailed": "Market data ingestion failed.",
+    "ingestFailedDetail": "Market data ingestion failed: {reason}.",
     "analysisSuccess": "Analysis refreshed for {symbol}.",
-    "analysisFailed": "Analysis refresh failed."
+    "analysisFailed": "Analysis refresh failed.",
+    "analysisFailedDetail": "Analysis refresh failed: {reason}."
   },
   "Breadcrumbs": {
     "home": "Home"
@@ -143,12 +146,15 @@
     "watchlistFailed": "Failed to add to watchlist.",
     "watchlistFailedDetail": "Failed to add to watchlist: {reason}.",
     "viewReports": "Stored Reports",
+    "viewTaskRun": "View task run",
+    "viewGeneratedReport": "View generated report",
     "refreshAnalysis": "Refresh Analysis",
     "generateReport": "Generate Daily Report",
     "analysisSuccess": "Analysis refreshed for {symbol}.",
     "analysisFailedDetail": "Analysis refresh failed: {reason}.",
     "reportSuccess": "Daily report generated.",
     "reportFailed": "Failed to generate daily report.",
+    "reportFailedDetail": "Failed to generate daily report: {reason}.",
     "dailyBarSummary": "Daily Bar Summary",
     "dailyBarSummaryDesc": "Latest daily-bar source, provider, freshness, and chart coverage.",
     "latestClose": "Latest close",

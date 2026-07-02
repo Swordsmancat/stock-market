@@ -61,6 +61,7 @@
     "viewAlerts": "查看告警历史",
     "viewPortfolios": "管理组合",
     "viewTaskRuns": "查看任务详情",
+    "viewTaskRun": "查看任务",
     "viewAllReports": "查看全部报告",
     "dailyReport": "每日报告 ({symbol})",
     "dailyReportDesc": "最新持久化的每日分析报告。",
@@ -71,8 +72,10 @@
     "noInstrumentsHint": "请在后端配置标的或运行行情采集任务。",
     "ingestSuccess": "已为 {market} 采集 {count} 条行情。",
     "ingestFailed": "行情采集失败。",
+    "ingestFailedDetail": "行情采集失败：{reason}。",
     "analysisSuccess": "已刷新 {symbol} 的分析。",
-    "analysisFailed": "分析刷新失败。"
+    "analysisFailed": "分析刷新失败。",
+    "analysisFailedDetail": "分析刷新失败：{reason}。"
   },
   "Breadcrumbs": {
     "home": "首页"
@@ -143,12 +146,15 @@
     "watchlistFailed": "加入关注列表失败。",
     "watchlistFailedDetail": "加入关注列表失败：{reason}。",
     "viewReports": "历史报告",
+    "viewTaskRun": "查看任务",
+    "viewGeneratedReport": "查看生成报告",
     "refreshAnalysis": "刷新分析",
     "generateReport": "生成每日报告",
     "analysisSuccess": "已刷新 {symbol} 的分析。",
     "analysisFailedDetail": "分析刷新失败：{reason}。",
     "reportSuccess": "每日报告已生成。",
     "reportFailed": "报告生成失败。",
+    "reportFailedDetail": "报告生成失败：{reason}。",
     "dailyBarSummary": "日线摘要",
     "dailyBarSummaryDesc": "最新日线的来源、数据源、新鲜度和图表覆盖范围。",
     "latestClose": "最新收盘价",
@@ -364,6 +370,9 @@
     "generating": "生成中...",
     "generateSuccess": "每日报告已生成。",
     "generateFailed": "报告生成失败。",
+    "generateFailedDetail": "报告生成失败：{reason}。",
+    "viewGeneratedReport": "查看生成报告",
+    "viewTaskRun": "查看任务",
     "viewInstrument": "查看标的详情"
   },
   "Alerts": {

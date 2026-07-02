@@ -163,6 +163,7 @@ export default async function HomePage({
     market?: string;
     symbol?: string;
     msg?: string;
+    task_run_id?: string;
   }>;
 }) {
   const { locale } = await params;
@@ -271,23 +272,47 @@ export default async function HomePage({
       {flash.ingest === "ok" ? (
         <FlashBanner
           variant="success"
-          message={t("ingestSuccess", {
-            market: flash.market ?? primaryInstrument.market,
-            count: Number(flash.bars ?? 0),
-          })}
+          message={
+            <>
+              {t("ingestSuccess", {
+                market: flash.market ?? primaryInstrument.market,
+                count: Number(flash.bars ?? 0),
+              })}
+              {flash.task_run_id ? (
+                <>
+                  {" "}
+                  <Link href={`/task-runs/${flash.task_run_id}` as any} className="font-medium underline">
+                    {t("viewTaskRun")}
+                  </Link>
+                </>
+              ) : null}
+            </>
+          }
         />
       ) : null}
       {flash.ingest === "error" ? (
-        <FlashBanner variant="error" message={t("ingestFailed")} />
+        <FlashBanner variant="error" message={flash.msg ? t("ingestFailedDetail", { reason: flash.msg }) : t("ingestFailed")} />
       ) : null}
       {flash.analysis === "ok" ? (
         <FlashBanner
           variant="success"
-          message={t("analysisSuccess", { symbol: flash.symbol ?? primaryInstrument.symbol })}
+          message={
+            <>
+              {t("analysisSuccess", { symbol: flash.symbol ?? primaryInstrument.symbol })}
+              {flash.task_run_id ? (
+                <>
+                  {" "}
+                  <Link href={`/task-runs/${flash.task_run_id}` as any} className="font-medium underline">
+                    {t("viewTaskRun")}
+                  </Link>
+                </>
+              ) : null}
+            </>
+          }
         />
       ) : null}
       {flash.analysis === "error" ? (
-        <FlashBanner variant="error" message={t("analysisFailed")} />
+        <FlashBanner variant="error" message={flash.msg ? t("analysisFailedDetail", { reason: flash.msg }) : t("analysisFailed")} />
       ) : null}
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

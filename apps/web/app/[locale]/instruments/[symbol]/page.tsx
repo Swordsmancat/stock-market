@@ -239,10 +239,19 @@ export default async function InstrumentDetailPage({
   searchParams = Promise.resolve({}),
 }: {
   params: Promise<{ symbol: string; locale: string }>;
-  searchParams?: Promise<{ range?: string; watchlist?: string; reason?: string; analysis?: string; report?: string; msg?: string }>;
+  searchParams?: Promise<{
+    range?: string;
+    watchlist?: string;
+    reason?: string;
+    analysis?: string;
+    report?: string;
+    msg?: string;
+    report_id?: string;
+    task_run_id?: string;
+  }>;
 }) {
   const { symbol, locale } = await params;
-  const { range, watchlist, reason, analysis: analysisStatus, report, msg } = await searchParams;
+  const { range, watchlist, reason, analysis: analysisStatus, report, msg, report_id: reportId, task_run_id: taskRunId } = await searchParams;
   const decodedSymbol = decodeURIComponent(symbol).toUpperCase();
   const selectedRange = parseInstrumentRange(range);
   const dateRange = getInstrumentDateRange(selectedRange);
@@ -323,13 +332,55 @@ export default async function InstrumentDetailPage({
         <FlashBanner variant="error" message={t("watchlistFailedDetail", { reason: reason ?? "unknown" })} />
       ) : null}
       {analysisStatus === "ok" ? (
-        <FlashBanner variant="success" message={t("analysisSuccess", { symbol: decodedSymbol })} />
+        <FlashBanner
+          variant="success"
+          message={
+            <>
+              {t("analysisSuccess", { symbol: decodedSymbol })}
+              {taskRunId ? (
+                <>
+                  {" "}
+                  <Link href={`/task-runs/${taskRunId}` as any} className="font-medium underline">
+                    {t("viewTaskRun")}
+                  </Link>
+                </>
+              ) : null}
+            </>
+          }
+        />
       ) : null}
       {analysisStatus === "error" ? (
         <FlashBanner variant="error" message={t("analysisFailedDetail", { reason: msg ?? "unknown" })} />
       ) : null}
-      {report === "ok" ? <FlashBanner variant="success" message={t("reportSuccess")} /> : null}
-      {report === "error" ? <FlashBanner variant="error" message={t("reportFailed")} /> : null}
+      {report === "ok" ? (
+        <FlashBanner
+          variant="success"
+          message={
+            <>
+              {t("reportSuccess")}
+              {reportId ? (
+                <>
+                  {" "}
+                  <Link href={`/reports/${reportId}` as any} className="font-medium underline">
+                    {t("viewGeneratedReport")}
+                  </Link>
+                </>
+              ) : null}
+              {taskRunId ? (
+                <>
+                  {" "}
+                  <Link href={`/task-runs/${taskRunId}` as any} className="font-medium underline">
+                    {t("viewTaskRun")}
+                  </Link>
+                </>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
+      {report === "error" ? (
+        <FlashBanner variant="error" message={msg ? t("reportFailedDetail", { reason: msg }) : t("reportFailed")} />
+      ) : null}
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
