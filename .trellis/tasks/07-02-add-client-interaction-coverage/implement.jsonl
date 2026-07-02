@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Load frontend App Router, component, i18n, and testing conventions."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Client component interaction test should follow current component patterns."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Client interaction tests should mock fetch, click controls, and assert visible success/failure behavior."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Test mocks and route URLs should remain type-safe and maintainable."}
