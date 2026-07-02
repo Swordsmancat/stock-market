@@ -30,3 +30,11 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Local AI agent/tool metadata
+.agents/
+.claude/
+.codex/
+.cursor/
+.trellis/
+AGENTS.md
