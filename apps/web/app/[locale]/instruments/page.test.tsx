@@ -1,0 +1,164 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/backend-api", () => ({
+  backendFetch: (path: string, init?: RequestInit) => globalThis.fetch(path, init),
+  getBackendApiUrl: () => "http://127.0.0.1:8000",
+}));
+
+vi.mock("@/lib/platform-settings-store", () => ({
+  getPlatformSettings: async () => ({
+    market_data_provider: "yfinance",
+    llm_provider: "mock",
+    llm_api_key: "",
+    llm_api_base: "https://api.openai.com/v1",
+    akshare_enabled: false,
+    tushare_token: "",
+    llm_api_key_configured: false,
+    tushare_token_configured: false,
+    market_data_provider_capabilities: [],
+  }),
+}));
+
+import InstrumentsPage from "./page";
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+it("renders instruments with latest daily-bar source and freshness", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-01-22T00:00:00Z"));
+
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/instruments")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            source: "database",
+            items: [
+              {
+                symbol: "AAPL",
+                name: "Apple Inc.",
+                market: "US",
+                exchange: "NASDAQ",
+                asset_type: "stock",
+                currency: "USD",
+                source: "database",
+              },
+              {
+                symbol: "MSFT",
+                name: "Microsoft Corp.",
+                market: "US",
+                exchange: "NASDAQ",
+                asset_type: "stock",
+                currency: "USD",
+                source: "database",
+              },
+            ],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/AAPL/latest")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "AAPL",
+            source: "database",
+            provider: "yfinance",
+            effective_provider: "yfinance",
+            status: "ok",
+            item: {
+              timestamp: "2026-01-21T00:00:00+00:00",
+              close: 102.15,
+            },
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/MSFT/latest")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "MSFT",
+            source: "yfinance",
+            provider: "yfinance",
+            effective_provider: "yfinance",
+            status: "no_data",
+            no_data_reason: "No daily bars were available for the requested symbol/date range.",
+            item: null,
+          }),
+        ),
+      );
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  render(
+    await InstrumentsPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
+
+  expect(screen.getByRole("heading", { name: "Instruments" })).toBeInTheDocument();
+  expect(screen.getByText("Instrument source: database")).toBeInTheDocument();
+  expect(screen.getByText("Active provider: yfinance")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "AAPL" })).toHaveAttribute("href", "/instruments/AAPL");
+  expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+  expect(screen.getByText("$102.15")).toBeInTheDocument();
+  expect(screen.getByText("Source: database")).toBeInTheDocument();
+  expect(screen.getAllByText("Provider: yfinance").length).toBeGreaterThan(0);
+  expect(screen.getByText("Fresh")).toBeInTheDocument();
+  expect(screen.getByText("Microsoft Corp.")).toBeInTheDocument();
+  expect(screen.getByText("No latest daily bar.")).toBeInTheDocument();
+  expect(screen.getByText("No data")).toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: /Reports/ })[0]).toHaveAttribute("href", "/reports?symbol=AAPL");
+});
+
+it("renders an actionable empty state when the instrument list is empty", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/instruments")) {
+      return Promise.resolve(new Response(JSON.stringify({ source: "seed", items: [] })));
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  render(
+    await InstrumentsPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
+
+  expect(screen.getByText("No instruments yet.")).toBeInTheDocument();
+  expect(
+    screen.getByText("Configure provider settings or run single-symbol daily-bar ingestion to populate this page."),
+  ).toBeInTheDocument();
+});
+
+it("renders an error state when instruments cannot be loaded", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/instruments")) {
+      return Promise.resolve(new Response("", { status: 503 }));
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  render(
+    await InstrumentsPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
+
+  expect(screen.getByText("Could not load instruments.")).toBeInTheDocument();
+  expect(screen.getByText("Check that the API is running, then refresh this page.")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Provider settings/ })).toHaveAttribute("href", "/settings");
+});

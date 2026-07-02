@@ -1,13 +1,14 @@
 "use client";
 
 import { Link, usePathname } from "@/src/i18n/routing";
-import { Activity, BarChart3, Bell, Home, List, PieChart, Settings } from "lucide-react";
+import { Activity, BarChart3, Bell, Home, List, PieChart, Settings, TrendingUp } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { titleKey: "dashboard", href: "/", icon: Home },
+  { titleKey: "instruments", href: "/instruments", icon: TrendingUp },
   { titleKey: "watchlist", href: "/watchlist", icon: List },
   { titleKey: "portfolios", href: "/portfolios", icon: PieChart },
   { titleKey: "reports", href: "/reports", icon: BarChart3 },
@@ -21,7 +22,7 @@ export function MobileNavigation() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden">
-      <ul className="grid grid-cols-6">
+      <ul className="grid grid-cols-7">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||

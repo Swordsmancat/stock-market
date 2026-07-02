@@ -1,7 +1,7 @@
 "use client"
 
 import { Link, usePathname } from "@/src/i18n/routing"
-import { Activity, BarChart3, Bell, Home, List, PieChart, Settings } from "lucide-react"
+import { Activity, BarChart3, Bell, Home, List, PieChart, Settings, TrendingUp } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
@@ -11,6 +11,11 @@ const navItems = [
     titleKey: "dashboard",
     href: "/",
     icon: Home,
+  },
+  {
+    titleKey: "instruments",
+    href: "/instruments",
+    icon: TrendingUp,
   },
   {
     titleKey: "watchlist",
