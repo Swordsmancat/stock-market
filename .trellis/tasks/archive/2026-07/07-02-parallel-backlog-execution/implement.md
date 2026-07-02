@@ -49,10 +49,10 @@ npm run test:web
 
 ### Candidate Lane E: API proxy/client interaction tests
 
-Status: deferred to a later task to avoid overlapping frontend test and component files with Lane D in the same implementation wave.
+Status: proxy-test scope completed by `07-02-add-deferred-api-proxy-tests`. Additional client form or polling behavior coverage remains a future testing backlog item.
 
-- [ ] Add tests for one or two high-value API route proxies.
-- [ ] Add tests for one high-value client form or polling behavior.
+- [x] Add tests for one high-value API route proxy.
+- [ ] Add tests for one high-value client form or polling behavior. Deferred to future proxy/client interaction coverage.
 
 Suggested validation:
 
@@ -75,6 +75,6 @@ npm run test:web
 
 ## Phase 5: Commit Policy
 
-- [ ] Ask the user before creating any commit.
-- [ ] Commit only reviewed files for the approved scope.
-- [ ] Do not push unless the user explicitly requests it.
+- [x] Ask the user before creating any commit.
+- [x] Commit only reviewed files for the approved scope.
+- [x] Do not push unless the user explicitly requests it.
