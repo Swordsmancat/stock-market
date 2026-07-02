@@ -21,7 +21,7 @@ This slice locks down low-risk proxy/local route contracts before broader produc
 - [x] Recent alert triggers route proxy success and failure behavior is covered.
 - [x] Settings route GET/PUT behavior is covered with mocked store calls.
 - [x] Focused web route tests pass.
-- [ ] Task is committed, pushed, archived, and the next backlog item is inspected.
+- [x] Task is committed, pushed, archived, and the next backlog item is inspected.
 
 ## Notes
 
