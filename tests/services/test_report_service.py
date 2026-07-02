@@ -11,6 +11,7 @@ from packages.services.indicators import calculate_and_store_daily_indicators
 from packages.services.ingestion import ingest_mock_market_snapshot
 from packages.services.news import ingest_mock_news
 from packages.services.reports import (
+    ReportDataUnavailableError,
     generate_and_store_daily_report,
     generate_stock_report_payload,
     get_latest_daily_report_payload,
@@ -37,6 +38,27 @@ def test_generate_stock_report_payload_uses_market_data_citation():
     assert "PE 28.40" in payload["content_markdown"]
     assert "bars_1d:AAPL:2026-01-15" in payload["citations"]
     assert "fundamental_metrics:AAPL:2026-01-15" in payload["citations"]
+
+
+def test_generate_stock_report_payload_raises_typed_error_when_bars_are_empty():
+    try:
+        generate_stock_report_payload(
+            "AAPL",
+            date(2026, 1, 2),
+            date(2026, 1, 1),
+            provider_name="mock",
+        )
+    except ReportDataUnavailableError as error:
+        assert error.category == "no_market_data"
+        assert error.http_status_code == 422
+        assert error.symbol == "AAPL"
+        assert error.start == date(2026, 1, 2)
+        assert error.end == date(2026, 1, 1)
+        assert error.provider == "mock"
+        assert error.no_data_reason == "No daily bars were available for the requested symbol/date range."
+        assert "token" not in str(error).lower()
+    else:
+        raise AssertionError("Expected ReportDataUnavailableError for empty market data")
 
 
 def test_generate_stock_report_payload_aggregates_database_indicators_and_news():

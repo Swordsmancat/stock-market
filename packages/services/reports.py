@@ -25,6 +25,51 @@ def _serialize_generated_report(report: GeneratedReport) -> dict[str, object]:
     }
 
 
+class ReportDataUnavailableError(RuntimeError):
+    category = "no_market_data"
+    http_status_code = 422
+
+    def __init__(
+        self,
+        *,
+        symbol: str,
+        start: date,
+        end: date,
+        source: str,
+        provider: str | None,
+        requested_provider: str | None,
+        effective_provider: str | None,
+        no_data_reason: str | None,
+    ) -> None:
+        self.symbol = symbol
+        self.start = start
+        self.end = end
+        self.source = source
+        self.provider = provider
+        self.requested_provider = requested_provider
+        self.effective_provider = effective_provider
+        self.no_data_reason = no_data_reason or "No market data is available for report generation."
+        self.category = self.__class__.category
+        self.http_status_code = self.__class__.http_status_code
+        super().__init__(
+            f"Market data is unavailable for report generation: {symbol} {start.isoformat()}..{end.isoformat()}."
+        )
+
+    def to_http_detail(self) -> dict[str, object]:
+        return {
+            "message": str(self),
+            "category": self.category,
+            "symbol": self.symbol,
+            "start": self.start.isoformat(),
+            "end": self.end.isoformat(),
+            "source": self.source,
+            "provider": self.provider,
+            "requested_provider": self.requested_provider,
+            "effective_provider": self.effective_provider,
+            "no_data_reason": self.no_data_reason,
+        }
+
+
 def list_reports_payload(
     session: Session,
     symbol: str | None = None,
@@ -172,6 +217,23 @@ def generate_stock_report_payload(
         provider_name=provider_name,
     )
     items = bars_payload["items"]
+    if not items:
+        raise ReportDataUnavailableError(
+            symbol=symbol,
+            start=start,
+            end=end,
+            source=str(bars_payload.get("source", "unknown")),
+            provider=str(bars_payload.get("provider")) if bars_payload.get("provider") is not None else None,
+            requested_provider=str(bars_payload.get("requested_provider"))
+            if bars_payload.get("requested_provider") is not None
+            else None,
+            effective_provider=str(bars_payload.get("effective_provider"))
+            if bars_payload.get("effective_provider") is not None
+            else None,
+            no_data_reason=str(bars_payload.get("no_data_reason"))
+            if bars_payload.get("no_data_reason") is not None
+            else None,
+        )
     first_bar = items[0]
     latest_bar = items[-1]
     change_pct = ((latest_bar["close"] - first_bar["close"]) / first_bar["close"]) * 100

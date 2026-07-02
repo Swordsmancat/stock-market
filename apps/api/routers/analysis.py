@@ -1,15 +1,20 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from packages.services.analysis import refresh_stock_analysis
+from packages.services.reports import ReportDataUnavailableError
 from packages.services.task_runs import enqueue_task_run
 from packages.shared.database import get_session
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 TASK_NAME = "reports.refresh_daily_stock_analysis"
+
+
+def _raise_report_data_unavailable(error: ReportDataUnavailableError) -> None:
+    raise HTTPException(status_code=error.http_status_code, detail=error.to_http_detail()) from error
 
 
 @router.post("/refresh-sync")
@@ -22,15 +27,18 @@ def refresh_analysis_sync(
     provider: str = Query(default="mock"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return refresh_stock_analysis(
-        symbol=symbol,
-        market=market,
-        start=start,
-        end=end,
-        session=session,
-        ma_window=ma_window,
-        provider_name=provider,
-    )
+    try:
+        return refresh_stock_analysis(
+            symbol=symbol,
+            market=market,
+            start=start,
+            end=end,
+            session=session,
+            ma_window=ma_window,
+            provider_name=provider,
+        )
+    except ReportDataUnavailableError as error:
+        _raise_report_data_unavailable(error)
 
 
 @router.post("/refresh")

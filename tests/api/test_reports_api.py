@@ -51,6 +51,48 @@ def test_generate_stock_report_returns_markdown_with_citations():
     assert "本报告仅基于平台内可验证数据生成" in payload["content_markdown"]
 
 
+def test_generate_stock_report_returns_actionable_no_data_error():
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/reports/AAPL/stock",
+            params={"start": "2026-01-02", "end": "2026-01-01", "provider": "mock"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]["category"] == "no_market_data"
+    assert payload["detail"]["symbol"] == "AAPL"
+    assert payload["detail"]["provider"] == "mock"
+    assert payload["detail"]["no_data_reason"] == "No daily bars were available for the requested symbol/date range."
+
+
+def test_daily_report_generate_returns_actionable_no_data_error():
+    session = make_session()
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/reports/AAPL/daily/generate",
+            params={"start": "2026-01-02", "end": "2026-01-01", "provider": "mock"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]["category"] == "no_market_data"
+    assert payload["detail"]["symbol"] == "AAPL"
+    assert payload["detail"]["provider"] == "mock"
+
+
 def test_daily_report_generate_then_latest_returns_persisted_report():
     session = make_session()
     ingest_mock_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 20), session=session)

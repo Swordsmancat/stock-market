@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from packages.services.reports import (
+    ReportDataUnavailableError,
     generate_and_store_daily_report,
     generate_stock_report_payload,
     get_daily_report_history_payload,
@@ -14,6 +15,10 @@ from packages.services.reports import (
 from packages.shared.database import get_session
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+def _raise_report_data_unavailable(error: ReportDataUnavailableError) -> None:
+    raise HTTPException(status_code=error.http_status_code, detail=error.to_http_detail()) from error
 
 
 @router.get("")
@@ -55,13 +60,16 @@ def generate_daily_report(
     provider: str = Query(default="mock"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return generate_and_store_daily_report(
-        symbol,
-        start,
-        end,
-        session=session,
-        provider_name=provider,
-    )
+    try:
+        return generate_and_store_daily_report(
+            symbol,
+            start,
+            end,
+            session=session,
+            provider_name=provider,
+        )
+    except ReportDataUnavailableError as error:
+        _raise_report_data_unavailable(error)
 
 
 @router.get("/{symbol}/daily/latest")
@@ -89,10 +97,13 @@ def generate_stock_report(
     provider: str = Query(default="mock"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    return generate_stock_report_payload(
-        symbol,
-        start,
-        end,
-        session=session,
-        provider_name=provider,
-    )
+    try:
+        return generate_stock_report_payload(
+            symbol,
+            start,
+            end,
+            session=session,
+            provider_name=provider,
+        )
+    except ReportDataUnavailableError as error:
+        _raise_report_data_unavailable(error)

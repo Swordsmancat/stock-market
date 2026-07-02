@@ -21,6 +21,7 @@ def _provider() -> MockProvider:
 
 
 DEFAULT_RSI_WINDOW = 14
+NO_DAILY_BARS_REASON = "No daily bars were available for the requested symbol/date range."
 
 
 class MarketDataProviderError(RuntimeError):
@@ -176,6 +177,18 @@ def _serialize_provider_bars(
         raise MarketDataProviderPayloadError(provider_name, operation, error) from error
 
 
+def _build_data_availability_metadata(items: list[object]) -> dict[str, str | None]:
+    if items:
+        return {
+            "status": "ok",
+            "no_data_reason": None,
+        }
+    return {
+        "status": "no_data",
+        "no_data_reason": NO_DAILY_BARS_REASON,
+    }
+
+
 def serialize_daily_bar(bar: DailyBar) -> dict[str, float | str | None]:
     return {
         "timestamp": bar.trade_date.isoformat(),
@@ -222,6 +235,7 @@ def get_bars_payload(
         except SQLAlchemyError:
             db_bars = []
         if db_bars:
+            serialized_db_bars = [serialize_daily_bar(bar) for bar in db_bars]
             return {
                 "symbol": symbol,
                 "timeframe": timeframe,
@@ -229,7 +243,8 @@ def get_bars_payload(
                 "provider": effective_provider_name,
                 "requested_provider": requested_provider_name,
                 "effective_provider": effective_provider_name,
-                "items": [serialize_daily_bar(bar) for bar in db_bars],
+                "items": serialized_db_bars,
+                **_build_data_availability_metadata(serialized_db_bars),
             }
 
     provider = get_provider(effective_provider_name)
@@ -241,6 +256,11 @@ def get_bars_payload(
         start,
         end,
     )
+    serialized_provider_bars = _serialize_provider_bars(
+        bars,
+        effective_provider_name,
+        "serializing bars",
+    )
     return {
         "symbol": symbol,
         "timeframe": timeframe,
@@ -248,11 +268,8 @@ def get_bars_payload(
         "provider": effective_provider_name,
         "requested_provider": requested_provider_name,
         "effective_provider": effective_provider_name,
-        "items": _serialize_provider_bars(
-            bars,
-            effective_provider_name,
-            "serializing bars",
-        ),
+        "items": serialized_provider_bars,
+        **_build_data_availability_metadata(serialized_provider_bars),
     }
 
 
@@ -284,6 +301,8 @@ def get_indicator_payload(
         "provider": bars_payload.get("provider"),
         "requested_provider": bars_payload.get("requested_provider"),
         "effective_provider": bars_payload.get("effective_provider"),
+        "status": bars_payload.get("status"),
+        "no_data_reason": bars_payload.get("no_data_reason"),
         "indicators": {
             "ma": latest_ma,
             "rsi": latest_rsi,
@@ -310,6 +329,7 @@ def get_latest_bar_payload(
         except SQLAlchemyError:
             db_bar = None
         if db_bar is not None:
+            serialized_db_bar = serialize_daily_bar(db_bar)
             return {
                 "symbol": symbol,
                 "timeframe": "1d",
@@ -317,7 +337,9 @@ def get_latest_bar_payload(
                 "provider": effective_provider_name,
                 "requested_provider": requested_provider_name,
                 "effective_provider": effective_provider_name,
-                "item": serialize_daily_bar(db_bar),
+                "item": serialized_db_bar,
+                "status": "ok",
+                "no_data_reason": None,
             }
 
     end = date.today()
@@ -331,6 +353,7 @@ def get_latest_bar_payload(
         provider_name=provider_name,
     )
     items = fallback["items"]
+    latest_item = items[-1] if items else None
     return {
         "symbol": symbol,
         "timeframe": "1d",
@@ -338,7 +361,9 @@ def get_latest_bar_payload(
         "provider": fallback.get("provider"),
         "requested_provider": fallback.get("requested_provider"),
         "effective_provider": fallback.get("effective_provider"),
-        "item": items[-1] if items else None,
+        "item": latest_item,
+        "status": "ok" if latest_item is not None else "no_data",
+        "no_data_reason": None if latest_item is not None else fallback.get("no_data_reason", NO_DAILY_BARS_REASON),
     }
 
 
@@ -361,6 +386,8 @@ def get_latest_bars_batch_payload(
                 "provider": payload.get("provider"),
                 "requested_provider": payload.get("requested_provider"),
                 "effective_provider": payload.get("effective_provider"),
+                "status": payload.get("status"),
+                "no_data_reason": payload.get("no_data_reason"),
                 "item": payload["item"],
             }
         )

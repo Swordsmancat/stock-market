@@ -62,6 +62,20 @@ def test_get_bars_payload_uses_platform_default_when_provider_is_omitted(monkeyp
     assert payload["source"] == "mock"
 
 
+def test_get_bars_payload_marks_empty_provider_results_as_no_data():
+    payload = get_bars_payload(
+        "AAPL",
+        "1d",
+        date(2026, 1, 2),
+        date(2026, 1, 1),
+        provider_name="mock",
+    )
+
+    assert payload["items"] == []
+    assert payload["status"] == "no_data"
+    assert payload["no_data_reason"] == "No daily bars were available for the requested symbol/date range."
+
+
 def test_get_indicator_payload_returns_latest_values():
     payload = get_indicator_payload(
         "AAPL",

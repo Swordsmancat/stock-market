@@ -69,3 +69,32 @@ def test_analysis_refresh_dispatches_task_run_and_stores_report(monkeypatch):
     latest = latest_response.json()
     assert latest["symbol"] == "AAPL"
     assert latest["as_of"] == "2026-01-20"
+
+
+def test_analysis_refresh_sync_returns_actionable_no_data_error():
+    session = make_session()
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/analysis/refresh-sync",
+            params={
+                "symbol": "AAPL",
+                "market": "US",
+                "start": "2026-01-02",
+                "end": "2026-01-01",
+                "provider": "mock",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]["category"] == "no_market_data"
+    assert payload["detail"]["symbol"] == "AAPL"
+    assert payload["detail"]["provider"] == "mock"
