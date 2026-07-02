@@ -55,6 +55,61 @@ def test_missing_weekday_is_reported():
     assert result.status == "WARN"
 
 
+def test_expected_trade_dates_can_skip_weekday_holidays():
+    bars = [
+        _daily_bar(date(2026, 1, 5)),
+        _daily_bar(date(2026, 1, 7)),
+    ]
+
+    result = check_daily_bar_quality(
+        bars,
+        expected_trade_dates=[date(2026, 1, 5), date(2026, 1, 7)],
+    )
+
+    assert result.missing_dates == []
+    assert result.status == "OK"
+
+
+def test_expected_trade_dates_report_missing_sessions():
+    bars = [
+        _daily_bar(date(2026, 1, 5)),
+        _daily_bar(date(2026, 1, 8)),
+    ]
+
+    result = check_daily_bar_quality(
+        bars,
+        expected_trade_dates=[
+            date(2026, 1, 5),
+            date(2026, 1, 6),
+            date(2026, 1, 8),
+        ],
+    )
+
+    assert result.missing_dates == ["2026-01-06"]
+    assert result.status == "WARN"
+
+
+def test_expected_trade_dates_parse_mixed_session_inputs():
+    bars = [
+        _daily_bar(date(2026, 1, 5)),
+        _daily_bar(date(2026, 1, 8)),
+    ]
+
+    result = check_daily_bar_quality(
+        bars,
+        expected_trade_dates=[
+            date(2026, 1, 5),
+            datetime(2026, 1, 6, tzinfo=timezone.utc),
+            "2026-01-07T00:00:00+00:00",
+            "2026-01-08",
+            "not-a-date",
+        ],
+    )
+
+    assert result.missing_dates == ["2026-01-06", "2026-01-07"]
+    assert result.status == "WARN"
+
+
 def test_invalid_ohlc_row_is_reported():
     bars = [
         _daily_bar(

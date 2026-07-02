@@ -33,7 +33,10 @@ class DataQualityResult:
         return asdict(self)
 
 
-def check_daily_bar_quality(bars: list[dict[str, object]]) -> DataQualityResult:
+def check_daily_bar_quality(
+    bars: list[dict[str, object]],
+    expected_trade_dates: list[object] | None = None,
+) -> DataQualityResult:
     """Check serialized daily OHLCV bars without querying or mutating storage."""
     checked_bars = len(bars)
     parsed_trade_dates: list[date] = []
@@ -75,7 +78,7 @@ def check_daily_bar_quality(bars: list[dict[str, object]]) -> DataQualityResult:
             )
         )
 
-    missing_dates = _find_missing_weekday_dates(parsed_trade_dates)
+    missing_dates = _find_missing_dates(parsed_trade_dates, expected_trade_dates)
     status = _determine_status(
         checked_bars=checked_bars,
         missing_dates=missing_dates,
@@ -204,6 +207,16 @@ def _find_volume_issues(
     return []
 
 
+def _find_missing_dates(
+    parsed_trade_dates: list[date],
+    expected_trade_dates: list[object] | None,
+) -> list[str]:
+    if expected_trade_dates is None:
+        return _find_missing_weekday_dates(parsed_trade_dates)
+
+    return _find_missing_expected_trade_dates(parsed_trade_dates, expected_trade_dates)
+
+
 def _find_missing_weekday_dates(parsed_trade_dates: list[date]) -> list[str]:
     if not parsed_trade_dates:
         return []
@@ -220,6 +233,37 @@ def _find_missing_weekday_dates(parsed_trade_dates: list[date]) -> list[str]:
         current_trade_date += timedelta(days=1)
 
     return missing_dates
+
+
+def _find_missing_expected_trade_dates(
+    parsed_trade_dates: list[date],
+    expected_trade_dates: list[object],
+) -> list[str]:
+    if not parsed_trade_dates:
+        return []
+
+    observed_trade_dates = set(parsed_trade_dates)
+    first_observed_trade_date = min(observed_trade_dates)
+    final_observed_trade_date = max(observed_trade_dates)
+    parsed_expected_trade_dates = {
+        parsed_trade_date
+        for expected_trade_date in expected_trade_dates
+        if (parsed_trade_date := _parse_expected_trade_date(expected_trade_date)) is not None
+    }
+
+    return [
+        expected_trade_date.isoformat()
+        for expected_trade_date in sorted(parsed_expected_trade_dates)
+        if first_observed_trade_date <= expected_trade_date <= final_observed_trade_date
+        and expected_trade_date not in observed_trade_dates
+    ]
+
+
+def _parse_expected_trade_date(expected_trade_date: object) -> date | None:
+    try:
+        return _parse_bar_trade_date({"trade_date": expected_trade_date})
+    except (TypeError, ValueError):
+        return None
 
 
 def _determine_status(

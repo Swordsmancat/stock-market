@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Review that data-quality behavior is tested with focused pure service tests and no side effects."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Review parsing behavior and ensure expected-session issues do not create noisy failures."}

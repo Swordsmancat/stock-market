@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/index.md","reason":"Load backend service and focused pytest conventions."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Data-quality checks must remain pure, non-mutating, and covered by focused tests."}
