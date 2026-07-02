@@ -10,9 +10,27 @@ export type PlatformSettings = {
   llm_api_base: string;
   akshare_enabled: boolean;
   tushare_token: string;
+  llm_api_key_configured: boolean;
+  tushare_token_configured: boolean;
+  market_data_provider_capabilities: MarketDataProviderCapability[];
 };
 
-const DEFAULTS: PlatformSettings = {
+export type MarketDataProviderCapability = {
+  provider: string;
+  active: boolean;
+  configured: boolean;
+  category: string;
+  supports_daily_bars: boolean;
+  supports_realtime_quotes: boolean;
+  readiness_note: string;
+};
+
+type StoredPlatformSettings = Omit<
+  PlatformSettings,
+  "llm_api_key_configured" | "tushare_token_configured" | "market_data_provider_capabilities"
+>;
+
+const DEFAULTS: StoredPlatformSettings = {
   market_data_provider: process.env.NEXT_PUBLIC_MARKET_DATA_PROVIDER ?? "yfinance",
   llm_provider: process.env.LLM_PROVIDER ?? "mock",
   llm_api_key: process.env.LLM_API_KEY ?? "",
@@ -21,22 +39,51 @@ const DEFAULTS: PlatformSettings = {
   tushare_token: "",
 };
 
+const MARKET_DATA_PROVIDER_CAPABILITY_BASE: Record<
+  string,
+  Omit<MarketDataProviderCapability, "active" | "configured" | "provider">
+> = {
+  mock: {
+    category: "mock",
+    supports_daily_bars: true,
+    supports_realtime_quotes: false,
+    readiness_note: "Deterministic fixture data for development and tests.",
+  },
+  yfinance: {
+    category: "historical_daily",
+    supports_daily_bars: true,
+    supports_realtime_quotes: false,
+    readiness_note: "Historical daily bars are available; real-time quotes are not enabled.",
+  },
+  akshare: {
+    category: "historical_daily",
+    supports_daily_bars: true,
+    supports_realtime_quotes: false,
+    readiness_note: "Requires AkShare support to be enabled and dependencies installed.",
+  },
+  tushare: {
+    category: "historical_daily",
+    supports_daily_bars: true,
+    supports_realtime_quotes: false,
+    readiness_note: "Requires a configured Tushare token.",
+  },
+};
+
 function settingsPath(): string {
   return join(process.cwd(), "..", "..", "data", "platform_settings.json");
 }
 
-async function readSettingsFile(): Promise<Partial<PlatformSettings>> {
+async function readSettingsFile(): Promise<Partial<StoredPlatformSettings>> {
   try {
     const raw = await readFile(settingsPath(), "utf-8");
-    return JSON.parse(raw) as Partial<PlatformSettings>;
+    return JSON.parse(raw) as Partial<StoredPlatformSettings>;
   } catch {
     return {};
   }
 }
 
-export async function getPlatformSettings(): Promise<PlatformSettings & { llm_api_key_configured: boolean }> {
-  const stored = await readSettingsFile();
-  const merged: PlatformSettings = {
+function buildStoredPlatformSettings(stored: Partial<StoredPlatformSettings>): StoredPlatformSettings {
+  return {
     market_data_provider: stored.market_data_provider ?? DEFAULTS.market_data_provider,
     llm_provider: stored.llm_provider ?? DEFAULTS.llm_provider,
     llm_api_key: stored.llm_api_key ?? DEFAULTS.llm_api_key,
@@ -44,15 +91,58 @@ export async function getPlatformSettings(): Promise<PlatformSettings & { llm_ap
     akshare_enabled: stored.akshare_enabled ?? DEFAULTS.akshare_enabled,
     tushare_token: stored.tushare_token ?? DEFAULTS.tushare_token,
   };
+}
+
+function isMarketDataProviderConfigured(
+  provider: string,
+  settings: StoredPlatformSettings,
+): boolean {
+  if (provider === "mock" || provider === "yfinance") {
+    return true;
+  }
+  if (provider === "akshare") {
+    return settings.akshare_enabled;
+  }
+  if (provider === "tushare") {
+    return Boolean(settings.tushare_token.trim());
+  }
+  return false;
+}
+
+function buildMarketDataProviderCapabilities(
+  settings: StoredPlatformSettings,
+): MarketDataProviderCapability[] {
+  const activeProvider = settings.market_data_provider.toLowerCase();
+  return Object.entries(MARKET_DATA_PROVIDER_CAPABILITY_BASE).map(([provider, baseCapability]) => ({
+    provider,
+    active: provider === activeProvider,
+    configured: isMarketDataProviderConfigured(provider, settings),
+    ...baseCapability,
+  }));
+}
+
+function toPublicPlatformSettings(settings: StoredPlatformSettings): PlatformSettings {
   return {
-    ...merged,
-    llm_api_key_configured: Boolean(merged.llm_api_key.trim()),
+    ...settings,
+    tushare_token: "",
+    llm_api_key_configured: Boolean(settings.llm_api_key.trim()),
+    tushare_token_configured: Boolean(settings.tushare_token.trim()),
+    market_data_provider_capabilities: buildMarketDataProviderCapabilities(settings),
   };
 }
 
-export async function savePlatformSettings(updates: Partial<PlatformSettings>): Promise<PlatformSettings> {
-  const current = await getPlatformSettings();
-  const next: PlatformSettings = {
+async function getStoredPlatformSettings(): Promise<StoredPlatformSettings> {
+  const stored = await readSettingsFile();
+  return buildStoredPlatformSettings(stored);
+}
+
+export async function getPlatformSettings(): Promise<PlatformSettings> {
+  return toPublicPlatformSettings(await getStoredPlatformSettings());
+}
+
+export async function savePlatformSettings(updates: Partial<StoredPlatformSettings>): Promise<PlatformSettings> {
+  const current = await getStoredPlatformSettings();
+  const next: StoredPlatformSettings = {
     market_data_provider: updates.market_data_provider ?? current.market_data_provider,
     llm_provider: updates.llm_provider ?? current.llm_provider,
     llm_api_key:
@@ -70,5 +160,5 @@ export async function savePlatformSettings(updates: Partial<PlatformSettings>): 
   const path = settingsPath();
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(next, null, 2), "utf-8");
-  return next;
+  return toPublicPlatformSettings(next);
 }

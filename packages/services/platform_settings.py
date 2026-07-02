@@ -16,6 +16,34 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
+MARKET_DATA_PROVIDER_CAPABILITY_BASE: dict[str, dict[str, object]] = {
+    "mock": {
+        "category": "mock",
+        "supports_daily_bars": True,
+        "supports_realtime_quotes": False,
+        "readiness_note": "Deterministic fixture data for development and tests.",
+    },
+    "yfinance": {
+        "category": "historical_daily",
+        "supports_daily_bars": True,
+        "supports_realtime_quotes": False,
+        "readiness_note": "Historical daily bars are available; real-time quotes are not enabled.",
+    },
+    "akshare": {
+        "category": "historical_daily",
+        "supports_daily_bars": True,
+        "supports_realtime_quotes": False,
+        "readiness_note": "Requires AkShare support to be enabled and dependencies installed.",
+    },
+    "tushare": {
+        "category": "historical_daily",
+        "supports_daily_bars": True,
+        "supports_realtime_quotes": False,
+        "readiness_note": "Requires a configured Tushare token.",
+    },
+}
+
+
 def _ensure_parent() -> None:
     SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -42,11 +70,53 @@ def get_platform_settings() -> dict[str, Any]:
 def get_platform_settings_public() -> dict[str, Any]:
     current = get_platform_settings()
     api_key = current["llm_api_key"]
+    tushare_token = current["tushare_token"]
     return {
         **current,
         "llm_api_key": api_key,
         "llm_api_key_configured": bool(api_key.strip()),
+        "tushare_token": "",
+        "tushare_token_configured": bool(tushare_token.strip()),
+        "market_data_provider_capabilities": build_market_data_provider_capabilities(current),
     }
+
+
+def build_market_data_provider_capabilities(settings_payload: dict[str, Any]) -> list[dict[str, object]]:
+    active_provider = str(settings_payload["market_data_provider"]).lower()
+    akshare_enabled = bool(settings_payload.get("akshare_enabled", False))
+    tushare_token_configured = bool(str(settings_payload.get("tushare_token", "") or "").strip())
+
+    capabilities: list[dict[str, object]] = []
+    for provider_name, base_capability in MARKET_DATA_PROVIDER_CAPABILITY_BASE.items():
+        configured = _is_market_data_provider_configured(
+            provider_name,
+            akshare_enabled=akshare_enabled,
+            tushare_token_configured=tushare_token_configured,
+        )
+        capabilities.append(
+            {
+                "provider": provider_name,
+                "active": provider_name == active_provider,
+                "configured": configured,
+                **base_capability,
+            }
+        )
+    return capabilities
+
+
+def _is_market_data_provider_configured(
+    provider_name: str,
+    *,
+    akshare_enabled: bool,
+    tushare_token_configured: bool,
+) -> bool:
+    if provider_name in {"mock", "yfinance"}:
+        return True
+    if provider_name == "akshare":
+        return akshare_enabled
+    if provider_name == "tushare":
+        return tushare_token_configured
+    return False
 
 
 def update_platform_settings(updates: dict[str, Any]) -> dict[str, Any]:

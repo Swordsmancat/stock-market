@@ -18,7 +18,13 @@ from packages.services.market_data import (
 
 
 def test_get_bars_payload_serializes_provider_bars():
-    payload = get_bars_payload("AAPL", "1d", date(2026, 1, 1), date(2026, 1, 3))
+    payload = get_bars_payload(
+        "AAPL",
+        "1d",
+        date(2026, 1, 1),
+        date(2026, 1, 3),
+        provider_name="mock",
+    )
 
     assert payload["symbol"] == "AAPL"
     assert payload["timeframe"] == "1d"
@@ -38,8 +44,32 @@ def test_get_bars_payload_reports_effective_provider_source():
     assert payload["source"] == "mock"
 
 
+def test_get_bars_payload_uses_platform_default_when_provider_is_omitted(monkeypatch):
+    monkeypatch.setattr(
+        market_data_service,
+        "get_effective_market_data_provider",
+        lambda requested=None: "mock" if requested is None else str(requested).strip().lower(),
+    )
+
+    payload = get_bars_payload(
+        "AAPL",
+        "1d",
+        date(2026, 1, 1),
+        date(2026, 1, 1),
+        provider_name=None,
+    )
+
+    assert payload["source"] == "mock"
+
+
 def test_get_indicator_payload_returns_latest_values():
-    payload = get_indicator_payload("AAPL", date(2026, 1, 1), date(2026, 1, 15), 3)
+    payload = get_indicator_payload(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 15),
+        3,
+        provider_name="mock",
+    )
 
     assert payload["symbol"] == "AAPL"
     assert payload["indicators"]["ma"] == 114.0
@@ -47,7 +77,13 @@ def test_get_indicator_payload_returns_latest_values():
 
 
 def test_get_indicator_payload_handles_empty_bars():
-    payload = get_indicator_payload("AAPL", date(2026, 1, 2), date(2026, 1, 1), 3)
+    payload = get_indicator_payload(
+        "AAPL",
+        date(2026, 1, 2),
+        date(2026, 1, 1),
+        3,
+        provider_name="mock",
+    )
 
     assert payload["symbol"] == "AAPL"
     assert payload["as_of"] is None
@@ -55,7 +91,13 @@ def test_get_indicator_payload_handles_empty_bars():
 
 
 def test_get_indicator_payload_returns_nulls_for_insufficient_ma_data():
-    payload = get_indicator_payload("AAPL", date(2026, 1, 1), date(2026, 1, 2), 3)
+    payload = get_indicator_payload(
+        "AAPL",
+        date(2026, 1, 1),
+        date(2026, 1, 2),
+        3,
+        provider_name="mock",
+    )
 
     assert payload["symbol"] == "AAPL"
     assert payload["as_of"] == "2026-01-02"
@@ -77,7 +119,13 @@ def test_get_bars_payload_wraps_unexpected_provider_failures(monkeypatch):
     monkeypatch.setattr(market_data_service, "get_provider", get_failing_provider)
 
     with pytest.raises(MarketDataProviderError) as raised_error:
-        get_bars_payload("AAPL", "1d", date(2026, 1, 1), date(2026, 1, 1))
+        get_bars_payload(
+            "AAPL",
+            "1d",
+            date(2026, 1, 1),
+            date(2026, 1, 1),
+            provider_name="mock",
+        )
 
     provider_error = raised_error.value
     assert provider_error.provider_name == "mock"
@@ -103,7 +151,13 @@ def test_get_bars_payload_preserves_provider_value_errors(monkeypatch):
     monkeypatch.setattr(market_data_service, "get_provider", get_failing_provider)
 
     with pytest.raises(ValueError, match="unsupported timeframe"):
-        get_bars_payload("AAPL", "1h", date(2026, 1, 1), date(2026, 1, 1))
+        get_bars_payload(
+            "AAPL",
+            "1h",
+            date(2026, 1, 1),
+            date(2026, 1, 1),
+            provider_name="mock",
+        )
 
 
 @pytest.mark.parametrize(
@@ -139,7 +193,13 @@ def test_get_bars_payload_classifies_provider_failures(
     monkeypatch.setattr(market_data_service, "get_provider", get_failing_provider)
 
     with pytest.raises(expected_error_type) as raised_error:
-        get_bars_payload("AAPL", "1d", date(2026, 1, 1), date(2026, 1, 1))
+        get_bars_payload(
+            "AAPL",
+            "1d",
+            date(2026, 1, 1),
+            date(2026, 1, 1),
+            provider_name="mock",
+        )
 
     provider_error = raised_error.value
     assert provider_error.provider_name == "mock"
@@ -162,7 +222,13 @@ def test_get_bars_payload_wraps_malformed_provider_bar_payloads(monkeypatch):
     monkeypatch.setattr(market_data_service, "get_provider", get_malformed_provider)
 
     with pytest.raises(MarketDataProviderPayloadError) as raised_error:
-        get_bars_payload("AAPL", "1d", date(2026, 1, 1), date(2026, 1, 1))
+        get_bars_payload(
+            "AAPL",
+            "1d",
+            date(2026, 1, 1),
+            date(2026, 1, 1),
+            provider_name="mock",
+        )
 
     provider_error = raised_error.value
     assert provider_error.provider_name == "mock"
@@ -172,7 +238,12 @@ def test_get_bars_payload_wraps_malformed_provider_bar_payloads(monkeypatch):
 
 
 def test_get_market_snapshot_includes_instruments_and_bars():
-    snapshot = get_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 2))
+    snapshot = get_market_snapshot(
+        "US",
+        date(2026, 1, 1),
+        date(2026, 1, 2),
+        provider_name="mock",
+    )
 
     assert snapshot["market"] == "US"
     assert snapshot["instrument_count"] == 1

@@ -36,6 +36,8 @@ it("returns persisted platform settings with route source metadata", async () =>
   await expect(response.json()).resolves.toEqual({
     source: "platform_settings",
     ...storedSettings,
+    tushare_token: "",
+    tushare_token_configured: true,
   });
 });
 
@@ -66,6 +68,8 @@ it("saves platform settings and reports whether an LLM API key is configured", a
     source: "platform_settings",
     ...updatePayload,
     llm_api_key_configured: true,
+    tushare_token: "",
+    tushare_token_configured: true,
   });
 });
 
@@ -96,5 +100,7 @@ it("marks saved settings as not configured when the stored LLM API key is blank"
     source: "platform_settings",
     ...savedSettings,
     llm_api_key_configured: false,
+    tushare_token: "",
+    tushare_token_configured: false,
   });
 });

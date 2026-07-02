@@ -37,7 +37,7 @@ export default async function SettingsPage({
             <CardTitle>{t("dataProviderTitle")}</CardTitle>
             <CardDescription>{t("dataProviderDesc")}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <select
               name="market_data_provider"
               defaultValue={settings.market_data_provider}
@@ -48,6 +48,41 @@ export default async function SettingsPage({
               <option value="tushare">tushare</option>
               <option value="mock">mock</option>
             </select>
+            <p className="text-sm text-muted-foreground">
+              {t("activeProvider")}: <span className="font-medium text-foreground">{settings.market_data_provider}</span>
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {settings.market_data_provider_capabilities.map((capability) => (
+                <div key={capability.provider} className="rounded-lg border p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-medium">{capability.provider}</div>
+                    <span
+                      className={
+                        capability.configured
+                          ? "rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
+                          : "rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800"
+                      }
+                    >
+                      {capability.configured ? t("providerConfigured") : t("providerNeedsSetup")}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-muted-foreground">
+                    {capability.active ? `${t("providerActive")}. ` : ""}
+                    {capability.supports_daily_bars ? t("dailyBarsSupported") : t("dailyBarsUnsupported")}
+                    {" "}
+                    {capability.supports_realtime_quotes
+                      ? t("realtimeQuotesSupported")
+                      : t("realtimeQuotesUnsupported")}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {capability.provider === "mock" ? t("mockReadiness") : null}
+                    {capability.provider === "yfinance" ? t("yfinanceReadiness") : null}
+                    {capability.provider === "akshare" ? t("akshareReadiness") : null}
+                    {capability.provider === "tushare" ? t("tushareReadiness") : null}
+                  </p>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -84,9 +119,9 @@ export default async function SettingsPage({
                 id="tushare_token"
                 name="tushare_token"
                 type="password"
-                defaultValue={settings.tushare_token}
+                defaultValue=""
                 placeholder={
-                  settings.tushare_token ? t("tushareTokenConfigured") : t("tushareTokenPlaceholder")
+                  settings.tushare_token_configured ? t("tushareTokenConfigured") : t("tushareTokenPlaceholder")
                 }
               />
             </div>

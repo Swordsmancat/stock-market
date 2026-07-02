@@ -57,11 +57,11 @@ class MarketDataProviderPayloadError(MarketDataProviderError):
     http_status_code = 502
 
 
-def resolve_market_data_provider_name(provider_name: str | None = "mock") -> str:
+def resolve_market_data_provider_name(provider_name: str | None = None) -> str:
     return get_effective_market_data_provider(provider_name)
 
 
-def get_provider(provider_name: str = "mock") -> ProviderAdapter:
+def get_provider(provider_name: str | None = None) -> ProviderAdapter:
     normalized = resolve_market_data_provider_name(provider_name)
     if normalized == "mock":
         return MockProvider()
@@ -73,6 +73,13 @@ def get_provider(provider_name: str = "mock") -> ProviderAdapter:
         return TushareProvider()
     msg = f"Unsupported market data provider: {provider_name}"
     raise ValueError(msg)
+
+
+def _normalize_requested_provider_name(provider_name: str | None) -> str | None:
+    if provider_name is None:
+        return None
+    normalized = provider_name.strip().lower()
+    return normalized or None
 
 
 def _classify_provider_error(
@@ -205,8 +212,9 @@ def get_bars_payload(
     start: date,
     end: date,
     session: Session | None = None,
-    provider_name: str = "mock",
+    provider_name: str | None = None,
 ) -> dict[str, object]:
+    requested_provider_name = _normalize_requested_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
     if timeframe == "1d" and session is not None:
         try:
@@ -218,6 +226,9 @@ def get_bars_payload(
                 "symbol": symbol,
                 "timeframe": timeframe,
                 "source": "database",
+                "provider": effective_provider_name,
+                "requested_provider": requested_provider_name,
+                "effective_provider": effective_provider_name,
                 "items": [serialize_daily_bar(bar) for bar in db_bars],
             }
 
@@ -234,6 +245,9 @@ def get_bars_payload(
         "symbol": symbol,
         "timeframe": timeframe,
         "source": effective_provider_name,
+        "provider": effective_provider_name,
+        "requested_provider": requested_provider_name,
+        "effective_provider": effective_provider_name,
         "items": _serialize_provider_bars(
             bars,
             effective_provider_name,
@@ -248,8 +262,16 @@ def get_indicator_payload(
     end: date,
     ma_window: int,
     session: Session | None = None,
+    provider_name: str | None = None,
 ) -> dict[str, object]:
-    bars_payload = get_bars_payload(symbol, "1d", start, end, session=session)
+    bars_payload = get_bars_payload(
+        symbol,
+        "1d",
+        start,
+        end,
+        session=session,
+        provider_name=provider_name,
+    )
     items = bars_payload["items"]
     close_prices = pd.Series([float(item["close"]) for item in items], dtype="float64")
     latest_ma = _latest_numeric_value_or_none(calculate_ma(close_prices, ma_window))
@@ -259,6 +281,9 @@ def get_indicator_payload(
         "symbol": symbol,
         "as_of": str(items[-1]["timestamp"]) if items else None,
         "source": bars_payload["source"],
+        "provider": bars_payload.get("provider"),
+        "requested_provider": bars_payload.get("requested_provider"),
+        "effective_provider": bars_payload.get("effective_provider"),
         "indicators": {
             "ma": latest_ma,
             "rsi": latest_rsi,
@@ -269,8 +294,10 @@ def get_indicator_payload(
 def get_latest_bar_payload(
     symbol: str,
     session: Session | None = None,
-    provider_name: str = "mock",
+    provider_name: str | None = None,
 ) -> dict[str, object]:
+    requested_provider_name = _normalize_requested_provider_name(provider_name)
+    effective_provider_name = resolve_market_data_provider_name(provider_name)
     if session is not None:
         try:
             db_bar = (
@@ -287,6 +314,9 @@ def get_latest_bar_payload(
                 "symbol": symbol,
                 "timeframe": "1d",
                 "source": "database",
+                "provider": effective_provider_name,
+                "requested_provider": requested_provider_name,
+                "effective_provider": effective_provider_name,
                 "item": serialize_daily_bar(db_bar),
             }
 
@@ -305,6 +335,9 @@ def get_latest_bar_payload(
         "symbol": symbol,
         "timeframe": "1d",
         "source": fallback["source"],
+        "provider": fallback.get("provider"),
+        "requested_provider": fallback.get("requested_provider"),
+        "effective_provider": fallback.get("effective_provider"),
         "item": items[-1] if items else None,
     }
 
@@ -312,7 +345,7 @@ def get_latest_bar_payload(
 def get_latest_bars_batch_payload(
     symbols: list[str],
     session: Session | None = None,
-    provider_name: str = "mock",
+    provider_name: str | None = None,
 ) -> dict[str, object]:
     items: list[dict[str, object]] = []
     sources: set[str] = set()
@@ -325,6 +358,9 @@ def get_latest_bars_batch_payload(
             {
                 "symbol": symbol,
                 "source": source,
+                "provider": payload.get("provider"),
+                "requested_provider": payload.get("requested_provider"),
+                "effective_provider": payload.get("effective_provider"),
                 "item": payload["item"],
             }
         )
@@ -340,14 +376,17 @@ def get_market_snapshot(
     start: date,
     end: date,
     timeframe: str = "1d",
-    provider_name: str = "mock",
+    provider_name: str | None = None,
 ) -> dict[str, object]:
+    requested_provider_name = _normalize_requested_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
     provider = get_provider(effective_provider_name)
     instruments = _fetch_provider_instruments(provider, effective_provider_name, market)
     return {
         "market": market,
         "provider": effective_provider_name,
+        "requested_provider": requested_provider_name,
+        "effective_provider": effective_provider_name,
         "timeframe": timeframe,
         "start": start.isoformat(),
         "end": end.isoformat(),

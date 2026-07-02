@@ -36,7 +36,7 @@ def _call_market_data_service(service_call: Callable[[], dict]) -> dict:
 @router.get("/latest")
 def get_latest_bars(
     symbols: str = Query(..., description="Comma-separated symbols, e.g. AAPL,600519"),
-    provider: str = Query(default="mock"),
+    provider: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     symbol_list = [symbol.strip().upper() for symbol in symbols.split(",") if symbol.strip()]
@@ -52,7 +52,7 @@ def get_latest_bars(
 @router.get("/{symbol}/latest")
 def get_latest_bar(
     symbol: str,
-    provider: str = Query(default="mock"),
+    provider: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     return _call_market_data_service(
@@ -66,7 +66,7 @@ def get_bars(
     timeframe: str = Query(default="1d"),
     start: date = Query(...),
     end: date = Query(...),
-    provider: str = Query(default="mock"),
+    provider: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     return _call_market_data_service(
@@ -87,8 +87,16 @@ def get_indicators(
     start: date = Query(...),
     end: date = Query(...),
     ma_window: int = Query(default=20, ge=1),
+    provider: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     return _call_market_data_service(
-        lambda: get_indicator_payload(symbol, start, end, ma_window, session=session)
+        lambda: get_indicator_payload(
+            symbol,
+            start,
+            end,
+            ma_window,
+            session=session,
+            provider_name=provider,
+        )
     )

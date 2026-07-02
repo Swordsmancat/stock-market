@@ -16,7 +16,12 @@ def test_get_bars_returns_mock_market_data():
         client = TestClient(app)
         response = client.get(
             "/market-data/AAPL/bars",
-            params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-03"},
+            params={
+                "timeframe": "1d",
+                "start": "2026-01-01",
+                "end": "2026-01-03",
+                "provider": "mock",
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -29,13 +34,44 @@ def test_get_bars_returns_mock_market_data():
     assert payload["items"][0]["close"] == 101.0
 
 
+def test_get_bars_uses_platform_default_when_provider_query_is_omitted(monkeypatch):
+    monkeypatch.setattr(
+        market_data_service,
+        "get_effective_market_data_provider",
+        lambda requested=None: "mock" if requested is None else str(requested).strip().lower(),
+    )
+
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/market-data/AAPL/bars",
+            params={
+                "timeframe": "1d",
+                "start": "2026-01-01",
+                "end": "2026-01-01",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "mock"
+
+
 def test_get_indicators_returns_latest_ma_and_rsi():
     app.dependency_overrides[get_session] = override_no_database_session
     try:
         client = TestClient(app)
         response = client.get(
             "/market-data/AAPL/indicators",
-            params={"start": "2026-01-01", "end": "2026-01-15", "ma_window": 3},
+            params={
+                "start": "2026-01-01",
+                "end": "2026-01-15",
+                "ma_window": 3,
+                "provider": "mock",
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -53,7 +89,12 @@ def test_get_indicators_handles_empty_bars():
         client = TestClient(app)
         response = client.get(
             "/market-data/AAPL/indicators",
-            params={"start": "2026-01-02", "end": "2026-01-01", "ma_window": 3},
+            params={
+                "start": "2026-01-02",
+                "end": "2026-01-01",
+                "ma_window": 3,
+                "provider": "mock",
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -83,7 +124,12 @@ def test_get_bars_maps_provider_failure_to_bad_gateway(monkeypatch):
         client = TestClient(app)
         response = client.get(
             "/market-data/AAPL/bars",
-            params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-01"},
+            params={
+                "timeframe": "1d",
+                "start": "2026-01-01",
+                "end": "2026-01-01",
+                "provider": "mock",
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -114,7 +160,12 @@ def test_get_bars_preserves_provider_value_errors_as_bad_request(monkeypatch):
         client = TestClient(app)
         response = client.get(
             "/market-data/AAPL/bars",
-            params={"timeframe": "1h", "start": "2026-01-01", "end": "2026-01-01"},
+            params={
+                "timeframe": "1h",
+                "start": "2026-01-01",
+                "end": "2026-01-01",
+                "provider": "mock",
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -154,7 +205,12 @@ def test_get_bars_maps_provider_taxonomy_to_http_status(
         client = TestClient(app)
         response = client.get(
             "/market-data/AAPL/bars",
-            params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-01"},
+            params={
+                "timeframe": "1d",
+                "start": "2026-01-01",
+                "end": "2026-01-01",
+                "provider": "mock",
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -184,7 +240,12 @@ def test_get_bars_maps_malformed_provider_payload_to_bad_gateway(monkeypatch):
         client = TestClient(app)
         response = client.get(
             "/market-data/AAPL/bars",
-            params={"timeframe": "1d", "start": "2026-01-01", "end": "2026-01-01"},
+            params={
+                "timeframe": "1d",
+                "start": "2026-01-01",
+                "end": "2026-01-01",
+                "provider": "mock",
+            },
         )
     finally:
         app.dependency_overrides.clear()
