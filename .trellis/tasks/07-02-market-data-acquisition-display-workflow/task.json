@@ -1,0 +1,33 @@
+{
+  "id": "market-data-acquisition-display-workflow",
+  "name": "market-data-acquisition-display-workflow",
+  "title": "Complete market data acquisition and display workflow",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "何剑锋",
+  "assignee": "何剑锋",
+  "createdAt": "2026-07-02",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-02-provider-settings-readiness-visibility",
+    "07-02-single-symbol-daily-bar-ingestion",
+    "07-02-market-data-no-data-error-contract",
+    "07-02-instruments-market-data-display-page",
+    "07-02-instrument-detail-source-freshness-table",
+    "07-02-task-run-feedback-from-user-actions"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
