@@ -13,6 +13,14 @@ vi.mock("@/components/advanced-candlestick-chart", () => ({
   ),
 }));
 
+vi.mock("@/components/intraday-price-chart", () => ({
+  IntradayPriceChart: ({ status, reason }: { status?: string; reason?: string | null }) => (
+    <div data-testid="intraday-price-chart">
+      Intraday chart status {status} {reason}
+    </div>
+  ),
+}));
+
 vi.mock("@/lib/instrument-detail", () => ({
   fetchInstrumentDetailPayload: fetchInstrumentDetailPayloadMock,
   normalizeInstrumentDetailProvider: (providerName: string | null | undefined) =>
@@ -50,6 +58,19 @@ function mockInstrumentDetailResponse(
         ? { status: "unavailable", item: null }
         : { status: "ok", item: { timestamp: "2026-01-20", close: latestClose } },
       bars: { items },
+      intraday: {
+        symbol: "AAPL",
+        timeframe: "1m",
+        date: "2026-01-20",
+        source: "none",
+        status: "degraded",
+        previous_close: null,
+        items: [],
+        availability: {
+          status: "degraded",
+          reason: "The selected provider does not support verified minute bars in this backend.",
+        },
+      },
       range: { timeframe: "1d", start: "2026-01-01", end: "2026-01-20" },
     },
   });
@@ -87,6 +108,9 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getByText("+0.99%")).toBeInTheDocument();
   expect(screen.getByText("K线图")).toBeInTheDocument();
   expect(screen.getByText("交互式价格走势图")).toBeInTheDocument();
+  expect(screen.getByText("分时图")).toBeInTheDocument();
+  expect(screen.getByText("展示可用的分钟价格、均价、昨收参考和成交量。")).toBeInTheDocument();
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");
   expect(screen.getByTestId("advanced-candlestick-chart")).toHaveTextContent("Advanced chart for AAPL");
 });
 
@@ -97,6 +121,7 @@ it("renders latest price even when the detail endpoint has no bars", async () =>
 
   expect(await screen.findByText("AAPL")).toBeInTheDocument();
   expect(screen.getByText("暂无K线数据")).toBeInTheDocument();
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");
   expect(screen.getByText("105.00")).toBeInTheDocument();
 });
 

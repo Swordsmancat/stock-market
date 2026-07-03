@@ -181,6 +181,18 @@
     "seriesKdjD": "D",
     "seriesKdjJ": "J"
   },
+  "IntradayPriceChart": {
+    "degradedState": "当前数据源暂不支持分时数据。",
+    "emptyState": "暂无分时数据。",
+    "priceSeries": "分时价格",
+    "averagePriceSeries": "均价",
+    "volumeSeries": "成交量",
+    "timeLabel": "时间",
+    "priceLabel": "价格",
+    "averagePriceLabel": "均价",
+    "previousCloseLabel": "昨收",
+    "volumeLabel": "成交量"
+  },
   "Watchlist": {
     "title": "关注列表",
     "description": "追踪您感兴趣的股票及其最新表现。",
@@ -228,6 +240,8 @@
     "priceChangePercent": "涨跌幅",
     "klineTitle": "K线图",
     "interactiveKlineDescription": "交互式价格走势图",
+    "intradayTitle": "分时图",
+    "intradayDescription": "展示可用的分钟价格、均价、昨收参考和成交量。",
     "noKlineData": "暂无K线数据",
     "loadFailed": "加载失败：{reason}",
     "latestPrice": "最新收盘价",

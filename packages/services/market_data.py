@@ -22,6 +22,8 @@ def _provider() -> MockProvider:
 
 DEFAULT_RSI_WINDOW = 14
 NO_DAILY_BARS_REASON = "No daily bars were available for the requested symbol/date range."
+DEFAULT_INTRADAY_TIMEFRAME = "1m"
+INTRADAY_UNSUPPORTED_REASON = "The selected provider does not support verified minute bars in this backend."
 
 
 class MarketDataProviderError(RuntimeError):
@@ -270,6 +272,41 @@ def get_bars_payload(
         "effective_provider": effective_provider_name,
         "items": serialized_provider_bars,
         **_build_data_availability_metadata(serialized_provider_bars),
+    }
+
+
+def get_intraday_bars_payload(
+    symbol: str,
+    trade_date: date,
+    timeframe: str = DEFAULT_INTRADAY_TIMEFRAME,
+    session: Session | None = None,
+    provider_name: str | None = None,
+) -> dict[str, object]:
+    if timeframe != DEFAULT_INTRADAY_TIMEFRAME:
+        msg = f"Unsupported intraday timeframe: {timeframe}. Only {DEFAULT_INTRADAY_TIMEFRAME} is supported."
+        raise ValueError(msg)
+
+    requested_provider_name = _normalize_requested_provider_name(provider_name)
+    effective_provider_name = resolve_market_data_provider_name(provider_name)
+
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "date": trade_date.isoformat(),
+        "source": "none",
+        "provider": effective_provider_name,
+        "requested_provider": requested_provider_name,
+        "effective_provider": effective_provider_name,
+        "status": "degraded",
+        "previous_close": None,
+        "items": [],
+        "availability": {
+            "status": "degraded",
+            "reason": INTRADAY_UNSUPPORTED_REASON,
+            "is_realtime": False,
+            "is_delayed": False,
+            "delay_minutes": None,
+        },
     }
 
 

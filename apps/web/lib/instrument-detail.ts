@@ -25,6 +25,38 @@ export type InstrumentBar = {
   volume?: number;
 };
 
+export type InstrumentIntradayItem = {
+  timestamp?: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  price?: number;
+  average_price?: number | null;
+  volume?: number | null;
+  amount?: number | null;
+};
+
+export type InstrumentIntradayPayload = {
+  symbol: string;
+  timeframe: "1m";
+  date: string;
+  source: string;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  status: "ok" | "no_data" | "degraded";
+  previous_close?: number | null;
+  items?: InstrumentIntradayItem[];
+  availability?: {
+    status: "ok" | "no_data" | "degraded";
+    reason?: string | null;
+    is_realtime?: boolean;
+    is_delayed?: boolean;
+    delay_minutes?: number | null;
+  };
+};
+
 export type InstrumentDetailPayload = {
   symbol: string;
   request_symbol: string;
@@ -40,6 +72,7 @@ export type InstrumentDetailPayload = {
     status?: string;
     source?: string;
   };
+  intraday?: InstrumentIntradayPayload;
   range: {
     timeframe: "1d";
     start: string;
@@ -92,6 +125,38 @@ function copyContentType(response: Response): HeadersInit {
   return contentType ? { "content-type": contentType } : {};
 }
 
+function buildUnavailableIntradayPayload({
+  requestSymbol,
+  providerName,
+  date,
+  reason,
+}: {
+  requestSymbol: string;
+  providerName: string;
+  date: string;
+  reason: string;
+}): InstrumentIntradayPayload {
+  return {
+    symbol: requestSymbol,
+    timeframe: "1m",
+    date,
+    source: "none",
+    provider: providerName,
+    requested_provider: providerName,
+    effective_provider: providerName,
+    status: "degraded",
+    previous_close: null,
+    items: [],
+    availability: {
+      status: "degraded",
+      reason,
+      is_realtime: false,
+      is_delayed: false,
+      delay_minutes: null,
+    },
+  };
+}
+
 export async function fetchInstrumentDetailPayload({
   symbol,
   providerName,
@@ -105,12 +170,16 @@ export async function fetchInstrumentDetailPayload({
   const requestSymbol = resolveInstrumentDetailRequestSymbol(symbol, normalizedProviderName);
   const encodedSymbol = encodeURIComponent(requestSymbol);
 
-  const [latestResult, barsResult] = await Promise.allSettled([
+  const [latestResult, barsResult, intradayResult] = await Promise.allSettled([
     backendFetch(`/market-data/${encodedSymbol}/latest${providerQuerySuffix.replace("&", "?")}`, {
       cache: "no-store",
     }),
     backendFetch(
       `/market-data/${encodedSymbol}/bars?timeframe=1d&start=${start}&end=${end}${providerQuerySuffix}`,
+      { cache: "no-store" },
+    ),
+    backendFetch(
+      `/market-data/${encodedSymbol}/intraday?date=${end}&timeframe=1m${providerQuerySuffix}`,
       { cache: "no-store" },
     ),
   ]);
@@ -139,6 +208,14 @@ export async function fetchInstrumentDetailPayload({
   const latestData = latestResult.status === "fulfilled" && latestResult.value.ok
     ? await latestResult.value.json()
     : { status: "unavailable", item: null };
+  const intradayData = intradayResult.status === "fulfilled" && intradayResult.value.ok
+    ? await intradayResult.value.json()
+    : buildUnavailableIntradayPayload({
+        requestSymbol,
+        providerName: normalizedProviderName,
+        date: end,
+        reason: "Intraday data is unavailable for this provider.",
+      });
 
   return {
     status: "loaded",
@@ -147,6 +224,7 @@ export async function fetchInstrumentDetailPayload({
       request_symbol: requestSymbol,
       latest: latestData,
       bars: barsData,
+      intraday: intradayData,
       range: { timeframe: "1d", start, end },
     },
   };

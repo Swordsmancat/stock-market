@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
+import { IntradayPriceChart } from "@/components/intraday-price-chart";
 import { PriceChangeBadge } from "@/components/price-change-badge";
 import { decodeInstrumentSymbol, getInstrumentDisplayName } from "@/lib/instrument-display";
 import type { InstrumentDetailPayload } from "@/lib/instrument-detail";
@@ -151,6 +152,22 @@ export function InstrumentDetailClient({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("intradayTitle")}</CardTitle>
+          <CardDescription>{t("intradayDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <IntradayPriceChart
+            points={data.intraday?.items ?? []}
+            previousClose={data.intraday?.previous_close ?? null}
+            status={data.intraday?.status ?? "degraded"}
+            reason={data.intraday?.availability?.reason ?? null}
+            height={280}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

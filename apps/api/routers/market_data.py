@@ -8,6 +8,7 @@ from packages.services.market_data import (
     MarketDataProviderError,
     get_bars_payload,
     get_indicator_payload,
+    get_intraday_bars_payload,
     get_latest_bar_payload,
     get_latest_bars_batch_payload,
 )
@@ -75,6 +76,25 @@ def get_bars(
             timeframe,
             start,
             end,
+            session=session,
+            provider_name=provider,
+        )
+    )
+
+
+@router.get("/{symbol}/intraday")
+def get_intraday_bars(
+    symbol: str,
+    trade_date: date = Query(..., alias="date"),
+    timeframe: str = Query(default="1m"),
+    provider: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict:
+    return _call_market_data_service(
+        lambda: get_intraday_bars_payload(
+            symbol,
+            trade_date,
+            timeframe=timeframe,
             session=session,
             provider_name=provider,
         )
