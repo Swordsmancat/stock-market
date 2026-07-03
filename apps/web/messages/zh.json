@@ -159,6 +159,28 @@
   "Breadcrumbs": {
     "home": "首页"
   },
+  "AdvancedCandlestickChart": {
+    "emptyState": "暂无K线数据",
+    "technicalIndicatorsLabel": "技术指标",
+    "indicatorMa": "均线",
+    "indicatorBoll": "布林线",
+    "indicatorVolume": "成交量",
+    "indicatorMacd": "MACD",
+    "indicatorRsi": "RSI",
+    "indicatorKdj": "KDJ",
+    "seriesMovingAverage": "MA{period}",
+    "seriesBollUpper": "布林上轨",
+    "seriesBollMiddle": "布林中轨",
+    "seriesBollLower": "布林下轨",
+    "seriesVolume": "成交量",
+    "seriesMacdDif": "DIF",
+    "seriesMacdDea": "DEA",
+    "seriesMacdHistogram": "MACD柱",
+    "seriesRsi": "RSI{period}",
+    "seriesKdjK": "K",
+    "seriesKdjD": "D",
+    "seriesKdjJ": "J"
+  },
   "Watchlist": {
     "title": "关注列表",
     "description": "追踪您感兴趣的股票及其最新表现。",

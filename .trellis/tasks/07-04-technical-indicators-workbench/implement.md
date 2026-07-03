@@ -19,6 +19,13 @@
 4. Add focused chart helper/component tests.
 5. Run `npm run test:web`.
 
+Status: completed in the frontend workbench slice. The advanced candlestick chart now exposes localized indicator toggles, configurable default parameters, and chart series for MA, BOLL, Volume, MACD, RSI, and KDJ. Shared frontend indicator helpers cover MA, BOLL, MACD, and KDJ with focused Vitest coverage.
+
+Verified with:
+
+- `npx vitest run "apps/web/lib/chart-indicators.test.ts" "apps/web/components/advanced-candlestick-chart.test.tsx"`
+- `npm run test:web`
+
 ## Commit Policy
 
 Commit and push each passing slice separately. Do not include unrelated working tree noise.

@@ -152,6 +152,28 @@
   "Breadcrumbs": {
     "home": "Home"
   },
+  "AdvancedCandlestickChart": {
+    "emptyState": "No K-line data available",
+    "technicalIndicatorsLabel": "Technical indicators",
+    "indicatorMa": "MA",
+    "indicatorBoll": "BOLL",
+    "indicatorVolume": "Volume",
+    "indicatorMacd": "MACD",
+    "indicatorRsi": "RSI",
+    "indicatorKdj": "KDJ",
+    "seriesMovingAverage": "MA{period}",
+    "seriesBollUpper": "BOLL Upper",
+    "seriesBollMiddle": "BOLL Middle",
+    "seriesBollLower": "BOLL Lower",
+    "seriesVolume": "Volume",
+    "seriesMacdDif": "DIF",
+    "seriesMacdDea": "DEA",
+    "seriesMacdHistogram": "MACD Histogram",
+    "seriesRsi": "RSI{period}",
+    "seriesKdjK": "K",
+    "seriesKdjD": "D",
+    "seriesKdjJ": "J"
+  },
   "Watchlist": {
     "title": "Watchlist",
     "description": "Track your favorite stocks and their latest performance.",

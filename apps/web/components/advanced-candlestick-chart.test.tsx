@@ -1,5 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { NextIntlClientProvider } from "next-intl";
+import chineseMessages from "../messages/zh.json";
 
 const { chartMockState, themeMockState } = vi.hoisted(() => ({
   chartMockState: {
@@ -74,6 +76,28 @@ function createBars(count: number) {
   });
 }
 
+function getSeriesTitles() {
+  return chartMockState.addSeriesCalls.map((call) => call.options.title).filter(Boolean);
+}
+
+function expectFiniteSeriesDataPoints() {
+  for (const seriesCall of chartMockState.addSeriesCalls) {
+    const firstSetDataCall = seriesCall.setDataMock.mock.calls[0];
+    if (firstSetDataCall === undefined) {
+      continue;
+    }
+
+    const dataPoints = firstSetDataCall[0] as Array<Record<string, unknown>>;
+    for (const dataPoint of dataPoints) {
+      for (const value of Object.values(dataPoint)) {
+        if (typeof value === "number") {
+          expect(Number.isFinite(value)).toBe(true);
+        }
+      }
+    }
+  }
+}
+
 afterEach(() => {
   cleanup();
   themeMockState.resolvedTheme = "light";
@@ -87,6 +111,17 @@ afterEach(() => {
 });
 
 describe("AdvancedCandlestickChart", () => {
+  it("renders controls for all technical indicators", () => {
+    render(<AdvancedCandlestickChart data={createBars(65)} symbol="AAPL" />);
+
+    expect(screen.getByRole("button", { name: "MA" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "BOLL" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Volume" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "MACD" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "RSI" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "KDJ" })).toBeInTheDocument();
+  });
+
   it("adds MA60 and YTD controls while keeping the v5 addSeries API", async () => {
     const bars = createBars(65);
 
@@ -98,9 +133,7 @@ describe("AdvancedCandlestickChart", () => {
       expect(chartMockState.addSeriesCalls.length).toBeGreaterThanOrEqual(6);
     });
 
-    const movingAverageTitles = chartMockState.addSeriesCalls
-      .map((call) => call.options.title)
-      .filter(Boolean);
+    const movingAverageTitles = getSeriesTitles();
 
     expect(movingAverageTitles).toEqual(expect.arrayContaining(["MA5", "MA10", "MA20", "MA60"]));
 
@@ -143,5 +176,68 @@ describe("AdvancedCandlestickChart", () => {
     expect(chartOptions.grid.vertLines.color).toBe("#27272a");
     expect(chartOptions.rightPriceScale.borderColor).toBe("#3f3f46");
     expect(chartOptions.timeScale.borderColor).toBe("#3f3f46");
+  });
+
+  it("adds configured BOLL MACD RSI and KDJ series without invalid numeric values", async () => {
+    render(
+      <AdvancedCandlestickChart
+        data={createBars(65)}
+        symbol="AAPL"
+        indicators={{ ma: true, boll: true, volume: true, macd: true, rsi: true, kdj: true }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getSeriesTitles()).toEqual(
+        expect.arrayContaining([
+          "MA5",
+          "MA10",
+          "MA20",
+          "MA60",
+          "BOLL Upper",
+          "BOLL Middle",
+          "BOLL Lower",
+          "Volume",
+          "DIF",
+          "DEA",
+          "MACD Histogram",
+          "RSI6",
+          "RSI12",
+          "RSI24",
+          "K",
+          "D",
+          "J",
+        ]),
+      );
+    });
+
+    expectFiniteSeriesDataPoints();
+  });
+
+  it("updates visible indicator series when an indicator control is toggled", async () => {
+    render(<AdvancedCandlestickChart data={createBars(65)} symbol="AAPL" />);
+
+    await waitFor(() => {
+      expect(getSeriesTitles()).toEqual(expect.arrayContaining(["MA60", "Volume"]));
+    });
+
+    chartMockState.addSeriesCalls = [];
+    fireEvent.click(screen.getByRole("button", { name: "BOLL" }));
+
+    await waitFor(() => {
+      expect(getSeriesTitles()).toEqual(expect.arrayContaining(["BOLL Upper", "BOLL Middle", "BOLL Lower"]));
+    });
+  });
+
+  it("renders technical indicator controls in Chinese", () => {
+    render(
+      <NextIntlClientProvider locale="zh" messages={chineseMessages}>
+        <AdvancedCandlestickChart data={createBars(65)} symbol="AAPL" />
+      </NextIntlClientProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "均线" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "布林线" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "成交量" })).toBeInTheDocument();
   });
 });
