@@ -188,6 +188,49 @@ export default async function SettingsPage({
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("displayPreferencesTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t("colorSchemeLabel")}</label>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="color_scheme"
+                    value="china"
+                    defaultChecked={settings.color_scheme === "china"}
+                    className="h-4 w-4"
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{t("chinaConvention")}</span>
+                    <span className="text-xs text-muted-foreground">
+                      (<span className="text-green-600 font-medium">绿涨</span> / <span className="text-red-600 font-medium">红跌</span>)
+                    </span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="color_scheme"
+                    value="international"
+                    defaultChecked={settings.color_scheme === "international"}
+                    className="h-4 w-4"
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{t("internationalConvention")}</span>
+                    <span className="text-xs text-muted-foreground">
+                      (<span className="text-red-600 font-medium">红涨</span> / <span className="text-green-600 font-medium">绿跌</span>)
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Button type="submit">{t("save")}</Button>
       </form>
     </div>
