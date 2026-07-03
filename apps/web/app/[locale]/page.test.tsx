@@ -256,10 +256,15 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   );
 
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
+  expect(screen.getByText("Daily-bar command center")).toBeInTheDocument();
+  expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
+  expect(screen.getByText("Default sample: first 25 instruments")).toBeInTheDocument();
+  expect(screen.getByText("Recommended next action")).toBeInTheDocument();
+  expect(screen.getByText("AAPL daily story")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
     .toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("AAPL Latest Price")).toBeInTheDocument();
-  expect(screen.getByText("$102.00")).toBeInTheDocument();
+  expect(screen.getAllByText("$102.00").length).toBeGreaterThan(0);
   expect(screen.getByText("Technical Indicators")).toBeInTheDocument();
   expect(screen.getByText("Fundamentals")).toBeInTheDocument();
   expect(screen.getByText("Latest News")).toBeInTheDocument();
@@ -281,7 +286,7 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("fundamental_metrics:AAPL:2026-01-02")).toBeInTheDocument();
   expect(screen.getAllByText("Latest Task Run").length).toBeGreaterThan(0);
   expect(screen.getByText("Portfolio Value")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Trigger Ingestion" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Ingest daily bars" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Refresh Analysis" })).toBeInTheDocument();
 });
 
@@ -391,7 +396,8 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
   );
 
   expect(screen.getByText("600519 Latest Price")).toBeInTheDocument();
-  expect(screen.getByText("$1666.00")).toBeInTheDocument();
+  expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("$1666.00").length).toBeGreaterThan(0);
   expect(screen.getByText("No technical indicators available.")).toBeInTheDocument();
   expect(screen.getByText("No news sentiment available.")).toBeInTheDocument();
   expect(screen.getAllByText("Latest Task Run").length).toBeGreaterThan(0);

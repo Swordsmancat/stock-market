@@ -108,15 +108,17 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
   expect(screen.getByRole("heading", { name: "Instruments" })).toBeInTheDocument();
   expect(screen.getByText("Instrument source: database")).toBeInTheDocument();
   expect(screen.getByText("Active provider: yfinance")).toBeInTheDocument();
+  expect(screen.getByText("Visible daily-bar health")).toBeInTheDocument();
+  expect(screen.getByText("Latest daily-bar health for 2 of 2 instruments using yfinance.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "AAPL" })).toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
   expect(screen.getByText("$102.15")).toBeInTheDocument();
   expect(screen.getByText("Source: database")).toBeInTheDocument();
   expect(screen.getAllByText("Provider: yfinance").length).toBeGreaterThan(0);
-  expect(screen.getByText("Fresh")).toBeInTheDocument();
+  expect(screen.getAllByText("Fresh").length).toBeGreaterThan(0);
   expect(screen.getByText("Microsoft Corp.")).toBeInTheDocument();
   expect(screen.getByText("No latest daily bar.")).toBeInTheDocument();
-  expect(screen.getByText("No data")).toBeInTheDocument();
+  expect(screen.getAllByText("No data").length).toBeGreaterThan(0);
   expect(screen.getAllByRole("link", { name: /Reports/ })[0]).toHaveAttribute("href", "/reports?symbol=AAPL");
 });
 

@@ -46,6 +46,7 @@ it("renders latest report, history, and citations", async () => {
   expect(screen.getByText("2 reports found")).toBeInTheDocument();
   expect(screen.getByText("Showing 1-2 of 2")).toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: "AAPL" })[0]).toHaveAttribute("href", "/instruments/AAPL");
-  expect(screen.getByText(/Persisted report: MA 119.00/)).toBeInTheDocument();
+  expect(screen.getAllByText("AAPL daily report").length).toBeGreaterThan(0);
+  expect(screen.queryByText(/Persisted report: MA 119.00/)).not.toBeInTheDocument();
   expect(screen.getAllByTitle("View Full Report")[0]).toHaveAttribute("href", "/reports/report-1");
 });

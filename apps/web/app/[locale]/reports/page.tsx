@@ -44,6 +44,28 @@ async function fetchReports(params: URLSearchParams): Promise<ReportsPayload> {
   return response.json() as Promise<ReportsPayload>;
 }
 
+function cleanReportPreviewLine(line: string): string {
+  return line
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*]\s+/, "")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/[*_`]/g, "")
+    .trim();
+}
+
+function extractReportPreview(contentMarkdown: string, fallback: string): string {
+  const lines = contentMarkdown.split(/\r?\n/).map((line) => line.trim());
+  const headingLine = lines.find((line) => line.startsWith("#"));
+  const meaningfulLine = headingLine ?? lines.find((line) => line.length > 0);
+
+  if (meaningfulLine === undefined) {
+    return fallback;
+  }
+
+  const cleanedLine = cleanReportPreviewLine(meaningfulLine);
+  return cleanedLine || fallback;
+}
+
 export default async function ReportsCenterPage({
   searchParams = Promise.resolve({}),
 }: {
@@ -186,7 +208,7 @@ export default async function ReportsCenterPage({
                       {item.as_of ? new Date(item.as_of).toLocaleDateString() : "--"}
                     </TableCell>
                     <TableCell className="max-w-[300px] truncate text-muted-foreground">
-                      {item.content_markdown.substring(0, 100)}...
+                      {extractReportPreview(item.content_markdown, t("emptyPreview"))}
                     </TableCell>
                     <TableCell>
                       {item.task_run_id ? (

@@ -8,6 +8,7 @@ type IngestionTriggerFormProps = {
   end: string;
   provider: string;
   label: string;
+  buttonVariant?: "default" | "outline";
 };
 
 export function IngestionTriggerForm({
@@ -17,6 +18,7 @@ export function IngestionTriggerForm({
   end,
   provider,
   label,
+  buttonVariant = "outline",
 }: IngestionTriggerFormProps) {
   return (
     <form action={triggerIngestionAction} className="inline-block">
@@ -25,7 +27,7 @@ export function IngestionTriggerForm({
       <input type="hidden" name="start" value={start} />
       <input type="hidden" name="end" value={end} />
       <input type="hidden" name="provider" value={provider} />
-      <Button type="submit" variant="outline">
+      <Button type="submit" variant={buttonVariant}>
         {label}
       </Button>
     </form>

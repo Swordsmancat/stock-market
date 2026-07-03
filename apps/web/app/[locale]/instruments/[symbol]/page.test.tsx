@@ -166,6 +166,10 @@ it("renders instrument detail with market, indicators, fundamentals, news, and r
   expect(screen.getByText("US")).toBeInTheDocument();
   expect(screen.getAllByText("$102.00").length).toBeGreaterThan(0);
   expect(screen.getByText("Daily Bar Summary")).toBeInTheDocument();
+  expect(screen.getByText("Daily movement")).toBeInTheDocument();
+  expect(screen.getByText("Up: +1.00 (+0.99%)")).toBeInTheDocument();
+  expect(screen.getByText("Direction is shown with signs and labels, not color alone.")).toBeInTheDocument();
+  expect(screen.getByText("Latest volume")).toBeInTheDocument();
   expect(screen.getByText("Source: database")).toBeInTheDocument();
   expect(screen.getByText("Provider: yfinance")).toBeInTheDocument();
   expect(screen.getByText("Fresh")).toBeInTheDocument();
@@ -173,7 +177,7 @@ it("renders instrument detail with market, indicators, fundamentals, news, and r
   expect(screen.getByText("Recent OHLCV")).toBeInTheDocument();
   expect(screen.getAllByText("1/20/2026").length).toBeGreaterThan(0);
   expect(screen.getAllByText("102.00").length).toBeGreaterThan(0);
-  expect(screen.getByText("1,200")).toBeInTheDocument();
+  expect(screen.getAllByText("1,200").length).toBeGreaterThan(0);
   expect(screen.getByText("Price History")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Candles" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "MA(20)" })).toBeInTheDocument();

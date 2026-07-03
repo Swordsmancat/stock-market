@@ -62,6 +62,8 @@ type LatestDailyBarLoadResult =
 
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
+type LatestDailyBarHealthCounts = Record<FreshnessStatus, number>;
+
 type InstrumentsPageProps = {
   params: Promise<{ locale: string }>;
   searchParams?: Promise<{
@@ -199,6 +201,23 @@ function getFreshnessBadgeVariant(freshnessStatus: FreshnessStatus): "secondary"
   return "destructive";
 }
 
+function countLatestDailyBarHealth(latestDailyBars: LatestDailyBarLoadResult[]): LatestDailyBarHealthCounts {
+  const initialCounts: LatestDailyBarHealthCounts = {
+    fresh: 0,
+    stale: 0,
+    no_data: 0,
+    unavailable: 0,
+  };
+
+  return latestDailyBars.reduce((counts, latestDailyBar) => {
+    const freshnessStatus = getFreshnessStatus(latestDailyBar);
+    return {
+      ...counts,
+      [freshnessStatus]: counts[freshnessStatus] + 1,
+    };
+  }, initialCounts);
+}
+
 function getLatestSource(latestDailyBar: LatestDailyBarLoadResult, instrument: Instrument): string {
   if (latestDailyBar.status === "failed") {
     return "unavailable";
@@ -276,6 +295,7 @@ export default async function InstrumentsPage({
   const latestDailyBars = await Promise.all(
     visibleInstruments.map((instrument) => fetchLatestDailyBar(instrument.symbol, activeProvider)),
   );
+  const latestDailyBarHealthCounts = countLatestDailyBarHealth(latestDailyBars);
 
   return (
     <div className="space-y-6">
@@ -328,6 +348,43 @@ export default async function InstrumentsPage({
               <Link href="/instruments">{t("reset")}</Link>
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("healthSummaryTitle")}</CardTitle>
+          <CardDescription>
+            {t("healthSummaryDesc", {
+              visible: visibleInstruments.length,
+              total: instruments.length,
+              provider: activeProvider,
+            })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">{t("visibleInstruments")}</div>
+              <div className="text-2xl font-bold">{visibleInstruments.length}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">{t("fresh")}</div>
+              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.fresh}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">{t("stale")}</div>
+              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.stale}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">{t("no_data")}</div>
+              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.no_data}</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="text-xs text-muted-foreground">{t("unavailable")}</div>
+              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.unavailable}</div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

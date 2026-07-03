@@ -6,6 +6,7 @@ import { IngestionTriggerForm } from "@/components/ingestion-trigger-form";
 import { FlashBanner } from "@/components/flash-banner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MiniPriceChart } from "@/components/mini-price-chart";
 import { EmptyState } from "@/components/empty-state";
@@ -26,12 +27,15 @@ type InstrumentsPayload = {
 
 type BarsPayload = {
   source: string;
-  items: Array<{ timestamp: string; close: number }>;
+  items: Array<{ timestamp: string; close: number; volume?: number }>;
 };
 
 type LatestBarPayload = {
   source: string;
-  item?: { close: number } | null;
+  provider?: string | null;
+  effective_provider?: string | null;
+  status?: "ok" | "no_data" | string;
+  item?: { timestamp?: string; close: number } | null;
 };
 
 type ReportPayload = {
@@ -116,12 +120,54 @@ type AlertTriggersPayload = {
   }>;
 };
 
+const DASHBOARD_HEALTH_SAMPLE_LIMIT = 25;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
+
+type LatestBarLoadResult =
+  | { status: "loaded"; payload: LatestBarPayload }
+  | { status: "failed" };
+
+type DashboardHealthScope = "watchlist" | "default_sample";
+
+type DashboardHealthInstrument = Instrument & {
+  alertTriggered?: boolean;
+};
+
+type DashboardHealthCounts = Record<FreshnessStatus, number>;
+
+type DailyMovement = {
+  direction: "up" | "down" | "flat";
+  absoluteChange: number;
+  percentChange: number | null;
+} | null;
+
 async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
   const response = await backendFetch(`${path}`, { cache: "no-store" });
   if (!response.ok) {
     return fallback;
   }
   return response.json() as Promise<T>;
+}
+
+async function fetchLatestBarResult(symbol: string, provider: string): Promise<LatestBarLoadResult> {
+  try {
+    const response = await backendFetch(
+      withProviderQuery(`/market-data/${encodeURIComponent(symbol)}/latest`, provider),
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return { status: "failed" };
+    }
+
+    return {
+      status: "loaded",
+      payload: (await response.json()) as LatestBarPayload,
+    };
+  } catch {
+    return { status: "failed" };
+  }
 }
 
 async function fetchPlatformProvider(): Promise<string> {
@@ -149,6 +195,147 @@ function renderCitation(citation: string) {
 function hasTechnicalIndicators(payload: IndicatorsPayload): boolean {
   const { ma, rsi, bollinger, atr } = payload.indicators;
   return ma !== undefined || rsi !== undefined || bollinger !== undefined || atr !== undefined;
+}
+
+function parseLatestBarTimestamp(latestBarResult: LatestBarLoadResult): Date | null {
+  if (latestBarResult.status === "failed") {
+    return null;
+  }
+
+  const timestamp = latestBarResult.payload.item?.timestamp;
+  if (!timestamp) {
+    return null;
+  }
+
+  const parsedTimestamp = new Date(timestamp);
+  return Number.isNaN(parsedTimestamp.getTime()) ? null : parsedTimestamp;
+}
+
+function getFreshnessStatus(latestBarResult: LatestBarLoadResult): FreshnessStatus {
+  if (latestBarResult.status === "failed") {
+    return "unavailable";
+  }
+
+  if (latestBarResult.payload.status === "no_data" || latestBarResult.payload.item == null) {
+    return "no_data";
+  }
+
+  const parsedTimestamp = parseLatestBarTimestamp(latestBarResult);
+  if (parsedTimestamp === null) {
+    return "unavailable";
+  }
+
+  const daysSinceLatestBar = (Date.now() - parsedTimestamp.getTime()) / MILLISECONDS_PER_DAY;
+  return daysSinceLatestBar <= 3 ? "fresh" : "stale";
+}
+
+function getFreshnessBadgeVariant(freshnessStatus: FreshnessStatus): "secondary" | "outline" | "destructive" {
+  if (freshnessStatus === "fresh") {
+    return "secondary";
+  }
+  if (freshnessStatus === "stale") {
+    return "outline";
+  }
+  return "destructive";
+}
+
+function formatLatestBarDate(latestBarResult: LatestBarLoadResult, locale: string, unavailableLabel: string): string {
+  const parsedTimestamp = parseLatestBarTimestamp(latestBarResult);
+  return parsedTimestamp === null ? unavailableLabel : parsedTimestamp.toLocaleDateString(locale);
+}
+
+function buildDashboardHealthInstruments(
+  instruments: Instrument[],
+  watchlistItems: WatchlistPayload["items"],
+): { scope: DashboardHealthScope; instruments: DashboardHealthInstrument[] } {
+  if (watchlistItems.length > 0) {
+    const instrumentsBySymbol = new Map(instruments.map((instrument) => [instrument.symbol.toUpperCase(), instrument]));
+    return {
+      scope: "watchlist",
+      instruments: watchlistItems.map((watchlistItem) => {
+        const matchedInstrument = instrumentsBySymbol.get(watchlistItem.symbol.toUpperCase());
+        return {
+          symbol: watchlistItem.symbol,
+          name: matchedInstrument?.name ?? watchlistItem.symbol,
+          market: watchlistItem.market || matchedInstrument?.market || "US",
+          alertTriggered: watchlistItem.alert_status?.triggered,
+        };
+      }),
+    };
+  }
+
+  return {
+    scope: "default_sample",
+    instruments: instruments.slice(0, DASHBOARD_HEALTH_SAMPLE_LIMIT),
+  };
+}
+
+function countFreshnessStatuses(latestBarResults: LatestBarLoadResult[]): DashboardHealthCounts {
+  const initialCounts: DashboardHealthCounts = {
+    fresh: 0,
+    stale: 0,
+    no_data: 0,
+    unavailable: 0,
+  };
+
+  return latestBarResults.reduce((counts, latestBarResult) => {
+    const freshnessStatus = getFreshnessStatus(latestBarResult);
+    return {
+      ...counts,
+      [freshnessStatus]: counts[freshnessStatus] + 1,
+    };
+  }, initialCounts);
+}
+
+function getDailyMovement(items: BarsPayload["items"]): DailyMovement {
+  const latestDailyBar = items.at(-1);
+  const previousDailyBar = items.at(-2);
+  if (latestDailyBar === undefined || previousDailyBar === undefined) {
+    return null;
+  }
+
+  const absoluteChange = latestDailyBar.close - previousDailyBar.close;
+  const percentChange = previousDailyBar.close === 0 ? null : absoluteChange / previousDailyBar.close;
+  const direction = absoluteChange > 0 ? "up" : absoluteChange < 0 ? "down" : "flat";
+
+  return {
+    direction,
+    absoluteChange,
+    percentChange,
+  };
+}
+
+function formatSignedNumber(value: number, locale: string): string {
+  const formattedValue = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(Math.abs(value));
+  if (value > 0) {
+    return `+${formattedValue}`;
+  }
+  if (value < 0) {
+    return `-${formattedValue}`;
+  }
+  return formattedValue;
+}
+
+function formatSignedPercent(value: number | null, locale: string, unavailableLabel: string): string {
+  if (value === null) {
+    return unavailableLabel;
+  }
+
+  const formattedValue = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "percent",
+  }).format(Math.abs(value));
+  if (value > 0) {
+    return `+${formattedValue}`;
+  }
+  if (value < 0) {
+    return `-${formattedValue}`;
+  }
+  return formattedValue;
 }
 
 export default async function HomePage({
@@ -266,6 +453,46 @@ export default async function HomePage({
   const latestNews = newsPayload.items[0];
   const reportCitations = reportPayload.citations ?? [];
   const dailyReportCitations = dailyReportPayload.citations ?? [];
+  const dashboardHealth = buildDashboardHealthInstruments(instrumentsPayload.items, watchlistPayload.items);
+  const dashboardHealthLatestBars = await Promise.all(
+    dashboardHealth.instruments.map((instrument) => fetchLatestBarResult(instrument.symbol, provider)),
+  );
+  const dashboardHealthCounts = countFreshnessStatuses(dashboardHealthLatestBars);
+  const checkedInstrumentCount = dashboardHealth.instruments.length;
+  const attentionItems = dashboardHealth.instruments
+    .map((instrument, index) => ({
+      instrument,
+      latestBarResult: dashboardHealthLatestBars[index],
+      freshnessStatus: getFreshnessStatus(dashboardHealthLatestBars[index]),
+    }))
+    .filter((item) => item.freshnessStatus !== "fresh")
+    .slice(0, 5);
+  const primaryLatestBarResult: LatestBarLoadResult = { status: "loaded", payload: latestBarPayload };
+  const primaryFreshnessStatus = getFreshnessStatus(primaryLatestBarResult);
+  const latestDailyBarDateLabel = formatLatestBarDate(primaryLatestBarResult, locale, t("unavailableShort"));
+  const dailyMovement = getDailyMovement(barsPayload.items);
+  const dailyMovementDirectionLabel = dailyMovement
+    ? dailyMovement.direction === "up"
+      ? t("movementUp")
+      : dailyMovement.direction === "down"
+      ? t("movementDown")
+      : t("movementFlat")
+    : t("movementUnavailable");
+  const dailyMovementLabel = dailyMovement
+    ? t("dailyMovementValue", {
+        direction: dailyMovementDirectionLabel,
+        change: formatSignedNumber(dailyMovement.absoluteChange, locale),
+        percent: formatSignedPercent(dailyMovement.percentChange, locale, t("unavailableShort")),
+      })
+    : t("dailyMovementUnavailable");
+  const primaryProvider = latestBarPayload.effective_provider ?? latestBarPayload.provider ?? provider;
+  const hasMissingOrUnavailableData = dashboardHealthCounts.no_data + dashboardHealthCounts.unavailable > 0;
+  const hasStaleData = dashboardHealthCounts.stale > 0;
+  const primaryActionLabel = hasMissingOrUnavailableData
+    ? t("actionIngestMissingData")
+    : hasStaleData
+    ? t("actionRefreshStaleData")
+    : t("actionOpenPrimaryInstrument");
 
   return (
     <div className="space-y-6">
@@ -323,24 +550,172 @@ export default async function HomePage({
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <IngestionTriggerForm
-            locale={locale}
-            market={primaryInstrument.market}
-            start={recent.start}
-            end={recent.end}
-            provider={provider}
-            label={t("triggerIngestion")}
-          />
-          <AnalysisTriggerForm
-            locale={locale}
-            symbol={primaryInstrument.symbol}
-            market={primaryInstrument.market}
-            start={analysis.start}
-            end={analysis.end}
-            maWindow={3}
-            provider={provider}
-            label={t("refreshAnalysis")}
-          />
+          <Button variant="outline" asChild>
+            <Link href="/task-runs">{t("viewTaskRuns")}</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/settings">{t("providerSettings")}</Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
+        <Card className="border-primary/20 bg-muted/20">
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{t("commandCenterBadge")}</Badge>
+              <Badge variant="outline">
+                {dashboardHealth.scope === "watchlist"
+                  ? t("healthScopeWatchlist")
+                  : t("healthScopeDefaultSample", { limit: DASHBOARD_HEALTH_SAMPLE_LIMIT })}
+              </Badge>
+              <Badge variant="outline">{t("activeProvider", { provider })}</Badge>
+            </div>
+            <CardTitle className="text-2xl">{t("dataHealthTitle")}</CardTitle>
+            <CardDescription>{t("dataHealthDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="rounded-lg border bg-background p-3">
+                <div className="text-xs text-muted-foreground">{t("checkedInstruments")}</div>
+                <div className="text-2xl font-bold">{checkedInstrumentCount}</div>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <div className="text-xs text-muted-foreground">{t("fresh")}</div>
+                <div className="text-2xl font-bold">{dashboardHealthCounts.fresh}</div>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <div className="text-xs text-muted-foreground">{t("stale")}</div>
+                <div className="text-2xl font-bold">{dashboardHealthCounts.stale}</div>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <div className="text-xs text-muted-foreground">{t("no_data")}</div>
+                <div className="text-2xl font-bold">{dashboardHealthCounts.no_data}</div>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <div className="text-xs text-muted-foreground">{t("unavailable")}</div>
+                <div className="text-2xl font-bold">{dashboardHealthCounts.unavailable}</div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 rounded-lg border bg-background p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm font-medium">{t("primaryNextAction")}</div>
+                <p className="text-sm text-muted-foreground">
+                  {hasMissingOrUnavailableData
+                    ? t("missingDataActionHint")
+                    : hasStaleData
+                    ? t("staleDataActionHint")
+                    : t("healthyDataActionHint", { symbol: primaryInstrument.symbol })}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {hasMissingOrUnavailableData || hasStaleData ? (
+                  <IngestionTriggerForm
+                    locale={locale}
+                    market={primaryInstrument.market}
+                    start={recent.start}
+                    end={recent.end}
+                    provider={provider}
+                    label={primaryActionLabel}
+                    buttonVariant="default"
+                  />
+                ) : (
+                  <Button asChild>
+                    <Link href={`/instruments/${primaryInstrument.symbol}` as any}>{primaryActionLabel}</Link>
+                  </Button>
+                )}
+                <Button variant="outline" asChild>
+                  <Link href={taskRunPayload.id ? (`/task-runs/${taskRunPayload.id}` as any) : "/task-runs"}>
+                    {t("inspectTaskRuns")}
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/settings">{t("providerSettings")}</Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("watchlistHealthTitle")}</CardTitle>
+              <CardDescription>
+                {dashboardHealth.scope === "watchlist"
+                  ? t("watchlistHealthDesc")
+                  : t("defaultSampleHealthDesc")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {attentionItems.length > 0 ? (
+                <div className="space-y-2">
+                  {attentionItems.map(({ instrument, freshnessStatus, latestBarResult }) => (
+                    <Link
+                      key={`${instrument.market}-${instrument.symbol}`}
+                      href={`/instruments/${instrument.symbol}` as any}
+                      className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                    >
+                      <div>
+                        <div className="font-medium">{instrument.symbol}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t("latestDailyBarAsOf", {
+                            date: formatLatestBarDate(latestBarResult, locale, t("unavailableShort")),
+                          })}
+                        </div>
+                      </div>
+                      <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("allCheckedDataFresh")}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("primaryInstrumentStory", { symbol: primaryInstrument.symbol })}</CardTitle>
+              <CardDescription>{t("primaryInstrumentStoryDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="text-3xl font-bold">{latestClose ? `$${latestClose.toFixed(2)}` : t("unavailableShort")}</div>
+                <Badge variant={getFreshnessBadgeVariant(primaryFreshnessStatus)}>{t(primaryFreshnessStatus)}</Badge>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">{t("dailyMovement")}</div>
+                  <div className="font-semibold">{dailyMovementLabel}</div>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">{t("sourceProvider")}</div>
+                  <div className="font-semibold">{t("source", { source: priceSource })}</div>
+                  <div className="text-xs text-muted-foreground">{t("providerValue", { provider: primaryProvider })}</div>
+                </div>
+              </div>
+              <MiniPriceChart items={barsPayload.items} className="h-20 w-full" />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/instruments/${primaryInstrument.symbol}` as any}>{t("openInstrument")}</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/reports?symbol=${primaryInstrument.symbol}` as any}>{t("viewAllReports")}</Link>
+                </Button>
+                <AnalysisTriggerForm
+                  locale={locale}
+                  symbol={primaryInstrument.symbol}
+                  market={primaryInstrument.market}
+                  start={analysis.start}
+                  end={analysis.end}
+                  maWindow={3}
+                  provider={provider}
+                  label={t("refreshAnalysis")}
+                />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

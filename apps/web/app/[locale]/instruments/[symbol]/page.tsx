@@ -48,6 +48,12 @@ type BarsLoadResult =
 
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
+type DailyMovement = {
+  direction: "up" | "down" | "flat";
+  absoluteChange: number;
+  percentChange: number | null;
+} | null;
+
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const RECENT_OHLCV_ROW_LIMIT = 10;
 
@@ -179,6 +185,57 @@ function formatVolumeValue(value: number | undefined, locale: string, unavailabl
   }).format(value);
 }
 
+function getDailyMovement(dailyBars: BarsPayload["items"]): DailyMovement {
+  const latestDailyBar = dailyBars.at(-1);
+  const previousDailyBar = dailyBars.at(-2);
+  if (latestDailyBar === undefined || previousDailyBar === undefined) {
+    return null;
+  }
+
+  const absoluteChange = latestDailyBar.close - previousDailyBar.close;
+  const percentChange = previousDailyBar.close === 0 ? null : absoluteChange / previousDailyBar.close;
+  const direction = absoluteChange > 0 ? "up" : absoluteChange < 0 ? "down" : "flat";
+
+  return {
+    direction,
+    absoluteChange,
+    percentChange,
+  };
+}
+
+function formatSignedNumber(value: number, locale: string): string {
+  const formattedValue = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(Math.abs(value));
+  if (value > 0) {
+    return `+${formattedValue}`;
+  }
+  if (value < 0) {
+    return `-${formattedValue}`;
+  }
+  return formattedValue;
+}
+
+function formatSignedPercent(value: number | null, locale: string, unavailableLabel: string): string {
+  if (value === null) {
+    return unavailableLabel;
+  }
+
+  const formattedValue = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "percent",
+  }).format(Math.abs(value));
+  if (value > 0) {
+    return `+${formattedValue}`;
+  }
+  if (value < 0) {
+    return `-${formattedValue}`;
+  }
+  return formattedValue;
+}
+
 function getFreshnessStatus(barsResult: BarsLoadResult): FreshnessStatus {
   if (barsResult.status === "failed") {
     return "unavailable";
@@ -305,8 +362,24 @@ export default async function InstrumentDetailPage({
   const dailyBarSource = getDailyBarSource(barsResult);
   const latestCloseLabel = latestClose === undefined ? unavailableLabel : `$${formatNumberValue(latestClose, locale, unavailableLabel)}`;
   const latestDailyBarDateLabel = formatDailyBarDate(latestDailyBar?.timestamp, locale, unavailableLabel);
+  const latestVolumeLabel = formatVolumeValue(latestDailyBar?.volume, locale, unavailableLabel);
   const chartRangeLabel = formatChartRange(dailyBars, locale, unavailableLabel);
   const dailyBarCountLabel = new Intl.NumberFormat(locale).format(dailyBars.length);
+  const dailyMovement = getDailyMovement(dailyBars);
+  const dailyMovementDirectionLabel = dailyMovement
+    ? dailyMovement.direction === "up"
+      ? t("movementUp")
+      : dailyMovement.direction === "down"
+      ? t("movementDown")
+      : t("movementFlat")
+    : t("movementUnavailable");
+  const dailyMovementLabel = dailyMovement
+    ? t("dailyMovementValue", {
+        direction: dailyMovementDirectionLabel,
+        change: formatSignedNumber(dailyMovement.absoluteChange, locale),
+        percent: formatSignedPercent(dailyMovement.percentChange, locale, unavailableLabel),
+      })
+    : t("dailyMovementUnavailable");
   const recentDailyBars = dailyBars.slice(-RECENT_OHLCV_ROW_LIMIT).reverse();
   const chartLabels = {
     candles: t("chartCandles"),
@@ -422,22 +495,31 @@ export default async function InstrumentDetailPage({
           <CardDescription>{t("dailyBarSummaryDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border p-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="rounded-lg border p-4 xl:col-span-2">
               <div className="text-sm font-medium text-muted-foreground mb-1">{t("latestClose")}</div>
               <div className="text-2xl font-bold">{latestCloseLabel}</div>
               <div className="mt-1 text-xs text-muted-foreground">{t("latestDailyBarAsOf", { date: latestDailyBarDateLabel })}</div>
             </div>
+            <div className="rounded-lg border p-4 xl:col-span-2">
+              <div className="text-sm font-medium text-muted-foreground mb-1">{t("dailyMovement")}</div>
+              <div className="text-xl font-bold">{dailyMovementLabel}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{t("movementTextFirstHint")}</div>
+            </div>
             <div className="rounded-lg border p-4">
-              <div className="text-sm font-medium text-muted-foreground mb-1">{t("sourceProvider")}</div>
-              <div className="text-sm font-semibold">{t("sourceValue", { source: dailyBarSource })}</div>
-              <div className="mt-1 text-xs text-muted-foreground">{t("providerValue", { provider: dailyBarProvider })}</div>
+              <div className="text-sm font-medium text-muted-foreground mb-1">{t("latestVolume")}</div>
+              <div className="text-xl font-semibold">{latestVolumeLabel}</div>
             </div>
             <div className="rounded-lg border p-4">
               <div className="text-sm font-medium text-muted-foreground mb-1">{t("freshness")}</div>
               <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 xl:col-span-3">
+              <div className="text-sm font-medium text-muted-foreground mb-1">{t("sourceProvider")}</div>
+              <div className="text-sm font-semibold">{t("sourceValue", { source: dailyBarSource })}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{t("providerValue", { provider: dailyBarProvider })}</div>
+            </div>
+            <div className="rounded-lg border p-4 xl:col-span-3">
               <div className="text-sm font-medium text-muted-foreground mb-1">{t("barCoverage")}</div>
               <div className="text-sm font-semibold">{t("barCount", { count: dailyBarCountLabel })}</div>
               <div className="mt-1 text-xs text-muted-foreground">{t("chartRange", { range: chartRangeLabel })}</div>
