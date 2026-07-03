@@ -790,30 +790,30 @@ export default async function HomePage({
           </CardHeader>
           <CardContent>
             {marketOverviewIndices.length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
                 {marketOverviewIndices.map((item) => {
                   const freshnessStatus = coerceFreshnessStatus(item.freshness);
                   return (
-                    <div key={item.code} className="rounded-lg border p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="font-semibold leading-tight">{item.name}</div>
-                          <div className="text-xs text-muted-foreground">{item.region}</div>
+                    <div key={item.code} className="rounded-lg border p-2 transition-colors hover:bg-muted/50">
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold leading-tight text-xs truncate">{item.name}</div>
+                          <div className="text-[10px] text-muted-foreground">{item.region}</div>
                         </div>
-                        <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
+                        <Badge variant={getFreshnessBadgeVariant(freshnessStatus)} className="text-[10px] px-1 py-0 shrink-0">{t(freshnessStatus)}</Badge>
                       </div>
-                      <div className="mt-3 text-2xl font-bold">
+                      <div className="mt-2 text-3xl font-bold leading-tight">
                         {formatDashboardNumber(item.latest?.close, locale, t("unavailableShort"))}
                       </div>
-                      <div className="mt-1 text-sm text-muted-foreground">
+                      <div className="mt-1 text-xs text-muted-foreground">
                         {formatDashboardMovement(item.latest?.movement, locale, t("unavailableShort"), marketDashboardMovementLabels)}
                       </div>
                       <CompactCandlestickChart
                         data={item.bars}
                         emptyMessage={t("chartUnavailable")}
-                        className="mt-3 h-24 w-full"
+                        className="mt-2 h-16 w-full"
                       />
-                      <div className="mt-2 text-xs text-muted-foreground">
+                      <div className="mt-1 text-[10px] text-muted-foreground truncate">
                         {t("latestDailyBarAsOf", {
                           date: formatDashboardDate(item.latest?.timestamp, locale, t("unavailableShort")),
                         })}
