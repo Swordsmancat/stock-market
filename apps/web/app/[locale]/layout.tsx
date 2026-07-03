@@ -7,6 +7,7 @@ import { notFound } from "next/navigation"
 import { routing } from "@/src/i18n/routing"
 
 import { ThemeProvider } from "@/components/theme-provider"
+import { MarketColorsProvider } from "@/context/market-colors-context"
 import { TopNavBar } from "@/components/top-nav-bar"
 import { SidebarNavigation } from "@/components/sidebar-navigation"
 import { MobileNavigation } from "@/components/mobile-navigation"
@@ -44,18 +45,20 @@ export default async function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <div className="flex h-screen flex-col overflow-hidden">
-              <TopNavBar />
-              <div className="flex flex-1 overflow-hidden">
-                <SidebarNavigation />
-                <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
-                  <Breadcrumbs />
-                  <BackendStatusBanner />
-                  {children}
-                </main>
+            <MarketColorsProvider>
+              <div className="flex h-screen flex-col overflow-hidden">
+                <TopNavBar />
+                <div className="flex flex-1 overflow-hidden">
+                  <SidebarNavigation />
+                  <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+                    <Breadcrumbs />
+                    <BackendStatusBanner />
+                    {children}
+                  </main>
+                </div>
+                <MobileNavigation />
               </div>
-              <MobileNavigation />
-            </div>
+            </MarketColorsProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

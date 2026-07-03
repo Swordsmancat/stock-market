@@ -14,6 +14,7 @@ DEFAULTS: dict[str, Any] = {
     "akshare_enabled": False,
     "tushare_token": "",
     "tushare_http_url": "",
+    "color_scheme": "china",
 }
 
 
@@ -66,6 +67,7 @@ def get_platform_settings() -> dict[str, Any]:
         "akshare_enabled": bool(payload.get("akshare_enabled", False)),
         "tushare_token": str(payload.get("tushare_token", "") or ""),
         "tushare_http_url": str(payload.get("tushare_http_url", "") or ""),
+        "color_scheme": str(payload.get("color_scheme", "china")),
     }
 
 
@@ -74,6 +76,7 @@ def get_platform_settings_public() -> dict[str, Any]:
     api_key = current["llm_api_key"]
     tushare_token = current["tushare_token"]
     tushare_http_url = current["tushare_http_url"]
+    color_scheme = current["color_scheme"]
     return {
         **current,
         "llm_api_key": api_key,
@@ -81,6 +84,7 @@ def get_platform_settings_public() -> dict[str, Any]:
         "tushare_token": "",
         "tushare_token_configured": bool(tushare_token.strip()),
         "tushare_http_url": tushare_http_url,
+        "color_scheme": color_scheme,
         "market_data_provider_capabilities": build_market_data_provider_capabilities(current),
     }
 
@@ -136,6 +140,7 @@ def update_platform_settings(updates: dict[str, Any]) -> dict[str, Any]:
     current["akshare_enabled"] = bool(current.get("akshare_enabled", False))
     current["tushare_token"] = str(current.get("tushare_token", "") or "")
     current["tushare_http_url"] = str(current.get("tushare_http_url", "") or "")
+    current["color_scheme"] = str(current.get("color_scheme", "china"))
     _ensure_parent()
     SETTINGS_PATH.write_text(json.dumps(current, indent=2), encoding="utf-8")
     return get_platform_settings_public()
