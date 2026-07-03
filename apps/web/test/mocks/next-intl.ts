@@ -1,12 +1,26 @@
-import messages from "../../messages/en.json";
-import type * as React from "react";
+import englishMessages from "../../messages/en.json";
+import chineseMessages from "../../messages/zh.json";
+import * as React from "react";
 
-type MessageNamespace = keyof typeof messages;
+type MessageCatalog = Record<string, Record<string, string>>;
 
-function translate(namespace?: string) {
+const DEFAULT_LOCALE = "en";
+const messagesByLocale: Record<string, MessageCatalog> = {
+  en: englishMessages as MessageCatalog,
+  zh: chineseMessages as MessageCatalog,
+};
+
+const defaultIntlContextValue = {
+  locale: DEFAULT_LOCALE,
+  messages: messagesByLocale[DEFAULT_LOCALE],
+};
+
+let activeIntlContextValue = defaultIntlContextValue;
+
+function translate(namespace?: string, activeMessages: MessageCatalog = defaultIntlContextValue.messages) {
   return (key: string, values?: Record<string, string | number>) => {
     const namespaceMessages = namespace
-      ? (messages[namespace as MessageNamespace] as Record<string, string> | undefined)
+      ? activeMessages[namespace]
       : undefined;
     let message = namespaceMessages?.[key] ?? key;
     for (const [name, value] of Object.entries(values ?? {})) {
@@ -17,11 +31,38 @@ function translate(namespace?: string) {
 }
 
 export function useTranslations(namespace?: string) {
-  return translate(namespace);
+  return translate(namespace, activeIntlContextValue.messages);
 }
 
 export function useLocale() {
-  return "en";
+  return activeIntlContextValue.locale;
 }
 
-export const NextIntlClientProvider = ({ children }: { children: React.ReactNode }) => children;
+export function NextIntlClientProvider({
+  children,
+  locale = DEFAULT_LOCALE,
+  messages,
+}: {
+  children: React.ReactNode;
+  locale?: string;
+  messages?: MessageCatalog;
+}) {
+  const previousIntlContextValueRef = React.useRef(activeIntlContextValue);
+  const intlContextValue = React.useMemo(
+    () => ({
+      locale,
+      messages: messages ?? messagesByLocale[locale] ?? defaultIntlContextValue.messages,
+    }),
+    [locale, messages],
+  );
+
+  activeIntlContextValue = intlContextValue;
+
+  React.useEffect(() => {
+    return () => {
+      activeIntlContextValue = previousIntlContextValueRef.current;
+    };
+  }, []);
+
+  return React.createElement(React.Fragment, null, children);
+}

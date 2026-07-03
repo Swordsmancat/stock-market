@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
 import { PriceChangeBadge } from "@/components/price-change-badge";
+import { decodeInstrumentSymbol, getInstrumentDisplayName } from "@/lib/instrument-display";
 import type { InstrumentDetailPayload } from "@/lib/instrument-detail";
 
 interface InstrumentDetailClientProps {
@@ -23,6 +25,7 @@ export function InstrumentDetailClient({
   initialError = null,
 }: InstrumentDetailClientProps) {
   const router = useRouter();
+  const t = useTranslations("InstrumentDetail");
   const [data, setData] = useState<InstrumentDetailPayload | null>(initialData);
   const [loading, setLoading] = useState(initialData === null && initialError === null);
   const [error, setError] = useState<string | null>(initialError);
@@ -59,7 +62,7 @@ export function InstrumentDetailClient({
       <div className="space-y-6">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          返回
+          {t("back")}
         </Button>
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -73,11 +76,13 @@ export function InstrumentDetailClient({
       <div className="space-y-6">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          返回
+          {t("back")}
         </Button>
         <Card>
           <CardContent className="p-6">
-            <p className="text-center text-destructive">加载失败: {error}</p>
+            <p className="text-center text-destructive">
+              {t("loadFailed", { reason: error ?? t("unavailableShort") })}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -92,25 +97,28 @@ export function InstrumentDetailClient({
   const prevPrice = prevBar?.close || currentPrice;
   const change = currentPrice - prevPrice;
   const changePercent = prevPrice ? change / prevPrice : 0;
+  const decodedSymbol = decodeInstrumentSymbol(symbol);
+  const displayName = getInstrumentDisplayName(symbol, locale);
+  const subtitle = displayName === decodedSymbol ? t("detailSubtitle") : `${decodedSymbol} · ${t("detailSubtitle")}`;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          返回
+          {t("back")}
         </Button>
       </div>
 
       <div>
-        <h1 className="text-3xl font-bold">{decodeURIComponent(symbol)}</h1>
-        <p className="text-muted-foreground">标的详情</p>
+        <h1 className="text-3xl font-bold">{displayName}</h1>
+        <p className="text-muted-foreground">{subtitle}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>最新价</CardDescription>
+            <CardDescription>{t("latestPriceCard")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{currentPrice.toFixed(2)}</div>
@@ -119,7 +127,7 @@ export function InstrumentDetailClient({
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>涨跌额</CardDescription>
+            <CardDescription>{t("priceChange")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -130,7 +138,7 @@ export function InstrumentDetailClient({
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>涨跌幅</CardDescription>
+            <CardDescription>{t("priceChangePercent")}</CardDescription>
           </CardHeader>
           <CardContent>
             <PriceChangeBadge
@@ -146,8 +154,8 @@ export function InstrumentDetailClient({
 
       <Card>
         <CardHeader>
-          <CardTitle>K线图</CardTitle>
-          <CardDescription>交互式价格走势图</CardDescription>
+          <CardTitle>{t("klineTitle")}</CardTitle>
+          <CardDescription>{t("interactiveKlineDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {bars.length > 0 ? (
@@ -160,7 +168,7 @@ export function InstrumentDetailClient({
             />
           ) : (
             <div className="flex items-center justify-center h-96 text-muted-foreground">
-              暂无K线数据
+              {t("noKlineData")}
             </div>
           )}
         </CardContent>

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createChart } from "lightweight-charts";
+import { CandlestickSeries, createChart, HistogramSeries, LineSeries } from "lightweight-charts";
 import type { CandlestickData, IChartApi, ISeriesApi, Time } from "lightweight-charts";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 
 interface BarData {
@@ -35,6 +36,7 @@ export function AdvancedCandlestickChart({
   showVolume = true,
   className = "",
 }: AdvancedCandlestickChartProps) {
+  const { resolvedTheme } = useTheme();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -44,25 +46,40 @@ export function AdvancedCandlestickChart({
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
 
+    const isDarkTheme = resolvedTheme === "dark";
+    const chartTheme = isDarkTheme
+      ? {
+          background: "#18181b",
+          text: "#e4e4e7",
+          grid: "#27272a",
+          border: "#3f3f46",
+        }
+      : {
+          background: "#ffffff",
+          text: "#333333",
+          grid: "#f0f0f0",
+          border: "#e0e0e0",
+        };
+
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: height,
       layout: {
-        background: { color: "#ffffff" },
-        textColor: "#333",
+        background: { color: chartTheme.background },
+        textColor: chartTheme.text,
       },
       grid: {
-        vertLines: { color: "#f0f0f0" },
-        horzLines: { color: "#f0f0f0" },
+        vertLines: { color: chartTheme.grid },
+        horzLines: { color: chartTheme.grid },
       },
       crosshair: {
         mode: 1,
       },
       rightPriceScale: {
-        borderColor: "#e0e0e0",
+        borderColor: chartTheme.border,
       },
       timeScale: {
-        borderColor: "#e0e0e0",
+        borderColor: chartTheme.border,
         timeVisible: true,
         secondsVisible: false,
       },
@@ -70,7 +87,7 @@ export function AdvancedCandlestickChart({
 
     chartRef.current = chart;
 
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#26a69a",
       downColor: "#ef5350",
       borderVisible: false,
@@ -95,21 +112,21 @@ export function AdvancedCandlestickChart({
       const ma10Data = calculateMA(candlestickData, 10);
       const ma20Data = calculateMA(candlestickData, 20);
 
-      const ma5Series = chart.addLineSeries({
+      const ma5Series = chart.addSeries(LineSeries, {
         color: "#2196F3",
         lineWidth: 1,
         title: "MA5",
       });
       ma5Series.setData(ma5Data);
 
-      const ma10Series = chart.addLineSeries({
+      const ma10Series = chart.addSeries(LineSeries, {
         color: "#FF9800",
         lineWidth: 1,
         title: "MA10",
       });
       ma10Series.setData(ma10Data);
 
-      const ma20Series = chart.addLineSeries({
+      const ma20Series = chart.addSeries(LineSeries, {
         color: "#9C27B0",
         lineWidth: 1,
         title: "MA20",
@@ -118,7 +135,7 @@ export function AdvancedCandlestickChart({
     }
 
     if (showVolume && data.some((bar) => bar.volume !== undefined)) {
-      const volumeSeries = chart.addHistogramSeries({
+      const volumeSeries = chart.addSeries(HistogramSeries, {
         color: "#26a69a",
         priceFormat: {
           type: "volume",
@@ -165,7 +182,7 @@ export function AdvancedCandlestickChart({
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
-  }, [data, height, showMA, showVolume]);
+  }, [data, height, resolvedTheme, showMA, showVolume]);
 
   const calculateMA = (data: CandlestickData[], period: number) => {
     const result: { time: Time; value: number }[] = [];
@@ -248,7 +265,7 @@ export function AdvancedCandlestickChart({
           ))}
         </div>
       </div>
-      <div ref={chartContainerRef} className="w-full rounded border" />
+      <div ref={chartContainerRef} className="w-full rounded border bg-card" />
     </div>
   );
 }

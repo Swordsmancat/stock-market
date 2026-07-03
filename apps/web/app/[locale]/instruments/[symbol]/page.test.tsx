@@ -1,5 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
+import zhMessages from "../../../../messages/zh.json";
 
 const { fetchInstrumentDetailPayloadMock } = vi.hoisted(() => ({
   fetchInstrumentDetailPayloadMock: vi.fn(),
@@ -18,6 +20,16 @@ vi.mock("@/lib/instrument-detail", () => ({
 }));
 
 import InstrumentDetailPage from "./page";
+
+async function renderChineseInstrumentDetailPage(symbol = "AAPL") {
+  const page = await InstrumentDetailPage({ params: Promise.resolve({ symbol, locale: "zh" }) });
+
+  render(
+    <NextIntlClientProvider locale="zh" messages={zhMessages}>
+      {page}
+    </NextIntlClientProvider>,
+  );
+}
 
 afterEach(() => {
   cleanup();
@@ -63,7 +75,7 @@ it("renders the enhanced client-side instrument detail view", async () => {
     },
   ]);
 
-  render(await InstrumentDetailPage({ params: Promise.resolve({ symbol: "AAPL", locale: "en" }) }));
+  await renderChineseInstrumentDetailPage();
 
   expect(await screen.findByText("AAPL")).toBeInTheDocument();
   expect(screen.getByText("标的详情")).toBeInTheDocument();
@@ -81,7 +93,7 @@ it("renders the enhanced client-side instrument detail view", async () => {
 it("renders latest price even when the detail endpoint has no bars", async () => {
   mockInstrumentDetailResponse([], 105);
 
-  render(await InstrumentDetailPage({ params: Promise.resolve({ symbol: "AAPL", locale: "en" }) }));
+  await renderChineseInstrumentDetailPage();
 
   expect(await screen.findByText("AAPL")).toBeInTheDocument();
   expect(screen.getByText("暂无K线数据")).toBeInTheDocument();
@@ -96,7 +108,7 @@ it("renders an error state when the detail endpoint fails", async () => {
     headers: { "content-type": "application/json" },
   });
 
-  render(await InstrumentDetailPage({ params: Promise.resolve({ symbol: "AAPL", locale: "en" }) }));
+  await renderChineseInstrumentDetailPage();
 
-  expect(await screen.findByText("加载失败: Failed to fetch instrument data")).toBeInTheDocument();
+  expect(await screen.findByText("加载失败：Failed to fetch instrument data")).toBeInTheDocument();
 });

@@ -1,8 +1,9 @@
 "use client"
 
 import { Link, usePathname } from "@/src/i18n/routing"
+import { getInstrumentDisplayName } from "@/lib/instrument-display"
 import { ChevronRight, Home } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 import {
   Breadcrumb,
@@ -16,13 +17,39 @@ import React from "react"
 
 export function Breadcrumbs() {
   const pathname = usePathname()
+  const locale = useLocale()
   const t = useTranslations("Breadcrumbs")
+  const navigationTranslations = useTranslations("Navigation")
   
   if (pathname === "/") {
     return null
   }
 
   const segments = pathname.split("/").filter(Boolean)
+
+  function formatBreadcrumbSegment(segment: string, index: number): string {
+    if (index === 0) {
+      const navigationKeyBySegment: Record<string, Parameters<typeof navigationTranslations>[0]> = {
+        instruments: "instruments",
+        watchlist: "watchlist",
+        portfolios: "portfolios",
+        reports: "reports",
+        alerts: "alerts",
+        "task-runs": "taskRuns",
+        settings: "settings",
+      }
+      const navigationKey = navigationKeyBySegment[segment]
+      if (navigationKey !== undefined) {
+        return navigationTranslations(navigationKey)
+      }
+    }
+
+    if (segments[0] === "instruments" && index === 1) {
+      return getInstrumentDisplayName(segment, locale)
+    }
+
+    return decodeURIComponent(segment).replace(/-/g, " ")
+  }
 
   return (
     <Breadcrumb className="mb-4">
@@ -42,7 +69,7 @@ export function Breadcrumbs() {
         {segments.map((segment, index) => {
           const isLast = index === segments.length - 1
           const href = `/${segments.slice(0, index + 1).join("/")}`
-          const title = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ")
+          const title = formatBreadcrumbSegment(segment, index)
 
           return (
             <React.Fragment key={href}>
