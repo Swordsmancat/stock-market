@@ -121,6 +121,57 @@ class FundamentalSnapshot(Base):
     )
 
 
+class MarketIndicator(Base):
+    __tablename__ = "market_indicators"
+    __table_args__ = (UniqueConstraint("code", name="uq_market_indicators_code"),)
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    code: Mapped[str] = mapped_column(String(128))
+    name: Mapped[str] = mapped_column(String(256))
+    category: Mapped[str] = mapped_column(String(64))
+    region: Mapped[str] = mapped_column(String(32))
+    unit: Mapped[str] = mapped_column(String(32))
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+    display_order: Mapped[int] = mapped_column(Integer, default=100)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    observations: Mapped[list["MarketIndicatorObservation"]] = relationship(
+        "MarketIndicatorObservation",
+        back_populates="indicator",
+    )
+
+
+class MarketIndicatorObservation(Base):
+    __tablename__ = "market_indicator_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "indicator_id",
+            "as_of",
+            name="uq_market_indicator_observations_indicator_as_of",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    indicator_id: Mapped[PythonUUID] = mapped_column(ForeignKey("market_indicators.id"))
+    as_of: Mapped[date] = mapped_column(Date)
+    value: Mapped[Decimal] = mapped_column(Numeric(20, 6))
+    source: Mapped[str] = mapped_column(String(512))
+    components_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    indicator: Mapped[MarketIndicator] = relationship(
+        "MarketIndicator",
+        back_populates="observations",
+    )
+
+
 class Watchlist(Base):
     __tablename__ = "watchlists"
 

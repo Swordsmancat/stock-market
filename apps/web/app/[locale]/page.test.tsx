@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/dates", () => ({
@@ -11,8 +11,92 @@ vi.mock("@/lib/dates", () => ({
 import HomePage from "./page";
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
+
+function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", market = "US", latestClose = 102) {
+  const dailyBars = [
+    { timestamp: "2026-01-01", open: latestClose - 2, high: latestClose, low: latestClose - 3, close: latestClose - 1, volume: 1000 },
+    { timestamp: "2026-01-02", open: latestClose - 1, high: latestClose + 1, low: latestClose - 2, close: latestClose, volume: 1100 },
+  ];
+  const movement = {
+    direction: "up",
+    absolute_change: 1,
+    percent_change: 1 / (latestClose - 1),
+  };
+  const indexNames = [
+    ["cn_shanghai_composite", "Shanghai Composite", "CN"],
+    ["cn_shenzhen_component", "Shenzhen Component", "CN"],
+    ["cn_chinext", "ChiNext", "CN"],
+    ["cn_csi_300", "CSI 300", "CN"],
+    ["cn_csi_500", "CSI 500", "CN"],
+    ["hk_hang_seng", "Hang Seng Index", "HK"],
+    ["hk_hang_seng_tech", "Hang Seng Tech Index", "HK"],
+    ["us_sp_500", "S&P 500", "US"],
+    ["us_nasdaq_composite", "Nasdaq Composite", "US"],
+    ["us_dow_jones", "Dow Jones Industrial Average", "US"],
+  ];
+
+  return {
+    generated_at: "2026-01-02T00:00:00+00:00",
+    provider: "yfinance",
+    range: { timeframe: "1d", start: "2025-10-02", end: "2026-01-02" },
+    followed: {
+      scope: "watchlist",
+      limit: 6,
+      items: [
+        {
+          symbol,
+          name,
+          market,
+          currency: market === "CN" ? "CNY" : "USD",
+          status: "ok",
+          freshness: "fresh",
+          latest: { timestamp: "2026-01-02", close: latestClose, movement },
+          bars: dailyBars,
+          source: "database",
+          provider: "yfinance",
+          effective_provider: "yfinance",
+          detail_path: `/instruments/${symbol}`,
+        },
+      ],
+    },
+    indices: {
+      items: indexNames.map(([code, indexName, region], index) => ({
+        code,
+        name: indexName,
+        region,
+        market: region,
+        currency: region === "US" ? "USD" : region === "HK" ? "HKD" : "CNY",
+        provider_symbol: code,
+        status: "ok",
+        freshness: "fresh",
+        latest: { timestamp: "2026-01-02", close: 3000 + index, movement },
+        bars: dailyBars,
+        source: "database",
+        provider: "yfinance",
+        effective_provider: "yfinance",
+      })),
+    },
+    valuation_indicators: {
+      items: ["CN", "HK", "US"].map((region) => ({
+        code: `buffett_indicator_${region.toLowerCase()}`,
+        name: `Buffett Indicator - ${region}`,
+        region,
+        category: "valuation",
+        status: "no_data",
+        value: null,
+        unit: "percent",
+        as_of: null,
+        source: null,
+        components: {},
+        no_data_reason: "No audited observation has been seeded for this indicator yet.",
+      })),
+    },
+    diagnostics: [],
+  };
+}
 
 it("renders stock analysis dashboard data from backend APIs", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
@@ -189,6 +273,9 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     if (url.endsWith("/alerts/triggers/recent?limit=5")) {
       return Promise.resolve(new Response(JSON.stringify({ items: [] })));
     }
+    if (url.includes("/dashboard/market-overview")) {
+      return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
+    }
     if (url.includes("/api/ingestion/snapshot")) {
       return Promise.resolve(
         new Response(
@@ -256,6 +343,12 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   );
 
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
+  expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
+  expect(screen.getByText("Core market indices")).toBeInTheDocument();
+  expect(screen.getByText("Shanghai Composite")).toBeInTheDocument();
+  expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
+  expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open detailed chart" })).toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("Daily-bar command center")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
   expect(screen.getByText("Default sample: first 25 instruments")).toBeInTheDocument();
@@ -385,6 +478,9 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
     if (url.endsWith("/alerts/triggers/recent?limit=5")) {
       return Promise.resolve(new Response(JSON.stringify({ items: [] })));
     }
+    if (url.includes("/dashboard/market-overview")) {
+      return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload("600519", "Kweichow Moutai", "CN", 1666))));
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
@@ -396,6 +492,9 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
   );
 
   expect(screen.getByText("600519 Latest Price")).toBeInTheDocument();
+  expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
+  expect(screen.getByText("Core market indices")).toBeInTheDocument();
+  expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
   expect(screen.getAllByText("$1666.00").length).toBeGreaterThan(0);
   expect(screen.getByText("No technical indicators available.")).toBeInTheDocument();

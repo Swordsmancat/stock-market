@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MiniPriceChart } from "@/components/mini-price-chart";
+import { CompactCandlestickChart } from "@/components/compact-candlestick-chart";
 import { EmptyState } from "@/components/empty-state";
 import { getDashboardDateRanges } from "@/lib/dates";
 import { withProviderQuery } from "@/lib/market-data";
@@ -119,6 +120,96 @@ type AlertTriggersPayload = {
     triggered_at: string;
   }>;
 };
+
+type DashboardBarItem = {
+  timestamp: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close: number;
+  volume?: number;
+  amount?: number | null;
+};
+
+type DashboardMovementPayload = {
+  direction: "up" | "down" | "flat";
+  absolute_change: number;
+  percent_change: number | null;
+};
+
+type DashboardLatestPayload = {
+  timestamp?: string | null;
+  close?: number | null;
+  movement?: DashboardMovementPayload | null;
+} | null;
+
+type DashboardChartItem = {
+  status: "ok" | "no_data" | "unavailable" | string;
+  freshness: FreshnessStatus;
+  latest: DashboardLatestPayload;
+  bars: DashboardBarItem[];
+  source?: string | null;
+  provider?: string | null;
+  effective_provider?: string | null;
+  no_data_reason?: string | null;
+};
+
+type DashboardFollowedItem = DashboardChartItem & {
+  symbol: string;
+  name: string;
+  market: string;
+  currency?: string | null;
+  detail_path?: string | null;
+};
+
+type DashboardIndexItem = DashboardChartItem & {
+  code: string;
+  name: string;
+  region: string;
+  market: string;
+  currency: string;
+  provider_symbol: string;
+};
+
+type DashboardValuationIndicatorItem = {
+  code: string;
+  name: string;
+  region?: string | null;
+  category?: string | null;
+  status: "ok" | "no_data" | string;
+  value?: number | null;
+  unit?: string | null;
+  as_of?: string | null;
+  source?: string | null;
+  components?: Record<string, unknown>;
+  no_data_reason?: string | null;
+};
+
+type MarketOverviewPayload = {
+  generated_at: string;
+  provider: string;
+  range: {
+    timeframe: string;
+    start: string;
+    end: string;
+  };
+  followed: {
+    scope: "watchlist" | "default_sample" | string;
+    limit: number;
+    items: DashboardFollowedItem[];
+  };
+  indices: {
+    items: DashboardIndexItem[];
+  };
+  valuation_indicators: {
+    items: DashboardValuationIndicatorItem[];
+  };
+  diagnostics: Array<Record<string, unknown>>;
+};
+
+type MarketOverviewLoadResult =
+  | { status: "loaded"; payload: MarketOverviewPayload }
+  | { status: "failed" };
 
 const DASHBOARD_HEALTH_SAMPLE_LIMIT = 25;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -338,6 +429,93 @@ function formatSignedPercent(value: number | null, locale: string, unavailableLa
   return formattedValue;
 }
 
+async function fetchMarketOverviewResult(provider: string): Promise<MarketOverviewLoadResult> {
+  try {
+    const response = await backendFetch(
+      withProviderQuery("/dashboard/market-overview", provider),
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return { status: "failed" };
+    }
+
+    return {
+      status: "loaded",
+      payload: (await response.json()) as MarketOverviewPayload,
+    };
+  } catch {
+    return { status: "failed" };
+  }
+}
+
+function coerceFreshnessStatus(value: string | undefined): FreshnessStatus {
+  if (value === "fresh" || value === "stale" || value === "no_data" || value === "unavailable") {
+    return value;
+  }
+  return "unavailable";
+}
+
+function formatDashboardNumber(value: number | null | undefined, locale: string, unavailableLabel: string): string {
+  if (value === null || value === undefined) {
+    return unavailableLabel;
+  }
+
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatDashboardDate(value: string | null | undefined, locale: string, unavailableLabel: string): string {
+  if (!value) {
+    return unavailableLabel;
+  }
+
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? unavailableLabel : parsedDate.toLocaleDateString(locale);
+}
+
+function formatDashboardMovement(
+  movement: DashboardMovementPayload | null | undefined,
+  locale: string,
+  unavailableLabel: string,
+  labels: {
+    up: string;
+    down: string;
+    flat: string;
+    unavailable: string;
+    valueFormatter: (values: { direction: string; change: string; percent: string }) => string;
+  },
+): string {
+  if (!movement) {
+    return labels.unavailable;
+  }
+
+  const directionLabel =
+    movement.direction === "up" ? labels.up : movement.direction === "down" ? labels.down : labels.flat;
+  return labels.valueFormatter({
+    direction: directionLabel,
+    change: formatSignedNumber(movement.absolute_change, locale),
+    percent: formatSignedPercent(movement.percent_change, locale, unavailableLabel),
+  });
+}
+
+function formatValuationIndicatorValue(
+  item: DashboardValuationIndicatorItem,
+  locale: string,
+  unavailableLabel: string,
+): string {
+  if (item.value === null || item.value === undefined) {
+    return unavailableLabel;
+  }
+
+  const formattedValue = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(item.value);
+  return item.unit === "percent" ? `${formattedValue}%` : formattedValue;
+}
+
 export default async function HomePage({
   params,
   searchParams = Promise.resolve({}),
@@ -387,6 +565,7 @@ export default async function HomePage({
     taskRunPayload,
     watchlistPayload,
     alertTriggersPayload,
+    marketOverviewResult,
   ] =
     await Promise.all([
       fetchOptionalJson<LatestBarPayload>(
@@ -434,6 +613,7 @@ export default async function HomePage({
       ),
       fetchOptionalJson<WatchlistPayload>("/watchlist", { items: [] }),
       fetchOptionalJson<AlertTriggersPayload>("/alerts/triggers/recent?limit=5", { items: [] }),
+      fetchMarketOverviewResult(provider),
     ]);
 
   const latestClose =
@@ -493,6 +673,22 @@ export default async function HomePage({
     : hasStaleData
     ? t("actionRefreshStaleData")
     : t("actionOpenPrimaryInstrument");
+  const marketOverviewPayload = marketOverviewResult.status === "loaded" ? marketOverviewResult.payload : null;
+  const marketOverviewIndices = marketOverviewPayload?.indices.items ?? [];
+  const marketOverviewFollowedItems = marketOverviewPayload?.followed.items ?? [];
+  const marketOverviewValuationItems = marketOverviewPayload?.valuation_indicators.items ?? [];
+  const marketOverviewScopeLabel =
+    marketOverviewPayload?.followed.scope === "watchlist"
+      ? t("marketDashboardWatchlistScope")
+      : t("marketDashboardDefaultScope");
+  const marketDashboardMovementLabels = {
+    up: t("movementUp"),
+    down: t("movementDown"),
+    flat: t("movementFlat"),
+    unavailable: t("dailyMovementUnavailable"),
+    valueFormatter: (values: { direction: string; change: string; percent: string }) =>
+      t("dailyMovementValue", values),
+  };
 
   return (
     <div className="space-y-6">
@@ -558,6 +754,178 @@ export default async function HomePage({
           </Button>
         </div>
       </div>
+
+      <section className="space-y-4">
+        <Card className="border-primary/20 bg-muted/20">
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{t("marketDashboardBadge")}</Badge>
+              <Badge variant="outline">{t("activeProvider", { provider })}</Badge>
+              {marketOverviewPayload ? (
+                <Badge variant="outline">
+                  {t("marketDashboardRange", {
+                    start: formatDashboardDate(marketOverviewPayload.range.start, locale, t("unavailableShort")),
+                    end: formatDashboardDate(marketOverviewPayload.range.end, locale, t("unavailableShort")),
+                  })}
+                </Badge>
+              ) : null}
+            </div>
+            <CardTitle className="text-2xl">{t("marketDashboardTitle")}</CardTitle>
+            <CardDescription>{t("marketDashboardDesc")}</CardDescription>
+          </CardHeader>
+          {marketOverviewResult.status === "failed" ? (
+            <CardContent>
+              <div className="rounded-lg border bg-background p-4">
+                <div className="font-medium">{t("marketDashboardUnavailableTitle")}</div>
+                <p className="mt-1 text-sm text-muted-foreground">{t("marketDashboardUnavailableDesc")}</p>
+              </div>
+            </CardContent>
+          ) : null}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("coreIndicesTitle")}</CardTitle>
+            <CardDescription>{t("coreIndicesDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {marketOverviewIndices.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {marketOverviewIndices.map((item) => {
+                  const freshnessStatus = coerceFreshnessStatus(item.freshness);
+                  return (
+                    <div key={item.code} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold leading-tight">{item.name}</div>
+                          <div className="text-xs text-muted-foreground">{item.region}</div>
+                        </div>
+                        <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
+                      </div>
+                      <div className="mt-3 text-2xl font-bold">
+                        {formatDashboardNumber(item.latest?.close, locale, t("unavailableShort"))}
+                      </div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {formatDashboardMovement(item.latest?.movement, locale, t("unavailableShort"), marketDashboardMovementLabels)}
+                      </div>
+                      <CompactCandlestickChart
+                        data={item.bars}
+                        emptyMessage={t("chartUnavailable")}
+                        className="mt-3 h-24 w-full"
+                      />
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {t("latestDailyBarAsOf", {
+                          date: formatDashboardDate(item.latest?.timestamp, locale, t("unavailableShort")),
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("noCoreIndices")}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{marketOverviewScopeLabel}</Badge>
+                <Badge variant="outline">{t("followedKlineLimit", { limit: marketOverviewPayload?.followed.limit ?? 6 })}</Badge>
+              </div>
+              <CardTitle>{t("followedKlineTitle")}</CardTitle>
+              <CardDescription>{t("followedKlineDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {marketOverviewFollowedItems.length > 0 ? (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {marketOverviewFollowedItems.map((item) => {
+                    const freshnessStatus = coerceFreshnessStatus(item.freshness);
+                    return (
+                      <div key={`${item.market}-${item.symbol}`} className="rounded-lg border p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-lg font-semibold">{item.symbol}</div>
+                            <div className="text-sm text-muted-foreground">{item.name}</div>
+                          </div>
+                          <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <div className="text-xs text-muted-foreground">{t("latestClose")}</div>
+                            <div className="text-xl font-bold">
+                              {formatDashboardNumber(item.latest?.close, locale, t("unavailableShort"))}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">{t("dailyMovement")}</div>
+                            <div className="text-sm font-medium">
+                              {formatDashboardMovement(item.latest?.movement, locale, t("unavailableShort"), marketDashboardMovementLabels)}
+                            </div>
+                          </div>
+                        </div>
+                        <CompactCandlestickChart
+                          data={item.bars}
+                          emptyMessage={item.no_data_reason ?? t("chartUnavailable")}
+                          className="mt-4 h-40 w-full"
+                        />
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>{t("latestDailyBarAsOf", { date: formatDashboardDate(item.latest?.timestamp, locale, t("unavailableShort")) })}</span>
+                          <span>{t("source", { source: item.source ?? t("unavailableShort") })}</span>
+                        </div>
+                        <Button variant="outline" size="sm" className="mt-3" asChild>
+                          <Link href={(item.detail_path ?? `/instruments/${item.symbol}`) as any}>{t("openDetailedChart")}</Link>
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("noFollowedKlines")}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("valuationIndicatorsTitle")}</CardTitle>
+              <CardDescription>{t("valuationIndicatorsDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {marketOverviewValuationItems.length > 0 ? (
+                <div className="space-y-3">
+                  {marketOverviewValuationItems.map((item) => (
+                    <div key={item.code} className="rounded-lg border p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold">{item.name}</div>
+                          <div className="text-xs text-muted-foreground">{item.region ?? t("unavailableShort")}</div>
+                        </div>
+                        <Badge variant={item.status === "ok" ? "secondary" : "outline"}>
+                          {item.status === "ok" ? t("available") : t("no_data")}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 text-2xl font-bold">
+                        {formatValuationIndicatorValue(item, locale, t("unavailableShort"))}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {t("valuationAsOf", { date: formatDashboardDate(item.as_of, locale, t("unavailableShort")) })}
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {item.status === "ok" ? item.source : item.no_data_reason ?? t("indicatorNoData")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("noValuationIndicators")}</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
         <Card className="border-primary/20 bg-muted/20">
