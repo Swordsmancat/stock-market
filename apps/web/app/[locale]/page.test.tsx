@@ -393,6 +393,10 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
   expect(screen.getByText("AAPL 突破20日均线")).toBeInTheDocument();
   expect(screen.getByText("新能源汽车")).toBeInTheDocument();
+  expect(screen.getByText("对比分析")).toBeInTheDocument();
+  expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
+  expect(screen.getByText("皮尔逊相关系数")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "导出对比报告" })).toBeInTheDocument();
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
@@ -567,6 +571,9 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
   expect(screen.getByText("暂无推荐,继续监控市场中...")).toBeInTheDocument();
   expect(screen.getByText("暂无热点板块数据")).toBeInTheDocument();
+  expect(screen.getByText("对比分析")).toBeInTheDocument();
+  expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
+  expect(screen.getByText("皮尔逊相关系数")).toBeInTheDocument();
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
   expect(screen.getAllByText("1,666.00").length).toBeGreaterThan(0);

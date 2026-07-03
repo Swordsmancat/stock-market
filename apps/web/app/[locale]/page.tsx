@@ -8,6 +8,7 @@ import { MarketTicker } from "@/components/market-ticker";
 import { MarketOverviewClient } from "@/components/market-overview-client";
 import { HotSectors } from "@/components/hot-sectors";
 import { SmartRecommendations } from "@/components/smart-recommendations";
+import { ComparisonTool } from "@/components/comparison-tool";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -752,6 +753,22 @@ export default async function HomePage({
     change: item.latest?.movement?.absolute_change ?? null,
     changePercent: item.latest?.movement?.percent_change ?? null,
   }));
+  const comparisonInstruments = [
+    ...marketOverviewFollowedItems.map((item) => ({
+      id: `followed:${item.market}:${item.symbol}`,
+      symbol: item.symbol,
+      name: item.name,
+      market: item.market,
+      bars: item.bars.map((bar) => ({ timestamp: bar.timestamp, close: bar.close })),
+    })),
+    ...marketOverviewIndices.map((item) => ({
+      id: `index:${item.code}`,
+      symbol: item.code,
+      name: locale === "zh" ? item.name_zh ?? item.name : item.name,
+      market: item.market,
+      bars: item.bars.map((bar) => ({ timestamp: bar.timestamp, close: bar.close })),
+    })),
+  ];
 
   return (
     <div className="space-y-0">
@@ -868,6 +885,8 @@ export default async function HomePage({
           <SmartRecommendations recommendations={smartRecommendations} />
           <HotSectors sectors={hotSectors} />
         </div>
+
+        <ComparisonTool instruments={comparisonInstruments} />
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
           <Card className="rounded-none border-x-0">
