@@ -12,6 +12,7 @@ from packages.services.market_data import (
 from packages.services.market_indices import DEFAULT_MARKET_INDICES, MarketIndexDefinition, resolve_provider_symbol
 from packages.services.market_indicators import get_buffett_indicator_payloads
 from packages.services.watchlists import get_active_watchlist_item_dicts
+from packages.shared.cache import cache_market_overview
 
 
 FOLLOWED_INSTRUMENT_LIMIT = 6
@@ -197,6 +198,7 @@ def _serialize_market_index(
     identity = {
         "code": index.code,
         "name": index.name,
+        "name_zh": index.name_zh,
         "region": index.region,
         "market": index.market,
         "currency": index.currency,
@@ -242,6 +244,7 @@ def _serialize_indices(
     return {"items": items}, diagnostics
 
 
+@cache_market_overview(ttl=300)
 def get_market_overview_payload(
     *,
     session: Session,

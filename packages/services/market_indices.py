@@ -5,6 +5,7 @@ from dataclasses import dataclass
 class MarketIndexDefinition:
     code: str
     name: str
+    name_zh: str
     region: str
     market: str
     currency: str
@@ -16,6 +17,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="cn_shanghai_composite",
         name="Shanghai Composite",
+        name_zh="上证指数",
         region="CN",
         market="CN",
         currency="CNY",
@@ -25,6 +27,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="cn_shenzhen_component",
         name="Shenzhen Component",
+        name_zh="深证成指",
         region="CN",
         market="CN",
         currency="CNY",
@@ -34,6 +37,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="cn_chinext",
         name="ChiNext",
+        name_zh="创业板指",
         region="CN",
         market="CN",
         currency="CNY",
@@ -43,6 +47,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="cn_csi_300",
         name="CSI 300",
+        name_zh="沪深300",
         region="CN",
         market="CN",
         currency="CNY",
@@ -52,6 +57,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="cn_csi_500",
         name="CSI 500",
+        name_zh="中证500",
         region="CN",
         market="CN",
         currency="CNY",
@@ -61,6 +67,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="hk_hang_seng",
         name="Hang Seng Index",
+        name_zh="恒生指数",
         region="HK",
         market="HK",
         currency="HKD",
@@ -70,6 +77,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="hk_hang_seng_tech",
         name="Hang Seng Tech Index",
+        name_zh="恒生科技",
         region="HK",
         market="HK",
         currency="HKD",
@@ -79,6 +87,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="us_sp_500",
         name="S&P 500",
+        name_zh="标普500",
         region="US",
         market="US",
         currency="USD",
@@ -88,6 +97,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="us_nasdaq_composite",
         name="Nasdaq Composite",
+        name_zh="纳斯达克",
         region="US",
         market="US",
         currency="USD",
@@ -97,6 +107,7 @@ DEFAULT_MARKET_INDICES: tuple[MarketIndexDefinition, ...] = (
     MarketIndexDefinition(
         code="us_dow_jones",
         name="Dow Jones Industrial Average",
+        name_zh="道琼斯",
         region="US",
         market="US",
         currency="USD",

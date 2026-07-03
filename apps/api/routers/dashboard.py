@@ -8,7 +8,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("/market-overview")
-def get_market_overview(
+async def get_market_overview(
     provider: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:

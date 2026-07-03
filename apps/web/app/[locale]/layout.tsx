@@ -8,6 +8,7 @@ import { routing } from "@/src/i18n/routing"
 
 import { ThemeProvider } from "@/components/theme-provider"
 import { MarketColorsProvider } from "@/context/market-colors-context"
+import { ToastProvider } from "@/components/toast-provider"
 import { TopNavBar } from "@/components/top-nav-bar"
 import { SidebarNavigation } from "@/components/sidebar-navigation"
 import { MobileNavigation } from "@/components/mobile-navigation"
@@ -46,6 +47,7 @@ export default async function RootLayout({
             disableTransitionOnChange
           >
             <MarketColorsProvider>
+              <ToastProvider />
               <div className="flex h-screen flex-col overflow-hidden">
                 <TopNavBar />
                 <div className="flex flex-1 overflow-hidden">

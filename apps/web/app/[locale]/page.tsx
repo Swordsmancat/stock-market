@@ -4,10 +4,13 @@ import { TrendingUp, Activity, Briefcase, Newspaper, FileText, List, Bell } from
 import { AnalysisTriggerForm } from "@/components/analysis-trigger-form";
 import { IngestionTriggerForm } from "@/components/ingestion-trigger-form";
 import { FlashBanner } from "@/components/flash-banner";
+import { MarketTicker } from "@/components/market-ticker";
+import { MarketOverviewClient } from "@/components/market-overview-client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { MiniPriceChart } from "@/components/mini-price-chart";
 import { CompactCandlestickChart } from "@/components/compact-candlestick-chart";
 import { EmptyState } from "@/components/empty-state";
@@ -165,6 +168,7 @@ type DashboardFollowedItem = DashboardChartItem & {
 type DashboardIndexItem = DashboardChartItem & {
   code: string;
   name: string;
+  name_zh?: string;
   region: string;
   market: string;
   currency: string;
@@ -690,8 +694,20 @@ export default async function HomePage({
       t("dailyMovementValue", values),
   };
 
+  const tickerItems = marketOverviewIndices.slice(0, 10).map((item) => ({
+    code: item.code,
+    name: locale === 'zh' ? (item.name_zh || item.name) : item.name,
+    region: item.region,
+    close: item.latest?.close ?? null,
+    change: item.latest?.movement?.absolute_change ?? null,
+    changePercent: item.latest?.movement?.percent_change ?? null,
+  }));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-0">
+      {tickerItems.length > 0 && <MarketTicker items={tickerItems} />}
+      
+      <div className="space-y-6 p-6">
       {flash.ingest === "ok" ? (
         <FlashBanner
           variant="success"
@@ -783,137 +799,141 @@ export default async function HomePage({
           ) : null}
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("coreIndicesTitle")}</CardTitle>
-            <CardDescription>{t("coreIndicesDesc")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {marketOverviewIndices.length > 0 ? (
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
-                {marketOverviewIndices.map((item) => {
-                  const freshnessStatus = coerceFreshnessStatus(item.freshness);
-                  return (
-                    <div key={item.code} className="rounded-lg border p-2 transition-colors hover:bg-muted/50">
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold leading-tight text-xs truncate">{item.name}</div>
-                          <div className="text-[10px] text-muted-foreground">{item.region}</div>
-                        </div>
-                        <Badge variant={getFreshnessBadgeVariant(freshnessStatus)} className="text-[10px] px-1 py-0 shrink-0">{t(freshnessStatus)}</Badge>
-                      </div>
-                      <div className="mt-2 text-3xl font-bold leading-tight">
-                        {formatDashboardNumber(item.latest?.close, locale, t("unavailableShort"))}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {formatDashboardMovement(item.latest?.movement, locale, t("unavailableShort"), marketDashboardMovementLabels)}
-                      </div>
-                      <CompactCandlestickChart
-                        data={item.bars}
-                        emptyMessage={t("chartUnavailable")}
-                        className="mt-2 h-16 w-full"
-                      />
-                      <div className="mt-1 text-[10px] text-muted-foreground truncate">
-                        {t("latestDailyBarAsOf", {
-                          date: formatDashboardDate(item.latest?.timestamp, locale, t("unavailableShort")),
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("noCoreIndices")}</p>
-            )}
-          </CardContent>
-        </Card>
+        <MarketOverviewClient
+          initialData={marketOverviewPayload as any}
+          provider={provider}
+          locale={locale}
+          labels={{
+            coreIndicesTitle: t("coreIndicesTitle"),
+            coreIndicesDesc: t("coreIndicesDesc"),
+            indexName: t("indexName"),
+            change: t("change"),
+            changePercent: t("changePercent"),
+            trend: t("trend"),
+            status: t("status"),
+          }}
+        />
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
-          <Card>
-            <CardHeader>
+          <Card className="rounded-none border-x-0">
+            <CardHeader className="pb-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{marketOverviewScopeLabel}</Badge>
-                <Badge variant="outline">{t("followedKlineLimit", { limit: marketOverviewPayload?.followed.limit ?? 6 })}</Badge>
+                <Badge variant="outline" className="text-[10px]">{marketOverviewScopeLabel}</Badge>
+                <Badge variant="outline" className="text-[10px]">{t("followedKlineLimit", { limit: marketOverviewPayload?.followed.limit ?? 6 })}</Badge>
               </div>
-              <CardTitle>{t("followedKlineTitle")}</CardTitle>
-              <CardDescription>{t("followedKlineDesc")}</CardDescription>
+              <CardTitle className="text-base">{t("followedKlineTitle")}</CardTitle>
+              <CardDescription className="text-xs">{t("followedKlineDesc")}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {marketOverviewFollowedItems.length > 0 ? (
-                <div className="grid gap-3 lg:grid-cols-2">
-                  {marketOverviewFollowedItems.map((item) => {
-                    const freshnessStatus = coerceFreshnessStatus(item.freshness);
-                    return (
-                      <div key={`${item.market}-${item.symbol}`} className="rounded-lg border p-3 transition-colors hover:bg-muted/50">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="text-lg font-semibold">{item.symbol}</div>
-                            <div className="text-xs text-muted-foreground">{item.name}</div>
-                          </div>
-                          <Badge variant={getFreshnessBadgeVariant(freshnessStatus)} className="text-[10px] px-1 py-0">{t(freshnessStatus)}</Badge>
-                        </div>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <div>
-                            <div className="text-[10px] text-muted-foreground">{t("latestClose")}</div>
-                            <div className="text-2xl font-bold">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border hover:bg-transparent">
+                      <TableHead className="h-8 px-4 text-xs font-medium">{t("symbol")}</TableHead>
+                      <TableHead className="h-8 px-2 text-right text-xs font-medium">{t("latestClose")}</TableHead>
+                      <TableHead className="h-8 px-2 text-right text-xs font-medium">{t("dailyMovement")}</TableHead>
+                      <TableHead className="h-8 px-2 text-xs font-medium">{t("chart")}</TableHead>
+                      <TableHead className="h-8 px-2 text-xs font-medium">{t("status")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {marketOverviewFollowedItems.map((item) => {
+                      const freshnessStatus = coerceFreshnessStatus(item.freshness);
+                      const movement = item.latest?.movement;
+                      const changeValue = movement?.absolute_change ?? 0;
+                      const changeColor = changeValue >= 0 ? "text-green-500" : "text-red-500";
+                      
+                      return (
+                        <TableRow key={`${item.market}-${item.symbol}`} className="border-border hover:bg-muted/30">
+                          <TableCell className="py-3 px-4 font-medium">
+                            <div className="flex flex-col gap-0.5">
+                              <Link href={(item.detail_path ?? `/instruments/${item.symbol}`) as any} className="text-sm font-semibold hover:underline">
+                                {item.symbol}
+                              </Link>
+                              <span className="text-[10px] text-muted-foreground">{item.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-2 text-right">
+                            <div className="text-xl font-bold font-mono">
                               {formatDashboardNumber(item.latest?.close, locale, t("unavailableShort"))}
                             </div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] text-muted-foreground">{t("dailyMovement")}</div>
-                            <div className="text-sm font-medium">
-                              {formatDashboardMovement(item.latest?.movement, locale, t("unavailableShort"), marketDashboardMovementLabels)}
+                          </TableCell>
+                          <TableCell className="py-3 px-2 text-right">
+                            <div className={`text-sm font-mono ${changeColor}`}>
+                              {movement ? (
+                                <>
+                                  <div>{formatSignedNumber(movement.absolute_change, locale)}</div>
+                                  <div className="text-xs">
+                                    {movement.percent_change !== null && movement.percent_change !== undefined
+                                      ? formatSignedPercent(movement.percent_change, locale, t("unavailableShort"))
+                                      : t("unavailableShort")}
+                                  </div>
+                                </>
+                              ) : (
+                                t("unavailableShort")
+                              )}
                             </div>
-                          </div>
-                        </div>
-                        <CompactCandlestickChart
-                          data={item.bars}
-                          emptyMessage={item.no_data_reason ?? t("chartUnavailable")}
-                          className="mt-3 h-32 w-full"
-                        />
-                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-                          <span>{t("latestDailyBarAsOf", { date: formatDashboardDate(item.latest?.timestamp, locale, t("unavailableShort")) })}</span>
-                          <span>{t("source", { source: item.source ?? t("unavailableShort") })}</span>
-                        </div>
-                        <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
-                          <Link href={(item.detail_path ?? `/instruments/${item.symbol}`) as any}>{t("openDetailedChart")}</Link>
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-2">
+                            {item.bars && item.bars.length > 0 ? (
+                              <Link 
+                                href={(item.detail_path ?? `/instruments/${item.symbol}`) as any}
+                                className="block hover:opacity-80 transition-opacity"
+                              >
+                                <CompactCandlestickChart
+                                  data={item.bars}
+                                  emptyMessage={item.no_data_reason ?? t("chartUnavailable")}
+                                  className="h-16 w-32"
+                                />
+                              </Link>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {item.no_data_reason ?? t("chartUnavailable")}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-3 px-2">
+                            <Badge variant={getFreshnessBadgeVariant(freshnessStatus)} className="text-[10px] px-1.5 py-0">
+                              {t(freshnessStatus)}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               ) : (
-                <p className="text-sm text-muted-foreground">{t("noFollowedKlines")}</p>
+                <p className="text-sm text-muted-foreground px-4 pb-4">{t("noFollowedKlines")}</p>
               )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("valuationIndicatorsTitle")}</CardTitle>
-              <CardDescription>{t("valuationIndicatorsDesc")}</CardDescription>
+          <Card className="rounded-none border-x-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{t("valuationIndicatorsTitle")}</CardTitle>
+              <CardDescription className="text-xs">{t("valuationIndicatorsDesc")}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-2">
               {marketOverviewValuationItems.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {marketOverviewValuationItems.map((item) => (
-                    <div key={item.code} className="rounded-lg border p-4">
+                    <div key={item.code} className="rounded-none border p-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <div className="font-semibold">{item.name}</div>
-                          <div className="text-xs text-muted-foreground">{item.region ?? t("unavailableShort")}</div>
+                          <div className="font-semibold text-sm">{item.name}</div>
+                          <div className="text-[10px] text-muted-foreground">{item.region ?? t("unavailableShort")}</div>
                         </div>
-                        <Badge variant={item.status === "ok" ? "secondary" : "outline"}>
+                        <Badge variant={item.status === "ok" ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0">
                           {item.status === "ok" ? t("available") : t("no_data")}
                         </Badge>
                       </div>
-                      <div className="mt-3 text-2xl font-bold">
+                      <div className="mt-2 text-xl font-bold font-mono">
                         {formatValuationIndicatorValue(item, locale, t("unavailableShort"))}
                       </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">
                         {t("valuationAsOf", { date: formatDashboardDate(item.as_of, locale, t("unavailableShort")) })}
                       </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {item.status === "ok" ? item.source : item.no_data_reason ?? t("indicatorNoData")}
                       </p>
                     </div>
@@ -928,44 +948,44 @@ export default async function HomePage({
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
-        <Card className="border-primary/20 bg-muted/20">
-          <CardHeader>
+        <Card className="rounded-none border-x-0 border-primary/20 bg-muted/20">
+          <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{t("commandCenterBadge")}</Badge>
-              <Badge variant="outline">
+              <Badge variant="secondary" className="text-[10px]">{t("commandCenterBadge")}</Badge>
+              <Badge variant="outline" className="text-[10px]">
                 {dashboardHealth.scope === "watchlist"
                   ? t("healthScopeWatchlist")
                   : t("healthScopeDefaultSample", { limit: DASHBOARD_HEALTH_SAMPLE_LIMIT })}
               </Badge>
-              <Badge variant="outline">{t("activeProvider", { provider })}</Badge>
+              <Badge variant="outline" className="text-[10px]">{t("activeProvider", { provider })}</Badge>
             </div>
-            <CardTitle className="text-2xl">{t("dataHealthTitle")}</CardTitle>
-            <CardDescription>{t("dataHealthDesc")}</CardDescription>
+            <CardTitle className="text-lg">{t("dataHealthTitle")}</CardTitle>
+            <CardDescription className="text-xs">{t("dataHealthDesc")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-lg border bg-background p-3">
-                <div className="text-xs text-muted-foreground">{t("checkedInstruments")}</div>
-                <div className="text-2xl font-bold">{checkedInstrumentCount}</div>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="rounded-none border bg-background p-2">
+                <div className="text-[10px] text-muted-foreground">{t("checkedInstruments")}</div>
+                <div className="text-xl font-bold font-mono">{checkedInstrumentCount}</div>
               </div>
-              <div className="rounded-lg border bg-background p-3">
-                <div className="text-xs text-muted-foreground">{t("fresh")}</div>
-                <div className="text-2xl font-bold">{dashboardHealthCounts.fresh}</div>
+              <div className="rounded-none border bg-background p-2">
+                <div className="text-[10px] text-muted-foreground">{t("fresh")}</div>
+                <div className="text-xl font-bold font-mono">{dashboardHealthCounts.fresh}</div>
               </div>
-              <div className="rounded-lg border bg-background p-3">
-                <div className="text-xs text-muted-foreground">{t("stale")}</div>
-                <div className="text-2xl font-bold">{dashboardHealthCounts.stale}</div>
+              <div className="rounded-none border bg-background p-2">
+                <div className="text-[10px] text-muted-foreground">{t("stale")}</div>
+                <div className="text-xl font-bold font-mono">{dashboardHealthCounts.stale}</div>
               </div>
-              <div className="rounded-lg border bg-background p-3">
-                <div className="text-xs text-muted-foreground">{t("no_data")}</div>
-                <div className="text-2xl font-bold">{dashboardHealthCounts.no_data}</div>
+              <div className="rounded-none border bg-background p-2">
+                <div className="text-[10px] text-muted-foreground">{t("no_data")}</div>
+                <div className="text-xl font-bold font-mono">{dashboardHealthCounts.no_data}</div>
               </div>
-              <div className="rounded-lg border bg-background p-3">
-                <div className="text-xs text-muted-foreground">{t("unavailable")}</div>
-                <div className="text-2xl font-bold">{dashboardHealthCounts.unavailable}</div>
+              <div className="rounded-none border bg-background p-2">
+                <div className="text-[10px] text-muted-foreground">{t("unavailable")}</div>
+                <div className="text-xl font-bold font-mono">{dashboardHealthCounts.unavailable}</div>
               </div>
             </div>
-            <div className="flex flex-col gap-3 rounded-lg border bg-background p-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-2 rounded-none border bg-background p-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-sm font-medium">{t("primaryNextAction")}</div>
                 <p className="text-sm text-muted-foreground">
@@ -1006,10 +1026,10 @@ export default async function HomePage({
         </Card>
 
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("watchlistHealthTitle")}</CardTitle>
-              <CardDescription>
+          <Card className="rounded-none border-x-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{t("watchlistHealthTitle")}</CardTitle>
+              <CardDescription className="text-xs">
                 {dashboardHealth.scope === "watchlist"
                   ? t("watchlistHealthDesc")
                   : t("defaultSampleHealthDesc")}
@@ -1017,22 +1037,22 @@ export default async function HomePage({
             </CardHeader>
             <CardContent>
               {attentionItems.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {attentionItems.map(({ instrument, freshnessStatus, latestBarResult }) => (
                     <Link
                       key={`${instrument.market}-${instrument.symbol}`}
                       href={`/instruments/${instrument.symbol}` as any}
-                      className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                      className="flex items-center justify-between rounded-none border p-2 transition-colors hover:bg-muted/50"
                     >
                       <div>
-                        <div className="font-medium">{instrument.symbol}</div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="font-medium text-sm">{instrument.symbol}</div>
+                        <div className="text-[10px] text-muted-foreground">
                           {t("latestDailyBarAsOf", {
                             date: formatLatestBarDate(latestBarResult, locale, t("unavailableShort")),
                           })}
                         </div>
                       </div>
-                      <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
+                      <Badge variant={getFreshnessBadgeVariant(freshnessStatus)} className="text-[10px] px-1.5 py-0">{t(freshnessStatus)}</Badge>
                     </Link>
                   ))}
                 </div>
@@ -1042,28 +1062,28 @@ export default async function HomePage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("primaryInstrumentStory", { symbol: primaryInstrument.symbol })}</CardTitle>
-              <CardDescription>{t("primaryInstrumentStoryDesc")}</CardDescription>
+          <Card className="rounded-none border-x-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{t("primaryInstrumentStory", { symbol: primaryInstrument.symbol })}</CardTitle>
+              <CardDescription className="text-xs">{t("primaryInstrumentStoryDesc")}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="text-3xl font-bold">{latestClose ? `$${latestClose.toFixed(2)}` : t("unavailableShort")}</div>
-                <Badge variant={getFreshnessBadgeVariant(primaryFreshnessStatus)}>{t(primaryFreshnessStatus)}</Badge>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="text-2xl font-bold font-mono">{latestClose ? `${latestClose.toFixed(2)}` : t("unavailableShort")}</div>
+                <Badge variant={getFreshnessBadgeVariant(primaryFreshnessStatus)} className="text-[10px] px-1.5 py-0">{t(primaryFreshnessStatus)}</Badge>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">{t("dailyMovement")}</div>
-                  <div className="font-semibold">{dailyMovementLabel}</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-none border p-2">
+                  <div className="text-[10px] text-muted-foreground">{t("dailyMovement")}</div>
+                  <div className="font-semibold text-sm">{dailyMovementLabel}</div>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">{t("sourceProvider")}</div>
-                  <div className="font-semibold">{t("source", { source: priceSource })}</div>
-                  <div className="text-xs text-muted-foreground">{t("providerValue", { provider: primaryProvider })}</div>
+                <div className="rounded-none border p-2">
+                  <div className="text-[10px] text-muted-foreground">{t("sourceProvider")}</div>
+                  <div className="font-semibold text-sm">{t("source", { source: priceSource })}</div>
+                  <div className="text-[10px] text-muted-foreground">{t("providerValue", { provider: primaryProvider })}</div>
                 </div>
               </div>
-              <MiniPriceChart items={barsPayload.items} className="h-20 w-full" />
+              <MiniPriceChart items={barsPayload.items} className="h-16 w-full" />
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/instruments/${primaryInstrument.symbol}` as any}>{t("openInstrument")}</Link>
@@ -1089,44 +1109,44 @@ export default async function HomePage({
 
       {/* Row 1: KPIs */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
+        <Card className="rounded-none border-x-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-xs font-medium">
               {t("latestPrice", { symbol: primaryInstrument.symbol })}
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-3 w-3 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{latestClose ? `$${latestClose.toFixed(2)}` : "N/A"}</div>
-            <MiniPriceChart items={barsPayload.items} className="mt-3 h-16 w-full" />
-            <p className="mt-2 text-xs text-muted-foreground">{t("source", { source: priceSource })}</p>
+          <CardContent className="pt-0">
+            <div className="text-xl font-bold font-mono">{latestClose ? `${latestClose.toFixed(2)}` : "N/A"}</div>
+            <MiniPriceChart items={barsPayload.items} className="mt-2 h-12 w-full" />
+            <p className="mt-1 text-[10px] text-muted-foreground">{t("source", { source: priceSource })}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-none border-x-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t("portfolioValue")}</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs font-medium">{t("portfolioValue")}</CardTitle>
+            <Briefcase className="h-3 w-3 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {portfolioValue > 0 ? `$${portfolioValue.toLocaleString()}` : "N/A"}
+          <CardContent className="pt-0">
+            <div className="text-xl font-bold font-mono">
+              {portfolioValue > 0 ? `${portfolioValue.toLocaleString()}` : "N/A"}
             </div>
-            <p className="text-xs text-muted-foreground">{t("source", { source: portfolioPayload.source })}</p>
-            <Link href="/portfolios" className="mt-2 inline-block text-xs text-primary hover:underline">
+            <p className="text-[10px] text-muted-foreground">{t("source", { source: portfolioPayload.source })}</p>
+            <Link href="/portfolios" className="mt-1 inline-block text-[10px] text-primary hover:underline">
               {t("viewPortfolios")}
             </Link>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-none border-x-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t("activeAlerts")}</CardTitle>
-            <Bell className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs font-medium">{t("activeAlerts")}</CardTitle>
+            <Bell className="h-3 w-3 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{triggeredWatchlistCount}</div>
-            <p className="text-xs text-muted-foreground">{t("activeAlertsDesc")}</p>
+          <CardContent className="pt-0">
+            <div className="text-xl font-bold font-mono">{triggeredWatchlistCount}</div>
+            <p className="text-[10px] text-muted-foreground">{t("activeAlertsDesc")}</p>
             {alertTriggersPayload.items.length > 0 ? (
-              <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+              <ul className="mt-2 space-y-0.5 text-[10px] text-muted-foreground">
                 {alertTriggersPayload.items.slice(0, 3).map((trigger) => (
                   <li key={`${trigger.symbol}-${trigger.rule_key}-${trigger.triggered_at}`}>
                     <Link href="/alerts" className="hover:underline">
@@ -1374,6 +1394,7 @@ export default async function HomePage({
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );

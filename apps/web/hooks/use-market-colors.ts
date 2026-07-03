@@ -55,12 +55,14 @@ export function useMarketColors(): UseMarketColorsReturn {
         const response = await fetch("/api/platform-settings");
         if (response.ok) {
           const settings = await response.json();
-          // 如果后端有设置，使用后端设置；否则使用语言推断的默认值
           const scheme = settings.color_scheme || defaultScheme;
           setColorScheme(scheme);
+        } else {
+          // API 不可用时使用默认值
+          setColorScheme(defaultScheme);
         }
       } catch (error) {
-        console.warn("Failed to load color scheme, using locale-based default:", error);
+        // 网络错误或其他问题,使用默认值
         setColorScheme(defaultScheme);
       }
     }

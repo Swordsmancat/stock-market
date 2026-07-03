@@ -345,10 +345,11 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
-  expect(screen.getByText("Shanghai Composite")).toBeInTheDocument();
+  expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Open detailed chart" })).toHaveAttribute("href", "/instruments/AAPL");
+  expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
+    .toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("Daily-bar command center")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
   expect(screen.getByText("Default sample: first 25 instruments")).toBeInTheDocument();
@@ -357,7 +358,7 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
     .toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("AAPL Latest Price")).toBeInTheDocument();
-  expect(screen.getAllByText("$102.00").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("102.00").length).toBeGreaterThan(0);
   expect(screen.getByText("Technical Indicators")).toBeInTheDocument();
   expect(screen.getByText("Fundamentals")).toBeInTheDocument();
   expect(screen.getByText("Latest News")).toBeInTheDocument();
@@ -496,7 +497,7 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("$1666.00").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("1,666.00").length).toBeGreaterThan(0);
   expect(screen.getByText("No technical indicators available.")).toBeInTheDocument();
   expect(screen.getByText("No news sentiment available.")).toBeInTheDocument();
   expect(screen.getAllByText("Latest Task Run").length).toBeGreaterThan(0);

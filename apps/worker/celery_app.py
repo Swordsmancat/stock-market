@@ -63,4 +63,7 @@ celery_app.conf.beat_schedule = {
         },
     },
 }
-celery_app.autodiscover_tasks(["apps.worker.tasks"])
+celery_app.autodiscover_tasks(["apps.worker.tasks"], force=True)
+
+# Manually import tasks to ensure they are registered
+from apps.worker.tasks import ingestion, reports, alerts, indicators  # noqa: F401

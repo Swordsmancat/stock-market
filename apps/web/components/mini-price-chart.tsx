@@ -8,12 +8,12 @@ type BarItem = {
 };
 
 type MiniPriceChartProps = {
-  items: BarItem[];
+  items?: BarItem[];
   className?: string;
 };
 
-export function MiniPriceChart({ items, className }: MiniPriceChartProps) {
-  if (!items.length) {
+export function MiniPriceChart({ items = [], className }: MiniPriceChartProps) {
+  if (!items || items.length === 0) {
     return null;
   }
 
