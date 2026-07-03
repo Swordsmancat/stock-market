@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  buildComparisonReportText,
   buildCorrelationMatrix,
   buildNormalizedComparisonChartData,
   calculateComparisonSummaries,
@@ -58,22 +59,6 @@ function formatNumber(value: number | null): string {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   }).format(value);
-}
-
-function buildReportText(selectedInstruments: ComparisonInstrument[]): string {
-  const summaries = calculateComparisonSummaries(selectedInstruments);
-  const reportLines = [
-    "对比分析报告",
-    `生成时间: ${new Date().toISOString()}`,
-    "",
-    "标的表现:",
-    ...summaries.map(
-      (summary) =>
-        `${summary.symbol} ${summary.name}: 收益 ${formatPercent(summary.percentChange)}, 最新价 ${formatNumber(summary.latestClose)}`,
-    ),
-  ];
-
-  return reportLines.join("\n");
 }
 
 export function ComparisonTool({ instruments, className = "" }: ComparisonToolProps) {
@@ -126,7 +111,16 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
   }
 
   function exportReport() {
-    const reportBlob = new Blob([buildReportText(selectedInstruments)], { type: "text/plain;charset=utf-8" });
+    if (selectedInstruments.length < MIN_SELECTED_INSTRUMENTS) {
+      return;
+    }
+
+    const reportText = buildComparisonReportText({
+      selectedInstruments,
+      summaries,
+      correlationMatrix,
+    });
+    const reportBlob = new Blob([reportText], { type: "text/plain;charset=utf-8" });
     const reportUrl = URL.createObjectURL(reportBlob);
     const downloadLink = document.createElement("a");
     downloadLink.href = reportUrl;
@@ -157,7 +151,13 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
               支持选择 2-4 个指数/标的，查看归一化走势、收益和相关性
             </CardDescription>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={exportReport}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={exportReport}
+            disabled={selectedInstruments.length < MIN_SELECTED_INSTRUMENTS}
+          >
             导出对比报告
           </Button>
         </div>

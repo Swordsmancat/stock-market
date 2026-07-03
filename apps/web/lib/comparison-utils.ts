@@ -203,3 +203,86 @@ export function buildCorrelationMatrix(instruments: ComparisonInstrument[]): Cor
 
   return matrixCells;
 }
+
+function formatReportNumber(value: number | null): string {
+  if (value === null) {
+    return "--";
+  }
+
+  return value.toFixed(2);
+}
+
+function formatReportPercent(value: number | null): string {
+  if (value === null) {
+    return "--";
+  }
+
+  const formattedPercent = `${Math.abs(value * 100).toFixed(2)}%`;
+  if (value > 0) {
+    return `+${formattedPercent}`;
+  }
+  if (value < 0) {
+    return `-${formattedPercent}`;
+  }
+  return formattedPercent;
+}
+
+function formatCorrelationValue(value: number | null | undefined): string {
+  return value === null || value === undefined ? "--" : value.toFixed(3);
+}
+
+export function buildComparisonReportText({
+  selectedInstruments,
+  summaries,
+  correlationMatrix,
+  generatedAtIso = new Date().toISOString(),
+}: {
+  selectedInstruments: ComparisonInstrument[];
+  summaries: ComparisonSummary[];
+  correlationMatrix: CorrelationCell[];
+  generatedAtIso?: string;
+}): string {
+  const summaryLines = summaries.map((summary) =>
+    [
+      summary.symbol,
+      summary.name,
+      summary.market ?? "--",
+      formatReportNumber(summary.startClose),
+      formatReportNumber(summary.latestClose),
+      formatReportPercent(summary.percentChange),
+      formatReportPercent(summary.volatility),
+    ].join("\t"),
+  );
+
+  const correlationHeader = ["标的", ...selectedInstruments.map((instrument) => instrument.symbol)].join("\t");
+  const correlationRows = selectedInstruments.map((leftInstrument) => {
+    const rowValues = selectedInstruments.map((rightInstrument) => {
+      const cell = correlationMatrix.find(
+        (matrixCell) =>
+          matrixCell.leftInstrumentId === leftInstrument.id &&
+          matrixCell.rightInstrumentId === rightInstrument.id,
+      );
+      return formatCorrelationValue(cell?.value);
+    });
+
+    return [leftInstrument.symbol, ...rowValues].join("\t");
+  });
+
+  return [
+    "对比分析报告",
+    `生成时间: ${generatedAtIso}`,
+    "",
+    "已选标的:",
+    ...selectedInstruments.map((instrument) =>
+      `- ${instrument.symbol} ${instrument.name}${instrument.market ? ` (${instrument.market})` : ""}`,
+    ),
+    "",
+    "汇总指标:",
+    ["标的", "名称", "市场", "起始价", "最新价", "区间收益", "波动率"].join("\t"),
+    ...summaryLines,
+    "",
+    "相关系数矩阵:",
+    correlationHeader,
+    ...correlationRows,
+  ].join("\n");
+}

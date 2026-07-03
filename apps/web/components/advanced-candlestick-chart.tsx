@@ -24,9 +24,9 @@ interface AdvancedCandlestickChartProps {
   className?: string;
 }
 
-type TimeRange = "1D" | "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
+type TimeRange = "1D" | "5D" | "1M" | "3M" | "6M" | "1Y" | "YTD" | "ALL";
 
-const timeRangeOptions: TimeRange[] = ["1D", "5D", "1M", "3M", "6M", "1Y", "ALL"];
+const timeRangeOptions: TimeRange[] = ["1D", "5D", "1M", "3M", "6M", "1Y", "YTD", "ALL"];
 
 export function AdvancedCandlestickChart({
   data = [],
@@ -111,6 +111,7 @@ export function AdvancedCandlestickChart({
       const ma5Data = calculateMA(candlestickData, 5);
       const ma10Data = calculateMA(candlestickData, 10);
       const ma20Data = calculateMA(candlestickData, 20);
+      const ma60Data = calculateMA(candlestickData, 60);
 
       const ma5Series = chart.addSeries(LineSeries, {
         color: "#2196F3",
@@ -132,6 +133,13 @@ export function AdvancedCandlestickChart({
         title: "MA20",
       });
       ma20Series.setData(ma20Data);
+
+      const ma60Series = chart.addSeries(LineSeries, {
+        color: "#00BCD4",
+        lineWidth: 1,
+        title: "MA60",
+      });
+      ma60Series.setData(ma60Data);
     }
 
     if (showVolume && data.some((bar) => bar.volume !== undefined)) {
@@ -205,7 +213,9 @@ export function AdvancedCandlestickChart({
     setSelectedRange(range);
     if (!chartRef.current || data.length === 0) return;
 
-    const now = new Date();
+    const latestBarDate = new Date(data[data.length - 1].timestamp);
+    const fallbackEndDate = Number.isNaN(latestBarDate.getTime()) ? new Date() : latestBarDate;
+    const rangeEndTime = fallbackEndDate.getTime() / 1000;
     let daysToShow = 0;
 
     switch (range) {
@@ -227,15 +237,23 @@ export function AdvancedCandlestickChart({
       case "1Y":
         daysToShow = 365;
         break;
+      case "YTD": {
+        const startOfYear = new Date(fallbackEndDate.getFullYear(), 0, 1);
+        chartRef.current.timeScale().setVisibleRange({
+          from: (startOfYear.getTime() / 1000) as Time,
+          to: rangeEndTime as Time,
+        });
+        return;
+      }
       case "ALL":
         chartRef.current.timeScale().fitContent();
         return;
     }
 
-    const fromTime = (now.getTime() - daysToShow * 24 * 60 * 60 * 1000) / 1000;
+    const fromTime = rangeEndTime - daysToShow * 24 * 60 * 60;
     chartRef.current.timeScale().setVisibleRange({
       from: fromTime as Time,
-      to: (now.getTime() / 1000) as Time,
+      to: rangeEndTime as Time,
     });
   };
 

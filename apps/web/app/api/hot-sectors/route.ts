@@ -1,5 +1,19 @@
 import { backendFetch } from "@/lib/backend-api";
 
+type HotSectorsStatus = "ok" | "degraded" | "unavailable";
+type HotSectorsDataMode = "live" | "demo" | "mock" | "none";
+
+function unavailableHotSectorsPayload(message: string) {
+  return {
+    status: "unavailable" satisfies HotSectorsStatus,
+    data_mode: "none" satisfies HotSectorsDataMode,
+    source: "backend_proxy",
+    message,
+    count: 0,
+    items: [],
+  };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = searchParams.get("limit") || "5";
@@ -10,13 +24,13 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
-      return Response.json({ error: "Failed to fetch hot sectors" }, { status: 500 });
+      return Response.json(unavailableHotSectorsPayload("Failed to fetch hot sectors"), { status: 502 });
     }
 
     const data = await response.json();
     return Response.json(data);
   } catch (error) {
     console.error("Hot sectors API error:", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json(unavailableHotSectorsPayload("Internal server error"), { status: 502 });
   }
 }

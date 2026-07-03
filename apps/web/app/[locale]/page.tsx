@@ -156,8 +156,14 @@ type HotSectorItem = {
   symbols_count: number;
 };
 
+type HotSectorsStatus = "ok" | "degraded" | "unavailable";
+type HotSectorsDataMode = "live" | "demo" | "mock" | "none";
+
 type HotSectorsPayload = {
-  status?: string;
+  status: HotSectorsStatus;
+  data_mode: HotSectorsDataMode;
+  source?: string;
+  message?: string;
   count?: number;
   items: HotSectorItem[];
 };
@@ -727,7 +733,13 @@ export default async function HomePage({
     ),
     fetchOptionalJson<HotSectorsPayload>(
       "/sectors/hot?limit=5",
-      { status: "unavailable", items: [] },
+      {
+        status: "unavailable",
+        data_mode: "none",
+        message: "Hot sectors are unavailable.",
+        count: 0,
+        items: [],
+      },
     ),
   ]);
   const dashboardHealthCounts = countFreshnessStatuses(dashboardHealthLatestBars);
@@ -918,8 +930,16 @@ export default async function HomePage({
         />
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <SmartRecommendations recommendations={smartRecommendations} />
-          <HotSectors sectors={hotSectors} />
+          <SmartRecommendations
+            recommendations={smartRecommendations}
+            getInstrumentHref={(symbol) => `/instruments/${encodeURIComponent(symbol)}`}
+          />
+          <HotSectors
+            sectors={hotSectors}
+            status={hotSectorsPayload.status}
+            dataMode={hotSectorsPayload.data_mode}
+            message={hotSectorsPayload.message}
+          />
         </div>
 
         <ComparisonTool instruments={comparisonInstruments} />

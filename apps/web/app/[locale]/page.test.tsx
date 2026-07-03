@@ -299,7 +299,10 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
       return Promise.resolve(
         new Response(
           JSON.stringify({
-            status: "ok",
+            status: "degraded",
+            data_mode: "mock",
+            source: "static_sector_fixture",
+            message: "Static mock sector data; not live market data.",
             count: 1,
             items: [
               {
@@ -391,7 +394,9 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
   expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
+  expect(screen.getByRole("link", { name: /AAPL 突破20日均线/ })).toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("AAPL 突破20日均线")).toBeInTheDocument();
+  expect(screen.getByText("Mock data")).toBeInTheDocument();
   expect(screen.getByText("新能源汽车")).toBeInTheDocument();
   expect(screen.getByText("对比分析")).toBeInTheDocument();
   expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
@@ -547,6 +552,7 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
         new Response(
           JSON.stringify({
             status: "ok",
+            data_mode: "live",
             count: 0,
             items: [],
           }),
@@ -570,7 +576,7 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
   expect(screen.getByText("暂无推荐,继续监控市场中...")).toBeInTheDocument();
-  expect(screen.getByText("暂无热点板块数据")).toBeInTheDocument();
+  expect(screen.getByText("No live hot-sector data available.")).toBeInTheDocument();
   expect(screen.getByText("对比分析")).toBeInTheDocument();
   expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
   expect(screen.getByText("皮尔逊相关系数")).toBeInTheDocument();

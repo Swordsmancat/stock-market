@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildComparisonReportText,
   buildCorrelationMatrix,
   buildNormalizedComparisonChartData,
   calculateComparisonSummaries,
@@ -62,5 +63,50 @@ describe("comparison-utils", () => {
     expect(matrix).toHaveLength(4);
     expect(matrix.find((cell) => cell.leftInstrumentId === "left" && cell.rightInstrumentId === "left")?.value).toBe(1);
     expect(matrix.find((cell) => cell.leftInstrumentId === "left" && cell.rightInstrumentId === "right")?.value).toBeCloseTo(1);
+  });
+
+  it("exports selected summaries and correlation matrix in report text", () => {
+    const selectedInstruments = [leftInstrument, rightInstrument];
+    const reportText = buildComparisonReportText({
+      selectedInstruments,
+      summaries: calculateComparisonSummaries(selectedInstruments),
+      correlationMatrix: buildCorrelationMatrix(selectedInstruments),
+      generatedAtIso: "2026-01-04T00:00:00.000Z",
+    });
+
+    expect(reportText).toContain("对比分析报告");
+    expect(reportText).toContain("生成时间: 2026-01-04T00:00:00.000Z");
+    expect(reportText).toContain("已选标的:");
+    expect(reportText).toContain("汇总指标:");
+    expect(reportText).toContain("LEFT\tLeft Instrument\t--\t100.00\t120.00\t+20.00%");
+    expect(reportText).toContain("RIGHT\tRight Instrument\t--\t50.00\t60.00\t+20.00%");
+    expect(reportText).toContain("相关系数矩阵:");
+    expect(reportText).toContain("标的\tLEFT\tRIGHT");
+    expect(reportText).toContain("LEFT\t1.000\t1.000");
+  });
+
+  it("uses a placeholder for unavailable correlation values in report text", () => {
+    const flatInstrument: ComparisonInstrument = {
+      id: "flat",
+      symbol: "FLAT",
+      name: "Flat Instrument",
+      bars: [
+        { timestamp: "2026-01-01", close: 100 },
+        { timestamp: "2026-01-02", close: 100 },
+        { timestamp: "2026-01-03", close: 100 },
+      ],
+    };
+
+    const selectedInstruments = [leftInstrument, flatInstrument];
+    const reportText = buildComparisonReportText({
+      selectedInstruments,
+      summaries: calculateComparisonSummaries(selectedInstruments),
+      correlationMatrix: buildCorrelationMatrix(selectedInstruments),
+      generatedAtIso: "2026-01-04T00:00:00.000Z",
+    });
+
+    expect(reportText).toContain("标的\tLEFT\tFLAT");
+    expect(reportText).toContain("LEFT\t1.000\t--");
+    expect(reportText).toContain("FLAT\t--\t1.000");
   });
 });

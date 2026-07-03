@@ -1,8 +1,12 @@
 "use client";
 
 import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+type HotSectorsStatus = "ok" | "degraded" | "unavailable";
+type HotSectorsDataMode = "live" | "demo" | "mock" | "none";
 
 interface Sector {
   name: string;
@@ -18,17 +22,80 @@ interface Sector {
 
 interface HotSectorsProps {
   sectors: Sector[];
+  status?: HotSectorsStatus;
+  dataMode?: HotSectorsDataMode;
+  message?: string;
   isLoading?: boolean;
   className?: string;
 }
 
-export function HotSectors({ sectors, isLoading = false, className = "" }: HotSectorsProps) {
+function getStatusBadgeLabel(
+  status: HotSectorsStatus,
+  dataMode: HotSectorsDataMode,
+  labels: {
+    live: string;
+    mock: string;
+    demo: string;
+    unavailable: string;
+  },
+): string {
+  if (status === "unavailable" || dataMode === "none") {
+    return labels.unavailable;
+  }
+  if (dataMode === "mock") {
+    return labels.mock;
+  }
+  if (dataMode === "demo") {
+    return labels.demo;
+  }
+  return labels.live;
+}
+
+function getEmptyMessage(
+  status: HotSectorsStatus,
+  dataMode: HotSectorsDataMode,
+  labels: {
+    emptyLive: string;
+    emptyDemo: string;
+    emptyMock: string;
+    unavailable: string;
+  },
+): string {
+  if (status === "unavailable" || dataMode === "none") {
+    return labels.unavailable;
+  }
+  if (dataMode === "mock") {
+    return labels.emptyMock;
+  }
+  if (dataMode === "demo") {
+    return labels.emptyDemo;
+  }
+  return labels.emptyLive;
+}
+
+export function HotSectors({
+  sectors,
+  status = "ok",
+  dataMode = "live",
+  message,
+  isLoading = false,
+  className = "",
+}: HotSectorsProps) {
+  const t = useTranslations("Dashboard");
+  const statusBadgeLabel = getStatusBadgeLabel(status, dataMode, {
+    live: t("hotSectorsLiveBadge"),
+    mock: t("hotSectorsMockBadge"),
+    demo: t("hotSectorsDemoBadge"),
+    unavailable: t("hotSectorsUnavailableBadge"),
+  });
+  const statusBadgeVariant = status === "ok" && dataMode === "live" ? "outline" : "secondary";
+
   if (isLoading) {
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="text-base">🔥 热点板块</CardTitle>
-          <CardDescription className="text-xs">板块资金流向分析</CardDescription>
+          <CardTitle className="text-base">🔥 {t("hotSectorsTitle")}</CardTitle>
+          <CardDescription className="text-xs">{t("hotSectorsDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -40,15 +107,25 @@ export function HotSectors({ sectors, isLoading = false, className = "" }: HotSe
   }
 
   if (sectors.length === 0) {
+    const emptyMessage = getEmptyMessage(status, dataMode, {
+      emptyLive: t("hotSectorsEmptyLive"),
+      emptyDemo: t("hotSectorsEmptyDemo"),
+      emptyMock: t("hotSectorsEmptyMock"),
+      unavailable: t("hotSectorsUnavailable"),
+    });
+
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="text-base">🔥 热点板块</CardTitle>
-          <CardDescription className="text-xs">板块资金流向分析</CardDescription>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">🔥 {t("hotSectorsTitle")}</CardTitle>
+            <Badge variant={statusBadgeVariant}>{statusBadgeLabel}</Badge>
+          </div>
+          <CardDescription className="text-xs">{message ?? t("hotSectorsDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-sm text-muted-foreground">
-            暂无热点板块数据
+            {emptyMessage}
           </div>
         </CardContent>
       </Card>
@@ -58,9 +135,12 @@ export function HotSectors({ sectors, isLoading = false, className = "" }: HotSe
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-base">🔥 热点板块</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">🔥 {t("hotSectorsTitle")}</CardTitle>
+          <Badge variant={statusBadgeVariant}>{statusBadgeLabel}</Badge>
+        </div>
         <CardDescription className="text-xs">
-          板块资金流向分析 · Top {sectors.length}
+          {message ?? t("hotSectorsDesc")} · Top {sectors.length}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

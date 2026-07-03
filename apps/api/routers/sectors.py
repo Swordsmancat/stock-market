@@ -93,7 +93,10 @@ async def get_hot_sectors(
         limited_sectors = hot_sectors[:limit]
         
         return {
-            "status": "ok",
+            "status": "degraded",
+            "data_mode": "mock",
+            "source": "static_sector_fixture",
+            "message": "Static mock sector data; not live market data.",
             "count": len(limited_sectors),
             "items": limited_sectors
         }
@@ -101,7 +104,9 @@ async def get_hot_sectors(
     except Exception as e:
         logger.error(f"Error in get_hot_sectors: {e}")
         return {
-            "status": "error",
+            "status": "unavailable",
+            "data_mode": "none",
             "message": str(e),
+            "count": 0,
             "items": []
         }

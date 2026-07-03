@@ -1,5 +1,6 @@
 "use client";
 
+import { Link } from "@/src/i18n/routing";
 import { TrendingUp, Activity, AlertCircle, Zap } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ interface Recommendation {
 
 interface SmartRecommendationsProps {
   recommendations: Recommendation[];
+  getInstrumentHref?: (symbol: string) => string;
   isLoading?: boolean;
   className?: string;
 }
@@ -50,6 +52,7 @@ const typeConfig = {
 
 export function SmartRecommendations({
   recommendations,
+  getInstrumentHref,
   isLoading = false,
   className = "",
 }: SmartRecommendationsProps) {
@@ -100,10 +103,12 @@ export function SmartRecommendations({
               const config = typeConfig[rec.type];
               const Icon = config.icon;
               const confidencePercent = Math.round(rec.confidence * 100);
+              const instrumentHref = getInstrumentHref?.(rec.symbol) ?? `/instruments/${encodeURIComponent(rec.symbol)}`;
 
               return (
-                <div
-                  key={index}
+                <Link
+                  key={`${rec.symbol}-${rec.type}-${rec.timestamp}-${index}`}
+                  href={instrumentHref as any}
                   className="flex gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors"
                 >
                   <div className={`flex-shrink-0 w-10 h-10 rounded-full ${config.bgColor} flex items-center justify-center`}>
@@ -132,7 +137,7 @@ export function SmartRecommendations({
                       </span>
                     </div>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "07-04-07-04-phase2-phase3-financial-features-completion"
+  ],
   "parent": null,
   "relatedFiles": [],
   "notes": "",
