@@ -60,20 +60,29 @@ class TushareProvider:
     @staticmethod
     def _download(symbol: str, start: date, end: date) -> pd.DataFrame:
         try:
+            import os
             import tushare as ts
 
             token = ""
+            http_url = ""
             try:
                 from packages.services.platform_settings import get_platform_settings
-                token = str(get_platform_settings().get("tushare_token", "") or "").strip()
+                settings_payload = get_platform_settings()
+                token = str(settings_payload.get("tushare_token", "") or "").strip()
+                http_url = str(settings_payload.get("tushare_http_url", "") or "").strip()
             except Exception:
                 pass
+
+            if not token:
+                token = os.environ.get("TUSHARE_TOKEN", "").strip()
+            if not http_url:
+                http_url = os.environ.get("TUSHARE_HTTP_URL", "").strip()
 
             if not token:
                 return pd.DataFrame()
 
             ts.set_token(token)
-            pro = ts.pro_api()
+            pro = ts.pro_api(http_url) if http_url else ts.pro_api()
 
             start_str = start.isoformat().replace("-", "")
             end_str = end.isoformat().replace("-", "")

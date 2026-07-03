@@ -504,9 +504,10 @@
     "tushareTitle": "Tushare（A 股行情）",
     "tushareDesc": "通过 Tushare Pro 获取 A 股数据。需在 tushare.pro 注册。",
     "tushareToken": "Tushare Token",
+    "tushareHttpUrl": "Tushare HTTP URL",
     "tushareTokenPlaceholder": "您的 Tushare Pro API Token",
     "tushareTokenConfigured": "已保存 Token，留空则保持不变",
-    "tushareHint": "免费 Token 可从 https://tushare.pro 获取，付费等级可解锁更多数据。"
+    "tushareHint": "免费 Token 可从 https://tushare.pro 获取，付费等级可解锁更多数据。HTTP URL 为可选项，用于自定义 Tushare 服务器。"
   },
   "System": {
     "backendOffline": "无法连接 API。请运行：uvicorn apps.api.main:app --reload --port 8000（或在 apps/web/.env.local 中设置 API_BASE_URL）",

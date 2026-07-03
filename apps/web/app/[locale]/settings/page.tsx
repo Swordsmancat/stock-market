@@ -125,6 +125,17 @@ export default async function SettingsPage({
                 }
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="tushare_http_url">
+                {t("tushareHttpUrl")}
+              </label>
+              <Input
+                id="tushare_http_url"
+                name="tushare_http_url"
+                defaultValue={settings.tushare_http_url}
+                placeholder="http://api.tushare.pro (optional)"
+              />
+            </div>
             <p className="text-xs text-muted-foreground">{t("tushareHint")}</p>
           </CardContent>
         </Card>

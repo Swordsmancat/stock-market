@@ -501,9 +501,10 @@
     "tushareTitle": "Tushare (CN Market)",
     "tushareDesc": "Chinese market data via Tushare Pro. Requires registration at tushare.pro.",
     "tushareToken": "Tushare Token",
+    "tushareHttpUrl": "Tushare HTTP URL",
     "tushareTokenPlaceholder": "Your Tushare Pro API token",
     "tushareTokenConfigured": "Token already saved — leave blank to keep unchanged",
-    "tushareHint": "Get your free token from https://tushare.pro. Paid tiers unlock more data."
+    "tushareHint": "Get your free token from https://tushare.pro. Paid tiers unlock more data. HTTP URL is optional for custom Tushare servers."
   },
   "System": {
     "backendOffline": "Cannot reach the API. Start it with: uvicorn apps.api.main:app --reload --port 8000 (or set API_BASE_URL in apps/web/.env.local)",
