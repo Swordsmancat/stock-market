@@ -1,0 +1,13 @@
+{
+  "id": "07-03-professional-financial-dashboard",
+  "title": "Professional Financial Dashboard - Deep Redesign",
+  "status": "planning",
+  "created_at": "2026-07-03",
+  "priority": "high",
+  "phase": "planning",
+  "description": "深度金融看板改造，参考 Yahoo Finance 和 TradingView 实现专业级数据展示",
+  "references": [
+    "https://finance.yahoo.com",
+    "https://cn.tradingview.com"
+  ]
+}
