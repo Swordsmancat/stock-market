@@ -6,10 +6,21 @@ from sqlalchemy.orm import Session
 from packages.analytics.indicators import (
     calculate_atr,
     calculate_bollinger_bands,
+    calculate_kdj,
     calculate_ma,
+    calculate_macd,
     calculate_rsi,
 )
 from packages.domain.models import DailyBar, Instrument, TechnicalIndicator
+
+DAILY_TECHNICAL_INDICATOR_CODES_TO_REFRESH = {
+    "ma",
+    "rsi",
+    "bollinger",
+    "atr",
+    "macd",
+    "kdj",
+}
 
 
 def _daily_bars_for_symbol(symbol: str, start: date, end: date, session: Session) -> list[DailyBar]:
@@ -67,6 +78,30 @@ def _latest_bollinger_value(close: pd.Series, window: int) -> dict[str, float] |
     }
 
 
+def _latest_macd_value(close: pd.Series) -> dict[str, float] | None:
+    macd = calculate_macd(close).dropna()
+    if macd.empty:
+        return None
+    latest = macd.iloc[-1]
+    return {
+        "macd": float(latest["macd"]),
+        "signal": float(latest["signal"]),
+        "histogram": float(latest["histogram"]),
+    }
+
+
+def _latest_kdj_value(high: pd.Series, low: pd.Series, close: pd.Series) -> dict[str, float] | None:
+    kdj = calculate_kdj(high, low, close).dropna()
+    if kdj.empty:
+        return None
+    latest = kdj.iloc[-1]
+    return {
+        "k": float(latest["k"]),
+        "d": float(latest["d"]),
+        "j": float(latest["j"]),
+    }
+
+
 def _serialize_indicator_value(value: object) -> object:
     if isinstance(value, dict):
         return {key: float(item) for key, item in value.items()}
@@ -96,6 +131,8 @@ def calculate_and_store_daily_indicators(
     as_of = _as_of_datetime(latest_bar.trade_date)
     bollinger = _latest_bollinger_value(close, ma_window)
     atr = _latest_atr_value(high, low, close)
+    macd = _latest_macd_value(close)
+    kdj = _latest_kdj_value(high, low, close)
     indicator_values = {
         "ma": {"params": {"window": ma_window}, "value": float(ma_values.iloc[-1])},
         "rsi": {"params": {"window": 14}, "value": _latest_rsi_value(close)},
@@ -107,12 +144,22 @@ def calculate_and_store_daily_indicators(
         }
     if atr is not None:
         indicator_values["atr"] = {"params": {"window": 14}, "value": atr}
+    if macd is not None:
+        indicator_values["macd"] = {
+            "params": {"fast": 12, "slow": 26, "signal": 9},
+            "value": macd,
+        }
+    if kdj is not None:
+        indicator_values["kdj"] = {
+            "params": {"window": 9, "k_smoothing": 3, "d_smoothing": 3},
+            "value": kdj,
+        }
 
     session.query(TechnicalIndicator).filter(
         TechnicalIndicator.instrument_id == instrument.id,
         TechnicalIndicator.timeframe == "1d",
         TechnicalIndicator.as_of == as_of,
-        TechnicalIndicator.indicator_code.in_(indicator_values.keys()),
+        TechnicalIndicator.indicator_code.in_(DAILY_TECHNICAL_INDICATOR_CODES_TO_REFRESH),
     ).delete(synchronize_session=False)
 
     for indicator_code, payload in indicator_values.items():
