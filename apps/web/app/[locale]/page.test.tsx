@@ -273,6 +273,51 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     if (url.endsWith("/alerts/triggers/recent?limit=5")) {
       return Promise.resolve(new Response(JSON.stringify({ items: [] })));
     }
+    if (url.includes("/recommendations?")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            generated_at: "2026-07-03T10:00:00Z",
+            count: 1,
+            items: [
+              {
+                symbol: "AAPL",
+                type: "breakout",
+                title: "AAPL 突破20日均线",
+                reason: "价格重新站上关键均线，短线动能改善。",
+                confidence: 0.82,
+                timestamp: "2026-07-03T10:00:00Z",
+                data: { close: 102 },
+              },
+            ],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/sectors/hot")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            count: 1,
+            items: [
+              {
+                name: "新能源汽车",
+                name_en: "EV & New Energy",
+                change_percent: 5.2,
+                fund_flow: "流入",
+                fund_flow_amount: 12.5,
+                leader_symbol: "TSLA",
+                leader_name: "特斯拉",
+                leader_change_percent: 6.8,
+                symbols_count: 4,
+              },
+            ],
+          }),
+        ),
+      );
+    }
     if (url.includes("/dashboard/market-overview")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
     }
@@ -346,6 +391,8 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
   expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
+  expect(screen.getByText("AAPL 突破20日均线")).toBeInTheDocument();
+  expect(screen.getByText("新能源汽车")).toBeInTheDocument();
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
@@ -479,6 +526,29 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
     if (url.endsWith("/alerts/triggers/recent?limit=5")) {
       return Promise.resolve(new Response(JSON.stringify({ items: [] })));
     }
+    if (url.includes("/recommendations?")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            generated_at: "2026-07-03T10:00:00Z",
+            count: 0,
+            items: [],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/sectors/hot")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            count: 0,
+            items: [],
+          }),
+        ),
+      );
+    }
     if (url.includes("/dashboard/market-overview")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload("600519", "Kweichow Moutai", "CN", 1666))));
     }
@@ -495,6 +565,8 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
   expect(screen.getByText("600519 Latest Price")).toBeInTheDocument();
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
+  expect(screen.getByText("暂无推荐,继续监控市场中...")).toBeInTheDocument();
+  expect(screen.getByText("暂无热点板块数据")).toBeInTheDocument();
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
   expect(screen.getAllByText("1,666.00").length).toBeGreaterThan(0);

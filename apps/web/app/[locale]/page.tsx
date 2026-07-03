@@ -6,6 +6,8 @@ import { IngestionTriggerForm } from "@/components/ingestion-trigger-form";
 import { FlashBanner } from "@/components/flash-banner";
 import { MarketTicker } from "@/components/market-ticker";
 import { MarketOverviewClient } from "@/components/market-overview-client";
+import { HotSectors } from "@/components/hot-sectors";
+import { SmartRecommendations } from "@/components/smart-recommendations";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,6 +124,41 @@ type AlertTriggersPayload = {
     threshold: number;
     triggered_at: string;
   }>;
+};
+
+type SmartRecommendationItem = {
+  symbol: string;
+  type: "breakout" | "volume_anomaly" | "oversold_rebound" | "strong_momentum";
+  title: string;
+  reason: string;
+  confidence: number;
+  timestamp: string;
+  data: Record<string, unknown>;
+};
+
+type SmartRecommendationsPayload = {
+  status?: string;
+  generated_at?: string;
+  count?: number;
+  items: SmartRecommendationItem[];
+};
+
+type HotSectorItem = {
+  name: string;
+  name_en: string;
+  change_percent: number;
+  fund_flow: string;
+  fund_flow_amount: number;
+  leader_symbol: string;
+  leader_name: string;
+  leader_change_percent: number;
+  symbols_count: number;
+};
+
+type HotSectorsPayload = {
+  status?: string;
+  count?: number;
+  items: HotSectorItem[];
 };
 
 type DashboardBarItem = {
@@ -681,6 +718,19 @@ export default async function HomePage({
   const marketOverviewIndices = marketOverviewPayload?.indices.items ?? [];
   const marketOverviewFollowedItems = marketOverviewPayload?.followed.items ?? [];
   const marketOverviewValuationItems = marketOverviewPayload?.valuation_indicators.items ?? [];
+  const recommendationSymbols = marketOverviewFollowedItems.length > 0
+    ? marketOverviewFollowedItems.map((item) => item.symbol).slice(0, 6)
+    : instrumentsPayload.items.map((instrument) => instrument.symbol).slice(0, 6);
+  const recommendationsPayload = await fetchOptionalJson<SmartRecommendationsPayload>(
+    `/recommendations?symbols=${encodeURIComponent(recommendationSymbols.join(","))}&limit=5`,
+    { status: "unavailable", items: [] },
+  );
+  const hotSectorsPayload = await fetchOptionalJson<HotSectorsPayload>(
+    "/sectors/hot?limit=5",
+    { status: "unavailable", items: [] },
+  );
+  const smartRecommendations = recommendationsPayload.items ?? [];
+  const hotSectors = hotSectorsPayload.items ?? [];
   const marketOverviewScopeLabel =
     marketOverviewPayload?.followed.scope === "watchlist"
       ? t("marketDashboardWatchlistScope")
@@ -813,6 +863,11 @@ export default async function HomePage({
             status: t("status"),
           }}
         />
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <SmartRecommendations recommendations={smartRecommendations} />
+          <HotSectors sectors={hotSectors} />
+        </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
           <Card className="rounded-none border-x-0">

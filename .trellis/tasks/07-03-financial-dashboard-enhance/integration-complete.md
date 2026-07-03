@@ -23,7 +23,21 @@
 
 ### 3. 智能推荐组件 ✅
 - **文件**: `apps/web/components/smart-recommendations.tsx` (已存在)
-- **状态**: 已完成,待集成到页面
+- **状态**: 已完成并已集成到首页
+
+### 4. 首页集成 ✅
+- **文件**: `apps/web/app/[locale]/page.tsx`
+- **功能**:
+  - 拉取智能推荐数据并展示 `SmartRecommendations`
+  - 拉取热点板块数据并展示 `HotSectors`
+  - 在市场概览下方以双栏布局展示专业增强模块
+
+### 5. 推荐 API 代理 ✅
+- **文件**: `apps/web/app/api/recommendations/route.ts`
+- **功能**:
+  - 代理后端 `/recommendations` API
+  - 校验 `symbols` 查询参数
+  - 统一错误响应格式
 
 ---
 
@@ -105,10 +119,7 @@ interface SmartRecommendationsProps {
 
 ## 下一步
 
-如需将组件集成到首页:
-1. 修改 `apps/web/app/[locale]/page.tsx`
-2. 添加数据获取逻辑
-3. 放置组件到合适位置
+首页集成已完成。后续可继续增强推荐算法准确率、热点板块真实数据源和对比分析工具。
 
 示例布局:
 ```
@@ -129,4 +140,4 @@ interface SmartRecommendationsProps {
 ✅ 响应式设计  
 ✅ 错误处理完善  
 
-**剩余工作**: 将组件添加到首页 (约15分钟)
+**剩余工作**: 对比分析工具和真实生产数据源增强
