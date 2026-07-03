@@ -255,6 +255,8 @@ type MarketOverviewLoadResult =
 
 const DASHBOARD_HEALTH_SAMPLE_LIMIT = 25;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const FALLBACK_DASHBOARD_LOCALE = "en-US";
+const OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS = 5000;
 
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
@@ -276,19 +278,45 @@ type DailyMovement = {
   percentChange: number | null;
 } | null;
 
-async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
-  const response = await backendFetch(`${path}`, { cache: "no-store" });
-  if (!response.ok) {
-    return fallback;
+function getSafeDashboardLocale(locale: string): string {
+  try {
+    const [supportedLocale] = Intl.DateTimeFormat.supportedLocalesOf([locale]);
+    return supportedLocale ?? FALLBACK_DASHBOARD_LOCALE;
+  } catch {
+    return FALLBACK_DASHBOARD_LOCALE;
   }
-  return response.json() as Promise<T>;
+}
+
+function createDashboardFetchTimeout(timeoutMilliseconds: number): { signal: AbortSignal; clear: () => void } {
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMilliseconds);
+  return {
+    signal: timeoutController.signal,
+    clear: () => clearTimeout(timeoutId),
+  };
+}
+
+async function fetchOptionalJson<T>(path: string, fallback: T): Promise<T> {
+  const timeout = createDashboardFetchTimeout(OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS);
+  try {
+    const response = await backendFetch(`${path}`, { cache: "no-store", signal: timeout.signal });
+    if (!response.ok) {
+      return fallback;
+    }
+    return response.json() as Promise<T>;
+  } catch {
+    return fallback;
+  } finally {
+    timeout.clear();
+  }
 }
 
 async function fetchLatestBarResult(symbol: string, provider: string): Promise<LatestBarLoadResult> {
+  const timeout = createDashboardFetchTimeout(OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS);
   try {
     const response = await backendFetch(
       withProviderQuery(`/market-data/${encodeURIComponent(symbol)}/latest`, provider),
-      { cache: "no-store" },
+      { cache: "no-store", signal: timeout.signal },
     );
     if (!response.ok) {
       return { status: "failed" };
@@ -300,6 +328,8 @@ async function fetchLatestBarResult(symbol: string, provider: string): Promise<L
     };
   } catch {
     return { status: "failed" };
+  } finally {
+    timeout.clear();
   }
 }
 
@@ -374,7 +404,7 @@ function getFreshnessBadgeVariant(freshnessStatus: FreshnessStatus): "secondary"
 
 function formatLatestBarDate(latestBarResult: LatestBarLoadResult, locale: string, unavailableLabel: string): string {
   const parsedTimestamp = parseLatestBarTimestamp(latestBarResult);
-  return parsedTimestamp === null ? unavailableLabel : parsedTimestamp.toLocaleDateString(locale);
+  return parsedTimestamp === null ? unavailableLabel : parsedTimestamp.toLocaleDateString(getSafeDashboardLocale(locale));
 }
 
 function buildDashboardHealthInstruments(
@@ -472,10 +502,11 @@ function formatSignedPercent(value: number | null, locale: string, unavailableLa
 }
 
 async function fetchMarketOverviewResult(provider: string): Promise<MarketOverviewLoadResult> {
+  const timeout = createDashboardFetchTimeout(OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS);
   try {
     const response = await backendFetch(
       withProviderQuery("/dashboard/market-overview", provider),
-      { cache: "no-store" },
+      { cache: "no-store", signal: timeout.signal },
     );
     if (!response.ok) {
       return { status: "failed" };
@@ -487,6 +518,8 @@ async function fetchMarketOverviewResult(provider: string): Promise<MarketOvervi
     };
   } catch {
     return { status: "failed" };
+  } finally {
+    timeout.clear();
   }
 }
 
@@ -514,7 +547,9 @@ function formatDashboardDate(value: string | null | undefined, locale: string, u
   }
 
   const parsedDate = new Date(value);
-  return Number.isNaN(parsedDate.getTime()) ? unavailableLabel : parsedDate.toLocaleDateString(locale);
+  return Number.isNaN(parsedDate.getTime())
+    ? unavailableLabel
+    : parsedDate.toLocaleDateString(getSafeDashboardLocale(locale));
 }
 
 function formatDashboardMovement(
@@ -573,7 +608,8 @@ export default async function HomePage({
     task_run_id?: string;
   }>;
 }) {
-  const { locale } = await params;
+  const { locale: requestedLocale } = await params;
+  const locale = getSafeDashboardLocale(requestedLocale);
   const flash = await searchParams;
   const { recent, analysis } = getDashboardDateRanges();
   const provider = await fetchPlatformProvider();
@@ -676,9 +712,24 @@ export default async function HomePage({
   const reportCitations = reportPayload.citations ?? [];
   const dailyReportCitations = dailyReportPayload.citations ?? [];
   const dashboardHealth = buildDashboardHealthInstruments(instrumentsPayload.items, watchlistPayload.items);
-  const dashboardHealthLatestBars = await Promise.all(
-    dashboardHealth.instruments.map((instrument) => fetchLatestBarResult(instrument.symbol, provider)),
-  );
+  const marketOverviewPayload = marketOverviewResult.status === "loaded" ? marketOverviewResult.payload : null;
+  const marketOverviewIndices = marketOverviewPayload?.indices.items ?? [];
+  const marketOverviewFollowedItems = marketOverviewPayload?.followed.items ?? [];
+  const marketOverviewValuationItems = marketOverviewPayload?.valuation_indicators.items ?? [];
+  const recommendationSymbols = marketOverviewFollowedItems.length > 0
+    ? marketOverviewFollowedItems.map((item) => item.symbol).slice(0, 6)
+    : instrumentsPayload.items.map((instrument) => instrument.symbol).slice(0, 6);
+  const [dashboardHealthLatestBars, recommendationsPayload, hotSectorsPayload] = await Promise.all([
+    Promise.all(dashboardHealth.instruments.map((instrument) => fetchLatestBarResult(instrument.symbol, provider))),
+    fetchOptionalJson<SmartRecommendationsPayload>(
+      `/recommendations?symbols=${encodeURIComponent(recommendationSymbols.join(","))}&limit=5`,
+      { status: "unavailable", items: [] },
+    ),
+    fetchOptionalJson<HotSectorsPayload>(
+      "/sectors/hot?limit=5",
+      { status: "unavailable", items: [] },
+    ),
+  ]);
   const dashboardHealthCounts = countFreshnessStatuses(dashboardHealthLatestBars);
   const checkedInstrumentCount = dashboardHealth.instruments.length;
   const attentionItems = dashboardHealth.instruments
@@ -715,21 +766,6 @@ export default async function HomePage({
     : hasStaleData
     ? t("actionRefreshStaleData")
     : t("actionOpenPrimaryInstrument");
-  const marketOverviewPayload = marketOverviewResult.status === "loaded" ? marketOverviewResult.payload : null;
-  const marketOverviewIndices = marketOverviewPayload?.indices.items ?? [];
-  const marketOverviewFollowedItems = marketOverviewPayload?.followed.items ?? [];
-  const marketOverviewValuationItems = marketOverviewPayload?.valuation_indicators.items ?? [];
-  const recommendationSymbols = marketOverviewFollowedItems.length > 0
-    ? marketOverviewFollowedItems.map((item) => item.symbol).slice(0, 6)
-    : instrumentsPayload.items.map((instrument) => instrument.symbol).slice(0, 6);
-  const recommendationsPayload = await fetchOptionalJson<SmartRecommendationsPayload>(
-    `/recommendations?symbols=${encodeURIComponent(recommendationSymbols.join(","))}&limit=5`,
-    { status: "unavailable", items: [] },
-  );
-  const hotSectorsPayload = await fetchOptionalJson<HotSectorsPayload>(
-    "/sectors/hot?limit=5",
-    { status: "unavailable", items: [] },
-  );
   const smartRecommendations = recommendationsPayload.items ?? [];
   const hotSectors = hotSectorsPayload.items ?? [];
   const marketOverviewScopeLabel =
