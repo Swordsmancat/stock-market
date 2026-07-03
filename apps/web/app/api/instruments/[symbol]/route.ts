@@ -1,42 +1,24 @@
-import { backendFetch } from "@/lib/backend-api";
+import { fetchInstrumentDetailPayload, normalizeInstrumentDetailProvider } from "@/lib/instrument-detail";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
   const { symbol } = await params;
+  const requestUrl = new URL(request.url);
+  const providerName = normalizeInstrumentDetailProvider(requestUrl.searchParams.get("provider"));
 
   try {
-    // 简化实现: 只获取bars数据
-    const barsResponse = await backendFetch(
-      `/market-data/${encodeURIComponent(symbol)}/bars?timeframe=1d&limit=90`,
-      { cache: "no-store" }
-    );
-
-    if (!barsResponse.ok) {
-      console.error(`Failed to fetch bars for ${symbol}: ${barsResponse.status}`);
-      // 返回Mock数据以便页面能正常显示
-      return Response.json({
-        symbol,
-        latest: { status: "ok", item: null },
-        bars: { status: "ok", items: [] },
+    const result = await fetchInstrumentDetailPayload({ symbol, providerName });
+    if (result.status === "failed") {
+      return new Response(result.body, {
+        status: result.responseStatus,
+        headers: result.headers,
       });
     }
-
-    const barsData = await barsResponse.json();
-
-    return Response.json({
-      symbol,
-      latest: { status: "ok", item: null },
-      bars: barsData,
-    });
+    return Response.json(result.payload);
   } catch (error) {
     console.error("Instrument detail API error:", error);
-    // 返回Mock数据而不是错误
-    return Response.json({
-      symbol,
-      latest: { status: "ok", item: null },
-      bars: { status: "ok", items: [] },
-    });
+    return Response.json({ detail: "Instrument detail API error" }, { status: 502 });
   }
 }

@@ -7,19 +7,31 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
 import { PriceChangeBadge } from "@/components/price-change-badge";
+import type { InstrumentDetailPayload } from "@/lib/instrument-detail";
 
 interface InstrumentDetailClientProps {
   symbol: string;
   locale: string;
+  initialData?: InstrumentDetailPayload | null;
+  initialError?: string | null;
 }
 
-export function InstrumentDetailClient({ symbol, locale }: InstrumentDetailClientProps) {
+export function InstrumentDetailClient({
+  symbol,
+  locale,
+  initialData = null,
+  initialError = null,
+}: InstrumentDetailClientProps) {
   const router = useRouter();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<InstrumentDetailPayload | null>(initialData);
+  const [loading, setLoading] = useState(initialData === null && initialError === null);
+  const [error, setError] = useState<string | null>(initialError);
 
   useEffect(() => {
+    if (initialData !== null || initialError !== null) {
+      return;
+    }
+
     async function fetchData() {
       try {
         setLoading(true);
@@ -72,8 +84,9 @@ export function InstrumentDetailClient({ symbol, locale }: InstrumentDetailClien
     );
   }
 
-  const latestBar = data.bars?.items?.[data.bars.items.length - 1];
-  const prevBar = data.bars?.items?.[data.bars.items.length - 2];
+  const bars = data.bars?.items ?? [];
+  const latestBar = bars.at(-1) ?? data.latest?.item ?? null;
+  const prevBar = bars.at(-2) ?? null;
   
   const currentPrice = latestBar?.close || 0;
   const prevPrice = prevBar?.close || currentPrice;
@@ -137,9 +150,9 @@ export function InstrumentDetailClient({ symbol, locale }: InstrumentDetailClien
           <CardDescription>交互式价格走势图</CardDescription>
         </CardHeader>
         <CardContent>
-          {data.bars?.items && data.bars.items.length > 0 ? (
+          {bars.length > 0 ? (
             <AdvancedCandlestickChart
-              data={data.bars.items}
+              data={bars}
               symbol={symbol}
               height={500}
               showMA={true}

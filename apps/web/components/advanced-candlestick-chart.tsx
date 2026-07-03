@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createChart, IChartApi, ISeriesApi, CandlestickData, Time } from "lightweight-charts";
+import { createChart } from "lightweight-charts";
+import type { CandlestickData, IChartApi, ISeriesApi, Time } from "lightweight-charts";
 import { Button } from "@/components/ui/button";
 
 interface BarData {
