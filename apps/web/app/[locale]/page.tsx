@@ -840,27 +840,27 @@ export default async function HomePage({
             </CardHeader>
             <CardContent>
               {marketOverviewFollowedItems.length > 0 ? (
-                <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid gap-3 lg:grid-cols-2">
                   {marketOverviewFollowedItems.map((item) => {
                     const freshnessStatus = coerceFreshnessStatus(item.freshness);
                     return (
-                      <div key={`${item.market}-${item.symbol}`} className="rounded-lg border p-4">
-                        <div className="flex items-start justify-between gap-3">
+                      <div key={`${item.market}-${item.symbol}`} className="rounded-lg border p-3 transition-colors hover:bg-muted/50">
+                        <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="text-lg font-semibold">{item.symbol}</div>
-                            <div className="text-sm text-muted-foreground">{item.name}</div>
+                            <div className="text-xs text-muted-foreground">{item.name}</div>
                           </div>
-                          <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>{t(freshnessStatus)}</Badge>
+                          <Badge variant={getFreshnessBadgeVariant(freshnessStatus)} className="text-[10px] px-1 py-0">{t(freshnessStatus)}</Badge>
                         </div>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           <div>
-                            <div className="text-xs text-muted-foreground">{t("latestClose")}</div>
-                            <div className="text-xl font-bold">
+                            <div className="text-[10px] text-muted-foreground">{t("latestClose")}</div>
+                            <div className="text-2xl font-bold">
                               {formatDashboardNumber(item.latest?.close, locale, t("unavailableShort"))}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-muted-foreground">{t("dailyMovement")}</div>
+                            <div className="text-[10px] text-muted-foreground">{t("dailyMovement")}</div>
                             <div className="text-sm font-medium">
                               {formatDashboardMovement(item.latest?.movement, locale, t("unavailableShort"), marketDashboardMovementLabels)}
                             </div>
@@ -869,13 +869,13 @@ export default async function HomePage({
                         <CompactCandlestickChart
                           data={item.bars}
                           emptyMessage={item.no_data_reason ?? t("chartUnavailable")}
-                          className="mt-4 h-40 w-full"
+                          className="mt-3 h-32 w-full"
                         />
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
                           <span>{t("latestDailyBarAsOf", { date: formatDashboardDate(item.latest?.timestamp, locale, t("unavailableShort")) })}</span>
                           <span>{t("source", { source: item.source ?? t("unavailableShort") })}</span>
                         </div>
-                        <Button variant="outline" size="sm" className="mt-3" asChild>
+                        <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
                           <Link href={(item.detail_path ?? `/instruments/${item.symbol}`) as any}>{t("openDetailedChart")}</Link>
                         </Button>
                       </div>
