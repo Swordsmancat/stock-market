@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal
 
 import pandas as pd
 from sqlalchemy.exc import SQLAlchemyError
@@ -24,6 +25,43 @@ DEFAULT_RSI_WINDOW = 14
 NO_DAILY_BARS_REASON = "No daily bars were available for the requested symbol/date range."
 DEFAULT_INTRADAY_TIMEFRAME = "1m"
 INTRADAY_UNSUPPORTED_REASON = "The selected provider does not support verified minute bars in this backend."
+DEFAULT_MARKET_DEPTH_LEVELS = 5
+DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT = Decimal("1000000")
+MARKET_DEPTH_UNSUPPORTED_REASON = "The selected provider does not expose verified market depth data in this backend."
+RECENT_TRADES_UNSUPPORTED_REASON = "Recent trades are not normalized or verified by this backend yet."
+LARGE_ORDERS_UNSUPPORTED_REASON = "Large order detection requires verified recent trades, which are unavailable."
+FUND_FLOW_UNSUPPORTED_REASON = "Fund-flow data is not normalized or verified by this backend yet."
+
+MARKET_DEPTH_PROVIDER_CAPABILITIES = {
+    "mock": {
+        "order_book": False,
+        "recent_trades": False,
+        "large_orders": False,
+        "fund_flow": False,
+        "reason": "Mock provider does not expose verified real market depth data.",
+    },
+    "yfinance": {
+        "order_book": False,
+        "recent_trades": False,
+        "large_orders": False,
+        "fund_flow": False,
+        "reason": "YFinance provider does not expose verified level-2 market depth in this backend.",
+    },
+    "akshare": {
+        "order_book": False,
+        "recent_trades": False,
+        "large_orders": False,
+        "fund_flow": False,
+        "reason": "AkShare depth data is not normalized or verified by this backend yet.",
+    },
+    "tushare": {
+        "order_book": False,
+        "recent_trades": False,
+        "large_orders": False,
+        "fund_flow": False,
+        "reason": "Tushare depth/trade/fund-flow access is not normalized or permission-verified yet.",
+    },
+}
 
 
 class MarketDataProviderError(RuntimeError):
@@ -306,6 +344,80 @@ def get_intraday_bars_payload(
             "is_realtime": False,
             "is_delayed": False,
             "delay_minutes": None,
+        },
+    }
+
+
+def get_market_depth_payload(
+    symbol: str,
+    provider_name: str | None = None,
+    depth_levels: int = DEFAULT_MARKET_DEPTH_LEVELS,
+    large_order_threshold_amount: Decimal | None = None,
+) -> dict[str, object]:
+    requested_provider_name = _normalize_requested_provider_name(provider_name)
+    effective_provider_name = resolve_market_data_provider_name(provider_name)
+    provider_capabilities = MARKET_DEPTH_PROVIDER_CAPABILITIES.get(effective_provider_name)
+    if provider_capabilities is None:
+        msg = f"Unsupported market data provider: {provider_name}"
+        raise ValueError(msg)
+
+    threshold_amount = large_order_threshold_amount or DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT
+    provider_reason = str(provider_capabilities["reason"])
+    capabilities = {
+        "order_book": bool(provider_capabilities["order_book"]),
+        "recent_trades": bool(provider_capabilities["recent_trades"]),
+        "large_orders": bool(provider_capabilities["large_orders"]),
+        "fund_flow": bool(provider_capabilities["fund_flow"]),
+    }
+
+    return {
+        "symbol": symbol,
+        "source": "none",
+        "provider": effective_provider_name,
+        "requested_provider": requested_provider_name,
+        "effective_provider": effective_provider_name,
+        "status": "degraded",
+        "as_of": None,
+        "is_realtime": False,
+        "is_delayed": False,
+        "delay_minutes": None,
+        "order_book": {
+            "status": "degraded",
+            "reason": provider_reason,
+            "as_of": None,
+            "depth_levels": depth_levels,
+            "bids": [],
+            "asks": [],
+        },
+        "recent_trades": {
+            "status": "degraded",
+            "reason": RECENT_TRADES_UNSUPPORTED_REASON,
+            "as_of": None,
+            "items": [],
+        },
+        "large_orders": {
+            "status": "degraded",
+            "reason": LARGE_ORDERS_UNSUPPORTED_REASON,
+            "threshold_amount": float(threshold_amount),
+            "threshold_volume": None,
+            "currency": None,
+            "as_of": None,
+            "items": [],
+        },
+        "fund_flow": {
+            "status": "degraded",
+            "reason": FUND_FLOW_UNSUPPORTED_REASON,
+            "as_of": None,
+            "currency": None,
+            "net_inflow": None,
+            "main_net_inflow": None,
+            "retail_net_inflow": None,
+            "source_definition": None,
+        },
+        "availability": {
+            "status": "degraded",
+            "reason": MARKET_DEPTH_UNSUPPORTED_REASON,
+            "capabilities": capabilities,
         },
     }
 

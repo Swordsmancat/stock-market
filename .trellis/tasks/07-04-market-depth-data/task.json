@@ -3,7 +3,7 @@
   "name": "market-depth-data",
   "title": "Market Depth Data",
   "description": "Add level-2 style depth, recent trades, large order tracking, and fund-flow fallback contracts.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

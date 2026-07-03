@@ -71,6 +71,61 @@ function mockInstrumentDetailResponse(
           reason: "The selected provider does not support verified minute bars in this backend.",
         },
       },
+      market_depth: {
+        symbol: "AAPL",
+        source: "none",
+        provider: "yfinance",
+        requested_provider: "yfinance",
+        effective_provider: "yfinance",
+        status: "degraded",
+        as_of: null,
+        is_realtime: false,
+        is_delayed: false,
+        delay_minutes: null,
+        order_book: {
+          status: "degraded",
+          reason: "The selected provider does not expose verified market depth data in this backend.",
+          as_of: null,
+          depth_levels: 5,
+          bids: [],
+          asks: [],
+        },
+        recent_trades: {
+          status: "degraded",
+          reason: "Recent trades are not normalized or verified by this backend yet.",
+          as_of: null,
+          items: [],
+        },
+        large_orders: {
+          status: "degraded",
+          reason: "Large order detection requires verified recent trades, which are unavailable.",
+          threshold_amount: 1000000,
+          threshold_volume: null,
+          currency: null,
+          as_of: null,
+          items: [],
+        },
+        fund_flow: {
+          status: "degraded",
+          reason: "Fund-flow data is not normalized or verified by this backend yet.",
+          as_of: null,
+          currency: null,
+          net_inflow: null,
+          main_net_inflow: null,
+          retail_net_inflow: null,
+          source_definition: null,
+        },
+        availability: {
+          status: "degraded",
+          reason: "当前数据源暂不支持深度数据。",
+          capabilities: {
+            order_book: false,
+            recent_trades: false,
+            large_orders: false,
+            fund_flow: false,
+          },
+        },
+      },
       range: { timeframe: "1d", start: "2026-01-01", end: "2026-01-20" },
     },
   });
@@ -110,6 +165,9 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getByText("交互式价格走势图")).toBeInTheDocument();
   expect(screen.getByText("分时图")).toBeInTheDocument();
   expect(screen.getByText("展示可用的分钟价格、均价、昨收参考和成交量。")).toBeInTheDocument();
+  expect(screen.getByText("深度数据")).toBeInTheDocument();
+  expect(screen.getByText("展示可用的五档买卖盘、逐笔成交、大单追踪和资金流摘要。")).toBeInTheDocument();
+  expect(screen.getByText("当前数据源暂不支持深度数据。")).toBeInTheDocument();
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");
   expect(screen.getByTestId("advanced-candlestick-chart")).toHaveTextContent("Advanced chart for AAPL");
 });

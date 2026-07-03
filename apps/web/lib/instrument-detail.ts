@@ -2,6 +2,8 @@ import { backendFetch } from "@/lib/backend-api";
 
 const DETAIL_BARS_LOOKBACK_DAYS = 180;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const DEFAULT_MARKET_DEPTH_LEVELS = 5;
+const DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT = 1000000;
 
 const MARKET_INDEX_PROVIDER_SYMBOLS: Record<string, Record<string, string>> = {
   cn_shanghai_composite: { mock: "SH000001", yfinance: "000001.SS", akshare: "000001", tushare: "000001" },
@@ -57,6 +59,84 @@ export type InstrumentIntradayPayload = {
   };
 };
 
+type InstrumentMarketDepthStatus = "ok" | "no_data" | "degraded";
+
+export type InstrumentMarketDepthLevel = {
+  price?: number | null;
+  volume?: number | null;
+  amount?: number | null;
+  order_count?: number | null;
+};
+
+export type InstrumentRecentTradeItem = {
+  timestamp?: string;
+  price?: number | null;
+  volume?: number | null;
+  amount?: number | null;
+  side?: string | null;
+};
+
+export type InstrumentLargeOrderItem = InstrumentRecentTradeItem & {
+  threshold_amount?: number | null;
+  threshold_volume?: number | null;
+};
+
+export type InstrumentMarketDepthPayload = {
+  symbol: string;
+  source: string;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  status: InstrumentMarketDepthStatus;
+  as_of?: string | null;
+  is_realtime?: boolean;
+  is_delayed?: boolean;
+  delay_minutes?: number | null;
+  order_book: {
+    status: InstrumentMarketDepthStatus;
+    reason?: string | null;
+    as_of?: string | null;
+    depth_levels: number;
+    bids: InstrumentMarketDepthLevel[];
+    asks: InstrumentMarketDepthLevel[];
+  };
+  recent_trades: {
+    status: InstrumentMarketDepthStatus;
+    reason?: string | null;
+    as_of?: string | null;
+    items: InstrumentRecentTradeItem[];
+  };
+  large_orders: {
+    status: InstrumentMarketDepthStatus;
+    reason?: string | null;
+    threshold_amount?: number | null;
+    threshold_volume?: number | null;
+    currency?: string | null;
+    as_of?: string | null;
+    items: InstrumentLargeOrderItem[];
+  };
+  fund_flow: {
+    status: InstrumentMarketDepthStatus;
+    reason?: string | null;
+    as_of?: string | null;
+    currency?: string | null;
+    net_inflow?: number | null;
+    main_net_inflow?: number | null;
+    retail_net_inflow?: number | null;
+    source_definition?: string | null;
+  };
+  availability?: {
+    status: InstrumentMarketDepthStatus;
+    reason?: string | null;
+    capabilities?: {
+      order_book?: boolean;
+      recent_trades?: boolean;
+      large_orders?: boolean;
+      fund_flow?: boolean;
+    };
+  };
+};
+
 export type InstrumentDetailPayload = {
   symbol: string;
   request_symbol: string;
@@ -73,6 +153,7 @@ export type InstrumentDetailPayload = {
     source?: string;
   };
   intraday?: InstrumentIntradayPayload;
+  market_depth?: InstrumentMarketDepthPayload;
   range: {
     timeframe: "1d";
     start: string;
@@ -157,6 +238,72 @@ function buildUnavailableIntradayPayload({
   };
 }
 
+function buildUnavailableMarketDepthPayload({
+  requestSymbol,
+  providerName,
+  reason,
+}: {
+  requestSymbol: string;
+  providerName: string;
+  reason: string;
+}): InstrumentMarketDepthPayload {
+  return {
+    symbol: requestSymbol,
+    source: "none",
+    provider: providerName,
+    requested_provider: providerName,
+    effective_provider: providerName,
+    status: "degraded",
+    as_of: null,
+    is_realtime: false,
+    is_delayed: false,
+    delay_minutes: null,
+    order_book: {
+      status: "degraded",
+      reason,
+      as_of: null,
+      depth_levels: DEFAULT_MARKET_DEPTH_LEVELS,
+      bids: [],
+      asks: [],
+    },
+    recent_trades: {
+      status: "degraded",
+      reason: "Recent trades are unavailable for this provider.",
+      as_of: null,
+      items: [],
+    },
+    large_orders: {
+      status: "degraded",
+      reason: "Large order detection is unavailable because recent trades are unavailable.",
+      threshold_amount: DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT,
+      threshold_volume: null,
+      currency: null,
+      as_of: null,
+      items: [],
+    },
+    fund_flow: {
+      status: "degraded",
+      reason: "Fund-flow data is unavailable for this provider.",
+      as_of: null,
+      currency: null,
+      net_inflow: null,
+      main_net_inflow: null,
+      retail_net_inflow: null,
+      source_definition: null,
+    },
+    availability: {
+      status: "degraded",
+      reason,
+      capabilities: {
+        order_book: false,
+        recent_trades: false,
+        large_orders: false,
+        fund_flow: false,
+      },
+    },
+  };
+}
+
 export async function fetchInstrumentDetailPayload({
   symbol,
   providerName,
@@ -170,7 +317,7 @@ export async function fetchInstrumentDetailPayload({
   const requestSymbol = resolveInstrumentDetailRequestSymbol(symbol, normalizedProviderName);
   const encodedSymbol = encodeURIComponent(requestSymbol);
 
-  const [latestResult, barsResult, intradayResult] = await Promise.allSettled([
+  const [latestResult, barsResult, intradayResult, marketDepthResult] = await Promise.allSettled([
     backendFetch(`/market-data/${encodedSymbol}/latest${providerQuerySuffix.replace("&", "?")}`, {
       cache: "no-store",
     }),
@@ -180,6 +327,10 @@ export async function fetchInstrumentDetailPayload({
     ),
     backendFetch(
       `/market-data/${encodedSymbol}/intraday?date=${end}&timeframe=1m${providerQuerySuffix}`,
+      { cache: "no-store" },
+    ),
+    backendFetch(
+      `/market-data/${encodedSymbol}/depth?depth_levels=${DEFAULT_MARKET_DEPTH_LEVELS}&large_order_threshold_amount=${DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT}${providerQuerySuffix}`,
       { cache: "no-store" },
     ),
   ]);
@@ -216,6 +367,13 @@ export async function fetchInstrumentDetailPayload({
         date: end,
         reason: "Intraday data is unavailable for this provider.",
       });
+  const marketDepthData = marketDepthResult.status === "fulfilled" && marketDepthResult.value.ok
+    ? await marketDepthResult.value.json()
+    : buildUnavailableMarketDepthPayload({
+        requestSymbol,
+        providerName: normalizedProviderName,
+        reason: "Market depth data is unavailable for this provider.",
+      });
 
   return {
     status: "loaded",
@@ -225,6 +383,7 @@ export async function fetchInstrumentDetailPayload({
       latest: latestData,
       bars: barsData,
       intraday: intradayData,
+      market_depth: marketDepthData,
       range: { timeframe: "1d", start, end },
     },
   };

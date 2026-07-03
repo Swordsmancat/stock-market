@@ -10,6 +10,64 @@ vi.mock("@/lib/backend-api", () => ({
 
 import { GET } from "./route";
 
+function buildMarketDepthPayload(symbol = "AAPL") {
+  return {
+    symbol,
+    source: "none",
+    provider: "yfinance",
+    requested_provider: "yfinance",
+    effective_provider: "yfinance",
+    status: "degraded",
+    as_of: null,
+    is_realtime: false,
+    is_delayed: false,
+    delay_minutes: null,
+    order_book: {
+      status: "degraded",
+      reason: "Provider does not support market depth data.",
+      as_of: null,
+      depth_levels: 5,
+      bids: [],
+      asks: [],
+    },
+    recent_trades: {
+      status: "degraded",
+      reason: "Recent trades are unavailable.",
+      as_of: null,
+      items: [],
+    },
+    large_orders: {
+      status: "degraded",
+      reason: "Large orders are unavailable.",
+      threshold_amount: 1000000,
+      threshold_volume: null,
+      currency: null,
+      as_of: null,
+      items: [],
+    },
+    fund_flow: {
+      status: "degraded",
+      reason: "Fund flow is unavailable.",
+      as_of: null,
+      currency: null,
+      net_inflow: null,
+      main_net_inflow: null,
+      retail_net_inflow: null,
+      source_definition: null,
+    },
+    availability: {
+      status: "degraded",
+      reason: "Provider does not support market depth data.",
+      capabilities: {
+        order_book: false,
+        recent_trades: false,
+        large_orders: false,
+        fund_flow: false,
+      },
+    },
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -47,6 +105,12 @@ it("fetches instrument latest and bars using the backend date-range contract", a
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(buildMarketDepthPayload()), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
     );
 
   const response = await GET(new Request("http://localhost/api/instruments/AAPL?provider=yfinance"), {
@@ -66,6 +130,11 @@ it("fetches instrument latest and bars using the backend date-range contract", a
     "/market-data/AAPL/intraday?date=2026-07-03&timeframe=1m&provider=yfinance",
     { cache: "no-store" },
   );
+  expect(backendFetchMock).toHaveBeenNthCalledWith(
+    4,
+    "/market-data/AAPL/depth?depth_levels=5&large_order_threshold_amount=1000000&provider=yfinance",
+    { cache: "no-store" },
+  );
 
   expect(response.status).toBe(200);
   await expect(response.json()).resolves.toEqual({
@@ -83,6 +152,7 @@ it("fetches instrument latest and bars using the backend date-range contract", a
       items: [],
       availability: { status: "degraded", reason: "Provider does not support intraday data." },
     },
+    market_depth: buildMarketDepthPayload(),
     range: { timeframe: "1d", start: "2026-01-04", end: "2026-07-03" },
   });
 });
@@ -109,6 +179,12 @@ it("maps dashboard index codes to provider symbols before requesting market data
         status: 200,
         headers: { "content-type": "application/json" },
       }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(buildMarketDepthPayload("000001.SS")), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
     );
 
   const response = await GET(new Request("http://localhost/api/instruments/cn_shanghai_composite"), {
@@ -128,6 +204,11 @@ it("maps dashboard index codes to provider symbols before requesting market data
     "/market-data/000001.SS/intraday?date=2026-07-03&timeframe=1m&provider=yfinance",
     { cache: "no-store" },
   );
+  expect(backendFetchMock).toHaveBeenNthCalledWith(
+    4,
+    "/market-data/000001.SS/depth?depth_levels=5&large_order_threshold_amount=1000000&provider=yfinance",
+    { cache: "no-store" },
+  );
 
   expect(response.status).toBe(200);
   await expect(response.json()).resolves.toMatchObject({
@@ -135,6 +216,7 @@ it("maps dashboard index codes to provider symbols before requesting market data
     request_symbol: "000001.SS",
     bars: { source: "yfinance", items: [{ timestamp: "2026-07-03", close: 3450 }] },
     intraday: { status: "degraded", items: [] },
+    market_depth: { symbol: "000001.SS", status: "degraded" },
   });
 });
 
@@ -160,6 +242,12 @@ it("degrades intraday failures without failing the instrument detail response", 
         status: 503,
         headers: { "content-type": "application/json" },
       }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(buildMarketDepthPayload()), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
     );
 
   const response = await GET(new Request("http://localhost/api/instruments/AAPL?provider=yfinance"), {
@@ -177,6 +265,63 @@ it("degrades intraday failures without failing the instrument detail response", 
       date: "2026-07-03",
       status: "degraded",
       items: [],
+    },
+    market_depth: { symbol: "AAPL", status: "degraded" },
+  });
+});
+
+it("degrades market depth failures without failing the instrument detail response", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
+
+  backendFetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 102 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 102 }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "degraded", items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: "market depth backend unavailable" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+  const response = await GET(new Request("http://localhost/api/instruments/AAPL?provider=yfinance"), {
+    params: Promise.resolve({ symbol: "AAPL" }),
+  });
+
+  expect(response.status).toBe(200);
+  await expect(response.json()).resolves.toMatchObject({
+    symbol: "AAPL",
+    bars: { source: "database", items: [{ timestamp: "2026-07-03", close: 102 }] },
+    market_depth: {
+      symbol: "AAPL",
+      status: "degraded",
+      order_book: {
+        status: "degraded",
+        depth_levels: 5,
+        bids: [],
+        asks: [],
+      },
+      large_orders: {
+        status: "degraded",
+        threshold_amount: 1000000,
+        items: [],
+      },
     },
   });
 });

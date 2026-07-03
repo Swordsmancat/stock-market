@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from packages.services.market_data import (
     get_bars_payload,
     get_indicator_payload,
     get_intraday_bars_payload,
+    get_market_depth_payload,
     get_latest_bar_payload,
     get_latest_bars_batch_payload,
 )
@@ -97,6 +99,23 @@ def get_intraday_bars(
             timeframe=timeframe,
             session=session,
             provider_name=provider,
+        )
+    )
+
+
+@router.get("/{symbol}/depth")
+def get_market_depth(
+    symbol: str,
+    depth_levels: int = Query(default=5, ge=1, le=10),
+    large_order_threshold_amount: Decimal | None = Query(default=None, gt=0),
+    provider: str | None = Query(default=None),
+) -> dict:
+    return _call_market_data_service(
+        lambda: get_market_depth_payload(
+            symbol,
+            provider_name=provider,
+            depth_levels=depth_levels,
+            large_order_threshold_amount=large_order_threshold_amount,
         )
     )
 

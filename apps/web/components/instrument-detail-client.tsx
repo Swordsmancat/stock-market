@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
 import { IntradayPriceChart } from "@/components/intraday-price-chart";
+import { MarketDepthCard } from "@/components/market-depth-card";
 import { PriceChangeBadge } from "@/components/price-change-badge";
 import { decodeInstrumentSymbol, getInstrumentDisplayName } from "@/lib/instrument-display";
 import type { InstrumentDetailPayload } from "@/lib/instrument-detail";
@@ -152,6 +153,8 @@ export function InstrumentDetailClient({
           </CardContent>
         </Card>
       </div>
+
+      <MarketDepthCard marketDepth={data.market_depth ?? null} />
 
       <Card>
         <CardHeader>
