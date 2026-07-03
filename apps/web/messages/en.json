@@ -504,7 +504,11 @@
     "tushareHttpUrl": "Tushare HTTP URL",
     "tushareTokenPlaceholder": "Your Tushare Pro API token",
     "tushareTokenConfigured": "Token already saved — leave blank to keep unchanged",
-    "tushareHint": "Get your free token from https://tushare.pro. Paid tiers unlock more data. HTTP URL is optional for custom Tushare servers."
+    "tushareHint": "Get your free token from https://tushare.pro. Paid tiers unlock more data. HTTP URL is optional for custom Tushare servers.",
+    "displayPreferencesTitle": "Display Preferences",
+    "colorSchemeLabel": "Market Color Scheme",
+    "chinaConvention": "China Convention (Green Up / Red Down)",
+    "internationalConvention": "International Convention (Red Up / Green Down)"
   },
   "System": {
     "backendOffline": "Cannot reach the API. Start it with: uvicorn apps.api.main:app --reload --port 8000 (or set API_BASE_URL in apps/web/.env.local)",
