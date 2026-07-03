@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "next-intl";
 
 export type ColorScheme = "china" | "international";
 
@@ -34,8 +35,19 @@ export interface UseMarketColorsReturn {
   colors: MarketColors;
 }
 
+function getDefaultColorSchemeFromLocale(locale: string): ColorScheme {
+  // 中文用户默认使用中国习惯（绿涨红跌）
+  if (locale === "zh" || locale.startsWith("zh-")) {
+    return "china";
+  }
+  // 其他语言默认使用国际习惯（红涨绿跌）
+  return "international";
+}
+
 export function useMarketColors(): UseMarketColorsReturn {
-  const [colorScheme, setColorScheme] = useState<ColorScheme>("china");
+  const locale = useLocale();
+  const defaultScheme = getDefaultColorSchemeFromLocale(locale);
+  const [colorScheme, setColorScheme] = useState<ColorScheme>(defaultScheme);
 
   useEffect(() => {
     async function loadColorScheme() {
@@ -43,15 +55,17 @@ export function useMarketColors(): UseMarketColorsReturn {
         const response = await fetch("/api/platform-settings");
         if (response.ok) {
           const settings = await response.json();
-          const scheme = settings.color_scheme || "china";
+          // 如果后端有设置，使用后端设置；否则使用语言推断的默认值
+          const scheme = settings.color_scheme || defaultScheme;
           setColorScheme(scheme);
         }
       } catch (error) {
-        console.warn("Failed to load color scheme, using default:", error);
+        console.warn("Failed to load color scheme, using locale-based default:", error);
+        setColorScheme(defaultScheme);
       }
     }
     loadColorScheme();
-  }, []);
+  }, [defaultScheme]);
 
   const colors = MARKET_COLORS[colorScheme];
 
