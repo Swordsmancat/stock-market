@@ -161,6 +161,7 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getAllByText("102.00").length).toBeGreaterThan(0);
   expect(screen.getByText("+1.00")).toBeInTheDocument();
   expect(screen.getByText("+0.99%")).toBeInTheDocument();
+  expect(screen.getByText("AI 市场助手")).toBeInTheDocument();
   expect(screen.getByText("K线图")).toBeInTheDocument();
   expect(screen.getByText("交互式价格走势图")).toBeInTheDocument();
   expect(screen.getByText("分时图")).toBeInTheDocument();

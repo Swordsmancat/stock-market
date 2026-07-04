@@ -82,7 +82,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 ## Key features
 
 - **Market data**: yfinance provider (US/HK/CN), provider-neutral `/ingestion/snapshot`, Celery scheduled ingestion
-- **Analysis pipeline**: indicators, fundamentals, news, AI daily reports
+- **Analysis pipeline**: indicators, fundamentals, news, AI daily reports, AI market assistant
 - **Watchlist alerts**: price/RSI rules with trigger history
 - **Portfolios**: multi-portfolio CRUD with demo fallback
 - **Task runs**: async ingestion/analysis with retry and report linking
@@ -98,7 +98,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | Phase 3 | Intraday chart | Partial | UI and API contract exist; unsupported providers return explicit degraded/unavailable payloads instead of fabricated minute bars. |
 | Phase 3 | Market depth | Partial | Five-level order book / recent trades / large-order / fund-flow contracts and UI exist; current providers return degraded payloads until verified level-2 data is integrated. |
 | Phase 3 | Technical indicator library | Complete | MACD, RSI, KDJ, MA, BOLL, and volume chart overlays are supported; backend MACD/KDJ persistence is covered. |
-| Phase 3 | AI assistant | Planned | AI reports and summaries exist, but the chat-style market assistant API/UI is not yet implemented. |
+| Phase 3 | AI assistant | Partial / MVP available | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily-bar context, with degraded/no-data fallbacks when context is missing. |
 
 See [docs/manual/user-guide.md](docs/manual/user-guide.md) for user-facing behavior and [docs/runbooks/developer-maintenance.md](docs/runbooks/developer-maintenance.md) for endpoint and provider-maintenance details.
 

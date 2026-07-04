@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from apps.api.routers.alerts import router as alerts_router
 from apps.api.routers.analysis import router as analysis_router
+from apps.api.routers.assistant import router as assistant_router
 from apps.api.routers.dashboard import router as dashboard_router
 from apps.api.routers.fundamentals import router as fundamentals_router
 from apps.api.routers.health import router as health_router
@@ -21,6 +22,7 @@ from apps.api.routers.watchlists import router as watchlists_router
 app = FastAPI(title="Stock Analysis Platform")
 app.include_router(alerts_router)
 app.include_router(analysis_router)
+app.include_router(assistant_router)
 app.include_router(dashboard_router)
 app.include_router(fundamentals_router)
 app.include_router(health_router)

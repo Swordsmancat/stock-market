@@ -18,6 +18,13 @@ python -m pytest tests/api/test_market_depth_api.py tests/api/test_market_data_i
 npx vitest run "apps/web/app/api/instruments/[symbol]/route.test.ts" "apps/web/app/[locale]/instruments/[symbol]/page.test.tsx" "apps/web/components/market-depth-card.test.tsx" "apps/web/components/intraday-price-chart.test.tsx"
 ```
 
+AI 市场助手聚焦检查：
+
+```bash
+python -m pytest tests/ai/test_market_assistant.py tests/api/test_assistant_api.py
+npx vitest run "apps/web/app/api/assistant/market/route.test.ts" "apps/web/components/market-assistant-card.test.tsx" "apps/web/app/[locale]/instruments/[symbol]/page.test.tsx"
+```
+
 本地服务自检：
 
 ```bash
@@ -50,7 +57,7 @@ python scripts/task_run_health.py
 | `GET /news/{symbol}` | 新闻舆情 | 已实现 |
 | `GET /fundamentals/{symbol}` | 基本面 | 已实现 |
 | Hot sectors route | 热点板块/资金流展示 | 部分完成，真实资金流 provider 待补 |
-| AI assistant route | 聊天式市场助手 | 未上线 |
+| `POST /assistant/market` | 聊天式市场助手，聚合单标的日线、指标、基本面和新闻上下文，返回 answer/citations/diagnostics/safety | MVP 已实现，缺失上下文时返回 `no_data` / `degraded` |
 
 ### Portfolio, watchlist, alerts, and task runs
 
@@ -104,7 +111,7 @@ python scripts/task_run_health.py
 | Phase 3 | 分时图 | Partial | `apps/api/routers/market_data.py`, `get_intraday_bars_payload`, `apps/web/components/intraday-price-chart.tsx` | 需要真实分钟线 provider、交易时段处理和缓存/存储策略。 |
 | Phase 3 | 深度数据 | Partial | `GET /market-data/{symbol}/depth`, `get_market_depth_payload`, `MarketDepthCard` | 需要真实 Level-2、逐笔、大单和资金流 provider。 |
 | Phase 3 | 技术指标库 | Complete | `calculateMacdSeries`, `calculateKdjSeries`, `computeRsiSeries`, backend MACD/KDJ persistence | 可补更多指标、参数持久化和指标解释。 |
-| Phase 3 | AI 助手 | Missing | 仅有 Trellis PRD，未见稳定 API/UI/tests | 应单独实现 Assistant API、上下文聚合、聊天 UI 和安全边界。 |
+| Phase 3 | AI 助手 | Partial / MVP | `apps/api/routers/assistant.py`, `packages/services/market_assistant.py`, `apps/web/components/market-assistant-card.tsx`, assistant tests | 继续增强多轮上下文、报告/新闻检索、实时数据联动和更丰富引用。 |
 
 ## Professional Benchmark Gap Summary
 
@@ -124,7 +131,7 @@ python scripts/task_run_health.py
 主要差距：
 
 - 真实分钟线、Level-2、逐笔和资金流数据尚未接入。
-- AI 助手未上线。
+- AI 助手 MVP 已上线，但仍需增强多轮上下文、检索引用、实时行情联动和更完整的投资研究工作流。
 - 策略/推荐缺少回测、解释和筛选器。
 - 专业图表缺少多周期联动、自定义脚本、图表布局保存和告警联动。
 - 缺少生产级权限、数据 SLA、审计日志和 provider 配额治理。
@@ -133,7 +140,7 @@ python scripts/task_run_health.py
 
 | 优先级 | Roadmap Item | 建议 Trellis 任务 | 验收方向 |
 |---:|---|---|---|
-| P0 | AI 市场助手 | `07-04-ai-market-assistant` | API/UI/tests、上下文引用、安全免责声明、degraded 数据不编造。 |
+| P0 | AI 市场助手 MVP | `07-04-ai-market-assistant` | 已实现 API/UI/tests、上下文引用、安全免责声明和 degraded/no-data fallback；后续应拆分增强任务。 |
 | P0 | 真实分时数据管线 | `real-intraday-minute-data-pipeline` | 至少一个 provider 的分钟线、缓存/存储、交易时段和前端真实渲染。 |
 | P0 | 真实深度/大单/资金流管线 | `real-market-depth-provider-pipeline` | Level-2/逐笔/大单/资金流 provider 能力矩阵和真实 payload。 |
 | P1 | 热点板块真实资金流 | `hot-sector-fund-flow-provider` | 板块分类、成分股映射、资金流排序和降级测试。 |
@@ -146,4 +153,4 @@ python scripts/task_run_health.py
 - 修改 endpoint contract 时同步更新本手册、用户手册和相关测试。
 - 接入新 provider 能力时先扩展 capability matrix，再接入 UI。
 - 任何真实行情能力上线前必须有 unavailable/degraded 回归测试。
-- 不要把 AI 报告、AI 摘要和聊天式 AI 助手混为同一功能。
+- 不要把 AI 报告、AI 摘要和聊天式 AI 助手混为同一功能；助手回答必须保留引用、诊断和安全边界。
