@@ -71,8 +71,10 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 
 | Document | Purpose |
 |----------|---------|
+| [docs/manual/user-guide.md](docs/manual/user-guide.md) | User-facing guide for Phase 2 / Phase 3 financial analysis features and current capability status |
+| [docs/runbooks/developer-maintenance.md](docs/runbooks/developer-maintenance.md) | Maintainer guide for endpoints, degraded-safe provider contracts, validation, and roadmap gaps |
 | [docs/runbooks/local-development.md](docs/runbooks/local-development.md) | Full local setup, env vars, testing |
-| [docs/runbooks/mvp-acceptance.md](docs/runbooks/mvp-acceptance.md) | Acceptance checklist |
+| [docs/runbooks/mvp-acceptance.md](docs/runbooks/mvp-acceptance.md) | Original MVP acceptance checklist |
 | [CONTEXT.md](CONTEXT.md) | Domain terminology |
 | [docs/superpowers/plans/2026-07-01-priority-5-6-7.md](docs/superpowers/plans/2026-07-01-priority-5-6-7.md) | Latest implementation plan |
 | [docs/superpowers/plans/2026-07-01-implementation-gap-closure.md](docs/superpowers/plans/2026-07-01-implementation-gap-closure.md) | Current implementation status and gap-closure plan |
@@ -84,6 +86,21 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 - **Watchlist alerts**: price/RSI rules with trigger history
 - **Portfolios**: multi-portfolio CRUD with demo fallback
 - **Task runs**: async ingestion/analysis with retry and report linking
+
+## Phase 2 / Phase 3 feature status
+
+| Phase | Feature | Status | Notes |
+|---|---|---:|---|
+| Phase 2 | K-line interaction enhancements | Complete | Interactive candlestick charts include range controls and MA / BOLL / volume / MACD / RSI / KDJ indicator controls. |
+| Phase 2 | Smart recommendations | Complete | Breakout, oversold rebound, volume anomaly, and momentum-style research signals are available as research aids. |
+| Phase 2 | Hot sector rotation | Partial | UI and fallback states exist; verified fund-flow provider support remains a roadmap item. |
+| Phase 2 | Comparison analysis | Complete | Correlation-oriented comparison tooling is available. |
+| Phase 3 | Intraday chart | Partial | UI and API contract exist; unsupported providers return explicit degraded/unavailable payloads instead of fabricated minute bars. |
+| Phase 3 | Market depth | Partial | Five-level order book / recent trades / large-order / fund-flow contracts and UI exist; current providers return degraded payloads until verified level-2 data is integrated. |
+| Phase 3 | Technical indicator library | Complete | MACD, RSI, KDJ, MA, BOLL, and volume chart overlays are supported; backend MACD/KDJ persistence is covered. |
+| Phase 3 | AI assistant | Planned | AI reports and summaries exist, but the chat-style market assistant API/UI is not yet implemented. |
+
+See [docs/manual/user-guide.md](docs/manual/user-guide.md) for user-facing behavior and [docs/runbooks/developer-maintenance.md](docs/runbooks/developer-maintenance.md) for endpoint and provider-maintenance details.
 
 ## Tests
 

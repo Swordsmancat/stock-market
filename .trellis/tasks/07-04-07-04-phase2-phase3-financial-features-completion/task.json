@@ -24,7 +24,12 @@
     "07-04-intraday-chart",
     "07-04-market-depth-data",
     "07-04-ai-market-assistant",
-    "07-03-performance-data-fix"
+    "07-03-performance-data-fix",
+    "07-04-feature-completion-audit-manual-roadmap",
+    "07-04-real-intraday-minute-data-pipeline",
+    "07-04-real-market-depth-provider-pipeline",
+    "07-04-hot-sector-fund-flow-provider",
+    "07-04-trellis-phase2-phase3-state-reconciliation"
   ],
   "parent": "07-03-financial-dashboard-enhance",
   "relatedFiles": [],
