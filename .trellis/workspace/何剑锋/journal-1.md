@@ -171,3 +171,36 @@ Implemented conservative persistent cache for verified historical intraday minut
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Recommendation Signal Evaluation
+
+**Date**: 2026-07-05
+**Task**: Recommendation Signal Evaluation
+**Branch**: `master`
+
+### Summary
+
+Verified and committed the recommendation signal evaluation slice with deterministic service-level historical metrics, UI distinction for unevaluated realtime signals, focused backend validation, and full web test coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `361b07f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
