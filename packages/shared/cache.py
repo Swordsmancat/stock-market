@@ -45,10 +45,10 @@ def cache_market_overview(ttl: int = 300):
             
             # Store in cache (async, don't block on failure)
             try:
-                redis_client.setex(
+                redis_client.set(
                     cache_key,
-                    ttl,
-                    json.dumps(result, ensure_ascii=False, default=str)
+                    json.dumps(result, ensure_ascii=False, default=str),
+                    ex=ttl,
                 )
             except Exception:
                 # Cache write failed, just log and continue

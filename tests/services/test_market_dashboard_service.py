@@ -11,6 +11,28 @@ from packages.shared.cache import clear_market_overview_cache
 from packages.shared.database import Base
 
 
+class FakeRedis:
+    def __init__(self):
+        self.store: dict[str, str] = {}
+        self.expirations: dict[str, int] = {}
+
+    def get(self, key: str) -> str | None:
+        return self.store.get(key)
+
+    def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self.store[key] = value
+        if ex is not None:
+            self.expirations[key] = ex
+
+
+class FailingRedis:
+    def get(self, key: str) -> str | None:
+        raise RuntimeError("redis read unavailable")
+
+    def set(self, key: str, value: str, ex: int | None = None) -> None:
+        raise RuntimeError("redis write unavailable")
+
+
 def make_session():
     clear_market_overview_cache("mock")
     engine = create_engine(
@@ -95,3 +117,80 @@ def test_market_overview_keeps_partial_results_when_index_provider_fails(monkeyp
     assert payload["followed"]["items"][0]["status"] == "ok"
     assert payload["diagnostics"][0]["section"] == "indices"
     assert payload["diagnostics"][0]["code"] == "us_sp_500"
+
+
+def test_market_overview_payload_uses_provider_date_cache(monkeypatch):
+    session = make_session()
+    fake_redis = FakeRedis()
+    calls: list[str] = []
+
+    def fake_get_bars_payload(symbol, timeframe, start, end, session=None, provider_name=None):
+        calls.append(symbol)
+        return {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "status": "ok",
+            "no_data_reason": None,
+            "items": [
+                {"timestamp": "2026-07-02", "open": 100, "high": 103, "low": 99, "close": 101, "volume": 1000},
+                {"timestamp": "2026-07-03", "open": 101, "high": 104, "low": 100, "close": 102, "volume": 1100},
+            ],
+        }
+
+    monkeypatch.setattr("packages.shared.cache.redis_client", fake_redis)
+    monkeypatch.setattr("packages.services.market_dashboard.get_bars_payload", fake_get_bars_payload)
+
+    first_payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+    second_payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    assert second_payload == first_payload
+    assert len(calls) == 11
+    assert fake_redis.expirations["dashboard:market-overview:mock:2026-07-03"] == 300
+
+
+def test_market_overview_cache_failures_do_not_block_payload(monkeypatch):
+    session = make_session()
+    calls: list[str] = []
+
+    def fake_get_bars_payload(symbol, timeframe, start, end, session=None, provider_name=None):
+        calls.append(symbol)
+        return {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "status": "ok",
+            "no_data_reason": None,
+            "items": [
+                {"timestamp": "2026-07-02", "open": 100, "high": 103, "low": 99, "close": 101, "volume": 1000},
+                {"timestamp": "2026-07-03", "open": 101, "high": 104, "low": 100, "close": 102, "volume": 1100},
+            ],
+        }
+
+    monkeypatch.setattr("packages.shared.cache.redis_client", FailingRedis())
+    monkeypatch.setattr("packages.services.market_dashboard.get_bars_payload", fake_get_bars_payload)
+
+    payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    assert payload["provider"] == "mock"
+    assert payload["followed"]["items"][0]["status"] == "ok"
+    assert len(payload["indices"]["items"]) == 10
+    assert len(calls) == 11

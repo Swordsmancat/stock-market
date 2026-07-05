@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -46,20 +46,26 @@ function formatPercent(value: number | null, locale: string, fallback: string): 
   return formatted;
 }
 
-export function MarketTicker({ items, className }: MarketTickerProps) {
+function MarketTickerComponent({ items, className }: MarketTickerProps) {
   const locale = "zh-CN";
   const [selectedMarket, setSelectedMarket] = useState<string>("all");
 
-  const marketOptions = [
-    { value: "all", label: "全部市场" },
-    { value: "CN", label: "中国A股" },
-    { value: "HK", label: "香港" },
-    { value: "US", label: "美股" },
-  ];
+  const marketOptions = useMemo(
+    () => [
+      { value: "all", label: "全部市场" },
+      { value: "CN", label: "中国A股" },
+      { value: "HK", label: "香港" },
+      { value: "US", label: "美股" },
+    ],
+    [],
+  );
 
-  const filteredItems = selectedMarket === "all" 
-    ? items 
-    : items.filter(item => item.region === selectedMarket);
+  const filteredItems = useMemo(
+    () => selectedMarket === "all"
+      ? items
+      : items.filter((item) => item.region === selectedMarket),
+    [items, selectedMarket],
+  );
 
   return (
     <div
@@ -114,3 +120,6 @@ export function MarketTicker({ items, className }: MarketTickerProps) {
     </div>
   );
 }
+
+export const MarketTicker = memo(MarketTickerComponent);
+MarketTicker.displayName = "MarketTicker";
