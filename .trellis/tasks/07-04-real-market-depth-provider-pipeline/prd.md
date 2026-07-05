@@ -17,12 +17,18 @@ Upgrade the existing market-depth degraded-safe contract into a verified provide
 
 ## Acceptance Criteria
 
-- [ ] At least one verified provider path can populate one or more market-depth sections with real data.
-- [ ] Unsupported sections remain degraded with explicit reasons and capability metadata.
-- [ ] Large-order detection uses verified recent trades and an explicit threshold.
-- [ ] `MarketDepthCard` renders real rows and degraded sections correctly.
-- [ ] Backend/frontend tests prove real data is never fabricated for unsupported providers.
-- [ ] Developer manual and provider capability matrix are updated.
+- [x] At least one fixture-verified explicit provider path can populate one or more market-depth sections with real-shaped provider data; production AkShare Level-2 live smoke remains provider/network dependent.
+- [x] Unsupported sections remain degraded with explicit reasons and capability metadata.
+- [x] Large-order detection uses verified recent trades and an explicit threshold.
+- [x] `MarketDepthCard` renders real rows and degraded sections correctly.
+- [x] Backend/frontend tests prove real data is never fabricated for unsupported providers.
+- [x] Developer manual and provider capability matrix are updated.
+
+## Completion Status
+
+The provider-boundary MVP is complete: explicit market-depth provider models, AkShare fixture-tested candidate parsing, section-level partial/degraded payloads, verified-trade-only large-order derivation, frontend rendering, readiness diagnostics, and documentation are in place.
+
+Production verified Level-2 / tick / fund-flow remains a professional-terminal follow-up because the opt-in AkShare live smoke currently fails with `ConnectionError`. The implementation must therefore continue to label AkShare depth as a candidate/degraded provider path unless a future live smoke succeeds and the capability matrix is updated.
 
 ## Notes
 
