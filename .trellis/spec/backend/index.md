@@ -40,6 +40,7 @@ Primary examples:
 | [Error Handling](./error-handling.md) | HTTPException mapping, provider boundary errors, and diagnostic WARN/FAIL semantics | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Focused pytest, non-mutating diagnostics, and subagent safety boundaries | Filled |
 | [Logging Guidelines](./logging-guidelines.md) | Current logging state and sensitive-data boundaries | Filled |
+| [Hot Sector Contract](./hot-sector-contract.md) | `/sectors/hot` provider-backed payload fields, degraded states, and cross-layer tests | Filled |
 
 ---
 
