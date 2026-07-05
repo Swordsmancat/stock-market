@@ -86,6 +86,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 - **Watchlist alerts**: price/RSI rules with trigger history
 - **Portfolios**: multi-portfolio CRUD with demo fallback
 - **Task runs**: async ingestion/analysis with retry and report linking
+- **Sector rotation**: provider-backed `/sectors/hot` contract with explicit data modes, fund-flow definitions, and degraded-safe fallback states
 
 ## Phase 2 / Phase 3 feature status
 
@@ -93,10 +94,10 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 |---|---|---:|---|
 | Phase 2 | K-line interaction enhancements | Complete | Interactive candlestick charts include range controls and MA / BOLL / volume / MACD / RSI / KDJ indicator controls. |
 | Phase 2 | Smart recommendations | Complete | Breakout, oversold rebound, volume anomaly, and momentum-style research signals are available as research aids. |
-| Phase 2 | Hot sector rotation | Partial | UI and fallback states exist; verified fund-flow provider support remains a roadmap item. |
+| Phase 2 | Hot sector rotation | Partial / provider-backed MVP | `/sectors/hot` now returns a normalized provider contract with sector taxonomy, flow definitions, live/delayed/mock/unavailable data modes, and top constituent metadata. The default static fixture is explicitly `degraded + mock`; verified production fund-flow depends on provider availability such as AkShare/Tushare/Eastmoney-style integrations. |
 | Phase 2 | Comparison analysis | Complete | Correlation-oriented comparison tooling is available. |
-| Phase 3 | Intraday chart | Partial | UI and API contract exist; unsupported providers return explicit degraded/unavailable payloads instead of fabricated minute bars. |
-| Phase 3 | Market depth | Partial | Five-level order book / recent trades / large-order / fund-flow contracts and UI exist; current providers return degraded payloads until verified level-2 data is integrated. |
+| Phase 3 | Intraday chart | Partial / provider-backed MVP | `GET /market-data/{symbol}/intraday` now supports verified yfinance `1m` minute bars when available, including previous-close references and `ok` / `no_data` / `degraded` payloads. Mock, AkShare, and Tushare remain degraded until explicit minute-bar providers are verified. |
+| Phase 3 | Market depth | Partial / provider-boundary MVP | `GET /market-data/{symbol}/depth` now uses an explicit `fetch_market_depth` provider boundary, section-level `ok` / `degraded` semantics, verified order-book / recent-trade / fund-flow normalization, and large-order derivation only from verified trades. AkShare now has a fixture-tested order-book candidate path, but production-verified Level-2 status still requires opt-in live smoke checks, schema monitoring, and provider-permission validation. |
 | Phase 3 | Technical indicator library | Complete | MACD, RSI, KDJ, MA, BOLL, and volume chart overlays are supported; backend MACD/KDJ persistence is covered. |
 | Phase 3 | AI assistant | Partial / MVP available | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily-bar context, with degraded/no-data fallbacks when context is missing. |
 
