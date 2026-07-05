@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+import hashlib
+import re
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -20,11 +23,36 @@ from packages.services.indicators import get_stored_indicators_payload
 from packages.services.market_data import get_bars_payload
 from packages.services.news import get_news_sentiment_payload
 from packages.services.platform_settings import get_platform_settings
+from packages.services.reports import list_reports_payload
 
 
 DEFAULT_ASSISTANT_LOOKBACK_DAYS = 180
 SUPPORTED_ASSISTANT_SCOPE = "instrument"
 SUPPORTED_ASSISTANT_TIMEFRAME = "1d"
+ASSISTANT_CITATION_ID_PATTERN = re.compile(r"\[([A-Za-z0-9_:\-./+]+)\]")
+ASSISTANT_CITATION_ID_PREFIXES = (
+    "bars_1d:",
+    "technical_indicators:",
+    "fundamental_metrics:",
+    "fundamentals:",
+    "news:",
+    "news_articles:",
+    "generated_report:",
+)
+
+
+@dataclass(frozen=True)
+class MarketAssistantResearchEvidence:
+    citation: MarketAssistantCitation
+    summary: str
+    priority: int
+    source_type: str
+    title: str | None = None
+    as_of: str | None = None
+    published_at: str | None = None
+    url: str | None = None
+    provider: str | None = None
+    metadata: dict[str, object] | None = None
 
 
 def answer_market_assistant_question(
@@ -54,13 +82,15 @@ def answer_market_assistant_question(
         provider_name=provider_name,
     )
     bar_items = _extract_bar_items(bars_payload)
-    diagnostics: list[dict[str, str]] = []
+    diagnostics: list[dict[str, object]] = []
 
     if not bar_items:
         diagnostics.append(
             {
                 "source": "bars_1d",
                 "status": "no_data",
+                "severity": "error",
+                "code": "SOURCE_NO_DATA",
                 "message": "No verified daily bars are available for the requested symbol and date range.",
             }
         )
@@ -91,10 +121,36 @@ def answer_market_assistant_question(
             bars_payload=bars_payload,
         )
 
-    price_context = _build_price_context(normalized_symbol, timeframe, effective_start, effective_end, bar_items)
-    indicator_summary = _build_indicator_summary(normalized_symbol, session, diagnostics)
-    fundamental_summary = _build_fundamental_summary(normalized_symbol, effective_end, session, diagnostics)
-    news_summary = _build_news_summary(normalized_symbol, session, diagnostics)
+    price_context = _build_price_context(
+        normalized_symbol,
+        timeframe,
+        effective_start,
+        effective_end,
+        bar_items,
+        provider_name=_stringify_optional(bars_payload.get("effective_provider") or bars_payload.get("provider")),
+    )
+    research_evidence = list(price_context["evidence"])
+    indicator_summary, indicator_evidence = _build_indicator_context(normalized_symbol, session, diagnostics)
+    fundamental_summary, fundamental_evidence = _build_fundamental_context(
+        normalized_symbol,
+        effective_end,
+        session,
+        diagnostics,
+    )
+    news_summary, news_evidence = _build_news_context(normalized_symbol, session, diagnostics)
+    generated_report_summary, generated_report_evidence = _build_generated_report_context(
+        normalized_symbol,
+        normalized_question,
+        effective_start,
+        effective_end,
+        session,
+        diagnostics,
+    )
+    research_evidence.extend(indicator_evidence)
+    research_evidence.extend(fundamental_evidence)
+    research_evidence.extend(news_evidence)
+    research_evidence.extend(generated_report_evidence)
+    citations = _rank_research_citations(research_evidence)
 
     prompt_context = MarketAssistantPromptContext(
         symbol=normalized_symbol,
@@ -111,7 +167,8 @@ def answer_market_assistant_question(
         indicator_summary=indicator_summary,
         fundamental_summary=fundamental_summary,
         news_summary=news_summary,
-        citations=price_context["citations"],
+        research_summary=generated_report_summary,
+        citations=citations,
         diagnostics=diagnostics,
     )
 
@@ -174,6 +231,7 @@ def _build_price_context(
     start: date,
     end: date,
     bar_items: list[dict[str, object]],
+    provider_name: str | None = None,
 ) -> dict[str, Any]:
     first_bar = bar_items[0]
     latest_bar = bar_items[-1]
@@ -187,11 +245,26 @@ def _build_price_context(
         f"{_format_optional_number(latest_close)} as of {as_of}; period change "
         f"{_format_optional_number(period_change_pct)}%; bar count {len(bar_items)}."
     )
-    citations = [
-        MarketAssistantCitation(
-            id=f"bars_1d:{symbol}:{as_of}",
-            label=f"Daily bars for {symbol} as of {as_of}",
-            source=f"bars_{timeframe}",
+    citation = MarketAssistantCitation(
+        id=f"bars_1d:{symbol}:{as_of}",
+        label=f"Daily bars for {symbol} as of {as_of}",
+        source=f"bars_{timeframe}",
+        source_type="bars",
+        as_of=as_of,
+        provider=provider_name,
+        excerpt=price_summary,
+        metadata={"bar_count": len(bar_items), "timeframe": timeframe},
+    )
+    evidence = [
+        MarketAssistantResearchEvidence(
+            citation=citation,
+            summary=price_summary,
+            priority=10,
+            source_type="bars",
+            title=f"Daily bars for {symbol}",
+            as_of=as_of,
+            provider=provider_name,
+            metadata={"bar_count": len(bar_items), "timeframe": timeframe},
         )
     ]
     return {
@@ -200,20 +273,27 @@ def _build_price_context(
         "period_change_pct": period_change_pct,
         "bar_count": len(bar_items),
         "price_summary": price_summary,
-        "citations": citations,
+        "citations": [citation],
+        "evidence": evidence,
     }
 
 
-def _build_indicator_summary(symbol: str, session: Session | None, diagnostics: list[dict[str, str]]) -> str:
+def _build_indicator_context(
+    symbol: str,
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
     if session is None:
         diagnostics.append(
             {
                 "source": "indicators",
                 "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
                 "message": "No database session is available for stored technical indicators.",
             }
         )
-        return "No stored technical indicators are available."
+        return "No stored technical indicators are available.", []
 
     try:
         payload = get_stored_indicators_payload(symbol, session)
@@ -223,10 +303,12 @@ def _build_indicator_summary(symbol: str, session: Session | None, diagnostics: 
             {
                 "source": "indicators",
                 "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
                 "message": "Stored technical indicators could not be loaded.",
             }
         )
-        return "Stored technical indicators could not be loaded."
+        return "Stored technical indicators could not be loaded.", []
 
     indicators = payload.get("indicators")
     if not isinstance(indicators, dict) or not indicators:
@@ -234,24 +316,51 @@ def _build_indicator_summary(symbol: str, session: Session | None, diagnostics: 
             {
                 "source": "indicators",
                 "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
                 "message": "No stored technical indicators are available for this symbol.",
             }
         )
-        return "No stored technical indicators are available."
+        return "No stored technical indicators are available.", []
 
     formatted_values = [
         f"{indicator_code}={_format_context_value(indicator_value)}"
         for indicator_code, indicator_value in sorted(indicators.items())[:8]
     ]
-    return ", ".join(formatted_values)
+    summary = ", ".join(formatted_values)
+    as_of = _stringify_optional(payload.get("as_of")) or "latest"
+    provider_name = _stringify_optional(payload.get("source"))
+    citation = MarketAssistantCitation(
+        id=f"technical_indicators:{symbol}:{as_of}",
+        label=f"Technical indicators for {symbol} as of {as_of}",
+        source="indicators",
+        source_type="technical_indicator",
+        as_of=as_of,
+        provider=provider_name,
+        excerpt=summary,
+        metadata={"indicator_codes": sorted(str(indicator_code) for indicator_code in indicators)},
+    )
+    evidence = [
+        MarketAssistantResearchEvidence(
+            citation=citation,
+            summary=summary,
+            priority=20,
+            source_type="technical_indicator",
+            title=f"Technical indicators for {symbol}",
+            as_of=as_of,
+            provider=provider_name,
+            metadata={"indicator_codes": sorted(str(indicator_code) for indicator_code in indicators)},
+        )
+    ]
+    return summary, evidence
 
 
-def _build_fundamental_summary(
+def _build_fundamental_context(
     symbol: str,
     as_of: date,
     session: Session | None,
-    diagnostics: list[dict[str, str]],
-) -> str:
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
     try:
         payload = get_fundamental_payload(symbol, as_of=as_of, session=session)
     except Exception:
@@ -260,10 +369,12 @@ def _build_fundamental_summary(
             {
                 "source": "fundamentals",
                 "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
                 "message": "Fundamental metrics could not be loaded.",
             }
         )
-        return "Fundamental metrics could not be loaded."
+        return "Fundamental metrics could not be loaded.", []
 
     item = payload.get("item")
     if not isinstance(item, dict) or not item:
@@ -271,10 +382,12 @@ def _build_fundamental_summary(
             {
                 "source": "fundamentals",
                 "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
                 "message": "No fundamental snapshot is available for this symbol.",
             }
         )
-        return "No fundamental snapshot is available."
+        return "No fundamental snapshot is available.", []
 
     important_fields = ("pe_ratio", "revenue_growth", "net_margin", "debt_to_assets", "currency")
     formatted_values = [
@@ -288,19 +401,57 @@ def _build_fundamental_summary(
             for field_name, field_value in list(item.items())[:6]
             if field_value is not None
         ]
-    return ", ".join(formatted_values) if formatted_values else "Fundamental snapshot is present but empty."
+    summary = ", ".join(formatted_values) if formatted_values else "Fundamental snapshot is present but empty."
+    citation_id = _stringify_optional(payload.get("citation")) or f"fundamentals:{symbol}:{as_of.isoformat()}"
+    citation_as_of = _stringify_optional(payload.get("as_of")) or as_of.isoformat()
+    provider_name = _stringify_optional(payload.get("source"))
+    citation = MarketAssistantCitation(
+        id=citation_id,
+        label=f"Fundamental metrics for {symbol} as of {citation_as_of}",
+        source="fundamentals",
+        source_type="fundamental",
+        as_of=citation_as_of,
+        provider=provider_name,
+        excerpt=summary,
+        metadata={
+            "currency": item.get("currency"),
+            "pe_ratio": item.get("pe_ratio"),
+            "revenue_growth": item.get("revenue_growth"),
+            "net_margin": item.get("net_margin"),
+            "debt_to_assets": item.get("debt_to_assets"),
+        },
+    )
+    evidence = [
+        MarketAssistantResearchEvidence(
+            citation=citation,
+            summary=summary,
+            priority=30,
+            source_type="fundamental",
+            title=f"Fundamental metrics for {symbol}",
+            as_of=citation_as_of,
+            provider=provider_name,
+            metadata=citation.metadata,
+        )
+    ]
+    return summary, evidence
 
 
-def _build_news_summary(symbol: str, session: Session | None, diagnostics: list[dict[str, str]]) -> str:
+def _build_news_context(
+    symbol: str,
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
     if session is None:
         diagnostics.append(
             {
                 "source": "news",
                 "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
                 "message": "No database session is available for news sentiment.",
             }
         )
-        return "No stored news sentiment is available."
+        return "No stored news sentiment is available.", []
 
     try:
         payload = get_news_sentiment_payload(symbol, session)
@@ -310,10 +461,12 @@ def _build_news_summary(symbol: str, session: Session | None, diagnostics: list[
             {
                 "source": "news",
                 "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
                 "message": "News sentiment could not be loaded.",
             }
         )
-        return "News sentiment could not be loaded."
+        return "News sentiment could not be loaded.", []
 
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
     article_count = _safe_int(summary.get("article_count")) if isinstance(summary, dict) else 0
@@ -323,19 +476,24 @@ def _build_news_summary(symbol: str, session: Session | None, diagnostics: list[
             {
                 "source": "news",
                 "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
                 "message": "No stored news sentiment is available for this symbol.",
             }
         )
-        return "No stored news sentiment is available."
+        return "No stored news sentiment is available.", []
 
     items = payload.get("items")
-    article_titles = [
-        str(item.get("title"))
-        for item in items[:3]
-        if isinstance(item, dict) and item.get("title")
-    ] if isinstance(items, list) else []
+    article_items = items[:3] if isinstance(items, list) else []
+    article_titles = [str(item.get("title")) for item in article_items if isinstance(item, dict) and item.get("title")]
     title_summary = f" Recent titles: {'; '.join(article_titles)}." if article_titles else ""
-    return f"Latest sentiment {latest_sentiment}; article count {article_count}.{title_summary}"
+    summary_text = f"Latest sentiment {latest_sentiment}; article count {article_count}.{title_summary}"
+    evidence = [
+        _build_news_evidence_item(symbol, item, item_index)
+        for item_index, item in enumerate(article_items)
+        if isinstance(item, dict) and item.get("title")
+    ]
+    return summary_text, evidence
 
 
 def _generate_answer_or_fallback(
@@ -346,6 +504,7 @@ def _generate_answer_or_fallback(
     configured_api_key = str(settings.get("llm_api_key", "")).strip()
     if configured_provider != "openai" or not configured_api_key:
         fallback_reason = "OpenAI-compatible LLM provider is not configured."
+        _append_fallback_diagnostic(prompt_context, fallback_reason)
         return build_deterministic_market_answer(prompt_context), _build_fallback_model_metadata(fallback_reason)
 
     try:
@@ -353,10 +512,28 @@ def _generate_answer_or_fallback(
         generated_answer = llm_provider.generate(build_market_assistant_prompt(prompt_context)).strip()
     except Exception as error:
         fallback_reason = f"LLM generation failed: {error.__class__.__name__}."
+        _append_fallback_diagnostic(prompt_context, fallback_reason)
         return build_deterministic_market_answer(prompt_context), _build_fallback_model_metadata(fallback_reason)
 
     if not generated_answer:
         fallback_reason = "LLM generation returned an empty answer."
+        _append_fallback_diagnostic(prompt_context, fallback_reason)
+        return build_deterministic_market_answer(prompt_context), _build_fallback_model_metadata(fallback_reason)
+
+    unknown_citation_ids = _extract_unknown_inline_citation_ids(generated_answer, prompt_context.citations)
+    if unknown_citation_ids:
+        prompt_context.diagnostics.append(
+            {
+                "source": "citations",
+                "status": "invalid",
+                "severity": "warning",
+                "code": "CITATION_UNKNOWN_ID",
+                "message": "The LLM response referenced citation IDs that were not present in the retrieved evidence.",
+                "details": {"unknown_ids": unknown_citation_ids},
+            }
+        )
+        fallback_reason = "LLM citation validation failed: unknown citation id."
+        _append_fallback_diagnostic(prompt_context, fallback_reason)
         return build_deterministic_market_answer(prompt_context), _build_fallback_model_metadata(fallback_reason)
 
     return generated_answer, {
@@ -394,6 +571,7 @@ def _build_response_payload(
             "indicator_summary": prompt_context.indicator_summary,
             "fundamental_summary": prompt_context.fundamental_summary,
             "news_summary": prompt_context.news_summary,
+            "research_summary": prompt_context.research_summary,
             "source": bars_payload.get("source"),
             "provider": bars_payload.get("provider"),
             "requested_provider": bars_payload.get("requested_provider"),
@@ -416,6 +594,19 @@ def _build_fallback_model_metadata(fallback_reason: str) -> dict[str, object]:
         "used_llm": False,
         "fallback_reason": fallback_reason,
     }
+
+
+def _append_fallback_diagnostic(prompt_context: MarketAssistantPromptContext, fallback_reason: str) -> None:
+    prompt_context.diagnostics.append(
+        {
+            "source": "assistant_model",
+            "status": "fallback",
+            "severity": "info",
+            "code": "FALLBACK_USED",
+            "message": "The assistant used a deterministic fallback response instead of an LLM answer.",
+            "details": {"reason": fallback_reason},
+        }
+    )
 
 
 def _calculate_period_change_pct(first_close: float | None, latest_close: float | None) -> float | None:
@@ -473,3 +664,218 @@ def _rollback_session_if_possible(session: Session | None) -> None:
         session.rollback()
     except Exception:
         return
+
+
+def _build_news_evidence_item(
+    symbol: str,
+    item: dict[str, object],
+    item_index: int,
+) -> MarketAssistantResearchEvidence:
+    title = str(item.get("title") or f"News item {item_index + 1}")
+    url = _stringify_optional(item.get("url"))
+    published_at = _stringify_optional(item.get("published_at")) or "unknown"
+    provider_name = _stringify_optional(item.get("source")) or "news"
+    summary = str(item.get("summary") or title)
+    excerpt = _build_safe_excerpt(summary)
+    stable_hash = _stable_short_hash(url or f"{published_at}:{title}:{item_index}")
+    citation_id = f"news:{symbol}:{_citation_safe_token(published_at)}:{stable_hash}"
+    citation = MarketAssistantCitation(
+        id=citation_id,
+        label=f"News for {symbol}: {title}",
+        source="news",
+        url=url,
+        source_type="news",
+        as_of=published_at,
+        provider=provider_name,
+        retrieved_at=_utc_now_isoformat(),
+        excerpt=excerpt,
+        metadata={
+            "title": title,
+            "sentiment": item.get("sentiment"),
+            "confidence": item.get("confidence"),
+        },
+    )
+    return MarketAssistantResearchEvidence(
+        citation=citation,
+        summary=excerpt,
+        priority=40 + item_index,
+        source_type="news",
+        title=title,
+        as_of=published_at,
+        published_at=published_at,
+        url=url,
+        provider=provider_name,
+        metadata=citation.metadata,
+    )
+
+
+def _build_generated_report_context(
+    symbol: str,
+    question: str,
+    start: date,
+    end: date,
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
+    if session is None:
+        diagnostics.append(
+            {
+                "source": "generated_reports",
+                "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
+                "message": "No database session is available for generated research reports.",
+            }
+        )
+        return "No generated research reports are available.", []
+
+    try:
+        payload = list_reports_payload(
+            session,
+            symbol=symbol,
+            report_type=None,
+            query=None,
+            as_of_start=start,
+            as_of_end=end,
+            limit=3,
+            offset=0,
+        )
+    except Exception:
+        _rollback_session_if_possible(session)
+        diagnostics.append(
+            {
+                "source": "generated_reports",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Generated research reports could not be loaded.",
+            }
+        )
+        return "Generated research reports could not be loaded.", []
+
+    items = payload.get("items")
+    if not isinstance(items, list) or not items:
+        diagnostics.append(
+            {
+                "source": "generated_reports",
+                "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
+                "message": "No generated research reports are available for this symbol and date range.",
+            }
+        )
+        return "No generated research reports are available.", []
+
+    evidence_items = [
+        _build_generated_report_evidence_item(symbol, question, item, item_index)
+        for item_index, item in enumerate(items[:3])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    if not evidence_items:
+        diagnostics.append(
+            {
+                "source": "generated_reports",
+                "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
+                "message": "Generated reports were found but could not be converted into research evidence.",
+            }
+        )
+        return "Generated reports were found but could not be summarized.", []
+
+    report_titles = [item.title for item in evidence_items if item.title]
+    return f"Generated reports available: {'; '.join(report_titles)}.", evidence_items
+
+
+def _build_generated_report_evidence_item(
+    symbol: str,
+    question: str,
+    item: dict[str, object],
+    item_index: int,
+) -> MarketAssistantResearchEvidence:
+    report_id = str(item.get("id"))
+    report_type = str(item.get("report_type") or "stock")
+    as_of = _stringify_optional(item.get("as_of")) or "unknown"
+    content_markdown = str(item.get("content_markdown") or "")
+    excerpt = _build_safe_excerpt(content_markdown or question)
+    title = f"{symbol} {report_type} report as of {as_of}"
+    source_summary = item.get("source_summary")
+    provider_name = _extract_report_provider(source_summary)
+    citation = MarketAssistantCitation(
+        id=f"generated_report:{report_id}",
+        label=title,
+        source="generated_reports",
+        source_type="generated_report",
+        as_of=as_of,
+        provider=provider_name,
+        retrieved_at=_stringify_optional(item.get("created_at")),
+        excerpt=excerpt,
+        metadata={
+            "report_type": report_type,
+            "task_run_id": item.get("task_run_id"),
+            "source_citations": item.get("citations") if isinstance(item.get("citations"), list) else [],
+        },
+    )
+    return MarketAssistantResearchEvidence(
+        citation=citation,
+        summary=excerpt,
+        priority=50 + item_index,
+        source_type="generated_report",
+        title=title,
+        as_of=as_of,
+        provider=provider_name,
+        metadata=citation.metadata,
+    )
+
+
+def _rank_research_citations(evidence_items: list[MarketAssistantResearchEvidence]) -> list[MarketAssistantCitation]:
+    ranked_evidence_items = sorted(evidence_items, key=lambda item: (item.priority, item.citation.id))
+    citations_by_id: dict[str, MarketAssistantCitation] = {}
+    for evidence_item in ranked_evidence_items:
+        citations_by_id.setdefault(evidence_item.citation.id, evidence_item.citation)
+    return list(citations_by_id.values())
+
+
+def _extract_unknown_inline_citation_ids(
+    answer_markdown: str,
+    citations: list[MarketAssistantCitation],
+) -> list[str]:
+    known_citation_ids = {citation.id for citation in citations}
+    extracted_citation_ids = {
+        candidate
+        for candidate in ASSISTANT_CITATION_ID_PATTERN.findall(answer_markdown)
+        if candidate.startswith(ASSISTANT_CITATION_ID_PREFIXES)
+    }
+    return sorted(extracted_citation_ids - known_citation_ids)
+
+
+def _extract_report_provider(source_summary: object) -> str | None:
+    if isinstance(source_summary, dict):
+        return _stringify_optional(source_summary.get("source") or source_summary.get("provider"))
+    return None
+
+
+def _build_safe_excerpt(value: str, max_length: int = 280) -> str:
+    normalized_value = " ".join(value.split())
+    if len(normalized_value) <= max_length:
+        return normalized_value
+    return f"{normalized_value[: max_length - 3].rstrip()}..."
+
+
+def _stringify_optional(value: object) -> str | None:
+    if value is None:
+        return None
+    value_text = str(value).strip()
+    return value_text or None
+
+
+def _stable_short_hash(value: str) -> str:
+    return hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]
+
+
+def _citation_safe_token(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.+-]+", "-", value).strip("-") or "unknown"
+
+
+def _utc_now_isoformat() -> str:
+    return datetime.now(timezone.utc).isoformat()

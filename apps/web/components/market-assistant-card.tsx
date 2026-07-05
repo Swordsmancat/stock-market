@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { askMarketAssistant } from "@/lib/market-assistant";
-import type { MarketAssistantResponse, MarketAssistantStatus } from "@/lib/market-assistant";
+import type { MarketAssistantCitation, MarketAssistantDiagnostic, MarketAssistantResponse, MarketAssistantStatus } from "@/lib/market-assistant";
 
 type MarketAssistantCardProps = {
   symbol: string;
@@ -149,8 +149,21 @@ function AssistantResponsePanel({ response }: { response: MarketAssistantRespons
           <div className="text-sm font-semibold">{t("citationsTitle")}</div>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             {response.citations.map((citation) => (
-              <li key={citation.id}>
-                {citation.label} <span className="font-mono">({citation.source})</span>
+              <li key={citation.id} className="space-y-1">
+                {citation.url ? (
+                  <a
+                    className="font-medium text-foreground underline-offset-4 hover:underline"
+                    href={citation.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    {citation.label}
+                  </a>
+                ) : (
+                  <span>{citation.label}</span>
+                )} {" "}
+                <span className="font-mono">({citation.source})</span>
+                <CitationMetadata citation={citation} />
               </li>
             ))}
           </ul>
@@ -163,7 +176,7 @@ function AssistantResponsePanel({ response }: { response: MarketAssistantRespons
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             {response.diagnostics.map((diagnostic) => (
               <li key={`${diagnostic.source}:${diagnostic.status}:${diagnostic.message}`}>
-                {diagnostic.source}: {diagnostic.message}
+                {formatDiagnosticPrefix(diagnostic)}: {diagnostic.message}
               </li>
             ))}
           </ul>
@@ -175,6 +188,31 @@ function AssistantResponsePanel({ response }: { response: MarketAssistantRespons
       </div>
     </div>
   );
+}
+
+function CitationMetadata({ citation }: { citation: MarketAssistantCitation }) {
+  const metadataParts = [
+    citation.source_type ? `type=${citation.source_type}` : null,
+    citation.as_of ? `as_of=${citation.as_of}` : null,
+    citation.provider ? `provider=${citation.provider}` : null,
+    citation.retrieved_at ? `retrieved=${citation.retrieved_at}` : null,
+  ].filter(Boolean);
+
+  if (metadataParts.length === 0 && !citation.excerpt) {
+    return null;
+  }
+
+  return (
+    <div className="ml-5 space-y-1 text-xs text-muted-foreground">
+      {metadataParts.length > 0 ? <div>{metadataParts.join(" · ")}</div> : null}
+      {citation.excerpt ? <div className="line-clamp-2">{citation.excerpt}</div> : null}
+    </div>
+  );
+}
+
+function formatDiagnosticPrefix(diagnostic: MarketAssistantDiagnostic): string {
+  const statusParts = [diagnostic.source, diagnostic.severity, diagnostic.code].filter(Boolean);
+  return statusParts.length > 1 ? `${diagnostic.source} [${statusParts.slice(1).join("/")}]` : diagnostic.source;
 }
 
 function InitialEmptyState() {

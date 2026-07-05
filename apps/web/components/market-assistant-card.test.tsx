@@ -64,12 +64,18 @@ function buildAssistantResponse(overrides: Partial<MarketAssistantResponse> = {}
         label: "Daily bars for AAPL as of 2026-01-20",
         source: "bars_1d",
         url: null,
+        source_type: "bars",
+        as_of: "2026-01-20",
+        provider: "mock",
+        excerpt: "Daily bars from 2026-01-01 to 2026-01-20.",
       },
     ],
     diagnostics: [
       {
         source: "news",
         status: "no_data",
+        severity: "info",
+        code: "SOURCE_NO_DATA",
         message: "No stored news sentiment is available for this symbol.",
       },
     ],
@@ -117,8 +123,47 @@ it("submits a contextual assistant question and renders traceable output", async
   expect(await screen.findByText("降级")).toBeInTheDocument();
   expect(screen.getByText(/基于可用数据整理。/)).toBeInTheDocument();
   expect(screen.getByText("Daily bars for AAPL as of 2026-01-20")).toBeInTheDocument();
-  expect(screen.getByText(/news: No stored news sentiment/)).toBeInTheDocument();
+  expect(screen.getByText(/type=bars/)).toBeInTheDocument();
+  expect(screen.getByText(/news \[info\/SOURCE_NO_DATA\]: No stored news sentiment/)).toBeInTheDocument();
   expect(screen.getByText(/不构成投资建议/)).toBeInTheDocument();
+});
+
+it("renders citation links and compact research metadata", async () => {
+  askMarketAssistantMock.mockResolvedValue(
+    buildAssistantResponse({
+      citations: [
+        {
+          id: "news:AAPL:2026-01-20:abc123",
+          label: "Apple expands services revenue",
+          source: "news",
+          url: "https://example.com/aapl-services",
+          source_type: "news",
+          as_of: "2026-01-20T12:00:00+00:00",
+          provider: "mock_news",
+          excerpt: "Apple expands services revenue in the quarter.",
+        },
+      ],
+      diagnostics: [
+        {
+          source: "citations",
+          status: "invalid",
+          severity: "warning",
+          code: "CITATION_UNKNOWN_ID",
+          message: "The LLM response referenced an unknown citation.",
+        },
+      ],
+    }),
+  );
+  renderChineseMarketAssistantCard();
+
+  fireEvent.click(screen.getByRole("button", { name: "询问助手" }));
+
+  const citationLink = await screen.findByRole("link", { name: "Apple expands services revenue" });
+  expect(citationLink).toHaveAttribute("href", "https://example.com/aapl-services");
+  expect(screen.getByText(/type=news/)).toBeInTheDocument();
+  expect(screen.getByText(/provider=mock_news/)).toBeInTheDocument();
+  expect(screen.getByText(/Apple expands services revenue in the quarter/)).toBeInTheDocument();
+  expect(screen.getByText(/citations \[warning\/CITATION_UNKNOWN_ID\]/)).toBeInTheDocument();
 });
 
 it("updates the question from a quick prompt and renders request errors", async () => {

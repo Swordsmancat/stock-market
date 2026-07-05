@@ -41,14 +41,32 @@ class MarketAssistantCitation:
     label: str
     source: str
     url: str | None = None
+    source_type: str | None = None
+    as_of: str | None = None
+    provider: str | None = None
+    retrieved_at: str | None = None
+    excerpt: str | None = None
+    metadata: dict[str, object] | None = None
 
-    def to_payload(self) -> dict[str, str | None]:
-        return {
+    def to_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {
             "id": self.id,
             "label": self.label,
             "source": self.source,
             "url": self.url,
         }
+        optional_fields = {
+            "source_type": self.source_type,
+            "as_of": self.as_of,
+            "provider": self.provider,
+            "retrieved_at": self.retrieved_at,
+            "excerpt": self.excerpt,
+            "metadata": self.metadata,
+        }
+        for field_name, field_value in optional_fields.items():
+            if field_value is not None:
+                payload[field_name] = field_value
+        return payload
 
 
 @dataclass(frozen=True)
@@ -67,8 +85,9 @@ class MarketAssistantPromptContext:
     indicator_summary: str
     fundamental_summary: str
     news_summary: str
+    research_summary: str = "No generated research reports were loaded."
     citations: list[MarketAssistantCitation] = field(default_factory=list)
-    diagnostics: list[dict[str, str]] = field(default_factory=list)
+    diagnostics: list[dict[str, object]] = field(default_factory=list)
 
 
 def get_safety_disclaimer(locale: str) -> str:
@@ -111,10 +130,12 @@ def build_market_assistant_prompt(context: MarketAssistantPromptContext) -> str:
         f"Technical indicators: {context.indicator_summary}\n"
         f"Fundamentals: {context.fundamental_summary}\n"
         f"News sentiment: {context.news_summary}\n"
+        f"Research reports: {context.research_summary}\n"
         f"Citations:\n{citation_lines}\n"
         f"Diagnostics:\n{diagnostic_lines}\n\n"
         "Write a concise markdown answer with these sections: Summary, Evidence, Risks / Unknowns, Safety note. "
-        "Cite or name the data categories used. If context is unavailable, state that limitation clearly."
+        "Use inline citation IDs in square brackets for important factual claims, and use only citation IDs listed above. "
+        "If context is unavailable, state that limitation clearly instead of inventing sources."
     )
 
 
@@ -153,6 +174,7 @@ def _build_chinese_deterministic_answer(context: MarketAssistantPromptContext) -
         f"- 技术面：{context.indicator_summary}\n"
         f"- 基本面：{context.fundamental_summary}\n"
         f"- 消息面：{context.news_summary}\n"
+        f"- 研究资料：{context.research_summary}\n"
         f"- 引用：{_join_citation_labels(context.citations)}\n\n"
         "### 风险与未知\n"
         f"{_join_diagnostic_messages(context.diagnostics)} 如果需要更接近专业终端的结论，还应结合实时行情、成交明细、"
@@ -192,6 +214,7 @@ def _build_english_deterministic_answer(context: MarketAssistantPromptContext) -
         f"- Technical indicators: {context.indicator_summary}\n"
         f"- Fundamentals: {context.fundamental_summary}\n"
         f"- News: {context.news_summary}\n"
+        f"- Research reports: {context.research_summary}\n"
         f"- Citations: {_join_citation_labels(context.citations)}\n\n"
         "### Risks / Unknowns\n"
         f"{_join_diagnostic_messages(context.diagnostics)} A professional-grade conclusion would also require "
@@ -239,7 +262,7 @@ def _format_citation_lines(citations: list[MarketAssistantCitation]) -> str:
     return "\n".join(f"- {citation.id}: {citation.label} ({citation.source})" for citation in citations)
 
 
-def _format_diagnostic_lines(diagnostics: list[dict[str, str]]) -> str:
+def _format_diagnostic_lines(diagnostics: list[dict[str, object]]) -> str:
     if not diagnostics:
         return "- none"
     return "\n".join(
@@ -254,7 +277,7 @@ def _join_citation_labels(citations: list[MarketAssistantCitation]) -> str:
     return "；".join(citation.label for citation in citations)
 
 
-def _join_diagnostic_messages(diagnostics: list[dict[str, str]]) -> str:
+def _join_diagnostic_messages(diagnostics: list[dict[str, object]]) -> str:
     if not diagnostics:
         return "未发现额外数据缺口。"
     return "；".join(

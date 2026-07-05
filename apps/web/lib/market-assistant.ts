@@ -16,12 +16,22 @@ export type MarketAssistantCitation = {
   label: string;
   source: string;
   url?: string | null;
+  source_type?: string | null;
+  as_of?: string | null;
+  provider?: string | null;
+  retrieved_at?: string | null;
+  excerpt?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type MarketAssistantDiagnostic = {
   source: string;
   status: string;
   message: string;
+  severity?: "info" | "warning" | "error" | string | null;
+  code?: string | null;
+  citation_id?: string | null;
+  details?: Record<string, unknown> | null;
 };
 
 export type MarketAssistantResponse = {
@@ -47,6 +57,7 @@ export type MarketAssistantResponse = {
     indicator_summary?: string;
     fundamental_summary?: string;
     news_summary?: string;
+    research_summary?: string;
     source?: string | null;
     provider?: string | null;
     requested_provider?: string | null;

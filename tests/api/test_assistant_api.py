@@ -41,9 +41,21 @@ def test_market_assistant_api_returns_contextual_answer(monkeypatch):
                     "label": "Daily bars for AAPL as of 2026-01-03",
                     "source": "bars_1d",
                     "url": None,
+                    "source_type": "bars",
+                    "as_of": "2026-01-03",
+                    "provider": "mock",
+                    "excerpt": "Daily bars from 2026-01-01 to 2026-01-03.",
                 }
             ],
-            "diagnostics": [],
+            "diagnostics": [
+                {
+                    "source": "generated_reports",
+                    "status": "no_data",
+                    "severity": "info",
+                    "code": "SOURCE_NO_DATA",
+                    "message": "No generated research reports are available.",
+                }
+            ],
             "safety": {
                 "not_investment_advice": True,
                 "no_fabricated_market_data": True,
@@ -77,6 +89,8 @@ def test_market_assistant_api_returns_contextual_answer(monkeypatch):
     assert payload["status"] == "degraded"
     assert payload["context"]["latest_close"] == 105.0
     assert payload["citations"][0]["source"] == "bars_1d"
+    assert payload["citations"][0]["source_type"] == "bars"
+    assert payload["diagnostics"][0]["code"] == "SOURCE_NO_DATA"
     assert payload["safety"]["not_investment_advice"] is True
 
 
