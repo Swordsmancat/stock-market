@@ -21,7 +21,8 @@
   "children": [
     "07-05-professional-chart-workspace-enhancements",
     "07-05-hot-sector-production-breadth-rotation-history",
-    "07-05-recommendation-backtesting-signal-evaluation"
+    "07-05-recommendation-backtesting-signal-evaluation",
+    "07-05-persistent-intraday-cache-calendar-governance"
   ],
   "parent": null,
   "relatedFiles": [],
