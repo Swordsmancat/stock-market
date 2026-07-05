@@ -100,6 +100,7 @@ function expectFiniteSeriesDataPoints() {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   themeMockState.resolvedTheme = "light";
   chartMockState.addSeriesCalls = [];
   chartMockState.applyOptionsMock.mockClear();
@@ -227,6 +228,60 @@ describe("AdvancedCandlestickChart", () => {
     await waitFor(() => {
       expect(getSeriesTitles()).toEqual(expect.arrayContaining(["BOLL Upper", "BOLL Middle", "BOLL Lower"]));
     });
+  });
+
+  it("saves and restores a local chart workspace preset", async () => {
+    const bars = createBars(65);
+
+    render(<AdvancedCandlestickChart data={bars} symbol="AAPL" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "BOLL" }));
+    fireEvent.click(screen.getByRole("button", { name: "1Y" }));
+    fireEvent.change(screen.getByLabelText("Research annotation"), {
+      target: { value: "Watch 100 support" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save workspace" }));
+
+    expect(screen.getByText("Chart workspace saved in this browser.")).toBeInTheDocument();
+    expect(window.localStorage.getItem("chart-workspace:v1:AAPL")).toContain("Watch 100 support");
+
+    cleanup();
+    chartMockState.addSeriesCalls = [];
+
+    render(<AdvancedCandlestickChart data={bars} symbol="AAPL" />);
+    fireEvent.click(screen.getByRole("button", { name: "Restore workspace" }));
+
+    expect(screen.getByText("Local chart workspace restored.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Research annotation")).toHaveValue("Watch 100 support");
+    expect(screen.getByText("Note: Watch 100 support")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getSeriesTitles()).toEqual(expect.arrayContaining(["BOLL Upper", "BOLL Middle", "BOLL Lower"]));
+    });
+  });
+
+  it("ignores invalid local chart workspace data", () => {
+    window.localStorage.setItem("chart-workspace:v1:AAPL", "not-json");
+
+    render(<AdvancedCandlestickChart data={createBars(65)} symbol="AAPL" />);
+    fireEvent.click(screen.getByRole("button", { name: "Restore workspace" }));
+
+    expect(screen.getByText("No saved local chart workspace was found.")).toBeInTheDocument();
+  });
+
+  it("resets local workspace state without removing chart controls", () => {
+    render(<AdvancedCandlestickChart data={createBars(65)} symbol="AAPL" />);
+
+    fireEvent.change(screen.getByLabelText("Research annotation"), {
+      target: { value: "Temporary note" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+
+    expect(window.localStorage.getItem("chart-workspace:v1:AAPL")).toBeNull();
+    expect(screen.getByText("Local chart workspace reset.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Research annotation")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "MA" })).toBeInTheDocument();
   });
 
   it("renders technical indicator controls in Chinese", () => {

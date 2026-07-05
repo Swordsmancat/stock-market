@@ -87,6 +87,99 @@ const DEFAULT_KDJ_D_SMOOTHING = 3;
 const movingAverageColors = ["#2196F3", "#FF9800", "#9C27B0", "#00BCD4", "#22c55e", "#e11d48"];
 const rsiColors = ["#38bdf8", "#a78bfa", "#f472b6"];
 
+type ChartWorkspacePreset = {
+  workspaceVersion: 1;
+  selectedRange: TimeRange;
+  visibleIndicators: ResolvedAdvancedCandlestickIndicatorVisibility;
+  annotationNote: string;
+  savedAt: string;
+};
+
+function getChartWorkspaceStorageKey(symbol: string): string {
+  const normalizedSymbol = symbol.trim() || "default";
+  return `chart-workspace:v1:${normalizedSymbol}`;
+}
+
+function isTimeRange(value: unknown): value is TimeRange {
+  return typeof value === "string" && timeRangeOptions.includes(value as TimeRange);
+}
+
+function readChartWorkspacePreset(
+  storageKey: string,
+  fallbackVisibleIndicators: ResolvedAdvancedCandlestickIndicatorVisibility,
+): ChartWorkspacePreset | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawPreset = window.localStorage.getItem(storageKey);
+    if (!rawPreset) {
+      return null;
+    }
+
+    const parsedPreset = JSON.parse(rawPreset) as Partial<ChartWorkspacePreset>;
+    if (parsedPreset.workspaceVersion !== 1 || !isTimeRange(parsedPreset.selectedRange)) {
+      return null;
+    }
+
+    return {
+      workspaceVersion: 1,
+      selectedRange: parsedPreset.selectedRange,
+      visibleIndicators: normalizeStoredIndicatorVisibility(parsedPreset.visibleIndicators, fallbackVisibleIndicators),
+      annotationNote: typeof parsedPreset.annotationNote === "string" ? parsedPreset.annotationNote : "",
+      savedAt: typeof parsedPreset.savedAt === "string" ? parsedPreset.savedAt : new Date().toISOString(),
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeChartWorkspacePreset(storageKey: string, preset: ChartWorkspacePreset): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(preset));
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function removeChartWorkspacePreset(storageKey: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    window.localStorage.removeItem(storageKey);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function normalizeStoredIndicatorVisibility(
+  storedVisibility: unknown,
+  fallbackVisibleIndicators: ResolvedAdvancedCandlestickIndicatorVisibility,
+): ResolvedAdvancedCandlestickIndicatorVisibility {
+  if (storedVisibility === null || typeof storedVisibility !== "object") {
+    return fallbackVisibleIndicators;
+  }
+
+  const candidateVisibility = storedVisibility as Partial<Record<AdvancedCandlestickIndicatorKey, unknown>>;
+  return {
+    ma: typeof candidateVisibility.ma === "boolean" ? candidateVisibility.ma : fallbackVisibleIndicators.ma,
+    boll: typeof candidateVisibility.boll === "boolean" ? candidateVisibility.boll : fallbackVisibleIndicators.boll,
+    volume: typeof candidateVisibility.volume === "boolean" ? candidateVisibility.volume : fallbackVisibleIndicators.volume,
+    macd: typeof candidateVisibility.macd === "boolean" ? candidateVisibility.macd : fallbackVisibleIndicators.macd,
+    rsi: typeof candidateVisibility.rsi === "boolean" ? candidateVisibility.rsi : fallbackVisibleIndicators.rsi,
+    kdj: typeof candidateVisibility.kdj === "boolean" ? candidateVisibility.kdj : fallbackVisibleIndicators.kdj,
+  };
+}
+
 function resolveInitialIndicatorVisibility({
   indicators,
   showMA,
@@ -153,6 +246,10 @@ export function AdvancedCandlestickChart({
   const [visibleIndicators, setVisibleIndicators] = useState<ResolvedAdvancedCandlestickIndicatorVisibility>(() =>
     resolveInitialIndicatorVisibility({ indicators, showMA, showVolume }),
   );
+  const [annotationNote, setAnnotationNote] = useState("");
+  const [workspaceMessage, setWorkspaceMessage] = useState<string | null>(null);
+  const defaultVisibleIndicators = resolveInitialIndicatorVisibility({ indicators, showMA, showVolume });
+  const workspaceStorageKey = getChartWorkspaceStorageKey(symbol);
 
   const toggleIndicator = (indicator: AdvancedCandlestickIndicatorKey) => {
     setVisibleIndicators((currentVisibility) => ({
@@ -169,6 +266,87 @@ export function AdvancedCandlestickChart({
     { key: "rsi", label: t("indicatorRsi") },
     { key: "kdj", label: t("indicatorKdj") },
   ];
+
+  const applyTimeRangeToChart = (range: TimeRange) => {
+    if (!chartRef.current || data.length === 0) return;
+
+    const latestBarDate = new Date(data[data.length - 1].timestamp);
+    const fallbackEndDate = Number.isNaN(latestBarDate.getTime()) ? new Date() : latestBarDate;
+    const rangeEndTime = fallbackEndDate.getTime() / 1000;
+    let daysToShow = 0;
+
+    switch (range) {
+      case "1D":
+        daysToShow = 1;
+        break;
+      case "5D":
+        daysToShow = 5;
+        break;
+      case "1M":
+        daysToShow = 30;
+        break;
+      case "3M":
+        daysToShow = 90;
+        break;
+      case "6M":
+        daysToShow = 180;
+        break;
+      case "1Y":
+        daysToShow = 365;
+        break;
+      case "YTD": {
+        const startOfYear = new Date(fallbackEndDate.getFullYear(), 0, 1);
+        chartRef.current.timeScale().setVisibleRange({
+          from: (startOfYear.getTime() / 1000) as Time,
+          to: rangeEndTime as Time,
+        });
+        return;
+      }
+      case "ALL":
+        chartRef.current.timeScale().fitContent();
+        return;
+    }
+
+    const fromTime = rangeEndTime - daysToShow * 24 * 60 * 60;
+    chartRef.current.timeScale().setVisibleRange({
+      from: fromTime as Time,
+      to: rangeEndTime as Time,
+    });
+  };
+
+  const handleSaveWorkspace = () => {
+    const saved = writeChartWorkspacePreset(workspaceStorageKey, {
+      workspaceVersion: 1,
+      selectedRange,
+      visibleIndicators,
+      annotationNote,
+      savedAt: new Date().toISOString(),
+    });
+    setWorkspaceMessage(saved ? t("workspaceSaved") : t("workspaceSaveFailed"));
+  };
+
+  const handleRestoreWorkspace = () => {
+    const preset = readChartWorkspacePreset(workspaceStorageKey, defaultVisibleIndicators);
+    if (!preset) {
+      setWorkspaceMessage(t("workspaceNotFound"));
+      return;
+    }
+
+    setSelectedRange(preset.selectedRange);
+    setVisibleIndicators(preset.visibleIndicators);
+    setAnnotationNote(preset.annotationNote);
+    applyTimeRangeToChart(preset.selectedRange);
+    setWorkspaceMessage(t("workspaceRestored"));
+  };
+
+  const handleResetWorkspace = () => {
+    removeChartWorkspacePreset(workspaceStorageKey);
+    setSelectedRange("3M");
+    setVisibleIndicators(defaultVisibleIndicators);
+    setAnnotationNote("");
+    applyTimeRangeToChart("3M");
+    setWorkspaceMessage(t("workspaceReset"));
+  };
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
@@ -406,50 +584,7 @@ export function AdvancedCandlestickChart({
 
   const handleTimeRangeChange = (range: TimeRange) => {
     setSelectedRange(range);
-    if (!chartRef.current || data.length === 0) return;
-
-    const latestBarDate = new Date(data[data.length - 1].timestamp);
-    const fallbackEndDate = Number.isNaN(latestBarDate.getTime()) ? new Date() : latestBarDate;
-    const rangeEndTime = fallbackEndDate.getTime() / 1000;
-    let daysToShow = 0;
-
-    switch (range) {
-      case "1D":
-        daysToShow = 1;
-        break;
-      case "5D":
-        daysToShow = 5;
-        break;
-      case "1M":
-        daysToShow = 30;
-        break;
-      case "3M":
-        daysToShow = 90;
-        break;
-      case "6M":
-        daysToShow = 180;
-        break;
-      case "1Y":
-        daysToShow = 365;
-        break;
-      case "YTD": {
-        const startOfYear = new Date(fallbackEndDate.getFullYear(), 0, 1);
-        chartRef.current.timeScale().setVisibleRange({
-          from: (startOfYear.getTime() / 1000) as Time,
-          to: rangeEndTime as Time,
-        });
-        return;
-      }
-      case "ALL":
-        chartRef.current.timeScale().fitContent();
-        return;
-    }
-
-    const fromTime = rangeEndTime - daysToShow * 24 * 60 * 60;
-    chartRef.current.timeScale().setVisibleRange({
-      from: fromTime as Time,
-      to: rangeEndTime as Time,
-    });
+    applyTimeRangeToChart(range);
   };
 
   if (data.length === 0) {
@@ -477,6 +612,47 @@ export function AdvancedCandlestickChart({
             </Button>
           ))}
         </div>
+      </div>
+      <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-medium text-foreground">{t("workspaceTitle")}</div>
+            <div>{t("workspaceDescription")}</div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={handleSaveWorkspace}>
+              {t("workspaceSave")}
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={handleRestoreWorkspace}>
+              {t("workspaceRestore")}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleResetWorkspace}>
+              {t("workspaceResetAction")}
+            </Button>
+          </div>
+        </div>
+        <label className="mb-1 block font-medium text-foreground" htmlFor="chart-workspace-annotation">
+          {t("annotationLabel")}
+        </label>
+        <textarea
+          id="chart-workspace-annotation"
+          aria-label={t("annotationLabel")}
+          className="min-h-16 w-full rounded border bg-background px-2 py-1 text-xs text-foreground"
+          placeholder={t("annotationPlaceholder")}
+          value={annotationNote}
+          onChange={(event) => setAnnotationNote(event.target.value)}
+        />
+        {annotationNote.trim() ? (
+          <div className="mt-2 rounded bg-background/70 px-2 py-1">
+            {t("annotationPreview", { note: annotationNote.trim() })}
+          </div>
+        ) : null}
+        {workspaceMessage ? (
+          <div className="mt-2" role="status">
+            {workspaceMessage}
+          </div>
+        ) : null}
+        <div className="mt-2">{t("workspaceLocalOnly")}</div>
       </div>
       <div className="flex flex-wrap items-center gap-1" aria-label={t("technicalIndicatorsLabel")}>
         {indicatorOptions.map((indicator) => (

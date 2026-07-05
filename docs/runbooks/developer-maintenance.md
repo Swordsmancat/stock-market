@@ -297,7 +297,7 @@ python scripts/task_run_health.py
 - 真实分钟线已有 yfinance `1m` MVP；Level-2、逐笔和资金流仍缺少已验证生产 provider。
 - AI 助手 MVP 已上线，但仍需增强多轮上下文、检索引用、实时行情联动和更完整的投资研究工作流。
 - 策略/推荐缺少回测、解释和筛选器。
-- 专业图表缺少多周期联动、自定义脚本、图表布局保存和告警联动。
+- 专业图表已具备浏览器本地工作区保存/恢复和轻量研究注释；仍缺少多周期联动、自定义脚本、账号级图表布局同步和告警联动。
 - 缺少生产级权限、数据 SLA、审计日志和 provider 配额治理。
 
 ## Follow-up Roadmap
@@ -309,7 +309,7 @@ python scripts/task_run_health.py
 | P0 | 真实深度/大单/资金流管线 | `real-market-depth-provider-pipeline` | Provider-boundary MVP 已支持显式 `fetch_market_depth`、局部分区状态、真实 payload 渲染和大单派生；下一步是接入并验证生产 Level-2/逐笔/资金流 provider。 |
 | P1 | 热点板块真实资金流 | `hot-sector-fund-flow-provider` | Provider-backed MVP 已建立 contract、taxonomy、flow definitions、AkShare 候选路径和 degraded-safe UI；下一步是生产 provider 验证、涨跌家数/成分股贡献和历史轮动。 |
 | P1 | Trellis 状态治理 | `trellis-phase2-phase3-state-reconciliation` | 已实现任务归档，planning/in_progress 状态与代码一致。 |
-| P2 | 专业图表增强 | future task | 多周期联动、显式缩放按钮、图表布局保存、指标参数持久化。 |
+| P2 | 专业图表增强 | active slice | 本地工作区保存/恢复和研究注释已作为第一切片；后续仍需多周期联动、显式缩放按钮、账号同步、指标参数持久化和 chart-linked alerts。 |
 | P2 | 推荐回测与策略评价 | future task | 历史回测、命中率、回撤、风险统计和解释增强。 |
 
 ## Change Safety Checklist

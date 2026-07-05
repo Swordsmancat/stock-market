@@ -15,12 +15,24 @@ Add TradingView-style chart workspace follow-ups: saved layouts, drawing tools, 
 
 ## Acceptance Criteria
 
-- [ ] `design.md` defines chart workspace state, persistence, drawing model, and alert integration boundaries.
-- [ ] `implement.md` breaks work into independently testable slices.
-- [ ] Users can save and restore at least one chart layout/preset without losing current indicator controls.
-- [ ] Drawing or annotation affordances are available without breaking responsive layout.
-- [ ] Multi-timeframe or multi-pane behavior is covered by focused component tests.
-- [ ] Documentation explains that chart alerts are research notifications, not trading instructions.
+- [x] `design.md` defines chart workspace state, persistence, drawing model, and alert integration boundaries.
+- [x] `implement.md` breaks work into independently testable slices.
+- [x] Users can save and restore at least one chart layout/preset without losing current indicator controls.
+- [x] Drawing or annotation affordances are available without breaking responsive layout.
+- [x] Multi-timeframe or multi-pane behavior is covered by focused component tests.
+- [x] Documentation explains that chart alerts are research notifications, not trading instructions.
+
+## Completion Notes
+
+- Added a browser-local, versioned chart workspace preset for the existing advanced candlestick chart.
+- The first slice saves/restores/resets selected range, visible indicator toggles, and a lightweight research annotation.
+- Invalid localStorage payloads are ignored safely and do not crash the chart.
+- Existing MA, BOLL, volume, MACD, RSI, KDJ, range controls, theme behavior, and empty states remain intact.
+- Documentation now explains that workspace state is local-only and research annotations are not trading instructions.
+
+## Validation
+
+- `npm run test:web -- apps/web/components/advanced-candlestick-chart.test.tsx` -> `9 passed`
 
 ## Notes
 
