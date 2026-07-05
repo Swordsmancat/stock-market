@@ -56,6 +56,16 @@ def load_fundamentals_watchlists_migration():
     return module
 
 
+def load_intraday_minute_cache_migration():
+    migration_path = Path("alembic/versions/0010_intraday_minute_cache_entries.py")
+    spec = importlib.util.spec_from_file_location("intraday_minute_cache_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -152,3 +162,31 @@ def test_fundamentals_watchlists_migration_creates_persistent_analysis_tables():
         tables = set(inspect(connection).get_table_names())
 
     assert {"fundamental_snapshots", "watchlists", "watchlist_items"}.issubset(tables)
+
+
+def test_intraday_minute_cache_migration_creates_cache_metadata_table():
+    initial_migration = load_initial_migration()
+    intraday_cache_migration = load_intraday_minute_cache_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(intraday_cache_migration, connection)
+
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        columns = {column["name"] for column in inspector.get_columns("intraday_minute_cache_entries")}
+
+    assert "intraday_minute_cache_entries" in tables
+    assert {
+        "instrument_id",
+        "provider",
+        "symbol",
+        "trade_date",
+        "timeframe",
+        "row_count",
+        "first_ts",
+        "last_ts",
+        "fetched_at",
+        "cached_at",
+    }.issubset(columns)

@@ -41,6 +41,7 @@ Primary examples:
 | [Quality Guidelines](./quality-guidelines.md) | Focused pytest, non-mutating diagnostics, and subagent safety boundaries | Filled |
 | [Logging Guidelines](./logging-guidelines.md) | Current logging state and sensitive-data boundaries | Filled |
 | [Hot Sector Contract](./hot-sector-contract.md) | `/sectors/hot` provider-backed payload fields, degraded states, and cross-layer tests | Filled |
+| [Intraday Minute Cache Contract](./intraday-cache-contract.md) | `/market-data/{symbol}/intraday` verified minute cache, session policy, freshness metadata, and no-fabrication rules | Filled |
 
 ---
 

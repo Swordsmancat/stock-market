@@ -21,7 +21,7 @@ npx vitest run "apps/web/app/api/instruments/[symbol]/route.test.ts" "apps/web/a
 真实分时分钟线聚焦检查：
 
 ```bash
-python -m pytest tests/providers/test_yfinance_provider.py tests/services/test_market_data_service.py tests/api/test_market_data_intraday_api.py
+python -m pytest tests/providers/test_yfinance_provider.py tests/services/test_market_data_service.py tests/api/test_market_data_intraday_api.py tests/domain/test_migrations.py
 npx vitest run "apps/web/app/api/instruments/[symbol]/route.test.ts" "apps/web/app/[locale]/instruments/[symbol]/page.test.tsx" "apps/web/components/intraday-price-chart.test.tsx"
 ```
 
@@ -69,6 +69,21 @@ AI 市场助手现在在原有单标的问答 MVP 上增加了 service-local res
 - LLM 输出如果引用了 payload 中不存在的 citation ID，后端应降级到 deterministic fallback 或显式 `CITATION_UNKNOWN_ID` 诊断，不能把幻觉引用当作有效来源展示。
 - diagnostics 可包含 `severity`、`code`、`citation_id`、`details`，但不得泄露 API key、prompt internals、原始 stack trace 或 provider 原始 payload。
 
+推荐信号评估聚焦检查：
+
+```bash
+python -m pytest tests/services/test_recommendation_signal_evaluation.py tests/api/test_recommendations_api.py -q
+```
+
+推荐信号评估当前是 service-level deterministic research layer。维护时应确认：
+
+- `evaluate_recommendation_signals` 只使用传入的 deterministic historical bars，不访问 live provider，也不写入数据库。
+- 当前覆盖的信号类型保持与实时推荐一致：`breakout`、`volume_anomaly`、`oversold_rebound`、`strong_momentum`。
+- 输出必须包含 `sample_size`、`forward_windows`、per-window hit rate、average/median forward return、max drawdown、可用时的 benchmark-relative return，以及 no-data / no-signal / invalid-window / insufficient-post-signal diagnostics。
+- benchmark bars 缺失或无法安全对齐时应返回 `BENCHMARK_UNAVAILABLE` 等诊断，不要把缺失 benchmark-relative return 编码为 0。
+- 缺失历史、样本不足、没有触发信号时应返回显式状态和 diagnostics，不能把“没有证据”展示成收益率、命中率或回撤为 0 的成功结果。
+- 该能力是历史研究评估，不是投资建议、自动交易、组合回测或策略 tester；若未来暴露 API/UI，必须继续展示样本量、窗口、诊断和非建议声明。
+
 热点板块资金流聚焦检查：
 
 ```bash
@@ -96,7 +111,7 @@ python scripts/task_run_health.py
 | `GET /market-data/{symbol}/latest` | 单标的最新行情 | 已实现 |
 | `GET /market-data/{symbol}/bars?timeframe=1d&start=YYYY-MM-DD&end=YYYY-MM-DD` | 日线 OHLCV | 已实现 |
 | `GET /market-data/{symbol}/indicators?start=...&end=...&ma_window=20` | 基础指标 payload | 已实现 |
-| `GET /market-data/{symbol}/intraday?date=YYYY-MM-DD&timeframe=1m` | 分时图 minute-bar contract，返回 `ok` / `no_data` / `degraded`、provider、previous_close 和分钟点位 | Provider-backed MVP；yfinance 可返回 verified `1m` 分钟线，mock/AkShare/Tushare 仍 degraded |
+| `GET /market-data/{symbol}/intraday?date=YYYY-MM-DD&timeframe=1m` | 分时图 minute-bar contract，返回 `ok` / `no_data` / `degraded`、provider、previous_close、分钟点位、freshness/session 和缓存状态 | Provider-backed + closed-session cache MVP；yfinance 可返回 verified `1m` 分钟线并对历史闭市请求复用持久缓存，mock/AkShare/Tushare 仍 degraded |
 | `GET /market-data/{symbol}/depth?depth_levels=5&large_order_threshold_amount=1000000` | 深度数据 provider contract，返回 order_book / recent_trades / large_orders / fund_flow 分区状态和可验证行 | Provider-boundary MVP；只调用显式 `fetch_market_depth`；AkShare 已有 fixture-tested 盘口候选路径，生产 verified 状态仍需 live smoke、schema 监控和权限验证 |
 
 ### Analysis, recommendations, reports, and dashboard
@@ -197,12 +212,12 @@ python scripts/task_run_health.py
 顶层 payload 重点字段：
 
 - `status`: `ok` / `no_data` / `degraded`。
-- `source`: yfinance real minute rows 使用 `provider`；unsupported provider 使用 `none`。
+- `source`: yfinance real minute rows 首次 provider fetch 使用 `provider`；历史闭市缓存命中使用 `cache`；unsupported provider 或 session-policy skip 使用 `none`。
 - `provider`, `requested_provider`, `effective_provider`。
 - `previous_close`: 昨收参考线，可通过日线 lookback 获取；缺失时为 `null`。
-- `items`: minute rows，仅 verified provider 返回真实分钟点位。
+- `items`: minute rows，仅 verified provider 返回或由 verified historical closed-session cache 复用真实分钟点位。
 - `availability`: `{ status, reason, is_realtime, is_delayed, delay_minutes }`。
-- `freshness`: additive metadata，包含 `status`, `reason`, `data_as_of`, `checked_at`, `fetched_at`, `cached_at`, `cache_status`, `max_age_seconds`。当前 slice 主要用于解释 provider fetch / no-data / unsupported 的新鲜度和 cache policy，不代表已有持久化分钟缓存。
+- `freshness`: additive metadata，包含 `status`, `reason`, `data_as_of`, `checked_at`, `fetched_at`, `cached_at`, `cache_status`, `max_age_seconds`。`cache_status` 当前含义为 `hit`（历史闭市持久缓存命中）、`miss`（缓存未命中并执行 provider path）、`skipped`（session/provider policy 明确跳过缓存或 provider 调用）、`unavailable`（没有可用数据库 session 或缓存读写失败后返回 provider 数据）。
 - `session`: additive metadata，包含 `market`, `timezone`, `trading_date`, `status`, `reason`。当前覆盖 yfinance US-like symbol 的 future / weekend / known holiday / closed/current session / unsupported provider 判断，不代表完整全球交易日历。
 
 单个 minute item：
@@ -217,11 +232,12 @@ python scripts/task_run_health.py
 - 只允许显式 provider intraday method 生成 `items`。
 - 不要调用 mock/AkShare/Tushare 当前 daily `fetch_bars("1m")` 来生成分钟线。
 - yfinance 空结果、历史窗口外日期、周末/节假日应返回 `no_data`，不是伪造点位。
-- 对周末日期，服务层会直接返回可解释的 `no_data`，并且不会调用 provider 的分钟线接口；日线只可继续作为 `previous_close` 参考。
-- 对未来日期，服务层会直接返回可解释的 `no_data`，并且不会调用 provider 的分钟线接口；这避免把尚未发生的市场 session 当作 provider 故障。
-- 对 yfinance + US-like symbol 的已知美股休市日，服务层会直接返回可解释的 `no_data`，并跳过 provider 分钟线接口；readiness 窗口模式也会跳过这些休市日继续尝试最近有效工作日。当前覆盖固定/顺延休市日和常见移动休市日（MLK Day、Presidents Day、Good Friday、Memorial Day、Labor Day、Thanksgiving）。
+- 对周末日期，服务层会直接返回可解释的 `no_data`，并且不会调用 provider 的日线或分钟线接口；如数据库已有日线，`previous_close` 可从本地读取，否则为 `null`。
+- 对未来日期，服务层会直接返回可解释的 `no_data`，并且不会调用 provider 的日线或分钟线接口；这避免把尚未发生的市场 session 当作 provider 故障。
+- 对 yfinance + US-like symbol 的已知美股休市日，服务层会直接返回可解释的 `no_data`，并跳过 provider 日线/分钟线接口；readiness 窗口模式也会跳过这些休市日继续尝试最近有效工作日。当前覆盖固定/顺延休市日和常见移动休市日（MLK Day、Presidents Day、Good Friday、Memorial Day、Labor Day、Thanksgiving）。
 - 日线数据只可用于 `previous_close` 参考线，不可生成 minute rows。
-- `freshness.cache_status="skipped"` 表示服务层按 session/provider policy 明确跳过 provider 调用；`cache_status="miss"` 表示当前没有命中持久化/复用缓存并执行了 provider path 或 provider-empty path。不要把这些字段误读为已经实现 production persistent minute cache。
+- 历史闭市 session 会先查 `intraday_minute_cache_entries` 元数据和 `bars_1m` 分钟事实表；命中时返回 `source="cache"` 并且不调用 provider。当前 session 保持 provider-first，不从缓存冒充实时行情。
+- 缓存只写 verified provider 返回的 minute rows。不要为 future/weekend/holiday、unsupported provider、provider empty response 或 daily fallback 写入 fake minute rows。
 
 ### Market depth provider contract
 
@@ -272,7 +288,7 @@ python scripts/task_run_health.py
 | Phase 2 | 智能推荐 | Complete | `apps/api/routers/recommendations.py`, `packages/services/smart_recommendations.py`, `apps/web/components/smart-recommendations.tsx` | 增加推荐回测、命中率、策略解释和筛选器。 |
 | Phase 2 | 热点板块轮动 | Partial / provider-backed MVP | `packages/services/hot_sectors.py`, `apps/api/routers/sectors.py`, `apps/web/components/hot-sectors.tsx`, hot-sector service/API/proxy/component/page tests | 已有 normalized provider contract、MVP taxonomy、flow definition、top constituents 和 degraded-safe UI；后续需要生产级真实资金流 provider、涨跌家数、成分股贡献和历史轮动。 |
 | Phase 2 | 对比分析 | Complete | `apps/web/components/comparison-tool.tsx`, `apps/web/lib/comparison-utils.ts`, tests | 增加 beta、波动率、最大回撤和保存对比组合。 |
-| Phase 3 | 分时图 | Partial / provider-backed MVP | `ProviderIntradayBar`, `YFinanceProvider.fetch_intraday_bars`, `get_intraday_bars_payload`, `IntradayPriceChart`, intraday provider/service/API/proxy/page tests | yfinance `1m` verified minute path 已可返回 `ok`；unsupported provider 继续 degraded。后续需要更多 provider、分钟线缓存/存储、交易时段治理和更长历史窗口。 |
+| Phase 3 | 分时图 | Partial / provider-backed + closed-session cache MVP | `ProviderIntradayBar`, `YFinanceProvider.fetch_intraday_bars`, `IntradayMinuteCacheEntry`, `bars_1m`, `get_intraday_bars_payload`, `IntradayPriceChart`, intraday provider/service/API/proxy/page tests | yfinance `1m` verified minute path 已可返回 `ok`；历史闭市请求可持久缓存并复用；unsupported provider 继续 degraded。后续需要更多 provider、完整交易日历、半日市、盘前盘后、实时推送和更长历史窗口。 |
 | Phase 3 | 深度数据 | Partial / provider-boundary MVP | `ProviderMarketDepthSnapshot`, `ProviderOrderBookLevel`, `ProviderRecentTrade`, `ProviderFundFlow`, `AkShareProvider.fetch_market_depth`, `get_market_depth_payload`, `MarketDepthCard`, market-depth provider/service/API/proxy/page/component tests | 已有显式 `fetch_market_depth` boundary、AkShare fixture-tested 盘口候选路径、局部分区状态、真实行渲染和大单从已验证逐笔派生；后续需要生产级 Level-2 live smoke、逐笔和资金流 provider 验证。 |
 | Phase 3 | 技术指标库 | Complete | `calculateMacdSeries`, `calculateKdjSeries`, `computeRsiSeries`, backend MACD/KDJ persistence | 可补更多指标、参数持久化和指标解释。 |
 | Phase 3 | AI 助手 | Partial / MVP | `apps/api/routers/assistant.py`, `packages/services/market_assistant.py`, `apps/web/components/market-assistant-card.tsx`, assistant tests | 继续增强多轮上下文、报告/新闻检索、实时数据联动和更丰富引用。 |
@@ -290,11 +306,11 @@ python scripts/task_run_health.py
 
 - 已有 provider-neutral 架构、Celery 任务、TaskRun 监控和 degraded-safe 状态。
 - 已有日线、指标、推荐、报告、组合、关注列表和告警基础。
-- 已有 Phase 3 分时 provider-backed MVP，以及深度数据 provider-boundary MVP，可在真实 provider 接入后平滑升级。
+- 已有 Phase 3 分时 provider-backed + closed-session cache MVP，以及深度数据 provider-boundary MVP，可在真实 provider 接入后平滑升级。
 
 主要差距：
 
-- 真实分钟线已有 yfinance `1m` MVP；Level-2、逐笔和资金流仍缺少已验证生产 provider。
+- 真实分钟线已有 yfinance `1m` + 历史闭市缓存 MVP；Level-2、逐笔和资金流仍缺少已验证生产 provider。
 - AI 助手 MVP 已上线，但仍需增强多轮上下文、检索引用、实时行情联动和更完整的投资研究工作流。
 - 策略/推荐缺少回测、解释和筛选器。
 - 专业图表已具备浏览器本地工作区保存/恢复和轻量研究注释；仍缺少多周期联动、自定义脚本、账号级图表布局同步和告警联动。
@@ -305,11 +321,12 @@ python scripts/task_run_health.py
 | 优先级 | Roadmap Item | 建议 Trellis 任务 | 验收方向 |
 |---:|---|---|---|
 | P0 | AI 市场助手 MVP | `07-04-ai-market-assistant` | 已实现 API/UI/tests、上下文引用、安全免责声明和 degraded/no-data fallback；后续应拆分增强任务。 |
-| P0 | 真实分时数据管线 | `real-intraday-minute-data-pipeline` | yfinance `1m` MVP 已支持 verified minute payload、no_data/degraded fallback 和前端真实渲染；下一步是缓存/存储、多 provider、交易时段和历史窗口治理。 |
+| P0 | 真实分时数据管线 | `real-intraday-minute-data-pipeline` | yfinance `1m` MVP 已支持 verified minute payload、no_data/degraded fallback、前端真实渲染和历史闭市持久缓存；下一步是多 provider、完整交易日历、半日市、盘前盘后、实时推送和历史窗口治理。 |
 | P0 | 真实深度/大单/资金流管线 | `real-market-depth-provider-pipeline` | Provider-boundary MVP 已支持显式 `fetch_market_depth`、局部分区状态、真实 payload 渲染和大单派生；下一步是接入并验证生产 Level-2/逐笔/资金流 provider。 |
 | P1 | 热点板块真实资金流 | `hot-sector-fund-flow-provider` | Provider-backed MVP 已建立 contract、taxonomy、flow definitions、AkShare 候选路径和 degraded-safe UI；下一步是生产 provider 验证、涨跌家数/成分股贡献和历史轮动。 |
 | P1 | Trellis 状态治理 | `trellis-phase2-phase3-state-reconciliation` | 已实现任务归档，planning/in_progress 状态与代码一致。 |
 | P2 | 专业图表增强 | active slice | 本地工作区保存/恢复和研究注释已作为第一切片；后续仍需多周期联动、显式缩放按钮、账号同步、指标参数持久化和 chart-linked alerts。 |
+| P2 | 推荐信号评估 | active slice | Service-level deterministic evaluation 已覆盖样本数、前瞻窗口、命中率、回撤、benchmark-relative return 和诊断；后续仍需 API/UI、持久化历史、交易成本和 walk-forward 验证。 |
 | P2 | 推荐回测与策略评价 | future task | 历史回测、命中率、回撤、风险统计和解释增强。 |
 
 ## Change Safety Checklist

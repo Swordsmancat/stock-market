@@ -1,14 +1,14 @@
 from collections.abc import Callable
-from datetime import date
-from decimal import Decimal
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 
-from packages.providers.base import ProviderBar, ProviderInstrument
+from packages.providers.base import ProviderBar, ProviderInstrument, ProviderIntradayBar
 from packages.providers.yfinance_helpers import map_symbol_to_ticker
 
 
-Downloader = Callable[[str, date, date], pd.DataFrame]
+Downloader = Callable[..., pd.DataFrame]
 
 
 class YFinanceProvider:
@@ -55,14 +55,89 @@ class YFinanceProvider:
             )
         return bars
 
-    def _download(self, ticker: str, start: date, end: date) -> pd.DataFrame:
+    def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        if timeframe != "1m":
+            msg = f"Unsupported intraday timeframe for yfinance provider: {timeframe}"
+            raise ValueError(msg)
+
+        ticker = map_symbol_to_ticker(symbol)
+        end_date = trade_date + timedelta(days=1)
+        frame = _normalize_downloaded_frame(
+            self._downloader(ticker, trade_date, end_date, interval="1m"),
+            ticker,
+        )
+        if frame.empty or not _has_required_price_columns(frame):
+            return []
+
+        intraday_bars: list[ProviderIntradayBar] = []
+        for timestamp, row in frame.iterrows():
+            intraday_timestamp = _datetime_from_index_value(timestamp)
+            if intraday_timestamp is None or intraday_timestamp.date() != trade_date:
+                continue
+
+            open_value = _decimal_or_none(row["Open"])
+            high_value = _decimal_or_none(row["High"])
+            low_value = _decimal_or_none(row["Low"])
+            close_value = _decimal_or_none(row["Close"])
+            volume_value = _decimal_or_none(row["Volume"])
+            if None in {open_value, high_value, low_value, close_value, volume_value}:
+                continue
+
+            intraday_bars.append(
+                ProviderIntradayBar(
+                    symbol=symbol,
+                    timestamp=intraday_timestamp,
+                    open=open_value,
+                    high=high_value,
+                    low=low_value,
+                    close=close_value,
+                    volume=int(volume_value),
+                    amount=None,
+                    average_price=None,
+                )
+            )
+
+        return intraday_bars
+
+    def _download(self, ticker: str, start: date, end: date, interval: str | None = None) -> pd.DataFrame:
         import yfinance as yf
 
-        return yf.download(ticker, start=start.isoformat(), end=end.isoformat(), progress=False)
+        download_options: dict[str, object] = {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "progress": False,
+        }
+        if interval is not None:
+            download_options["interval"] = interval
+
+        return yf.download(ticker, **download_options)
 
 
 def _decimal(value: object) -> Decimal:
     return Decimal(str(value))
+
+
+def _decimal_or_none(value: object) -> Decimal | None:
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not decimal_value.is_finite():
+        return None
+    return decimal_value
+
+
+def _datetime_from_index_value(value: object) -> datetime | None:
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime()
+    if isinstance(value, datetime):
+        return value
+    return None
+
+
+def _has_required_price_columns(frame: pd.DataFrame) -> bool:
+    required_price_columns = {"Open", "High", "Low", "Close", "Volume"}
+    return required_price_columns.issubset({str(column) for column in frame.columns})
 
 
 def _normalize_downloaded_frame(frame: pd.DataFrame, ticker: str) -> pd.DataFrame:

@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pandas as pd
+import pytest
 
 from packages.providers.yfinance_provider import YFinanceProvider
 
@@ -77,3 +78,72 @@ def test_yfinance_provider_maps_known_market_instruments():
     assert instruments[0].symbol == "0700"
     assert instruments[0].market == "HK"
     assert instruments[0].currency == "HKD"
+
+
+def test_yfinance_provider_fetches_intraday_bars_with_one_minute_interval():
+    def fake_download(ticker: str, start: date, end: date, interval: str | None = None) -> pd.DataFrame:
+        assert ticker == "AAPL"
+        assert start == date(2026, 7, 3)
+        assert end == date(2026, 7, 4)
+        assert interval == "1m"
+        return pd.DataFrame(
+            [
+                {
+                    "Open": 214.1,
+                    "High": 214.3,
+                    "Low": 213.9,
+                    "Close": 214.2,
+                    "Volume": 12000,
+                },
+                {
+                    "Open": 215.1,
+                    "High": 215.3,
+                    "Low": 214.9,
+                    "Close": 215.2,
+                    "Volume": 9000,
+                },
+            ],
+            index=pd.to_datetime(["2026-07-03T13:30:00+00:00", "2026-07-04T13:30:00+00:00"]),
+        )
+
+    provider = YFinanceProvider(downloader=fake_download)
+
+    bars = provider.fetch_intraday_bars("AAPL", date(2026, 7, 3), "1m")
+
+    assert len(bars) == 1
+    assert bars[0].symbol == "AAPL"
+    assert bars[0].timestamp == datetime(2026, 7, 3, 13, 30, tzinfo=timezone.utc)
+    assert bars[0].open == Decimal("214.1")
+    assert bars[0].close == Decimal("214.2")
+    assert bars[0].volume == 12000
+    assert bars[0].amount is None
+    assert bars[0].average_price is None
+
+
+def test_yfinance_provider_returns_empty_intraday_bars_for_empty_frame():
+    provider = YFinanceProvider(downloader=lambda ticker, start, end, interval=None: pd.DataFrame())
+
+    bars = provider.fetch_intraday_bars("AAPL", date(2026, 7, 3), "1m")
+
+    assert bars == []
+
+
+def test_yfinance_provider_does_not_fabricate_intraday_rows_from_missing_columns():
+    def fake_download(ticker: str, start: date, end: date, interval: str | None = None) -> pd.DataFrame:
+        return pd.DataFrame(
+            [{"Open": 214.1, "High": 214.3, "Low": 213.9, "Close": 214.2}],
+            index=pd.to_datetime(["2026-07-03T13:30:00+00:00"]),
+        )
+
+    provider = YFinanceProvider(downloader=fake_download)
+
+    bars = provider.fetch_intraday_bars("AAPL", date(2026, 7, 3), "1m")
+
+    assert bars == []
+
+
+def test_yfinance_provider_rejects_unsupported_intraday_timeframes():
+    provider = YFinanceProvider(downloader=lambda ticker, start, end, interval=None: pd.DataFrame())
+
+    with pytest.raises(ValueError, match="Unsupported intraday timeframe"):
+        provider.fetch_intraday_bars("AAPL", date(2026, 7, 3), "5m")

@@ -93,7 +93,8 @@ K 线图基于日线 OHLCV 数据展示。当前支持：
 - UI 和 API contract 已存在。
 - yfinance provider 现在可以在可用窗口内返回已验证 `1m` 分钟线。
 - yfinance 分钟线通常有历史留存窗口限制；较早日期、周末、节假日或 provider 空响应会返回 `no_data`，而不是伪造数据。
-- 分时 payload 现在会附带 `freshness` 和 `session` 元数据，用于解释数据是否来自 provider fetch、是否因非交易日/未来日期/不支持 provider 被跳过，以及当前是否只是可靠性 metadata 而不是 production 级实时缓存。
+- 历史闭市交易日的 yfinance `1m` 数据在首次 verified provider 成功返回后会写入持久分钟缓存；同一标的、provider、日期和周期的后续请求可从缓存返回 `source="cache"`，避免重复打 provider。
+- 分时 payload 现在会附带 `freshness` 和 `session` 元数据，用于解释数据是否来自 provider fetch、是否命中缓存、是否因非交易日/未来日期/不支持 provider 被跳过，以及当前是否只是可靠性 metadata 而不是 production 级实时行情系统。
 - mock、AkShare、Tushare 当前仍不作为已验证分钟线 provider；系统会返回 `degraded`，页面显示“当前数据源暂不支持分时数据”等明确提示。
 - 系统不会用日线、静态 fixture 或估算值冒充分钟线。
 
@@ -102,7 +103,7 @@ K 线图基于日线 OHLCV 数据展示。当前支持：
 - 如果分时图显示真实曲线，表示后端返回了 `status="ok"` 的分钟点位。
 - 如果分时图显示 `no_data` 或降级提示，不代表市场没有交易，只代表当前 provider、日期或权限没有返回可验证分钟数据。
 - 分时图的昨收参考线可来自日线数据，但日线数据只用于参考线，不会被用来生成分钟点位。
-- `freshness.cache_status` 当前主要解释服务层是否跳过 provider 调用或走 provider fetch path；它不是完整的持久化分钟缓存功能。完整缓存、半日市、盘前盘后、实时推送和多 provider 验证仍是后续能力。
+- `freshness.cache_status` 可用于区分 `hit`（历史闭市缓存命中）、`miss`（缓存未命中并走 provider）、`skipped`（session/provider policy 明确跳过）和 `unavailable`（没有可用数据库 session 或缓存写入/读取不可用）。这不是完整 realtime market-data plant；当前盘、半日市、盘前盘后、实时推送、更长历史窗口和多 provider 验证仍是后续能力。
 - 后续接入更多真实分钟级 provider 后，该区块可继续复用当前 contract。
 
 ### 深度数据（五档 / 逐笔 / 大单 / 资金流）
@@ -137,10 +138,21 @@ K 线图基于日线 OHLCV 数据展示。当前支持：
 - 成交异常。
 - 强势动量。
 
+推荐信号现在具备第一层 deterministic 历史评估能力，可在服务层基于历史日线计算：
+
+- 样本数。
+- 1 / 5 / 20 等前瞻窗口收益。
+- 命中率。
+- 平均 / 中位前瞻收益。
+- 信号后最大回撤。
+- 有 benchmark 时的相对收益。
+- 无足够历史、无信号、无 benchmark 或窗口无后续数据时的诊断。
+
 使用建议：
 
 - 推荐结果应与 K 线、成交量、基本面、新闻和风险偏好一起分析。
 - 推荐算法基于可用行情和指标数据；当 provider 或日期范围没有足够数据时，推荐可能为空。
+- 历史评估指标只说明过去样本表现，样本少、数据缺口、幸存者偏差和不同市场交易日历都会影响解释。
 - 推荐结果不会自动下单，也不保证收益。
 
 ## 对比分析
@@ -186,7 +198,7 @@ AI 市场助手当前能力：
 | 对比维度 | 当前平台状态 | 专业平台常见能力 | 差距 |
 |---|---|---|---|
 | 图表交互 | 已有交互式 K 线、区间切换、常用指标 | 多图层、多周期、多窗口、自定义脚本、告警 | 缺少脚本化指标、版面保存、多周期联动。 |
-| 实时行情 | 日线和 yfinance `1m` 分钟线 MVP 可用；不支持 provider 会 no_data/degraded | 低延迟实时行情、盘前盘后、逐笔成交 | 分时已有 provider-backed MVP，但仍缺多 provider、长历史分钟线、实时推送和盘口/逐笔。 |
+| 实时行情 | 日线和 yfinance `1m` 分钟线 MVP 可用；历史闭市分钟线支持保守持久缓存；不支持 provider 会 no_data/degraded | 低延迟实时行情、盘前盘后、逐笔成交 | 分时已有 provider-backed + closed-session cache MVP，但仍缺多 provider、长历史分钟线、实时推送和盘口/逐笔。 |
 | 深度行情 | 有 provider-boundary MVP：显式 `fetch_market_depth` contract、分区状态和真实行渲染能力；AkShare 已有 fixture-tested 盘口候选路径 | Level-2、逐笔、订单流、盘口热力图 | 仍缺少已验证生产 Level-2 provider、逐笔/资金流生产验证、订单流分析和盘口热力图。 |
 | 热点板块 | 已有 provider-backed contract、数据模式、资金流口径、成分股展示和降级提示；默认仍是 mock fallback | 板块资金流、涨跌家数、成分股贡献、实时/延迟口径、板块 taxonomy | 真实生产 provider、跨市场 taxonomy 治理、涨跌家数/贡献拆解和历史轮动分析仍待增强。 |
 | 选股/推荐 | 有突破、超跌等研究线索 | 强筛选器、实时扫描、回测、告警 | 缺少条件选股器、回测和策略评价。 |
@@ -196,8 +208,8 @@ AI 市场助手当前能力：
 ## 优先优化路线
 
 1. **AI 市场助手增强**：在现有 research-citation MVP 上继续扩展 filings/transcripts/announcements、向量检索、多轮上下文、研究 notebook、watchlist 级监控和实时行情联动。
-2. **真实分时数据增强**：在 yfinance `1m` MVP 基础上补充更多 provider、分钟线缓存/存储、交易时段治理、盘前盘后和更长历史窗口。
+2. **真实分时数据增强**：在 yfinance `1m` + 历史闭市缓存 MVP 基础上补充更多 provider、完整交易日历、半日市、盘前盘后、实时推送和更长历史窗口。
 3. **真实深度和大单数据管线**：在现有显式 `fetch_market_depth` boundary 上接入并验证 Level-2 / 逐笔 / 资金流 provider，保留 provider capability matrix 和局部可用状态。
 4. **热点板块资金流增强**：在现有 provider-backed contract 上接入并验证真实生产 provider，补充涨跌家数、成分股贡献、历史轮动和跨市场 taxonomy 治理。
 5. **专业图表增强**：当前已具备本地工作区保存/恢复和轻量研究注释；后续继续增加多周期联动、指标参数持久化、告警和对比视图保存。
-6. **策略验证与回测**：为智能推荐增加历史回测、命中率、回撤和风险统计。
+6. **策略验证与回测**：当前已具备 service-level deterministic 信号评估；后续继续补 API/UI 展示、持久化信号历史、交易成本/滑点、组合级回测和 walk-forward 验证。

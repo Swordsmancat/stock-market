@@ -90,6 +90,34 @@ class MinuteBar(Base):
     amount: Mapped[Decimal | None] = mapped_column(Numeric(24, 4), default=None)
 
 
+class IntradayMinuteCacheEntry(Base):
+    __tablename__ = "intraday_minute_cache_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "symbol",
+            "trade_date",
+            "timeframe",
+            name="uq_intraday_minute_cache_provider_symbol_date_timeframe",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    instrument_id: Mapped[PythonUUID] = mapped_column(ForeignKey("instruments.id"))
+    provider: Mapped[str] = mapped_column(String(64))
+    symbol: Mapped[str] = mapped_column(String(64))
+    trade_date: Mapped[date] = mapped_column(Date)
+    timeframe: Mapped[str] = mapped_column(String(16))
+    source: Mapped[str] = mapped_column(String(128), default="provider_verified")
+    row_count: Mapped[int] = mapped_column(Integer)
+    first_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    cached_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    instrument: Mapped[Instrument] = relationship("Instrument")
+
+
 class TechnicalIndicator(Base):
     __tablename__ = "technical_indicators"
 
