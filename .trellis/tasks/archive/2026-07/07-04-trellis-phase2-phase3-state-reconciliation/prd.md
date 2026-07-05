@@ -15,11 +15,18 @@ Reconcile Trellis task status, parent/child links, and archive state for Phase 2
 
 ## Acceptance Criteria
 
-- [ ] Phase 2 / Phase 3 task tree has no obvious orphaned audit task or duplicated archived active task.
-- [ ] Implemented-and-verified tasks are archived or explicitly documented as still open with remaining gaps.
-- [ ] Missing/partial features remain active with actionable PRDs.
-- [ ] Parent task progress reflects child task status as accurately as Trellis supports.
-- [ ] Session journal records the reconciliation decisions and commit hashes.
+- [x] Phase 2 / Phase 3 task tree has no obvious orphaned audit task or duplicated archived active task.
+- [x] Implemented-and-verified tasks are archived or explicitly documented as still open with remaining gaps.
+- [x] Missing/partial features remain active with actionable PRDs.
+- [x] Parent task progress reflects child task status as accurately as Trellis supports.
+- [x] Session journal records the reconciliation decisions and commit hashes.
+
+## Completion Notes (2026-07-05)
+
+- Archived completed children for intraday chart, Phase 2 hardening acceptance closure, website-entry feature gap plan, and performance-data-fix.
+- Parent `07-04-07-04-phase2-phase3-financial-features-completion` now reflects `13/14 done` before archiving this reconciliation child.
+- Remaining professional-terminal gaps are documented as follow-up work rather than hidden active MVP blockers.
+- Top-level active tasks that are intentionally still open remain separate from this Phase 2/3 child tree: frontend UI polish and professional dashboard enhancement.
 
 ## Notes
 
