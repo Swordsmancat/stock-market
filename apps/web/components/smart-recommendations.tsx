@@ -61,7 +61,7 @@ export function SmartRecommendations({
       <Card className={className}>
         <CardHeader>
           <CardTitle className="text-base">📈 今日推荐</CardTitle>
-          <CardDescription className="text-xs">基于技术分析的智能推荐</CardDescription>
+          <CardDescription className="text-xs">基于技术分析的实时推荐，未附历史评估</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -77,7 +77,7 @@ export function SmartRecommendations({
       <Card className={className}>
         <CardHeader>
           <CardTitle className="text-base">📈 今日推荐</CardTitle>
-          <CardDescription className="text-xs">基于技术分析的智能推荐</CardDescription>
+          <CardDescription className="text-xs">基于技术分析的实时推荐，未附历史评估</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-sm text-muted-foreground">
@@ -93,10 +93,13 @@ export function SmartRecommendations({
       <CardHeader>
         <CardTitle className="text-base">📈 今日推荐</CardTitle>
         <CardDescription className="text-xs">
-          基于技术分析的智能推荐 · {recommendations.length} 条
+          基于技术分析的实时推荐 · {recommendations.length} 条
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
+        <div className="mx-4 mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          当前卡片展示的是未回测的实时技术信号；历史评估需结合服务层 signal evaluation 的样本量、窗口收益和诊断查看，不能视为投资建议。
+        </div>
         <ScrollArea className="h-[400px]">
           <div className="space-y-3 p-4">
             {recommendations.map((rec, index) => {

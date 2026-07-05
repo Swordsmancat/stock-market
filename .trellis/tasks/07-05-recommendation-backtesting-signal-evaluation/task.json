@@ -3,7 +3,7 @@
   "name": "recommendation-backtesting-signal-evaluation",
   "title": "Recommendation Backtesting and Signal Evaluation",
   "description": "Add professional evaluation for recommendation signals: backtests, hit rate, drawdown, benchmark comparison, and explainable signal history.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
