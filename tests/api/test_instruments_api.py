@@ -22,11 +22,21 @@ def make_session():
 
 
 def test_list_instruments_returns_seed_scope():
-    client = TestClient(app)
-    response = client.get("/instruments")
+    def override_session():
+        yield None
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.get("/instruments")
+    finally:
+        app.dependency_overrides.clear()
+
     assert response.status_code == 200
     payload = response.json()
-    assert payload["items"][0]["symbol"] in {"600519", "0700", "AAPL"}
+    assert payload["source"] == "seed"
+    symbols = {item["symbol"] for item in payload["items"]}
+    assert symbols == {"600519", "0700", "AAPL"}
 
 
 def test_list_instruments_reads_database_and_filters_results():

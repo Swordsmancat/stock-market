@@ -183,7 +183,7 @@ def get_demo_portfolio_payload(session: Session | None = None) -> dict[str, obje
 
 
 def _legacy_demo_portfolio_payload() -> dict[str, object]:
-    latest_bar = get_latest_bar_payload("AAPL", session=None)
+    latest_bar = get_latest_bar_payload("AAPL", session=None, provider_name="mock")
     latest_price = float(latest_bar["item"]["close"])
     quantity = 10.0
     avg_cost = 100.0

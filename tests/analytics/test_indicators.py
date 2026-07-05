@@ -47,9 +47,9 @@ def test_calculate_macd_returns_signal_and_histogram():
     latest = result.iloc[-1]
 
     assert list(result.columns) == ["macd", "signal", "histogram"]
-    assert latest["macd"] == pytest.approx(0.305556, rel=1e-6)
-    assert latest["signal"] == pytest.approx(0.240741, rel=1e-6)
-    assert latest["histogram"] == pytest.approx(0.064815, rel=1e-6)
+    assert latest["macd"] == pytest.approx(0.30555555555555536, rel=1e-6)
+    assert latest["signal"] == pytest.approx(0.24074074074074053, rel=1e-6)
+    assert latest["histogram"] == pytest.approx(0.06481481481481483, rel=1e-6)
 
 
 def test_calculate_kdj_returns_smoothed_k_d_and_j_values():

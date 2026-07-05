@@ -7,10 +7,12 @@ from sqlalchemy.pool import StaticPool
 import packages.domain.models  # noqa: F401
 from packages.services.market_dashboard import get_market_overview_payload
 from packages.services.market_data import MarketDataProviderUnavailableError
+from packages.shared.cache import clear_market_overview_cache
 from packages.shared.database import Base
 
 
 def make_session():
+    clear_market_overview_cache("mock")
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
