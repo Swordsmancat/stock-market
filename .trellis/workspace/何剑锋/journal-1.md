@@ -105,3 +105,36 @@ Implemented and documented provider-backed hot-sector breadth, contribution, tax
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Local chart workspace
+
+**Date**: 2026-07-05
+**Task**: Local chart workspace
+**Branch**: `master`
+
+### Summary
+
+Implemented professional chart workspace first slice with local save/restore/reset, research annotations, tests, docs, and frontend state-management spec.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3fa59ea` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
