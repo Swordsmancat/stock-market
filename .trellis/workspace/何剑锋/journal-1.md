@@ -71,3 +71,37 @@ Audited Phase 2 and Phase 3 feature completion, added user and maintainer manual
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Hot sector breadth metadata
+
+**Date**: 2026-07-05
+**Task**: Hot sector breadth metadata
+**Branch**: `master`
+
+### Summary
+
+Implemented and documented provider-backed hot-sector breadth, contribution, taxonomy, and rotation-history availability metadata; captured the /sectors/hot contract in backend specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bccdceb` | (see git log) |
+| `780c53f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
