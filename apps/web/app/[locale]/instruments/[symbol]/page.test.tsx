@@ -14,9 +14,19 @@ vi.mock("@/components/advanced-candlestick-chart", () => ({
 }));
 
 vi.mock("@/components/intraday-price-chart", () => ({
-  IntradayPriceChart: ({ status, reason }: { status?: string; reason?: string | null }) => (
+  IntradayPriceChart: ({
+    status,
+    reason,
+    points,
+    previousClose,
+  }: {
+    status?: string;
+    reason?: string | null;
+    points?: Array<{ timestamp?: string; price?: number; close?: number }>;
+    previousClose?: number | null;
+  }) => (
     <div data-testid="intraday-price-chart">
-      Intraday chart status {status} {reason}
+      Intraday chart status {status} {reason} points {points?.length ?? 0} previous {previousClose ?? "none"}
     </div>
   ),
 }));
@@ -48,6 +58,8 @@ afterEach(() => {
 function mockInstrumentDetailResponse(
   items: Array<{ timestamp: string; open: number; high: number; low: number; close: number; volume: number }>,
   latestClose?: number,
+  intradayPayload: Record<string, unknown> | null = null,
+  marketDepthPayload: Record<string, unknown> | null = null,
 ) {
   fetchInstrumentDetailPayloadMock.mockResolvedValue({
     status: "loaded",
@@ -58,7 +70,7 @@ function mockInstrumentDetailResponse(
         ? { status: "unavailable", item: null }
         : { status: "ok", item: { timestamp: "2026-01-20", close: latestClose } },
       bars: { items },
-      intraday: {
+      intraday: intradayPayload ?? {
         symbol: "AAPL",
         timeframe: "1m",
         date: "2026-01-20",
@@ -71,7 +83,7 @@ function mockInstrumentDetailResponse(
           reason: "The selected provider does not support verified minute bars in this backend.",
         },
       },
-      market_depth: {
+      market_depth: marketDepthPayload ?? {
         symbol: "AAPL",
         source: "none",
         provider: "yfinance",
@@ -171,6 +183,138 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getByText("当前数据源暂不支持深度数据。")).toBeInTheDocument();
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");
   expect(screen.getByTestId("advanced-candlestick-chart")).toHaveTextContent("Advanced chart for AAPL");
+});
+
+it("passes real intraday minute data to the intraday chart", async () => {
+  mockInstrumentDetailResponse(
+    [
+      {
+        timestamp: "2026-01-20",
+        open: 213,
+        high: 215,
+        low: 212,
+        close: 214.2,
+        volume: 1200,
+      },
+    ],
+    214.2,
+    {
+      symbol: "AAPL",
+      timeframe: "1m",
+      date: "2026-01-20",
+      source: "provider",
+      provider: "yfinance",
+      requested_provider: "yfinance",
+      effective_provider: "yfinance",
+      status: "ok",
+      previous_close: 213.55,
+      items: [
+        {
+          timestamp: "2026-01-20T13:30:00+00:00",
+          open: 214.1,
+          high: 214.3,
+          low: 213.9,
+          close: 214.2,
+          price: 214.2,
+          average_price: null,
+          volume: 12000,
+          amount: null,
+        },
+      ],
+      availability: {
+        status: "ok",
+        reason: null,
+        is_realtime: false,
+        is_delayed: true,
+        delay_minutes: null,
+      },
+    },
+  );
+
+  await renderChineseInstrumentDetailPage();
+
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status ok");
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("points 1");
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("previous 213.55");
+});
+
+it("renders real market depth rows when the detail payload includes provider-backed depth", async () => {
+  mockInstrumentDetailResponse(
+    [
+      {
+        timestamp: "2026-01-20",
+        open: 100,
+        high: 103,
+        low: 99,
+        close: 101.25,
+        volume: 1000,
+      },
+    ],
+    101.25,
+    null,
+    {
+      symbol: "AAPL",
+      source: "provider",
+      provider: "fake_depth",
+      requested_provider: "akshare",
+      effective_provider: "akshare",
+      status: "ok",
+      as_of: "2026-07-03T13:30:00+00:00",
+      is_realtime: false,
+      is_delayed: true,
+      delay_minutes: 15,
+      order_book: {
+        status: "ok",
+        reason: null,
+        as_of: "2026-07-03T13:30:00+00:00",
+        depth_levels: 1,
+        bids: [{ price: 101.2, volume: 1000, amount: 101200, order_count: 5 }],
+        asks: [{ price: 101.3, volume: 800, amount: 81040, order_count: 4 }],
+      },
+      recent_trades: {
+        status: "ok",
+        reason: null,
+        as_of: "2026-07-03T13:30:00+00:00",
+        items: [{ timestamp: "2026-07-03T13:31:00+00:00", side: "buy", price: 101.25, volume: 15000, amount: 1518750 }],
+      },
+      large_orders: {
+        status: "ok",
+        reason: null,
+        threshold_amount: 1000000,
+        threshold_volume: null,
+        currency: "CNY",
+        as_of: "2026-07-03T13:30:00+00:00",
+        items: [{ timestamp: "2026-07-03T13:31:00+00:00", side: "buy", price: 101.25, volume: 15000, amount: 1518750 }],
+      },
+      fund_flow: {
+        status: "ok",
+        reason: null,
+        as_of: "2026-07-03T13:30:00+00:00",
+        currency: "CNY",
+        net_inflow: 1234567,
+        main_net_inflow: 765432,
+        retail_net_inflow: -12345,
+        source_definition: "provider-defined verified fund-flow",
+      },
+      availability: {
+        status: "ok",
+        reason: "Depth snapshot from fixture provider.",
+        capabilities: {
+          order_book: true,
+          recent_trades: true,
+          large_orders: true,
+          fund_flow: true,
+        },
+      },
+    },
+  );
+
+  await renderChineseInstrumentDetailPage();
+
+  expect(screen.getByText("101.2")).toBeInTheDocument();
+  expect(screen.getByText("101.3")).toBeInTheDocument();
+  expect(screen.getByText("1,234,567")).toBeInTheDocument();
+  expect(screen.getByText("provider-defined verified fund-flow")).toBeInTheDocument();
 });
 
 it("renders latest price even when the detail endpoint has no bars", async () => {

@@ -157,6 +157,176 @@ it("fetches instrument latest and bars using the backend date-range contract", a
   });
 });
 
+it("preserves real intraday minute payloads from the backend", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
+
+  const intradayPayload = {
+    symbol: "AAPL",
+    timeframe: "1m",
+    date: "2026-07-03",
+    source: "provider",
+    provider: "yfinance",
+    requested_provider: "yfinance",
+    effective_provider: "yfinance",
+    status: "ok",
+    previous_close: 213.55,
+    items: [
+      {
+        timestamp: "2026-07-03T13:30:00+00:00",
+        open: 214.1,
+        high: 214.3,
+        low: 213.9,
+        close: 214.2,
+        price: 214.2,
+        average_price: null,
+        volume: 12000,
+        amount: null,
+      },
+    ],
+    availability: {
+      status: "ok",
+      reason: null,
+      is_realtime: false,
+      is_delayed: true,
+      delay_minutes: null,
+    },
+  };
+
+  backendFetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 214.2 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 214.2 }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(intradayPayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(buildMarketDepthPayload()), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+  const response = await GET(new Request("http://localhost/api/instruments/AAPL?provider=yfinance"), {
+    params: Promise.resolve({ symbol: "AAPL" }),
+  });
+
+  expect(response.status).toBe(200);
+  await expect(response.json()).resolves.toMatchObject({
+    symbol: "AAPL",
+    intraday: intradayPayload,
+  });
+});
+
+it("preserves real market-depth payloads from the backend", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
+
+  const marketDepthPayload = {
+    symbol: "AAPL",
+    source: "provider",
+    provider: "fake_depth",
+    requested_provider: "akshare",
+    effective_provider: "akshare",
+    status: "ok",
+    as_of: "2026-07-03T13:30:00+00:00",
+    is_realtime: false,
+    is_delayed: true,
+    delay_minutes: 15,
+    order_book: {
+      status: "ok",
+      reason: null,
+      as_of: "2026-07-03T13:30:00+00:00",
+      depth_levels: 1,
+      bids: [{ price: 101.2, volume: 1000, amount: 101200, order_count: 5 }],
+      asks: [{ price: 101.3, volume: 800, amount: 81040, order_count: 4 }],
+    },
+    recent_trades: {
+      status: "ok",
+      reason: null,
+      as_of: "2026-07-03T13:30:00+00:00",
+      items: [{ timestamp: "2026-07-03T13:31:00+00:00", side: "buy", price: 101.25, volume: 15000, amount: 1518750 }],
+    },
+    large_orders: {
+      status: "ok",
+      reason: null,
+      threshold_amount: 1000000,
+      threshold_volume: null,
+      currency: "CNY",
+      as_of: "2026-07-03T13:30:00+00:00",
+      items: [{ timestamp: "2026-07-03T13:31:00+00:00", side: "buy", price: 101.25, volume: 15000, amount: 1518750 }],
+    },
+    fund_flow: {
+      status: "ok",
+      reason: null,
+      as_of: "2026-07-03T13:30:00+00:00",
+      currency: "CNY",
+      net_inflow: 1234567,
+      main_net_inflow: 765432,
+      retail_net_inflow: -12345,
+      source_definition: "provider-defined verified fund-flow",
+    },
+    availability: {
+      status: "ok",
+      reason: "Depth snapshot from fixture provider.",
+      capabilities: {
+        order_book: true,
+        recent_trades: true,
+        large_orders: true,
+        fund_flow: true,
+      },
+    },
+  };
+
+  backendFetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 101.25 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 101.25 }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "degraded", items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(marketDepthPayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+  const response = await GET(new Request("http://localhost/api/instruments/AAPL?provider=akshare"), {
+    params: Promise.resolve({ symbol: "AAPL" }),
+  });
+
+  expect(response.status).toBe(200);
+  await expect(response.json()).resolves.toMatchObject({
+    symbol: "AAPL",
+    market_depth: marketDepthPayload,
+  });
+});
+
 it("maps dashboard index codes to provider symbols before requesting market data", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
