@@ -338,3 +338,34 @@ Committed instrument detail route/page tests that preserve real intraday and mar
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Recommendation evaluation task archive cleanup
+
+**Date**: 2026-07-05
+**Task**: Recommendation evaluation task archive cleanup
+**Branch**: `master`
+
+### Summary
+
+Verified the recommendation signal evaluation slice remains green, restored missing Trellis task metadata, and archived the completed recommendation backtesting/signal evaluation task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
