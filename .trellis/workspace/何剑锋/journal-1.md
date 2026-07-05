@@ -138,3 +138,36 @@ Implemented professional chart workspace first slice with local save/restore/res
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Persistent Intraday Cache
+
+**Date**: 2026-07-05
+**Task**: Persistent Intraday Cache
+**Branch**: `master`
+
+### Summary
+
+Implemented conservative persistent cache for verified historical intraday minute bars, added session-policy no-fabrication guards, updated docs/specs, and validated with focused and full Python test suites.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `40844d8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
