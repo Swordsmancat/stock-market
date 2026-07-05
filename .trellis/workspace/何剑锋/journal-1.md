@@ -237,3 +237,37 @@ Closed the parent feature-completion benchmark after all four child improvement 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Market depth provider boundary completion
+
+**Date**: 2026-07-05
+**Task**: Market depth provider boundary completion
+**Branch**: `master`
+
+### Summary
+
+Completed the market-depth provider-boundary MVP: explicit AkShare candidate depth parsing, section-level degraded rendering, no-fabrication contract, validation reruns, live-smoke limitation documentation, and Trellis backend spec capture.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68268a7` | (see git log) |
+| `bf69f7f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
