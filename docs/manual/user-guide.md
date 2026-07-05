@@ -10,7 +10,7 @@
 |---|---|---:|---|
 | Phase 2 | K 线图交互增强（缩放 + 均线） | 已完成 | 个股详情页支持交互式 K 线、时间范围切换和 MA 等指标显示。 |
 | Phase 2 | 智能推荐（突破 / 超跌） | 已完成 | 首页/相关模块可展示基于行情和技术规则的研究线索。 |
-| Phase 2 | 热点板块轮动（资金流向） | Provider-backed MVP | 首页热点板块已使用统一 provider contract，可展示 live/delayed/mock/unavailable 状态、资金流口径、数据源、时间和成分股；默认静态样例仍明确标记为 mock/degraded。 |
+| Phase 2 | 热点板块轮动（资金流向） | Provider-backed MVP | 首页热点板块已使用统一 provider contract，可展示 live/delayed/mock/unavailable 状态、资金流口径、数据源、时间、成分股、广度、贡献和分类版本；默认静态样例仍明确标记为 mock/degraded。 |
 | Phase 2 | 对比分析（相关性） | 已完成 | 支持多标的对比与相关性分析。 |
 | Phase 3 | 分时图 | Provider-backed MVP | 个股详情页分时图已支持 yfinance `1m` 真实分钟线（可用时），并保留 `ok` / `no_data` / `degraded` 状态；不支持分钟线的 provider 会明确降级。 |
 | Phase 3 | 深度数据（五档 / 大单） | Provider-boundary MVP | 个股详情页深度卡片支持真实 provider-backed 行和局部可用状态；内置生产 provider 尚未验证 Level-2 时仍明确显示不可用。 |
@@ -33,6 +33,13 @@
 
 热点板块功能现在采用 provider-backed MVP contract：后端 `GET /sectors/hot` 会返回统一的板块分类、资金流口径、数据源、时间戳、实时/延迟状态和成分股信息；前端会把这些元数据直接展示给用户。
 
+新增的专业化元数据包括：
+
+- `breadth` / 广度：展示上涨、下跌、平盘成分股数量和 A/D 比例。若 provider 没有可验证成分股表现，页面会显示不可用，而不是把缺失数据当作 0。
+- `constituent_contribution` / 成分股贡献：在 provider 或派生输入可用时展示正贡献和负贡献成分股。当前没有完整权重/资金流时，会以已验证成分股变化或 provider 明确字段为基础，不把 mock 数据伪装成真实贡献。
+- `taxonomy` / 分类版本：展示当前规范化分类版本，便于理解不同 provider 的板块分类差异。
+- `history` / 轮动历史：只有存在明确快照元数据时才展示；当前没有生产级持久化快照时会显示“暂无可验证快照”。
+
 页面上的数据模式含义如下：
 
 - `live` / 实时数据：provider 明确返回经过验证的实时板块表现或资金流。
@@ -47,6 +54,7 @@
 
 - 默认静态热点板块仅用于 UI 和 contract 展示，不代表真实市场排名。
 - 如果页面显示 mock/demo/degraded/unavailable，应把它理解为数据能力限制，而不是市场信号。
+- 广度、贡献和轮动历史是附加解释层；不可用代表 provider/存储能力不足，不代表真实市场为 0 或无变化。
 - 当真实 provider（例如 AkShare/Tushare/Eastmoney 类接口）可用时，页面会显示 provider、as-of、延迟和 verified 相关信息，便于判断数据可靠性。
 
 ## 个股详情页

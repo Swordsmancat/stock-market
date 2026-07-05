@@ -33,31 +33,31 @@
 
 ## Backend Checklist
 
-- [ ] Identify existing payload classes and status/data-mode semantics.
-- [ ] Add additive optional fields without breaking existing callers.
-- [ ] Represent provider capabilities separately from actual data values.
-- [ ] Ensure unavailable breadth/history/contribution data is not encoded as zero.
-- [ ] Ensure provider exceptions produce safe diagnostics with no secret leakage.
-- [ ] Keep mock/static fixture paths visibly degraded and mock-labeled.
-- [ ] Add focused service/API tests for supported, partial, unavailable, and mock states.
+- [x] Identify existing payload classes and status/data-mode semantics.
+- [x] Add additive optional fields without breaking existing callers.
+- [x] Represent provider capabilities separately from actual data values.
+- [x] Ensure unavailable breadth/history/contribution data is not encoded as zero.
+- [x] Ensure provider exceptions produce safe diagnostics with no secret leakage.
+- [x] Keep mock/static fixture paths visibly degraded and mock-labeled.
+- [x] Add focused service/API tests for supported, partial, unavailable, and mock states.
 
 ## Frontend Checklist
 
-- [ ] Update local payload types for optional fields.
-- [ ] Render breadth metrics only when present.
-- [ ] Render contribution leaders and laggards only when present.
-- [ ] Render history/rotation metadata only when backed by explicit snapshot fields.
-- [ ] Preserve existing empty, degraded, unavailable, and mock notices.
-- [ ] Add focused component/proxy/page tests for new states.
-- [ ] Keep all user-visible static strings in locale files if the component currently follows i18n message patterns.
+- [x] Update local payload types for optional fields.
+- [x] Render breadth metrics only when present.
+- [x] Render contribution leaders and laggards only when present.
+- [x] Render history/rotation metadata only when backed by explicit snapshot fields.
+- [x] Preserve existing empty, degraded, unavailable, and mock notices.
+- [x] Add focused component/proxy/page tests for new states.
+- [x] Keep all user-visible static strings in locale files if the component currently follows i18n message patterns.
 
 ## Documentation Checklist
 
-- [ ] Explain provider verification states.
-- [ ] Explain `live`, `delayed`, `demo`, `mock`, and `none` data modes.
-- [ ] Explain breadth and contribution metrics, including unavailable-state semantics.
-- [ ] Explain that static fixtures and degraded mock data are not market signals.
-- [ ] Add validation commands and provider-readiness guidance for maintainers.
+- [x] Explain provider verification states.
+- [x] Explain `live`, `delayed`, `demo`, `mock`, and `none` data modes.
+- [x] Explain breadth and contribution metrics, including unavailable-state semantics.
+- [x] Explain that static fixtures and degraded mock data are not market signals.
+- [x] Add validation commands and provider-readiness guidance for maintainers.
 
 ## Validation Commands
 
@@ -105,3 +105,17 @@ python scripts/provider_readiness.py --provider akshare --market CN --symbol 600
 - Paid provider entitlement workflow.
 - Large persistent time-series storage or scheduler changes for sector snapshots.
 - A full Eastmoney/Tonghuashun parity sector terminal.
+
+## Completed Implementation Notes
+
+- Backend hot-sector service now returns additive item-level `breadth`, `constituent_contribution`, `taxonomy`, and `history` sections.
+- Top-level payloads now include provider capability metadata for ranking, fund flow, constituents, breadth, contribution, rotation history, and taxonomy.
+- Unknown providers and provider exceptions still return typed `unavailable` payloads and do not leak secret-like exception content.
+- Static fixture fallback remains `degraded + mock`, and breadth/contribution derived from that path are marked as mock rather than production signal.
+- Frontend `HotSectors` renders breadth, positive/negative contributors, taxonomy version, and explicit unavailable rotation-history copy.
+- User/developer docs and README now describe the new metadata and current production limitations.
+
+## Completed Validation
+
+- `python -m pytest tests/services/test_hot_sectors_service.py tests/api/test_sectors_api.py -q` -> `10 passed`
+- `npm run test:web -- apps/web/app/api/hot-sectors/route.test.ts apps/web/components/hot-sectors.test.tsx` -> `10 passed`

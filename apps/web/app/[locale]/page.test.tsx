@@ -302,19 +302,48 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
             status: "degraded",
             data_mode: "mock",
             source: "static_sector_fixture",
+            provider: "static_fixture",
+            effective_provider: "static_fixture",
+            requested_provider: "static_fixture",
+            as_of: null,
+            is_realtime: false,
+            is_delayed: false,
+            delay_minutes: null,
+            flow_definition: {
+              metric: "static_fixture_demo_value",
+              window: "unknown",
+              currency: "N/A",
+              unit: "hundred_million",
+              methodology: "Static fixture values for UI demonstration only.",
+            },
             message: "Static mock sector data; not live market data.",
             count: 1,
             items: [
               {
+                sector_id: "ev_new_energy",
                 name: "新能源汽车",
                 name_en: "EV & New Energy",
+                market: "mixed_global",
+                rank: 1,
                 change_percent: 5.2,
                 fund_flow: "流入",
                 fund_flow_amount: 12.5,
+                flow_direction: "inflow",
+                net_flow_amount: 1_250_000_000,
+                net_flow_currency: "USD",
+                net_flow_unit: "yuan",
+                flow_definition: "Static fixture values for UI demonstration only.",
                 leader_symbol: "TSLA",
                 leader_name: "特斯拉",
                 leader_change_percent: 6.8,
+                leader: { symbol: "TSLA", name: "特斯拉", change_percent: 6.8 },
                 symbols_count: 4,
+                top_constituents: [
+                  { symbol: "TSLA", name: "特斯拉", change_percent: 6.8 },
+                  { symbol: "NIO", name: "蔚来", change_percent: 4.2 },
+                ],
+                provider: "static_fixture",
+                is_verified: false,
               },
             ],
           }),
@@ -397,7 +426,11 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByRole("link", { name: /AAPL 突破20日均线/ })).toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("AAPL 突破20日均线")).toBeInTheDocument();
   expect(screen.getByText("Mock data")).toBeInTheDocument();
+  expect(screen.getByText(/This sector data is not complete verified realtime fund-flow data/)).toBeInTheDocument();
+  expect(screen.getByText(/Provider: static_fixture/)).toBeInTheDocument();
+  expect(screen.getAllByText(/Definition: Static fixture values for UI demonstration only/).length).toBeGreaterThan(0);
   expect(screen.getByText("新能源汽车")).toBeInTheDocument();
+  expect(screen.getByText(/Constituents: 特斯拉 \/ 蔚来/)).toBeInTheDocument();
   expect(screen.getByText("对比分析")).toBeInTheDocument();
   expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
   expect(screen.getByText("皮尔逊相关系数")).toBeInTheDocument();

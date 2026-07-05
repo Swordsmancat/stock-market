@@ -161,19 +161,28 @@ python scripts/task_run_health.py
 - `as_of`, `generated_at`, `is_realtime`, `is_delayed`, `delay_minutes`。
 - `taxonomy_version`: 当前为 `sector-taxonomy-v1`。
 - `flow_definition`: `{ metric, window, currency, unit, methodology }`，用于解释资金流口径。
-- `availability`: performance/fund_flow/constituents 的可用性说明。
+- `availability`: performance/fund_flow/constituents/breadth/constituent_contribution/rotation_history/taxonomy 的可用性说明。
+- `provider_capabilities`: provider section-level capability matrix，说明 sector ranking、fund flow、constituents、breadth、contribution、rotation history 和 taxonomy 当前是 verified/delayed/mock/unavailable 中的哪一种状态。
 - `items`: normalized sector rows。
 
 单个 sector item 同时保留 legacy dashboard 字段和 normalized 字段：
 
 - Legacy: `name`, `name_en`, `change_percent`, `fund_flow`, `fund_flow_amount`, `leader_symbol`, `leader_name`, `leader_change_percent`, `symbols_count`。
-- Normalized: `sector_id`, `market`, `rank`, `flow_direction`, `net_flow_amount`, `net_flow_currency`, `net_flow_unit`, `flow_window`, `flow_metric`, `leader`, `top_constituents`, `as_of`, `provider`, `is_verified`, `availability`。
+- Normalized: `sector_id`, `market`, `rank`, `flow_direction`, `net_flow_amount`, `net_flow_currency`, `net_flow_unit`, `flow_window`, `flow_metric`, `leader`, `top_constituents`, `breadth`, `constituent_contribution`, `taxonomy`, `history`, `as_of`, `provider`, `is_verified`, `availability`。
+
+新增 section 规则：
+
+- `breadth` 只能由 provider 明确返回的成分股表现或已验证成分股列表派生；缺失时返回 `status=unavailable`，不要编码为 0。
+- `constituent_contribution` 可展示正贡献和负贡献成分股，但不能从日线价格或静态 fixture 推断生产级资金贡献。
+- `taxonomy` 必须带 `taxonomy_version` 和 normalized sector id，以防不同 provider 分类混用。
+- `history` 只有存在真实快照存储或明确 provider 历史数据时才可标为 available；当前无快照时保持 `status=unavailable`。
 
 维护规则：
 
 - 不要把 `static_sector_fixture`、demo 或 mock payload 标成 `live` / `is_verified=true`。
 - provider 失败时用 `source=provider_error` + `status=unavailable`，并过滤 secret/token 值。
 - 若新增 provider，应先补 service/API/component/proxy tests，再更新本手册的 capability matrix。
+- 若新增 rotation-history 持久化，应通过显式 schema/migration 和 deterministic tests 实现，不要把不透明 JSON 写进无关表来模拟历史能力。
 
 ### Intraday minute-bar contract
 

@@ -1,7 +1,7 @@
 import { backendFetch } from "@/lib/backend-api";
 
 type HotSectorsStatus = "ok" | "degraded" | "unavailable";
-type HotSectorsDataMode = "live" | "demo" | "mock" | "none";
+type HotSectorsDataMode = "live" | "delayed" | "demo" | "mock" | "none";
 
 function unavailableHotSectorsPayload(message: string) {
   return {
@@ -16,10 +16,15 @@ function unavailableHotSectorsPayload(message: string) {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const limit = searchParams.get("limit") || "5";
+  const limit = normalizeHotSectorsLimit(searchParams.get("limit"));
+  const backendSearchParams = new URLSearchParams({ limit: String(limit) });
+  const provider = searchParams.get("provider")?.trim();
+  if (provider) {
+    backendSearchParams.set("provider", provider);
+  }
 
   try {
-    const response = await backendFetch(`/sectors/hot?limit=${limit}`, {
+    const response = await backendFetch(`/sectors/hot?${backendSearchParams.toString()}`, {
       cache: "no-store"
     });
 
@@ -33,4 +38,12 @@ export async function GET(request: Request) {
     console.error("Hot sectors API error:", error);
     return Response.json(unavailableHotSectorsPayload("Internal server error"), { status: 502 });
   }
+}
+
+function normalizeHotSectorsLimit(rawLimit: string | null): number {
+  const parsedLimit = Number.parseInt(rawLimit ?? "5", 10);
+  if (Number.isNaN(parsedLimit)) {
+    return 5;
+  }
+  return Math.min(Math.max(parsedLimit, 1), 10);
 }

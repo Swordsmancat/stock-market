@@ -145,24 +145,63 @@ type SmartRecommendationsPayload = {
 };
 
 type HotSectorItem = {
+  sector_id?: string;
   name: string;
   name_en: string;
-  change_percent: number;
-  fund_flow: string;
-  fund_flow_amount: number;
-  leader_symbol: string;
-  leader_name: string;
-  leader_change_percent: number;
+  market?: string | null;
+  rank?: number | null;
+  change_percent?: number | null;
+  fund_flow?: string | null;
+  fund_flow_amount?: number | null;
+  flow_direction?: "inflow" | "outflow" | "flat" | "unknown" | string | null;
+  net_flow_amount?: number | null;
+  net_flow_currency?: string | null;
+  net_flow_unit?: string | null;
+  flow_definition?: string | null;
+  leader_symbol?: string | null;
+  leader_name?: string | null;
+  leader_change_percent?: number | null;
+  leader?: {
+    symbol: string;
+    name: string;
+    change_percent?: number | null;
+    weight?: number | null;
+    net_flow_amount?: number | null;
+  } | null;
   symbols_count: number;
+  top_constituents?: Array<{
+    symbol: string;
+    name: string;
+    change_percent?: number | null;
+    weight?: number | null;
+    net_flow_amount?: number | null;
+  }>;
+  as_of?: string | null;
+  provider?: string | null;
+  is_verified?: boolean;
 };
 
 type HotSectorsStatus = "ok" | "degraded" | "unavailable";
-type HotSectorsDataMode = "live" | "demo" | "mock" | "none";
+type HotSectorsDataMode = "live" | "delayed" | "demo" | "mock" | "none";
 
 type HotSectorsPayload = {
   status: HotSectorsStatus;
   data_mode: HotSectorsDataMode;
   source?: string;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  as_of?: string | null;
+  is_realtime?: boolean;
+  is_delayed?: boolean;
+  delay_minutes?: number | null;
+  flow_definition?: {
+    metric?: string | null;
+    window?: string | null;
+    currency?: string | null;
+    unit?: string | null;
+    methodology?: string | null;
+  } | null;
   message?: string;
   count?: number;
   items: HotSectorItem[];
@@ -932,13 +971,18 @@ export default async function HomePage({
         <div className="grid gap-4 xl:grid-cols-2">
           <SmartRecommendations
             recommendations={smartRecommendations}
-            getInstrumentHref={(symbol) => `/instruments/${encodeURIComponent(symbol)}`}
           />
           <HotSectors
             sectors={hotSectors}
             status={hotSectorsPayload.status}
             dataMode={hotSectorsPayload.data_mode}
             message={hotSectorsPayload.message}
+            provider={hotSectorsPayload.effective_provider ?? hotSectorsPayload.provider ?? null}
+            asOf={hotSectorsPayload.as_of ?? null}
+            isRealtime={hotSectorsPayload.is_realtime ?? false}
+            isDelayed={hotSectorsPayload.is_delayed ?? false}
+            delayMinutes={hotSectorsPayload.delay_minutes ?? null}
+            flowDefinition={hotSectorsPayload.flow_definition ?? null}
           />
         </div>
 
