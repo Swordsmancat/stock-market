@@ -305,3 +305,36 @@ Completed and archived the AI research-citation MVP: unified evidence/citation l
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Instrument detail payload preservation and archive cleanup
+
+**Date**: 2026-07-05
+**Task**: Instrument detail payload preservation and archive cleanup
+**Branch**: `master`
+
+### Summary
+
+Committed instrument detail route/page tests that preserve real intraday and market-depth payloads, then recorded the intraday and market-data cache/session governance task archives.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c8f16af` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
