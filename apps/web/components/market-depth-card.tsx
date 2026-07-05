@@ -167,6 +167,20 @@ function renderLargeOrderRows({
   ));
 }
 
+function SectionStatusMessage({
+  status,
+  reason,
+}: {
+  status?: MarketDepthStatus;
+  reason?: string | null;
+}) {
+  if (!reason || status === "ok") {
+    return null;
+  }
+
+  return <p className="text-sm text-muted-foreground">{reason}</p>;
+}
+
 export function MarketDepthCard({ marketDepth, className }: MarketDepthCardProps) {
   const locale = useLocale();
   const t = useTranslations("InstrumentDetail");
@@ -234,6 +248,7 @@ export function MarketDepthCard({ marketDepth, className }: MarketDepthCardProps
               {t("marketDepthLevels", { count: depthLevels })}
             </span>
           </div>
+          <SectionStatusMessage status={marketDepth?.order_book.status} reason={marketDepth?.order_book.reason ?? null} />
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-green-600">{t("marketDepthBids")}</h4>
@@ -282,6 +297,7 @@ export function MarketDepthCard({ marketDepth, className }: MarketDepthCardProps
 
         <section className="space-y-3">
           <h3 className="text-base font-semibold">{t("marketDepthRecentTradesTitle")}</h3>
+          <SectionStatusMessage status={marketDepth?.recent_trades.status} reason={marketDepth?.recent_trades.reason ?? null} />
           <Table>
             <TableHeader>
               <TableRow>
@@ -312,6 +328,7 @@ export function MarketDepthCard({ marketDepth, className }: MarketDepthCardProps
               })}
             </span>
           </div>
+          <SectionStatusMessage status={marketDepth?.large_orders.status} reason={marketDepth?.large_orders.reason ?? null} />
           <Table>
             <TableHeader>
               <TableRow>
@@ -335,6 +352,7 @@ export function MarketDepthCard({ marketDepth, className }: MarketDepthCardProps
 
         <section className="space-y-3">
           <h3 className="text-base font-semibold">{t("marketDepthFundFlowTitle")}</h3>
+          <SectionStatusMessage status={marketDepth?.fund_flow.status} reason={marketDepth?.fund_flow.reason ?? null} />
           <div className="grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-md border p-3">
               <div className="text-muted-foreground">{t("marketDepthNetInflow")}</div>

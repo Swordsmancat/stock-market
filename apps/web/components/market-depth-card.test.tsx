@@ -157,3 +157,71 @@ it("renders order book, recent trades, large orders, and fund-flow values when p
   const capabilities = screen.getByLabelText("深度数据能力");
   expect(within(capabilities).getByText("五档盘口: 可用")).toBeInTheDocument();
 });
+
+it("renders partial market depth sections with section-level degraded reasons", () => {
+  renderMarketDepthCard(
+    buildMarketDepthPayload({
+      source: "provider",
+      provider: "akshare",
+      requested_provider: "akshare",
+      effective_provider: "akshare",
+      status: "ok",
+      as_of: "2026-07-03T09:31:00Z",
+      is_delayed: true,
+      delay_minutes: 15,
+      order_book: {
+        status: "ok",
+        reason: null,
+        as_of: "2026-07-03T09:31:00Z",
+        depth_levels: 1,
+        bids: [{ price: 101.23, volume: 1200, amount: 121476, order_count: 8 }],
+        asks: [],
+      },
+      recent_trades: {
+        status: "degraded",
+        reason: "逐笔成交接口暂不可用。",
+        as_of: "2026-07-03T09:31:00Z",
+        items: [],
+      },
+      large_orders: {
+        status: "degraded",
+        reason: "大单检测需要已验证逐笔成交。",
+        threshold_amount: 1000000,
+        threshold_volume: null,
+        currency: "CNY",
+        as_of: "2026-07-03T09:31:00Z",
+        items: [],
+      },
+      fund_flow: {
+        status: "degraded",
+        reason: "资金流接口暂不可用。",
+        as_of: "2026-07-03T09:31:00Z",
+        currency: null,
+        net_inflow: null,
+        main_net_inflow: null,
+        retail_net_inflow: null,
+        source_definition: null,
+      },
+      availability: {
+        status: "ok",
+        reason: "部分深度数据可用。",
+        capabilities: {
+          order_book: true,
+          recent_trades: false,
+          large_orders: false,
+          fund_flow: false,
+        },
+      },
+    }),
+  );
+
+  expect(screen.getByText("可用")).toBeInTheDocument();
+  expect(screen.getByText("101.23")).toBeInTheDocument();
+  expect(screen.getByText("逐笔成交接口暂不可用。")).toBeInTheDocument();
+  expect(screen.getByText("大单检测需要已验证逐笔成交。")).toBeInTheDocument();
+  expect(screen.getByText("资金流接口暂不可用。")).toBeInTheDocument();
+
+  const capabilities = screen.getByLabelText("深度数据能力");
+  expect(within(capabilities).getByText("五档盘口: 可用")).toBeInTheDocument();
+  expect(within(capabilities).getByText("逐笔成交: 不可用")).toBeInTheDocument();
+});

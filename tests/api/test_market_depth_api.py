@@ -1,7 +1,69 @@
+from datetime import datetime, timezone
+from decimal import Decimal
+
 from fastapi.testclient import TestClient
 
 from apps.api.main import app
+from packages.providers.base import ProviderFundFlow
+from packages.providers.base import ProviderMarketDepthSnapshot
+from packages.providers.base import ProviderOrderBookLevel
+from packages.providers.base import ProviderRecentTrade
 from packages.services import market_data as market_data_service
+
+
+def test_get_market_depth_returns_verified_provider_sections(monkeypatch):
+    class FakeDepthProvider:
+        def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
+            return []
+
+        def fetch_bars(self, symbol: str, timeframe: str, start, end) -> list:
+            raise AssertionError("Daily bars must not be used for market depth")
+
+        def fetch_market_depth(self, symbol: str, depth_levels: int) -> ProviderMarketDepthSnapshot:
+            return ProviderMarketDepthSnapshot(
+                provider="fake_depth",
+                source="provider",
+                as_of=datetime(2026, 7, 3, 13, 30, tzinfo=timezone.utc),
+                is_realtime=False,
+                is_delayed=True,
+                delay_minutes=15,
+                bids=[ProviderOrderBookLevel(price=Decimal("101.20"), volume=Decimal("1000"), amount=Decimal("101200"), order_count=5)],
+                asks=[ProviderOrderBookLevel(price=Decimal("101.30"), volume=Decimal("800"), amount=Decimal("81040"), order_count=4)],
+                recent_trades=[
+                    ProviderRecentTrade(
+                        timestamp=datetime(2026, 7, 3, 13, 31, tzinfo=timezone.utc),
+                        price=Decimal("101.25"),
+                        volume=Decimal("15000"),
+                        amount=Decimal("1518750"),
+                        side="buy",
+                    )
+                ],
+                fund_flow=ProviderFundFlow(
+                    currency="CNY",
+                    net_inflow=Decimal("1234567"),
+                    source_definition="provider-defined verified fund-flow",
+                ),
+            )
+
+    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: FakeDepthProvider())
+    client = TestClient(app)
+
+    response = client.get(
+        "/market-data/AAPL/depth",
+        params={"provider": "akshare", "depth_levels": 5, "large_order_threshold_amount": "1000000"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["source"] == "provider"
+    assert payload["provider"] == "fake_depth"
+    assert payload["effective_provider"] == "akshare"
+    assert payload["order_book"]["status"] == "ok"
+    assert payload["recent_trades"]["status"] == "ok"
+    assert payload["large_orders"]["status"] == "ok"
+    assert payload["fund_flow"]["status"] == "ok"
+    assert payload["large_orders"]["items"][0]["threshold_amount"] == 1000000.0
 
 
 def test_get_market_depth_returns_degraded_contract_for_unsupported_provider():
