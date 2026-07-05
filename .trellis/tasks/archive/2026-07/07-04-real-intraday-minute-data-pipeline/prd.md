@@ -17,11 +17,17 @@ Upgrade the existing intraday chart degraded-safe contract into a real minute-ba
 
 ## Acceptance Criteria
 
-- [ ] At least one provider returns normalized real minute-bar payloads through `/market-data/{symbol}/intraday`.
-- [ ] Unsupported providers continue returning explicit degraded payloads and never fabricate intraday data.
-- [ ] `IntradayPriceChart` renders real intraday points and keeps degraded/empty states covered by tests.
-- [ ] Provider capability documentation and developer manual are updated.
-- [ ] Focused backend and frontend tests pass.
+- [x] At least one provider returns normalized real minute-bar payloads through `/market-data/{symbol}/intraday`.
+- [x] Unsupported providers continue returning explicit degraded payloads and never fabricate intraday data.
+- [x] `IntradayPriceChart` renders real intraday points and keeps degraded/empty states covered by tests.
+- [x] Provider capability documentation and developer manual are updated.
+- [x] Focused backend and frontend tests pass.
+
+## Completion Status
+
+The provider-backed MVP is complete: yfinance `1m` minute-bar fetching is routed through an explicit intraday provider method, unsupported providers remain degraded, non-session dates return explanatory `no_data`, previous close is reference-only, and frontend/backend tests cover real-data and degraded paths.
+
+Production breadth remains a follow-up because live yfinance smoke can still fail in the current environment and because full exchange calendars, half days, pre/post-market sessions, streaming, and additional provider support are outside this first slice.
 
 ## Notes
 
