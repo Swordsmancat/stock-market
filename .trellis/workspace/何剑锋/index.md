@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 17
+- **Total Sessions**: 18
 - **Last Active**: 2026-07-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~567 | Active |
+| `journal-1.md` | ~600 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 18 | 2026-07-06 | Source notebook macro evidence workflow | `02e8626` | `master` |
 | 17 | 2026-07-06 | Source Notebook Citation Hardening | `084d795` | `master` |
 | 16 | 2026-07-06 | Reviewed Source Notebook | `3bd09c9` | `master` |
 | 15 | 2026-07-06 | Macro seed import review | `b85d58b` | `master` |

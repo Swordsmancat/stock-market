@@ -565,3 +565,36 @@ Addressed Trellis check findings by validating source-note URL schemes, making d
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: Source notebook macro evidence workflow
+
+**Date**: 2026-07-06
+**Task**: Source notebook macro evidence workflow
+**Branch**: `master`
+
+### Summary
+
+Implemented source-readiness linkage, review completeness, citation metadata, Evidence Center UI, docs, specs, and focused tests for the Source Notebook macro evidence workflow.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `02e8626` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
