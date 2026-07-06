@@ -16,7 +16,7 @@
 - [x] Add frontend tests for source target selection, checklist display, saved linked note rendering, file upload preservation, and localized text.
 - [x] Run focused backend/frontend tests, ruff, TypeScript, and `git diff --check`.
 - [x] Update specs/docs if implementation establishes a reusable contract.
-- [ ] Commit and push after Trellis check passes.
+- [x] Commit and push after Trellis check passes.
 
 ## Validation Commands
 
