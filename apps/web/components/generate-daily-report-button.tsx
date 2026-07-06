@@ -17,6 +17,7 @@ type GenerateDailyReportButtonProps = {
   symbol: string;
   start: string;
   end: string;
+  provider?: string | null;
   variant?: "default" | "outline" | "secondary" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
 };
@@ -25,6 +26,7 @@ export function GenerateDailyReportButton({
   symbol,
   start,
   end,
+  provider = null,
   variant = "outline",
   size = "sm",
 }: GenerateDailyReportButtonProps) {
@@ -71,6 +73,9 @@ export function GenerateDailyReportButton({
 
     try {
       const params = new URLSearchParams({ start, end });
+      if (provider) {
+        params.set("provider", provider);
+      }
       const response = await fetch(
         `/api/reports/${encodeURIComponent(symbol)}/daily/generate?${params.toString()}`,
         { method: "POST" },
@@ -98,6 +103,11 @@ export function GenerateDailyReportButton({
         <FilePlus className={`mr-2 h-4 w-4 ${isLoading ? "animate-pulse" : ""}`} />
         {isLoading ? t("generating") : t("generateReport")}
       </Button>
+      {!provider ? (
+        <span className="text-xs text-amber-700 dark:text-amber-300">
+          未指定 provider，将使用后端默认数据源；若默认是 mock，请以报告源摘要为准。
+        </span>
+      ) : null}
       {message ? <span className="text-xs text-muted-foreground">{message}</span> : null}
       {generatedLinks.reportId || generatedLinks.taskRunId ? (
         <div className="flex flex-wrap gap-2 text-xs">

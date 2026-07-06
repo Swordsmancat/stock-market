@@ -1,7 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { getChangeLevel, getChangeLevelColor, getChangeArrow, isLimitUp, isLimitDown } from "@/lib/market-colors";
+import { useMarketColorsContext } from "@/context/market-colors-context";
+import { getChangeLevel, getChangeArrow, isLimitUp, isLimitDown, type ChangeLevel } from "@/lib/market-colors";
 
 interface PriceChangeBadgeProps {
   percentChange: number | null;
@@ -13,6 +14,24 @@ interface PriceChangeBadgeProps {
   animate?: boolean;
 }
 
+function getContextAwareChangeClass(
+  level: ChangeLevel,
+  percentChange: number | null,
+  getMovementColor: (value: number) => string,
+  getMovementBg: (value: number) => string,
+): string {
+  if (level === "flat" || percentChange === null) {
+    return "text-muted-foreground";
+  }
+
+  const baseValue = percentChange > 0 ? 1 : -1;
+  return cn(
+    getMovementColor(baseValue),
+    getMovementBg(baseValue),
+    (level === "limit-up" || level === "limit-down") && "border-2 border-current",
+  );
+}
+
 export function PriceChangeBadge({
   percentChange,
   absoluteChange,
@@ -22,10 +41,11 @@ export function PriceChangeBadge({
   className,
   animate = false,
 }: PriceChangeBadgeProps) {
+  const { getMovementColor, getMovementBg } = useMarketColorsContext();
   const isUp = isLimitUp(percentChange, marketType);
   const isDown = isLimitDown(percentChange, marketType);
   const level = getChangeLevel(percentChange, isUp, isDown);
-  const colorClass = getChangeLevelColor(level);
+  const colorClass = getContextAwareChangeClass(level, percentChange, getMovementColor, getMovementBg);
   const arrow = showArrow ? getChangeArrow(percentChange) : "";
   
   const formatPercent = (value: number | null): string => {

@@ -68,6 +68,7 @@ it("posts to the encoded report generation proxy and refreshes after success", a
       symbol="BRK/B"
       start="2026-01-01"
       end="2026-01-31"
+      provider="yfinance"
     />,
   );
 
@@ -77,7 +78,7 @@ it("posts to the encoded report generation proxy and refreshes after success", a
 
   expect(screen.getByRole("button", { name: "Generating..." })).toBeDisabled();
   expect(fetchMock).toHaveBeenCalledWith(
-    "/api/reports/BRK%2FB/daily/generate?start=2026-01-01&end=2026-01-31",
+    "/api/reports/BRK%2FB/daily/generate?start=2026-01-01&end=2026-01-31&provider=yfinance",
     { method: "POST" },
   );
 
@@ -93,6 +94,25 @@ it("posts to the encoded report generation proxy and refreshes after success", a
   expect(screen.getByRole("link", { name: "View task run" })).toHaveAttribute("href", "/task-runs/task-123");
   expect(screen.getByRole("button", { name: "Generate report" })).not.toBeDisabled();
   expect(routerRefreshMock).toHaveBeenCalledOnce();
+});
+
+it("warns when report generation has no explicit provider", () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ id: "report-123", status: "stored" }), {
+      status: 202,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+
+  render(
+    <GenerateDailyReportButton
+      symbol="AAPL"
+      start="2026-01-01"
+      end="2026-01-31"
+    />,
+  );
+
+  expect(screen.getByText(/未指定 provider/)).toBeInTheDocument();
 });
 
 it("shows a failure message and does not refresh after failed generation", async () => {

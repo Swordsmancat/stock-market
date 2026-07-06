@@ -9,10 +9,12 @@ import { RefreshIndicator } from "@/components/refresh-indicator";
 import { PriceChangeBadge } from "@/components/price-change-badge";
 import { IndexQuickActions } from "@/components/index-quick-actions";
 import { KeyboardShortcutsHelp } from "@/components/keyboard-shortcuts-help";
+import { DataTrustBadge } from "@/components/data-trust-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MiniPriceChart } from "@/components/mini-price-chart";
+import { useMarketColorsContext } from "@/context/market-colors-context";
+import { createDataTrustSignal } from "@/lib/data-trust";
 
 type MarketOverviewData = {
   generated_at: string;
@@ -26,6 +28,11 @@ type MarketOverviewData = {
       market: string;
       status: string;
       freshness: string;
+      source?: string | null;
+      provider?: string | null;
+      requested_provider?: string | null;
+      effective_provider?: string | null;
+      no_data_reason?: string | null;
       latest: {
         close: number | null;
         movement: {
@@ -67,6 +74,7 @@ export function MarketOverviewClient({
 }: MarketOverviewClientProps) {
   const router = useRouter();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const { getMovementColor } = useMarketColorsContext();
   
   const { data, mutate, isValidating } = useSWR<MarketOverviewData>(
     `/api/market-overview?provider=${provider}`,
@@ -148,6 +156,16 @@ export function MarketOverviewClient({
                 const absoluteChange = item.latest?.movement?.absolute_change ?? null;
                 const close = item.latest?.close ?? null;
                 const hasData = item.bars && item.bars.length > 0;
+                const trustSignal = createDataTrustSignal({
+                  status: item.status,
+                  freshness: item.freshness,
+                  source: item.source,
+                  provider: item.provider,
+                  requested_provider: item.requested_provider,
+                  effective_provider: item.effective_provider,
+                  generated_at: data?.generated_at,
+                  no_data_reason: item.no_data_reason,
+                });
 
                 return (
                   <TableRow key={item.code} className="group border-border hover:bg-muted/30">
@@ -168,7 +186,7 @@ export function MarketOverviewClient({
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {absoluteChange !== null ? (
-                        <span className={absoluteChange >= 0 ? "text-green-600" : "text-red-600"}>
+                        <span className={getMovementColor(absoluteChange)}>
                           {absoluteChange >= 0 ? "+" : ""}{absoluteChange.toFixed(2)}
                         </span>
                       ) : (
@@ -194,9 +212,7 @@ export function MarketOverviewClient({
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={item.freshness === "fresh" ? "secondary" : "outline"}>
-                        {item.status}
-                      </Badge>
+                      <DataTrustBadge signal={trustSignal} mode="summary" className="items-center" />
                     </TableCell>
                   </TableRow>
                 );

@@ -154,6 +154,83 @@
 - [ ] 桌面端布局紧凑、专业，移动端基本可用
 - [ ] 页面加载和滚动性能良好
 
+## 2026-07-05 Automated Evidence Update
+
+Code and test evidence now supports part of the professional-dashboard direction, but this task should remain active until the visual acceptance criteria are reviewed in a browser.
+
+Evidence already present:
+
+- `apps/web/components/market-ticker.tsx` implements a black, horizontally scrollable, font-mono ticker with compact index data and market filtering.
+- `apps/web/components/market-overview-client.tsx` renders the core index area as a table with latest price, absolute change, percent change, mini chart, and status columns.
+- The ticker, market overview, and shared `PriceChangeBadge` now use the global market-color context for homepage and reused badge movement values.
+- Focused tests passed for settings, homepage rendering, ticker behavior, and route proxy cache-safety; full web tests passed.
+
+Remaining professional-dashboard checks:
+
+- Confirm 7-10 ticker items are visible at common desktop widths using browser screenshot evidence.
+- Decide whether the whole dashboard should default to dark theme or preserve user theme while optimizing dark-mode styling.
+- Review the followed-instrument section for table/big-chart parity.
+- Decide how far to go on removing cards, rounding, and decorative elements without hurting shadcn accessibility/consistency.
+- Verify WCAG contrast, mobile fallback, and scroll performance manually or with a browser automation/a11y follow-up.
+
+## 2026-07-05 Professional Gap Research Update
+
+Research and current-state inventory were written to:
+
+- `.trellis/tasks/07-03-frontend-ui-polish/research/financial-dashboard-current-state-and-professional-gap.md`
+
+Current position:
+
+- The app is now a solid internal research dashboard MVP with compact ticker, market-overview table, provider-aware degraded states, technical charting, comparison, watchlist, portfolio, reports, AI assistant, hot sectors, intraday, and depth cards.
+- It is not yet at TradingView/Yahoo Finance/Bloomberg/MarketWatch/Eastmoney/ifind-style professional parity because real-time feeds, Level-2/order-flow/fund-flow validation, screeners, backtests, configurable workstations, and production research corpus remain incomplete.
+
+Trellis execution plan:
+
+- P0: provider trust and no-fabrication UX.
+  - Keep live/delayed/mock/no-data states visible across dashboard, sectors, intraday, depth, reports, and assistant.
+  - Validate production providers for intraday/depth/fund-flow before calling the UI real-time or Level-2 capable.
+  - Add durable browser/screenshot evidence for UI polish and WCAG contrast.
+- P1: professional research workflows.
+  - Add screener/watchlist custom columns, saved filters, richer alert conditions, and signal browsing.
+  - Add sector rotation history, breadth/contribution drill-down, and real fund-flow provider integration.
+  - Persist chart/dashboard workspace settings beyond the current local chart note/toggle MVP.
+  - Expand AI assistant sources to filings/transcripts/announcements only after citation contracts and ingestion exist.
+- P2: terminal-grade analytics and operations.
+  - Add strategy backtesting UI, signal-history persistence, slippage/cost assumptions, and walk-forward validation.
+  - Add portfolio attribution, exposure, factor/risk, and scenario analysis.
+  - Add data SLA dashboards, provider incident history, entitlement/audit model, and usage monitoring.
+
+## 2026-07-05 Final Audit Update
+
+Latest browser smoke evidence supports the current MVP dashboard state:
+
+- `/zh` rendered `首页概览` at 1440x900 and 390x844 without document/body horizontal overflow.
+- `/zh/settings` rendered `设置`, exposed China/international market-color choices, and exposed the Tushare HTTP URL field at both viewports.
+- No browser console errors were captured during the final smoke pass.
+
+This is enough to close the current implementation audit, but not enough to declare professional-terminal parity. Screenshot and WCAG evidence are now complete; this task remains active for richer workstation/chart workflows, production provider validation, screeners, backtesting, and research-corpus expansion.
+
+## 2026-07-05 Evidence Closure Update
+
+The durable screenshot and WCAG evidence portion was completed in `07-05-dashboard-visual-evidence-wcag`:
+
+- Screenshots now cover `/zh`, `/zh/settings`, `/zh/instruments/AAPL`, and `/zh/watchlist` at desktop and mobile widths.
+- Browser observations recorded no console errors, runtime-error text, or document/body horizontal overflow on sampled routes.
+- Light/dark contrast sampling passed for representative ticker, table, settings, instrument, and watchlist states after a small black-ticker neutral-text fix.
+
+This strengthens the MVP/professional-style UI evidence, but does not change the professional-terminal parity conclusion. The remaining work is still production data/provider depth, Level-2/order-flow/fund-flow validation, screeners, backtests, configurable workstations, portfolio/risk analytics, and richer research corpus.
+
+## 2026-07-05 Provider Trust Update
+
+Child task `07-06-provider-trust-data-sla-dashboard` closed the next P0 no-fabrication/frontend trust gap:
+
+- Homepage ticker and market overview now expose provider/source/freshness/status metadata.
+- Recommendation cards no longer claim realtime by default and can display provider/source/generated_at/diagnostics.
+- Instrument latest, K-line, and intraday displays surface provider/source/freshness/cache/session/degraded reasons.
+- Reports list/detail display `source_summary`, and report generation warns when no explicit provider is passed.
+
+This makes the MVP safer and closer to professional transparency practices, but it still is not a production SLA console or professional terminal. Remaining professional work includes validated live feeds, provider incident/SLA history, Level-2/order-flow/fund-flow validation, screeners, backtests, portfolio risk analytics, configurable workstations, and richer research corpus.
+
 ## Out of Scope
 
 - 实时 WebSocket 数据推送（除非后端已支持）

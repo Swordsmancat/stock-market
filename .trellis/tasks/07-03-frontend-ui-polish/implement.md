@@ -4,6 +4,279 @@
 
 This document provides a detailed, ordered checklist for implementing the financial-style UI optimization across all pages.
 
+## 2026-07-05 Status Update
+
+This task is now in progress for Trellis bookkeeping. The codebase already contains the market-color foundation, settings UI, global provider, homepage ticker, and compact market-overview table. The latest automated slice closed the clearest remaining code gap by wiring the homepage ticker and market-overview movement values to `useMarketColorsContext()` instead of hard-coded green/red classes.
+
+### Completed in this update
+
+- `apps/web/components/market-ticker.tsx` now uses the global market-color context and remains memoized with memoized market filtering.
+- `apps/web/components/market-overview-client.tsx` now uses the global market-color context for index absolute-change values.
+- `apps/web/components/price-change-badge.tsx` now uses the global market-color context for positive/negative badge colors while preserving neutral and limit labels.
+- `apps/web/components/market-ticker.test.tsx` mocks the color context and proves movement classes come from the shared color provider.
+- `apps/web/components/price-change-badge.test.tsx` verifies positive, negative, and flat badge color behavior against the shared color provider.
+- `apps/web/app/[locale]/page.test.tsx` mocks the color context because the page test renders the page directly without the production layout provider.
+
+### Validation
+
+```powershell
+npx vitest run "apps/web/components/price-change-badge.test.tsx" "apps/web/components/market-ticker.test.tsx" "apps/web/app/[locale]/page.test.tsx" "apps/web/app/api/settings/route.test.ts" --reporter=dot
+# 4 test files passed, 10 tests passed
+
+npm run test:web
+# 32 test files passed, 109 tests passed
+
+git diff --check -- apps/web/components/price-change-badge.tsx apps/web/components/price-change-badge.test.tsx apps/web/components/market-ticker.tsx apps/web/components/market-ticker.test.tsx apps/web/components/market-overview-client.tsx apps/web/app/[locale]/page.test.tsx .trellis/tasks/07-03-frontend-ui-polish/prd.md .trellis/tasks/07-03-frontend-ui-polish/implement.md .trellis/tasks/07-03-professional-financial-dashboard/prd.md
+# exit code 0; CRLF conversion warning only for page.test.tsx
+```
+
+### Remaining before archival
+
+- Manual visual validation for first-viewport density, dark/light contrast, and responsive behavior.
+- Decide whether remaining secondary hard-coded colors are movement colors or domain-role colors, then handle the true movement colors in the deeper professional dashboard task.
+- Record browser screenshot evidence before marking the PRD acceptance criteria complete.
+
+## 2026-07-05 Follow-up Implementation Slice
+
+### Completed in this follow-up
+
+- Fixed the remaining `tsc` blockers:
+  - `apps/web/app/[locale]/portfolios/page.tsx` now accepts optional `params` safely for direct test rendering.
+  - `apps/web/components/instrument-detail-client.tsx` filters chart bars to rows with required timestamp/OHLC before passing them to `AdvancedCandlestickChart`.
+  - `apps/web/lib/platform-settings-store.ts` now exposes and persists `tushare_http_url` and `color_scheme`.
+  - `apps/web/components/ui/skeleton.tsx` provides the missing `Skeleton` primitive used by market overview skeletons.
+- Fixed settings persistence:
+  - `savePlatformSettingsAction` now submits `tushare_http_url` and normalized `color_scheme`.
+  - `/api/settings` and `/api/platform-settings` route payload types include the same fields.
+  - `apps/web/app/api/settings/route.test.ts` covers these fields in GET/PUT payloads.
+- Centralized market movement classes in `apps/web/lib/market-color-classes.ts`.
+- Reused that mapping in the client hook and in server/client surfaces:
+  - homepage followed-instrument daily movement
+  - instrument-detail absolute change
+  - hot-sector leader and sector movement
+  - portfolio PnL and return values
+- Left semantic colors alone where they do not represent market up/down convention:
+  - success/error banners
+  - destructive actions
+  - bid/ask labels
+  - settings page explanatory color previews
+  - recommendation category colors
+- Added Trellis research at `research/financial-dashboard-current-state-and-professional-gap.md`.
+- Updated `docs/manual/user-guide.md` and `README.md` with current dashboard UI status and professional-product comparison/plan.
+
+### Validation
+
+```powershell
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+# passed
+
+npx vitest run "apps/web/components/hot-sectors.test.tsx" "apps/web/app/[locale]/portfolios/page.test.tsx" "apps/web/app/[locale]/instruments/[symbol]/page.test.tsx" "apps/web/app/[locale]/page.test.tsx" "apps/web/components/market-ticker.test.tsx" "apps/web/components/price-change-badge.test.tsx" --reporter=dot
+# 6 test files passed, 19 tests passed
+
+npm run test:web -- --reporter=dot
+# 32 test files passed, 109 tests passed
+```
+
+Browser smoke validation:
+
+- Restarted a stale Next dev server and started a clean server at `http://127.0.0.1:3000`.
+- `Invoke-WebRequest` returned 200 for `/zh` and `/zh/settings`.
+- In-app browser desktop audit at 1440x900:
+  - `/zh` rendered `首页概览`
+  - no runtime-error text
+  - no horizontal overflow
+  - ticker contained core indices including `上证指数`, `深证成指`, `创业板指`, `恒生指数`, `纳斯达克`, and `道琼斯`
+  - 6 market-overview rows were visible in addition to the ticker
+- In-app browser mobile audit at 390x844:
+  - `/zh` rendered `首页概览`
+  - no runtime-error text
+  - no horizontal overflow
+- Settings audit:
+  - `/zh/settings` rendered `设置`
+  - `color_scheme` values were `china` and `international`
+  - `tushare_http_url` input existed
+  - no horizontal overflow
+
+### Remaining before archival
+
+- Capture screenshot artifacts if a visual evidence file is required.
+- Run a dedicated light/dark contrast pass.
+- Keep professional-finance parity work in `07-03-professional-financial-dashboard` unless this UI polish task is explicitly expanded.
+
+## 2026-07-05 Frontend Web Follow-up Slice
+
+### Completed in this slice
+
+- Continued the in-progress frontend UI polish task after the market-data reliability work was already archived as completed.
+- Replaced the remaining hard-coded hot-sector fund-flow direction colors with the shared market-color context:
+  - inflow now uses `getMovementColor(1)`;
+  - outflow now uses `getMovementColor(-1)`;
+  - flat/unknown remains `text-muted-foreground`.
+- Left semantic colors unchanged where they represent domain roles rather than market movement conventions, such as success/error/configuration state, bid/ask labels, destructive actions, or recommendation category badges.
+- Extended `apps/web/components/hot-sectors.test.tsx` so the live provider-backed sector test proves the fund-flow amount inherits the mocked market-color class from `useMarketColorsContext()`.
+
+### Validation
+
+```powershell
+npx vitest run "apps/web/components/hot-sectors.test.tsx" --reporter=dot
+# 1 test file passed, 5 tests passed
+
+npm run test:web -- --reporter=dot
+# 33 test files passed, 111 tests passed
+```
+
+The stderr output in `apps/web/app/api/hot-sectors/route.test.ts` is the existing intentional network-error branch test and did not fail the suite.
+
+### Browser smoke validation
+
+Checked the already-running Next dev server at `http://localhost:3000` through the in-app browser after this slice:
+
+- `/zh` rendered `首页概览`, contained `热点板块`, had no runtime-error text, and had no horizontal overflow.
+- `/zh/settings` rendered `设置`, exposed both market color options (`中国习惯` and `国际习惯`), had no runtime-error text, and had no horizontal overflow.
+- `/zh/instruments/AAPL` rendered the instrument heading, AI assistant controls, and chart workspace controls; it had no runtime-error text and no horizontal overflow.
+- `/zh/watchlist` rendered the watchlist heading, add-stock form, and detail links; it had no runtime-error text and no horizontal overflow.
+
+### Remaining before archival
+
+- Manual visual screenshot artifacts remain optional follow-up evidence if the project wants durable UI proof instead of DOM/browser audit output only.
+- A dedicated light/dark WCAG AA contrast pass was completed in `07-05-dashboard-visual-evidence-wcag`.
+- Broader professional-dashboard parity should continue in `07-03-professional-financial-dashboard` or in focused child tasks, not as unbounded UI polish scope.
+
+## 2026-07-05 Final Trellis Check Closure
+
+### Fixed by trellis-check
+
+- `apps/web/lib/market-color-classes.ts` now treats flat movement (`0`) as neutral text/background instead of coloring it as an up move.
+- `apps/web/lib/market-color-classes.test.ts` covers China and international schemes for up, down, and flat values.
+- `apps/web/components/hot-sectors.tsx` now renders sector movement arrows only for strictly positive or strictly negative values; flat or missing movement renders without a misleading arrow.
+
+### Final validation
+
+```powershell
+git diff --check
+# passed; CRLF conversion warnings only
+
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+# passed
+
+npm run test:web -- --reporter=dot
+# 33 test files passed, 111 tests passed
+
+pytest
+# 288 tests passed
+```
+
+Browser validation on `http://127.0.0.1:3000`:
+
+- `/zh` returned 200 via `curl`, rendered `首页概览`, and had no document/body horizontal overflow at 1440x900 or 390x844.
+- `/zh/settings` rendered `设置`, exposed `color_scheme` values `china` and `international`, exposed the `tushare_http_url` field, and had no document/body horizontal overflow at 1440x900 or 390x844.
+- Browser console error log was empty during the final smoke pass.
+
+### Final status
+
+The code-verifiable part of the user goal is complete: missing implementation was continued, manuals and README were updated, professional-product gap research was written, and the P0/P1/P2 plan is captured in Trellis. Durable screenshots and explicit WCAG AA contrast evidence were added in the follow-up evidence task below.
+
+## 2026-07-05 Visual Evidence and WCAG Closure
+
+The evidence-only follow-up was completed under `07-05-dashboard-visual-evidence-wcag`.
+
+Artifacts:
+
+- `.trellis/tasks/07-05-dashboard-visual-evidence-wcag/evidence/visual-evidence.md`
+- `.trellis/tasks/07-05-dashboard-visual-evidence-wcag/evidence/contrast-evidence.md`
+- `.trellis/tasks/07-05-dashboard-visual-evidence-wcag/evidence/browser-observations.json`
+- `.trellis/tasks/07-05-dashboard-visual-evidence-wcag/evidence/contrast-samples.json`
+- `.trellis/tasks/07-05-dashboard-visual-evidence-wcag/evidence/screenshots/*.png`
+
+Result:
+
+- Durable screenshots exist for `/zh`, `/zh/settings`, `/zh/instruments/AAPL`, and `/zh/watchlist` at `1440x900` and `390x844`.
+- Browser observations recorded no console errors, no runtime-error text, and no document/body horizontal overflow across the sampled routes/viewports.
+- Light/dark computed-style contrast sampling passed WCAG AA for the sampled text sizes after fixing the black ticker neutral text.
+- `apps/web/components/market-ticker.tsx` now uses `text-gray-300` for flat/missing movement values on the black ticker; `apps/web/components/market-ticker.test.tsx` covers it.
+
+Remaining professional parity gaps are roadmap work in `07-03-professional-financial-dashboard`; they no longer block archival of the UI-polish implementation evidence itself.
+
+## 2026-07-06 Large Frontend Optimization Slice
+
+### Completed in this slice
+
+- Started the new large-frontend-optimization request by reusing the existing in-progress `07-03-frontend-ui-polish` Trellis task instead of creating a duplicate task.
+- Implemented the first high-impact, low-risk vertical slice: homepage above-the-fold financial terminal polish.
+- Added `apps/web/components/financial-dashboard-hero.tsx`, a reusable server-safe presentation component for the dashboard hero:
+  - compact badge row for provider, scope, and date-range context;
+  - four dense KPI tiles with tabular numbers;
+  - optional action slot for existing page links;
+  - optional warning panel for existing unavailable-state copy.
+- Integrated `FinancialDashboardHero` into `apps/web/app/[locale]/page.tsx` without changing backend/API contracts, data fetch order, chart logic, or provider semantics.
+- Replaced the old loose title/header plus separate market-dashboard intro card with a single financial-terminal-style hero that surfaces:
+  - latest primary-instrument price;
+  - daily movement with market-color-aware class;
+  - portfolio value;
+  - latest task-run status;
+  - active provider, scope, and daily-bar date range badges.
+- Updated `apps/web/app/[locale]/page.test.tsx` to allow duplicated high-value metric labels now that the same metric can appear in both the hero and the downstream detailed card.
+
+### Validation
+
+```powershell
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+# passed
+
+npx vitest run "apps/web/app/[locale]/page.test.tsx" --reporter=dot
+# 1 test file passed, 2 tests passed
+
+npm run test:web -- --reporter=dot
+# 33 test files passed, 111 tests passed
+
+git diff --check -- "apps/web/app/[locale]/page.tsx" "apps/web/app/[locale]/page.test.tsx" "apps/web/components/financial-dashboard-hero.tsx"
+# passed; CRLF conversion warnings only for touched frontend files
+```
+
+The stderr output in `apps/web/app/api/hot-sectors/route.test.ts` remains the existing intentional network-error branch test and did not fail the suite.
+
+### Remaining large-frontend-optimization slices
+
+- Slice 2: unify desktop/mobile navigation config and polish shell hierarchy.
+- Slice 3: introduce reusable financial section/table wrappers and apply them to watchlist.
+- Slice 4: polish instrument-detail hero and section hierarchy without changing chart/data contracts.
+- Slice 5: polish settings page grouping after the high-value dashboard/watchlist/detail surfaces are complete.
+
+## 2026-07-06 Navigation Consistency Slice
+
+### Completed in this slice
+
+- Continued the large-frontend-optimization request with a second low-risk, high-leverage slice: shared navigation configuration and shell consistency.
+- Added `apps/web/components/navigation-items.ts` as the single source of truth for primary app navigation entries.
+- Updated `apps/web/components/sidebar-navigation.tsx` to consume `NAVIGATION_ITEMS` instead of maintaining a local duplicate list.
+- Updated `apps/web/components/mobile-navigation.tsx` to consume the same `NAVIGATION_ITEMS`, which also brings the mobile navigation back in sync with desktop by including the task-runs entry.
+- Changed the mobile navigation layout from a fixed seven-column grid to a horizontally scrollable compact list so eight primary destinations remain available without cramping or dropping entries.
+- Added `apps/web/components/navigation-items.test.ts` to lock the expected href order, ensure `taskRuns` remains present, and prevent duplicate navigation hrefs.
+
+### Validation
+
+```powershell
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+# passed
+
+npx vitest run "apps/web/components/navigation-items.test.ts" --reporter=dot
+# 1 test file passed, 1 test passed
+
+npm run test:web -- --reporter=dot
+# 34 test files passed, 112 tests passed
+
+git diff --check -- "apps/web/components/navigation-items.ts" "apps/web/components/navigation-items.test.ts" "apps/web/components/sidebar-navigation.tsx" "apps/web/components/mobile-navigation.tsx"
+# passed
+```
+
+The stderr output in `apps/web/app/api/hot-sectors/route.test.ts` remains the existing intentional network-error branch test and did not fail the suite.
+
+### Remaining large-frontend-optimization slices
+
+- Slice 3: introduce reusable financial section/table wrappers and apply them to watchlist.
+- Slice 4: polish instrument-detail hero and section hierarchy without changing chart/data contracts.
+- Slice 5: polish settings page grouping after the high-value dashboard/watchlist/detail surfaces are complete.
+
 ## Phase 1: Foundation (Backend + Core Hooks)
 
 ### 1.1 Backend - Color Scheme Support

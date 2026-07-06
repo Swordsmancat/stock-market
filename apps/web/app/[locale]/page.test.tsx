@@ -8,6 +8,21 @@ vi.mock("@/lib/dates", () => ({
   }),
 }));
 
+vi.mock("@/context/market-colors-context", () => ({
+  useMarketColorsContext: () => ({
+    colorScheme: "china",
+    setColorScheme: vi.fn(),
+    getMovementColor: (value: number) => value >= 0 ? "text-positive" : "text-negative",
+    getMovementBg: (value: number) => value >= 0 ? "bg-positive" : "bg-negative",
+    colors: {
+      up: "text-positive",
+      down: "text-negative",
+      upBg: "bg-positive",
+      downBg: "bg-negative",
+    },
+  }),
+}));
+
 import HomePage from "./page";
 
 afterEach(() => {
@@ -37,6 +52,30 @@ function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", marke
     ["us_nasdaq_composite", "Nasdaq Composite", "US"],
     ["us_dow_jones", "Dow Jones Industrial Average", "US"],
   ];
+
+  const macroIndicators = [
+    ["buffett_indicator_cn", "Buffett Indicator - CN", "CN", "valuation"],
+    ["buffett_indicator_hk", "Buffett Indicator - HK", "HK", "valuation"],
+    ["buffett_indicator_us", "Buffett Indicator - US", "US", "valuation"],
+    ["us_10y_yield", "US 10Y Treasury Yield", "US", "rates"],
+    ["us_2y_yield", "US 2Y Treasury Yield", "US", "rates"],
+    ["us_10y_2y_spread", "US 10Y-2Y Yield Spread", "US", "rates"],
+    ["us_cpi_yoy", "US CPI YoY", "US", "inflation"],
+    ["us_m2_yoy", "US M2 Money Supply YoY", "US", "liquidity"],
+    ["cn_m2_yoy", "China M2 Money Supply YoY", "CN", "liquidity"],
+  ].map(([code, indicatorName, region, category]) => ({
+    code,
+    name: indicatorName,
+    region,
+    category,
+    status: code === "us_10y_yield" ? "ok" : "no_data",
+    value: code === "us_10y_yield" ? 4.25 : null,
+    unit: "percent",
+    as_of: code === "us_10y_yield" ? "2026-01-02" : null,
+    source: code === "us_10y_yield" ? "Audited seed: FRED DGS10" : null,
+    components: code === "us_10y_yield" ? { source_series_id: "DGS10" } : {},
+    no_data_reason: code === "us_10y_yield" ? null : "No audited observation has been seeded for this indicator yet.",
+  }));
 
   return {
     generated_at: "2026-01-02T00:00:00+00:00",
@@ -80,19 +119,183 @@ function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", marke
       })),
     },
     valuation_indicators: {
-      items: ["CN", "HK", "US"].map((region) => ({
-        code: `buffett_indicator_${region.toLowerCase()}`,
-        name: `Buffett Indicator - ${region}`,
-        region,
-        category: "valuation",
-        status: "no_data",
-        value: null,
-        unit: "percent",
-        as_of: null,
-        source: null,
-        components: {},
-        no_data_reason: "No audited observation has been seeded for this indicator yet.",
-      })),
+      items: macroIndicators,
+    },
+    macro_indicators: {
+      items: macroIndicators,
+    },
+    dashboard_brief: {
+      status: "degraded",
+      generated_at: "2026-01-02T00:00:00+00:00",
+      sections: [
+        {
+          id: "what_changed",
+          title: "What changed",
+          items: ["US 10Y Treasury Yield: 4.25% as of 2026-01-02."],
+        },
+        {
+          id: "why_it_matters",
+          title: "Why it matters",
+          items: ["Macro indicators are shown with source and as-of metadata."],
+        },
+        {
+          id: "what_to_watch_next",
+          title: "What to watch next",
+          items: ["Review generated reports and watchlist moves together with macro freshness."],
+        },
+        {
+          id: "data_gaps",
+          title: "Data gaps",
+          items: ["Buffett Indicator - CN: No audited observation has been seeded for this indicator yet."],
+        },
+      ],
+      citations: [
+        {
+          id: "market_indicator:us_10y_yield:2026-01-02",
+          label: "US 10Y Treasury Yield",
+          source: "market_indicators",
+        },
+      ],
+      diagnostics: [
+        {
+          source: "market_indicators",
+          status: "no_data",
+          severity: "info",
+          code: "MACRO_INDICATOR_NO_DATA",
+          message: "Some macro indicators are configured but do not have audited observations yet.",
+        },
+      ],
+      safety: {
+        not_investment_advice: true,
+        no_buy_sell_hold: true,
+        no_fabricated_macro_data: true,
+      },
+      narrative: {
+        answer_markdown:
+          "### Summary\nUS 10Y remains the cited macro datapoint [market_indicator:us_10y_yield:2026-01-02].\n\n### Safety note\nNot investment advice.",
+        model: {
+          provider: "deterministic",
+          name: "dashboard-brief-deterministic-fallback",
+          used_llm: false,
+          fallback_reason: "OpenAI-compatible LLM provider is not configured.",
+        },
+        context: {
+          source_mix: {
+            macro_citations: 1,
+            report_citations: 0,
+            news_citations: 0,
+            information_source_gaps: 3,
+          },
+        },
+      },
+    },
+    information_sources: {
+      status: "degraded",
+      summary: {
+        total: 4,
+        configured: 1,
+        needs_action: 2,
+        future: 1,
+      },
+      groups: [
+        {
+          category: "macro",
+          label: "Macro sources",
+          items: [
+            {
+              id: "fred_us_rates",
+              label: "FRED US Treasury rates",
+              category: "macro",
+              authority: "Federal Reserve Bank of St. Louis FRED",
+              coverage: ["DGS10", "DGS2", "T10Y2Y"],
+              status: "needs_adapter",
+              freshness_policy: "Daily official series; update after FRED observation publication.",
+              ai_usage: "Can support rates and yield-curve context after observations are imported.",
+              next_action: "Add official-source adapter or audited seed import for DGS10/DGS2/T10Y2Y.",
+              evidence_count: 0,
+              latest_as_of: null,
+              collection_note: "Collect DGS10, DGS2, and T10Y2Y observations from official FRED pages before seeding rates data.",
+              citation_policy: "Can be cited only after a reviewed observation is stored locally.",
+              collection_links: [
+                {
+                  label: "FRED DGS10",
+                  url: "https://fred.stlouisfed.org/series/DGS10",
+                  source_type: "official_series",
+                },
+              ],
+              seed_template: {
+                label: "FRED rates seed template",
+                description: "Prepare reviewed daily Treasury observations before importing rates and yield-curve context.",
+                target_indicator_codes: ["us_10y_yield", "us_2y_yield", "us_10y_2y_spread"],
+                required_fields: ["code", "as_of", "value", "source", "components"],
+                json_template: {
+                  observations: [
+                    {
+                      code: "us_10y_yield",
+                      as_of: "YYYY-MM-DD",
+                      value: "<reviewed decimal>",
+                      source: "Audited seed: FRED DGS10",
+                      components: {
+                        source_series_id: "DGS10",
+                        source_url: "https://fred.stlouisfed.org/series/DGS10",
+                        methodology: "<operator review note>",
+                      },
+                    },
+                  ],
+                },
+                csv_header: ["code", "as_of", "value", "source", "components_json"],
+                csv_example_rows: [
+                  'us_10y_yield,YYYY-MM-DD,<reviewed decimal>,Audited seed: FRED DGS10,"{""source_series_id"": ""DGS10"", ""methodology"": ""<operator review note>""}"',
+                ],
+                review_checklist: [
+                  {
+                    id: "replace_placeholders",
+                    label: "Replace every placeholder date and value before import.",
+                    required: true,
+                    why: "The template is not an observation until reviewed values are supplied.",
+                  },
+                ],
+                warnings: [
+                  "Replace every placeholder before import; template values are not market data.",
+                ],
+                import_command: "python scripts/import_market_indicator_seeds.py path/to/macro-seeds.json",
+                citation_boundary:
+                  "This template is not evidence; imported observations become citeable only after validation stores reviewed source and methodology metadata locally.",
+              },
+            },
+          ],
+        },
+        {
+          category: "documents",
+          label: "Hard-to-find documents",
+          items: [
+            {
+              id: "sec_filings",
+              label: "SEC filings and announcements",
+              category: "documents",
+              authority: "SEC EDGAR",
+              coverage: ["10-K", "10-Q", "8-K"],
+              status: "future",
+              freshness_policy: "Use official APIs or user-provided files only; do not scrape restricted content.",
+              ai_usage: "Future evidence for company-specific AI summaries with citations.",
+              next_action: "Define legal ingestion policy before storing filing text or transcripts.",
+              evidence_count: 0,
+              latest_as_of: null,
+              collection_note: "Use EDGAR or user-provided files only; this panel is collection guidance, not automated scraping.",
+              citation_policy: "Do not cite filings until an adapter or manually reviewed local document is available.",
+              collection_links: [
+                {
+                  label: "SEC EDGAR company search",
+                  url: "https://www.sec.gov/edgar/search/",
+                  source_type: "official_documents",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      items: [],
+      diagnostics: [],
     },
     diagnostics: [],
   };
@@ -421,6 +624,45 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
 
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
+  expect(screen.getByText("AI research brief")).toBeInTheDocument();
+  expect(screen.getByText("Narrative synthesis")).toBeInTheDocument();
+  expect(screen.getByText("Deterministic fallback")).toBeInTheDocument();
+  expect(screen.getByText("Model: dashboard-brief-deterministic-fallback")).toBeInTheDocument();
+  expect(screen.getByText(/US 10Y remains the cited macro datapoint/)).toBeInTheDocument();
+  expect(screen.getByText("Macro evidence: 1")).toBeInTheDocument();
+  expect(screen.getByText("Source gaps: 3")).toBeInTheDocument();
+  expect(screen.getByText("What changed")).toBeInTheDocument();
+  expect(screen.getByText(/US 10Y Treasury Yield: 4.25%/)).toBeInTheDocument();
+  expect(screen.getByText("MACRO_INDICATOR_NO_DATA: Some macro indicators are configured but do not have audited observations yet.")).toBeInTheDocument();
+  expect(screen.getByText("Information source readiness")).toBeInTheDocument();
+  expect(screen.getByText("FRED US Treasury rates")).toBeInTheDocument();
+  expect(screen.getByText("Needs adapter")).toBeInTheDocument();
+  expect(screen.getAllByText("Collection guidance").length).toBeGreaterThan(0);
+  expect(screen.getByText("Collect DGS10, DGS2, and T10Y2Y observations from official FRED pages before seeding rates data.")).toBeInTheDocument();
+  expect(screen.getAllByText("Citation boundary").length).toBeGreaterThan(0);
+  expect(screen.getByText("Can be cited only after a reviewed observation is stored locally.")).toBeInTheDocument();
+  expect(screen.getAllByText("Official/legal source links").length).toBeGreaterThan(0);
+  expect(screen.getByRole("link", { name: "FRED DGS10" }))
+    .toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");
+  expect(screen.getByRole("link", { name: "FRED DGS10" })).toHaveAttribute("target", "_blank");
+  expect(screen.getByRole("link", { name: "FRED DGS10" })).toHaveAttribute("rel", "noreferrer");
+  expect(screen.getAllByText("Seed template").length).toBeGreaterThan(0);
+  expect(screen.getByText("FRED rates seed template")).toBeInTheDocument();
+  expect(screen.getByText("Target indicator codes")).toBeInTheDocument();
+  expect(screen.getByText("us_10y_yield")).toBeInTheDocument();
+  expect(screen.getByText("Required fields")).toBeInTheDocument();
+  expect(screen.getByText("code, as_of, value, source, components")).toBeInTheDocument();
+  expect(screen.getByText("Import command")).toBeInTheDocument();
+  expect(screen.getByText("python scripts/import_market_indicator_seeds.py path/to/macro-seeds.json")).toBeInTheDocument();
+  expect(screen.getByText("JSON template")).toBeInTheDocument();
+  expect(screen.getAllByText(/<reviewed decimal>/).length).toBeGreaterThan(0);
+  expect(screen.getByText("CSV template")).toBeInTheDocument();
+  expect(screen.getByText("Review checklist")).toBeInTheDocument();
+  expect(screen.getByText(/Replace every placeholder date and value before import/)).toBeInTheDocument();
+  expect(screen.getByText("Template warnings")).toBeInTheDocument();
+  expect(screen.getByText(/This template is not evidence/)).toBeInTheDocument();
+  expect(screen.getByText("Define legal ingestion policy before storing filing text or transcripts.")).toBeInTheDocument();
+  expect(screen.getByText("Do not cite filings until an adapter or manually reviewed local document is available.")).toBeInTheDocument();
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
   expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
   expect(screen.getByRole("link", { name: /AAPL 突破20日均线/ })).toHaveAttribute("href", "/instruments/AAPL");
@@ -437,6 +679,8 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByRole("button", { name: "导出对比报告" })).toBeInTheDocument();
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
+  expect(screen.getAllByText("US 10Y Treasury Yield").length).toBeGreaterThan(0);
+  expect(screen.getByText("Rates")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
     .toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("Daily-bar command center")).toBeInTheDocument();
@@ -446,7 +690,7 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("AAPL daily story")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
     .toHaveAttribute("href", "/instruments/AAPL");
-  expect(screen.getByText("AAPL Latest Price")).toBeInTheDocument();
+  expect(screen.getAllByText("AAPL Latest Price").length).toBeGreaterThan(0);
   expect(screen.getAllByText("102.00").length).toBeGreaterThan(0);
   expect(screen.getByText("Technical Indicators")).toBeInTheDocument();
   expect(screen.getByText("Fundamentals")).toBeInTheDocument();
@@ -468,7 +712,7 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("bars_1d:AAPL:2026-01-02")).toBeInTheDocument();
   expect(screen.getByText("fundamental_metrics:AAPL:2026-01-02")).toBeInTheDocument();
   expect(screen.getAllByText("Latest Task Run").length).toBeGreaterThan(0);
-  expect(screen.getByText("Portfolio Value")).toBeInTheDocument();
+  expect(screen.getAllByText("Portfolio Value").length).toBeGreaterThan(0);
   expect(screen.getByRole("button", { name: "Ingest daily bars" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Refresh Analysis" })).toBeInTheDocument();
 });
@@ -605,8 +849,10 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
     }),
   );
 
-  expect(screen.getByText("600519 Latest Price")).toBeInTheDocument();
+  expect(screen.getAllByText("600519 Latest Price").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
+  expect(screen.getByText("AI research brief")).toBeInTheDocument();
+  expect(screen.getByText("Narrative synthesis")).toBeInTheDocument();
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
   expect(screen.getByText("暂无推荐,继续监控市场中...")).toBeInTheDocument();
   expect(screen.getByText("No live hot-sector data available.")).toBeInTheDocument();

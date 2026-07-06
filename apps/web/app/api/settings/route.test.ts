@@ -25,6 +25,8 @@ it("returns persisted platform settings with route source metadata", async () =>
     llm_api_base: "https://llm.example/v1",
     akshare_enabled: true,
     tushare_token: "tushare-token",
+    tushare_http_url: "https://tushare.example",
+    color_scheme: "international",
     llm_api_key_configured: true,
   };
   getPlatformSettingsMock.mockResolvedValue(storedSettings);
@@ -49,6 +51,8 @@ it("saves platform settings and reports whether an LLM API key is configured", a
     llm_api_base: "https://api.openai.com/v1",
     akshare_enabled: false,
     tushare_token: "token-updated",
+    tushare_http_url: "https://tushare.example",
+    color_scheme: "china",
   };
   savePlatformSettingsMock.mockResolvedValue(updatePayload);
 
@@ -81,6 +85,8 @@ it("marks saved settings as not configured when the stored LLM API key is blank"
     llm_api_base: "https://api.openai.com/v1",
     akshare_enabled: false,
     tushare_token: "",
+    tushare_http_url: "",
+    color_scheme: "international",
   };
   savePlatformSettingsMock.mockResolvedValue(savedSettings);
 

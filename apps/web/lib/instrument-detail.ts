@@ -57,6 +57,18 @@ export type InstrumentIntradayPayload = {
     is_delayed?: boolean;
     delay_minutes?: number | null;
   };
+  freshness?: {
+    status?: string | null;
+    reason?: string | null;
+    cache_status?: string | null;
+    data_as_of?: string | null;
+    fetched_at?: string | null;
+    cached_at?: string | null;
+  } | null;
+  session?: {
+    status?: string | null;
+    reason?: string | null;
+  } | null;
 };
 
 type InstrumentMarketDepthStatus = "ok" | "no_data" | "degraded";
@@ -146,11 +158,20 @@ export type InstrumentDetailPayload = {
       close?: number;
     } | null;
     status?: string;
+    source?: string | null;
+    provider?: string | null;
+    requested_provider?: string | null;
+    effective_provider?: string | null;
+    no_data_reason?: string | null;
   };
   bars: {
     items?: InstrumentBar[];
     status?: string;
-    source?: string;
+    source?: string | null;
+    provider?: string | null;
+    requested_provider?: string | null;
+    effective_provider?: string | null;
+    no_data_reason?: string | null;
   };
   intraday?: InstrumentIntradayPayload;
   market_depth?: InstrumentMarketDepthPayload;

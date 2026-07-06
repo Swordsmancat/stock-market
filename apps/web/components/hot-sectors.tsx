@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-r
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useMarketColorsContext } from "@/context/market-colors-context";
 
 type HotSectorsStatus = "ok" | "degraded" | "unavailable";
 type HotSectorsDataMode = "live" | "delayed" | "demo" | "mock" | "none";
@@ -174,6 +175,7 @@ export function HotSectors({
   className = "",
 }: HotSectorsProps) {
   const t = useTranslations("Dashboard");
+  const { getMovementColor } = useMarketColorsContext();
   const statusBadgeLabel = getStatusBadgeLabel(status, dataMode, {
     live: t("hotSectorsLiveBadge"),
     delayed: t("hotSectorsDelayedBadge"),
@@ -263,7 +265,8 @@ export function HotSectors({
         {sectors.map((sector, index) => {
           const sectorChangePercent = safeNumber(sector.change_percent);
           const leaderChangePercent = safeNumber(sector.leader_change_percent ?? sector.leader?.change_percent);
-          const isPositive = sectorChangePercent === null || sectorChangePercent >= 0;
+          const isPositive = sectorChangePercent !== null && sectorChangePercent > 0;
+          const isNegative = sectorChangePercent !== null && sectorChangePercent < 0;
           const flowDirection = resolveFlowDirection(sector);
           const isFlowIn = flowDirection === "inflow";
           const isFlowOut = flowDirection === "outflow";
@@ -313,7 +316,7 @@ export function HotSectors({
                   
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{t("hotSectorsLeader", { name: leaderName })}</span>
-                    <span className={leaderChangePercent === null || leaderChangePercent >= 0 ? "text-green-600" : "text-red-600"}>
+                    <span className={getMovementColor(leaderChangePercent ?? 0)}>
                       {formatSignedPercent(leaderChangePercent)}
                     </span>
                   </div>
@@ -356,13 +359,21 @@ export function HotSectors({
               </div>
 
               <div className="flex flex-col items-end gap-1">
-                <div className={`flex items-center gap-1 font-semibold ${isPositive ? "text-green-600" : "text-red-600"}`}>
-                  {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                <div className={`flex items-center gap-1 font-semibold ${getMovementColor(sectorChangePercent ?? 0)}`}>
+                  {isPositive ? (
+                    <TrendingUp className="h-4 w-4" />
+                  ) : isNegative ? (
+                    <TrendingDown className="h-4 w-4" />
+                  ) : null}
                   <span>{formatSignedPercent(sectorChangePercent)}</span>
                 </div>
                 
-                <div className={`flex items-center gap-1 text-xs ${isFlowIn ? "text-green-600" : isFlowOut ? "text-red-600" : "text-muted-foreground"}`}>
-                  {isFlowIn ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                <div className={`flex items-center gap-1 text-xs ${isFlowIn ? getMovementColor(1) : isFlowOut ? getMovementColor(-1) : "text-muted-foreground"}`}>
+                  {isFlowIn ? (
+                    <ArrowUpRight className="h-3 w-3" />
+                  ) : isFlowOut ? (
+                    <ArrowDownRight className="h-3 w-3" />
+                  ) : null}
                   <span>{flowLabel} {formatFlowAmount(sector, t("unavailableShort"))}</span>
                 </div>
               </div>

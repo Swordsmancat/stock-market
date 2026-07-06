@@ -14,6 +14,16 @@ type ReportDetail = {
   citations: string[];
   created_at: string;
   task_run_id?: string | null;
+  source_summary?: ReportSourceSummary | null;
+};
+
+type ReportSourceSummary = {
+  source?: string | null;
+  price_source?: string | null;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  task_run_id?: string | null;
 };
 
 async function fetchReport(reportId: string): Promise<ReportDetail | null> {
@@ -26,6 +36,30 @@ async function fetchReport(reportId: string): Promise<ReportDetail | null> {
 
 function citationUrl(citation: string): string | null {
   return citation.match(/https?:\/\/\S+/)?.[0] ?? null;
+}
+
+function buildReportSourceDetails(sourceSummary: ReportSourceSummary | null | undefined): string[] {
+  if (!sourceSummary) {
+    return [];
+  }
+
+  const details: string[] = [];
+  if (sourceSummary.source) {
+    details.push(`source: ${sourceSummary.source}`);
+  }
+  if (sourceSummary.price_source) {
+    details.push(`price_source: ${sourceSummary.price_source}`);
+  }
+  if (sourceSummary.effective_provider || sourceSummary.provider) {
+    details.push(`provider: ${sourceSummary.effective_provider ?? sourceSummary.provider}`);
+  }
+  if (sourceSummary.requested_provider) {
+    details.push(`requested_provider: ${sourceSummary.requested_provider}`);
+  }
+  if (sourceSummary.task_run_id) {
+    details.push(`task_run_id: ${sourceSummary.task_run_id}`);
+  }
+  return details;
 }
 
 export default async function ReportDetailPage({
@@ -77,6 +111,15 @@ export default async function ReportDetailPage({
               </>
             ) : null}
           </CardDescription>
+          {buildReportSourceDetails(report.source_summary).length > 0 ? (
+            <div className="flex flex-wrap gap-2 pt-2 text-xs text-muted-foreground">
+              {buildReportSourceDetails(report.source_summary).map((detail) => (
+                <Badge key={detail} variant="outline" className="font-normal">
+                  {detail}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
           <div className="pt-2">
             <Button variant="link" className="h-auto p-0" asChild>
               <Link href={`/instruments/${report.symbol}` as any}>{t("viewInstrument")}</Link>

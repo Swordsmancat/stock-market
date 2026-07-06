@@ -1,6 +1,6 @@
-# Stock Analysis Platform
+# Personal Investment Research Cockpit
 
-Internal research platform for multi-market stock analysis: market data ingestion, technical indicators, AI reports, watchlist alerts, and simulated portfolios.
+Personal research platform for multi-market information aggregation, macro/valuation indicator tracking, AI summaries, watchlist monitoring, and evidence-backed stock analysis. The product direction is a source-transparent research cockpit, not a professional trading terminal.
 
 ## Quick start
 
@@ -71,7 +71,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 
 | Document | Purpose |
 |----------|---------|
-| [docs/manual/user-guide.md](docs/manual/user-guide.md) | User-facing guide for Phase 2 / Phase 3 financial analysis features and current capability status |
+| [docs/manual/user-guide.md](docs/manual/user-guide.md) | User-facing guide for personal research aggregation, macro/valuation indicators, AI summaries, and current capability status |
 | [docs/runbooks/developer-maintenance.md](docs/runbooks/developer-maintenance.md) | Maintainer guide for endpoints, degraded-safe provider contracts, validation, and roadmap gaps |
 | [docs/runbooks/local-development.md](docs/runbooks/local-development.md) | Full local setup, env vars, testing |
 | [docs/runbooks/mvp-acceptance.md](docs/runbooks/mvp-acceptance.md) | Original MVP acceptance checklist |
@@ -82,16 +82,29 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 ## Key features
 
 - **Market data**: yfinance provider (US/HK/CN), provider-neutral `/ingestion/snapshot`, Celery scheduled ingestion
-- **Analysis pipeline**: indicators, fundamentals, news, AI daily reports, AI market assistant
+- **Information aggregation**: watchlists, market overview, generated reports, news/fundamentals context, provider diagnostics, and task-run status in one personal dashboard
+- **Information source readiness**: explicit source registry for official macro candidates, valuation seed inputs, generated reports, stored news, future documents, and user-curated seed files, with official/legal collection links and citation boundaries
+- **Macro and valuation indicators**: curated Buffett Indicator, rates, inflation, and liquidity definitions with explicit audited-source/no-data states
+- **FRED macro adapter**: opt-in official FRED refresh path for US rates, yield spread, CPI YoY, and M2 YoY observations with source URL, series ID, retrieval time, and calculation metadata
+- **Audited macro seed import**: JSON/CSV import path and dashboard seed templates for manually reviewed macro and valuation observations with required source and methodology metadata
+- **AI summaries**: citation-aware dashboard narrative with deterministic fallback, generated reports, and citation-aware AI market assistant boundaries
+- **Analysis pipeline**: technical indicators, fundamentals, news, AI daily reports, and research-safe recommendation signals
 - **Watchlist alerts**: price/RSI rules with trigger history
 - **Portfolios**: multi-portfolio CRUD with demo fallback
 - **Task runs**: async ingestion/analysis with retry and report linking
 - **Sector rotation**: provider-backed `/sectors/hot` contract with explicit data modes, fund-flow definitions, and degraded-safe fallback states
+- **Dashboard UI polish**: compact market ticker, dense market-overview table, persisted China/international movement-color convention, durable screenshot evidence, and sampled light/dark WCAG contrast checks
+- **Provider trust visibility**: shared frontend trust labels for provider/source/freshness/mock/degraded/no-data states across homepage ticker, market overview, recommendations, instrument detail, intraday chart, and reports
 
 ## Phase 2 / Phase 3 feature status
 
 | Phase | Feature | Status | Notes |
 |---|---|---:|---|
+| P0 | Macro/valuation indicators + AI research brief | Implemented / citation-aware MVP | Dashboard overview now exposes a curated macro library covering Buffett Indicator, US yields/spread, CPI, US M2, and CN M2 definitions. Missing observations remain explicit `no_data`; the dashboard renders sections, citations, diagnostics, safety flags, and an additive citation-aware narrative. The narrative uses an OpenAI-compatible LLM only when configured and falls back deterministically if the model is unavailable, empty, failed, or cites an unknown ID. |
+| P0 | FRED official macro adapter | Implemented / opt-in refresh MVP | `scripts/refresh_fred_macro_indicators.py` can refresh audited FRED observations for DGS10, DGS2, T10Y2Y, CPIAUCSL-derived YoY, and M2SL-derived YoY when `FRED_API_KEY` is configured. Tests use mocked HTTP responses; no automatic scheduling or dashboard citation occurs until observations are stored locally. |
+| P1 | Information source readiness | Implemented / collection-guidance MVP | Dashboard overview now includes a source-readiness registry for FRED/PBOC-style macro candidates, Buffett manual seed inputs, generated reports, stored news, future filings/documents, and user seed files. It performs no live network fetches; it shows current local evidence, missing adapters/manual seeds, official/legal collection links, collection notes, citation boundaries, and next collection actions. |
+| P1 | Audited macro seed import | Implemented / template-assisted manual import MVP | Reviewed JSON/CSV seed files can import macro and valuation observations into `MarketIndicatorObservation`. Each row requires source and audit/method metadata; imports validate all rows before writing and do not fetch live data. The source-readiness panel now shows seed templates, placeholder JSON/CSV rows, review checklists, and the import command for FRED/PBOC/Buffett-style inputs. |
+| UI polish | Personal research dashboard surface | Implemented / evidence complete | Ticker, market overview table, settings-driven movement colors, durable screenshots, sampled WCAG contrast evidence, and major movement-color call sites are implemented and covered by web/browser evidence. The UI is optimized for personal scanning and research aggregation rather than terminal parity. |
 | Phase 2 | K-line interaction enhancements | Complete | Interactive candlestick charts include range controls and MA / BOLL / volume / MACD / RSI / KDJ indicator controls. |
 | Phase 2 | Smart recommendations | Complete | Breakout, oversold rebound, volume anomaly, and momentum-style research signals are available as research aids. |
 | Phase 2 | Hot sector rotation | Partial / provider-backed MVP | `/sectors/hot` now returns a normalized provider contract with sector taxonomy, flow definitions, live/delayed/mock/unavailable data modes, top constituent metadata, breadth, contribution, provider capability, and explicit rotation-history availability. The default static fixture is explicitly `degraded + mock`; verified production fund-flow and persisted rotation history depend on provider availability such as AkShare/Tushare/Eastmoney-style integrations. |
@@ -99,9 +112,50 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | Phase 3 | Intraday chart | Partial / provider-backed MVP | `GET /market-data/{symbol}/intraday` now supports verified yfinance `1m` minute bars when available, including previous-close references and `ok` / `no_data` / `degraded` payloads. Mock, AkShare, and Tushare remain degraded until explicit minute-bar providers are verified. |
 | Phase 3 | Market depth | Partial / provider-boundary MVP | `GET /market-data/{symbol}/depth` now uses an explicit `fetch_market_depth` provider boundary, section-level `ok` / `degraded` semantics, verified order-book / recent-trade / fund-flow normalization, and large-order derivation only from verified trades. AkShare now has a fixture-tested order-book candidate path, but production-verified Level-2 status still requires opt-in live smoke checks, schema monitoring, and provider-permission validation. |
 | Phase 3 | Technical indicator library | Complete | MACD, RSI, KDJ, MA, BOLL, and volume chart overlays are supported; backend MACD/KDJ persistence is covered. |
-| Phase 3 | AI assistant | Partial / research-citation MVP | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily bars, stored indicators, fundamentals, news, and generated reports. Citations can include source metadata, excerpts, URLs, and diagnostic severity/code; production filings/transcripts, vector search, multi-turn notebooks, and watchlist monitoring remain follow-up work. |
+| Phase 3 | AI assistant | Partial / research-citation MVP | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily bars, stored indicators, fundamentals, news, and generated reports. Citations can include source metadata, excerpts, URLs, and diagnostic severity/code; production filings/transcripts, vector search, multi-turn notebooks, and broader watchlist monitoring remain follow-up work. |
 
 See [docs/manual/user-guide.md](docs/manual/user-guide.md) for user-facing behavior and [docs/runbooks/developer-maintenance.md](docs/runbooks/developer-maintenance.md) for endpoint and provider-maintenance details.
+
+## Audited macro seed import
+
+Use reviewed local files to load hard-to-find macro and valuation observations:
+
+```bash
+python scripts/import_market_indicator_seeds.py path/to/macro-seeds.json
+python scripts/import_market_indicator_seeds.py path/to/macro-seeds.csv
+```
+
+JSON accepts either a top-level array or an object with `observations`. CSV uses `code,as_of,value,source,components_json`. Each row must include a source reference such as `source_url` or `source_series_id`, plus a method/review field such as `methodology`, `calculation`, or `notes`.
+
+This is an offline audited import path. It does not call FRED/PBOC/SEC, scrape websites, or turn seed values into investment advice.
+
+## FRED macro refresh
+
+Use the official FRED API only when a local API key is configured:
+
+```bash
+$env:FRED_API_KEY="..."
+python scripts/refresh_fred_macro_indicators.py --series rates --latest-only --dry-run
+python scripts/refresh_fred_macro_indicators.py --series all --start 2025-01-01 --end 2026-07-06
+```
+
+The refresh path writes through the same audited `MarketIndicatorObservation` evidence layer. It skips FRED missing values such as `"."`, derives CPI/M2 YoY only when prior-year source observations exist, and stores source series IDs, FRED URLs, retrieval timestamps, and methodology/calculation metadata. Missing API keys produce a `WARN`; provider or validation failures produce `FAIL`.
+
+FRED source links and templates remain guidance only. AI summaries may cite FRED macro data only after this refresh stores validated local observations.
+
+## Source collection guidance
+
+The dashboard source-readiness panel now shows where to collect hard-to-find inputs before they can become AI evidence:
+
+- FRED links for US rates, inflation, and liquidity candidates.
+- PBOC public monetary-statistics guidance for China M2 manual review.
+- World Bank links for Buffett Indicator market-cap/GDP and GDP components.
+- SEC filing search links for future document workflows.
+- Local report, news, and seed-file guidance for platform evidence.
+
+These links are guidance only. They are not automatic ingestion, licensed document storage, web scraping, or dashboard-brief citations. AI summaries may cite a source only after reviewed data is stored locally with source, as-of, and methodology metadata.
+
+For macro and valuation sources that can be imported manually, the same panel also shows source-to-seed templates: target indicator codes, required fields, placeholder JSON/CSV rows, a review checklist, and the import command. Template placeholders are not market data and are not import-ready until the user replaces them with reviewed values. Templates do not change source readiness status, do not write the database, and do not create AI-citable evidence until the audited import succeeds.
 
 ## Tests
 

@@ -24,6 +24,13 @@ it("renders latest report, history, and citations", async () => {
                 report_type: "stock_daily",
                 as_of: "2026-01-20",
                 content_markdown: "# AAPL daily report\n\nPersisted report: MA 119.00",
+                source_summary: {
+                  source: "database",
+                  price_source: "bars_1d",
+                  provider: "yfinance",
+                  effective_provider: "yfinance",
+                  task_run_id: "task-run-12345678",
+                },
               },
               {
                 id: "report-2",
@@ -47,6 +54,9 @@ it("renders latest report, history, and citations", async () => {
   expect(screen.getByText("Showing 1-2 of 2")).toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: "AAPL" })[0]).toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getAllByText("AAPL daily report").length).toBeGreaterThan(0);
+  expect(screen.getByText("source: database")).toBeInTheDocument();
+  expect(screen.getByText("price_source: bars_1d")).toBeInTheDocument();
+  expect(screen.getByText("provider: yfinance")).toBeInTheDocument();
   expect(screen.queryByText(/Persisted report: MA 119.00/)).not.toBeInTheDocument();
   expect(screen.getAllByTitle("View Full Report")[0]).toHaveAttribute("href", "/reports/report-1");
 });

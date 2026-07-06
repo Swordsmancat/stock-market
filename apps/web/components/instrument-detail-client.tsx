@@ -11,8 +11,29 @@ import { IntradayPriceChart } from "@/components/intraday-price-chart";
 import { MarketAssistantCard } from "@/components/market-assistant-card";
 import { MarketDepthCard } from "@/components/market-depth-card";
 import { PriceChangeBadge } from "@/components/price-change-badge";
+import { DataTrustBadge } from "@/components/data-trust-badge";
+import { useMarketColorsContext } from "@/context/market-colors-context";
+import { createDataTrustSignal } from "@/lib/data-trust";
 import { decodeInstrumentSymbol, getInstrumentDisplayName } from "@/lib/instrument-display";
-import type { InstrumentDetailPayload } from "@/lib/instrument-detail";
+import type { InstrumentBar, InstrumentDetailPayload } from "@/lib/instrument-detail";
+
+type ChartBarData = InstrumentBar & {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
+
+function isChartBarData(bar: InstrumentBar): bar is ChartBarData {
+  return (
+    typeof bar.timestamp === "string" &&
+    Number.isFinite(bar.open) &&
+    Number.isFinite(bar.high) &&
+    Number.isFinite(bar.low) &&
+    Number.isFinite(bar.close)
+  );
+}
 
 interface InstrumentDetailClientProps {
   symbol: string;
@@ -29,6 +50,7 @@ export function InstrumentDetailClient({
 }: InstrumentDetailClientProps) {
   const router = useRouter();
   const t = useTranslations("InstrumentDetail");
+  const { getMovementColor } = useMarketColorsContext();
   const [data, setData] = useState<InstrumentDetailPayload | null>(initialData);
   const [loading, setLoading] = useState(initialData === null && initialError === null);
   const [error, setError] = useState<string | null>(initialError);
@@ -93,6 +115,7 @@ export function InstrumentDetailClient({
   }
 
   const bars = data.bars?.items ?? [];
+  const chartBars = bars.filter(isChartBarData);
   const latestBar = bars.at(-1) ?? data.latest?.item ?? null;
   const prevBar = bars.at(-2) ?? null;
   
@@ -105,6 +128,24 @@ export function InstrumentDetailClient({
   const subtitle = displayName === decodedSymbol ? t("detailSubtitle") : `${decodedSymbol} · ${t("detailSubtitle")}`;
   const assistantSymbol = data.request_symbol ?? symbol;
   const assistantProvider = data.market_depth?.effective_provider ?? data.market_depth?.provider ?? null;
+  const latestTrustSignal = createDataTrustSignal({
+    status: data.latest?.status,
+    source: data.latest?.source,
+    provider: data.latest?.provider,
+    requested_provider: data.latest?.requested_provider,
+    effective_provider: data.latest?.effective_provider,
+    as_of: data.latest?.item?.timestamp,
+    no_data_reason: data.latest?.no_data_reason,
+  });
+  const barsTrustSignal = createDataTrustSignal({
+    status: data.bars?.status,
+    source: data.bars?.source,
+    provider: data.bars?.provider,
+    requested_provider: data.bars?.requested_provider,
+    effective_provider: data.bars?.effective_provider,
+    as_of: latestBar?.timestamp,
+    no_data_reason: data.bars?.no_data_reason,
+  });
 
   return (
     <div className="space-y-6">
@@ -127,6 +168,9 @@ export function InstrumentDetailClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{currentPrice.toFixed(2)}</div>
+            <div className="mt-3">
+              <DataTrustBadge signal={latestTrustSignal} mode="summary" />
+            </div>
           </CardContent>
         </Card>
 
@@ -135,7 +179,7 @@ export function InstrumentDetailClient({
             <CardDescription>{t("priceChange")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-2xl font-bold ${getMovementColor(change)}`}>
               {change >= 0 ? '+' : ''}{change.toFixed(2)}
             </div>
           </CardContent>
@@ -178,6 +222,13 @@ export function InstrumentDetailClient({
             previousClose={data.intraday?.previous_close ?? null}
             status={data.intraday?.status ?? "degraded"}
             reason={data.intraday?.availability?.reason ?? null}
+            source={data.intraday?.source ?? null}
+            provider={data.intraday?.provider ?? null}
+            requestedProvider={data.intraday?.requested_provider ?? null}
+            effectiveProvider={data.intraday?.effective_provider ?? null}
+            availability={data.intraday?.availability ?? null}
+            freshness={data.intraday?.freshness ?? null}
+            session={data.intraday?.session ?? null}
             height={280}
           />
         </CardContent>
@@ -189,9 +240,12 @@ export function InstrumentDetailClient({
           <CardDescription>{t("interactiveKlineDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
-          {bars.length > 0 ? (
+          <div className="mb-4">
+            <DataTrustBadge signal={barsTrustSignal} mode="summary" />
+          </div>
+          {chartBars.length > 0 ? (
             <AdvancedCandlestickChart
-              data={bars}
+              data={chartBars}
               symbol={symbol}
               height={500}
               showMA={true}

@@ -5,6 +5,8 @@ import { createChart, HistogramSeries, LineSeries } from "lightweight-charts";
 import type { IChartApi, ISeriesApi, Time } from "lightweight-charts";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
+import { DataTrustBadge } from "@/components/data-trust-badge";
+import { createDataTrustSignal } from "@/lib/data-trust";
 
 export type IntradayPricePoint = {
   timestamp?: string;
@@ -17,11 +19,40 @@ export type IntradayPricePoint = {
 
 type IntradayChartStatus = "ok" | "no_data" | "degraded";
 
+type IntradayTrustAvailability = {
+  status?: string | null;
+  reason?: string | null;
+  is_realtime?: boolean | null;
+  is_delayed?: boolean | null;
+  delay_minutes?: number | null;
+} | null;
+
+type IntradayTrustFreshness = {
+  status?: string | null;
+  reason?: string | null;
+  cache_status?: string | null;
+  data_as_of?: string | null;
+  fetched_at?: string | null;
+  cached_at?: string | null;
+} | null;
+
+type IntradayTrustSession = {
+  status?: string | null;
+  reason?: string | null;
+} | null;
+
 type IntradayPriceChartProps = {
   points: IntradayPricePoint[];
   previousClose?: number | null;
   status?: IntradayChartStatus;
   reason?: string | null;
+  source?: string | null;
+  provider?: string | null;
+  requestedProvider?: string | null;
+  effectiveProvider?: string | null;
+  availability?: IntradayTrustAvailability;
+  freshness?: IntradayTrustFreshness;
+  session?: IntradayTrustSession;
   height?: number;
   className?: string;
 };
@@ -90,6 +121,13 @@ export function IntradayPriceChart({
   previousClose = null,
   status = "degraded",
   reason = null,
+  source = null,
+  provider = null,
+  requestedProvider = null,
+  effectiveProvider = null,
+  availability = null,
+  freshness = null,
+  session = null,
   height = 280,
   className = "",
 }: IntradayPriceChartProps) {
@@ -107,6 +145,17 @@ export function IntradayPriceChart({
   const finitePreviousClose = getFiniteNumber(previousClose);
   const hasAveragePrice = normalizedPoints.some((point) => point.averagePrice !== null);
   const hasVolume = normalizedPoints.some((point) => point.volume !== null);
+  const trustSignal = createDataTrustSignal({
+    status,
+    source,
+    provider,
+    requestedProvider,
+    effectiveProvider,
+    availability,
+    freshness,
+    session,
+    reason,
+  });
 
   useEffect(() => {
     if (!chartContainerRef.current || normalizedPoints.length === 0 || status !== "ok") {
@@ -242,6 +291,7 @@ export function IntradayPriceChart({
     return (
       <div className={`flex min-h-48 items-center justify-center rounded border bg-muted/30 p-6 ${className}`}>
         <div className="space-y-2 text-center">
+          <DataTrustBadge signal={trustSignal} mode="summary" className="items-center" />
           <p className="text-sm font-medium text-muted-foreground">
             {status === "degraded" ? t("degradedState") : t("emptyState")}
           </p>
@@ -253,6 +303,7 @@ export function IntradayPriceChart({
 
   return (
     <div className={`space-y-2 ${className}`}>
+      <DataTrustBadge signal={trustSignal} mode="summary" />
       <div className="grid gap-2 rounded border bg-muted/20 p-3 text-xs text-muted-foreground sm:grid-cols-5">
         <div>
           <div className="font-medium text-foreground">{t("timeLabel")}</div>

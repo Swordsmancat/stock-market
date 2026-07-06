@@ -3,6 +3,8 @@
 import { memo, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMarketColorsContext } from "@/context/market-colors-context";
+import { createDataTrustSignal, getDataTrustTitle } from "@/lib/data-trust";
 
 type TickerItem = {
   code: string;
@@ -11,6 +13,14 @@ type TickerItem = {
   change: number | null;
   changePercent: number | null;
   region?: string;
+  status?: string | null;
+  freshness?: string | null;
+  source?: string | null;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  generated_at?: string | null;
+  no_data_reason?: string | null;
 };
 
 interface MarketTickerProps {
@@ -46,9 +56,17 @@ function formatPercent(value: number | null, locale: string, fallback: string): 
   return formatted;
 }
 
+function getTickerMovementColor(value: number, getMovementColor: (value: number) => string): string {
+  if (value === 0) {
+    return "text-gray-300";
+  }
+  return getMovementColor(value);
+}
+
 function MarketTickerComponent({ items, className }: MarketTickerProps) {
   const locale = "zh-CN";
   const [selectedMarket, setSelectedMarket] = useState<string>("all");
+  const { getMovementColor } = useMarketColorsContext();
 
   const marketOptions = useMemo(
     () => [
@@ -96,12 +114,25 @@ function MarketTickerComponent({ items, className }: MarketTickerProps) {
           <div className="flex gap-6 min-w-max">
             {filteredItems.map((item) => {
               const changeValue = item.change ?? 0;
-              const changeColor = changeValue >= 0 ? "text-green-500" : "text-red-500";
+              const changeColor = getTickerMovementColor(changeValue, getMovementColor);
+              const trustSignal = createDataTrustSignal({
+                status: item.status,
+                freshness: item.freshness,
+                source: item.source,
+                provider: item.provider,
+                requested_provider: item.requested_provider,
+                effective_provider: item.effective_provider,
+                generated_at: item.generated_at,
+                no_data_reason: item.no_data_reason,
+              });
+              const trustTitle = getDataTrustTitle(trustSignal);
 
               return (
                 <div
                   key={item.code}
                   className="inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap"
+                  title={trustTitle}
+                  aria-label={`${item.name} ${trustTitle}`}
                 >
                   <span className="text-gray-400 font-sans">{item.name}</span>
                   <span className="font-bold">
@@ -111,6 +142,7 @@ function MarketTickerComponent({ items, className }: MarketTickerProps) {
                     {formatChange(item.change, locale, "--")}{" "}
                     ({formatPercent(item.changePercent, locale, "--")})
                   </span>
+                  <span className="sr-only">{trustTitle}</span>
                 </div>
               );
             })}

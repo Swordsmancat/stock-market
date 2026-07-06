@@ -107,8 +107,8 @@ describe("IntradayPriceChart", () => {
 
     expect(screen.getByText("Intraday data is unavailable for this provider.")).toBeInTheDocument();
     expect(
-      screen.getByText("The selected provider does not support verified minute bars in this backend."),
-    ).toBeInTheDocument();
+      screen.getAllByText("The selected provider does not support verified minute bars in this backend.").length,
+    ).toBeGreaterThan(0);
     expect(chartMockState.createChartMock).not.toHaveBeenCalled();
   });
 

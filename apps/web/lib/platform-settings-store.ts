@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 
 /** Shared with Python backend at repo/data/platform_settings.json */
 
+export type ColorScheme = "china" | "international";
+
 export type PlatformSettings = {
   market_data_provider: string;
   llm_provider: string;
@@ -10,6 +12,8 @@ export type PlatformSettings = {
   llm_api_base: string;
   akshare_enabled: boolean;
   tushare_token: string;
+  tushare_http_url: string;
+  color_scheme: ColorScheme;
   llm_api_key_configured: boolean;
   tushare_token_configured: boolean;
   market_data_provider_capabilities: MarketDataProviderCapability[];
@@ -37,6 +41,8 @@ const DEFAULTS: StoredPlatformSettings = {
   llm_api_base: "https://api.openai.com/v1",
   akshare_enabled: false,
   tushare_token: "",
+  tushare_http_url: "",
+  color_scheme: "china",
 };
 
 const MARKET_DATA_PROVIDER_CAPABILITY_BASE: Record<
@@ -82,6 +88,10 @@ async function readSettingsFile(): Promise<Partial<StoredPlatformSettings>> {
   }
 }
 
+function normalizeColorScheme(value: unknown): ColorScheme {
+  return value === "international" ? "international" : "china";
+}
+
 function buildStoredPlatformSettings(stored: Partial<StoredPlatformSettings>): StoredPlatformSettings {
   return {
     market_data_provider: stored.market_data_provider ?? DEFAULTS.market_data_provider,
@@ -90,6 +100,8 @@ function buildStoredPlatformSettings(stored: Partial<StoredPlatformSettings>): S
     llm_api_base: stored.llm_api_base ?? DEFAULTS.llm_api_base,
     akshare_enabled: stored.akshare_enabled ?? DEFAULTS.akshare_enabled,
     tushare_token: stored.tushare_token ?? DEFAULTS.tushare_token,
+    tushare_http_url: stored.tushare_http_url ?? DEFAULTS.tushare_http_url,
+    color_scheme: normalizeColorScheme(stored.color_scheme ?? DEFAULTS.color_scheme),
   };
 }
 
@@ -155,6 +167,8 @@ export async function savePlatformSettings(updates: Partial<StoredPlatformSettin
       updates.tushare_token !== undefined && updates.tushare_token.trim()
         ? updates.tushare_token
         : current.tushare_token,
+    tushare_http_url: updates.tushare_http_url ?? current.tushare_http_url,
+    color_scheme: normalizeColorScheme(updates.color_scheme ?? current.color_scheme),
   };
 
   const path = settingsPath();

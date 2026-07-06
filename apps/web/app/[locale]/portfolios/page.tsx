@@ -23,6 +23,8 @@ import {
   PortfolioRenameForm,
 } from "@/components/portfolio-forms";
 import { backendFetch } from "@/lib/backend-api";
+import { getMarketMovementTextClass } from "@/lib/market-color-classes";
+import { getPlatformSettings } from "@/lib/platform-settings-store";
 
 type PortfolioPosition = {
   symbol: string;
@@ -102,22 +104,27 @@ async function fetchPortfolioList(): Promise<PortfolioListPayload> {
   return response.json() as Promise<PortfolioListPayload>;
 }
 
-export default async function PortfoliosPage({
-  params,
-  searchParams = Promise.resolve({}),
-}: {
-  params: Promise<{ locale: string }>;
+type PortfoliosPageProps = {
+  params?: Promise<{ locale: string }>;
   searchParams?: Promise<{ portfolio?: string; op?: string; reason?: string }>;
-} = {}) {
+};
+
+export default async function PortfoliosPage({
+  params = Promise.resolve({ locale: "en" }),
+  searchParams = Promise.resolve({}),
+}: PortfoliosPageProps = {}) {
   const { locale } = await params;
   const query = await searchParams;
   const selectedPortfolioId = query.portfolio ?? "demo";
   const { op, reason } = query;
-  const [payload, portfolioList] = await Promise.all([
+  const [payload, portfolioList, settings] = await Promise.all([
     fetchPortfolio(selectedPortfolioId),
     fetchPortfolioList(),
+    getPlatformSettings(),
   ]);
   const t = await getTranslations("Portfolios");
+  const getPnlClass = (value: number, baseClass: string) =>
+    `${baseClass} ${getMarketMovementTextClass(settings.color_scheme, value)}`;
 
   const positions = payload?.positions ?? [];
   const totalValue =
@@ -211,11 +218,7 @@ export default async function PortfoliosPage({
               </CardHeader>
               <CardContent>
                 <div
-                  className={
-                    unrealizedPnl < 0
-                      ? "text-2xl font-bold text-destructive"
-                      : "text-2xl font-bold text-emerald-600"
-                  }
+                  className={getPnlClass(unrealizedPnl, "text-2xl font-bold")}
                 >
                   ${unrealizedPnl.toLocaleString()}
                 </div>
@@ -228,11 +231,7 @@ export default async function PortfoliosPage({
               </CardHeader>
               <CardContent>
                 <div
-                  className={
-                    unrealizedReturnPct < 0
-                      ? "text-2xl font-bold text-destructive"
-                      : "text-2xl font-bold text-emerald-600"
-                  }
+                  className={getPnlClass(unrealizedReturnPct, "text-2xl font-bold")}
                 >
                   {(unrealizedReturnPct * 100).toFixed(2)}%
                 </div>
@@ -287,20 +286,12 @@ export default async function PortfoliosPage({
                             ${pos.market_value.toLocaleString()}
                           </TableCell>
                           <TableCell
-                            className={
-                              pos.unrealized_pnl < 0
-                                ? "text-right text-destructive"
-                                : "text-right text-emerald-600"
-                            }
+                            className={getPnlClass(pos.unrealized_pnl, "text-right")}
                           >
                             ${pos.unrealized_pnl.toLocaleString()}
                           </TableCell>
                           <TableCell
-                            className={
-                              pos.unrealized_return_pct < 0
-                                ? "text-right text-destructive"
-                                : "text-right text-emerald-600"
-                            }
+                            className={getPnlClass(pos.unrealized_return_pct, "text-right")}
                           >
                             {(pos.unrealized_return_pct * 100).toFixed(2)}%
                           </TableCell>

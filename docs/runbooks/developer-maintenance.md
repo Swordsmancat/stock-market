@@ -91,6 +91,30 @@ python -m pytest tests/services/test_hot_sectors_service.py tests/api/test_secto
 npx vitest run "apps/web/app/api/hot-sectors/route.test.ts" "apps/web/components/hot-sectors.test.tsx" "apps/web/app/[locale]/page.test.tsx"
 ```
 
+FRED 官方宏观刷新聚焦检查：
+
+```bash
+python -m pytest tests/providers/test_fred_provider.py tests/services/test_market_indicators_fred_refresh.py tests/scripts/test_refresh_fred_macro_indicators.py tests/services/test_market_indicators_service.py tests/services/test_market_dashboard_service.py tests/api/test_dashboard_api.py
+ruff check packages/providers/fred_provider.py packages/services/market_indicators.py scripts/refresh_fred_macro_indicators.py tests/providers/test_fred_provider.py tests/services/test_market_indicators_fred_refresh.py tests/scripts/test_refresh_fred_macro_indicators.py
+```
+
+FRED refresh 是显式 opt-in 的维护命令，不会自动调度。运行前需要配置 `FRED_API_KEY`，也可以用 `--dry-run` 先验证 provider payload 和审计字段：
+
+```powershell
+$env:FRED_API_KEY="..."
+python scripts/refresh_fred_macro_indicators.py --series rates --latest-only --dry-run
+python scripts/refresh_fred_macro_indicators.py --series all --start 2025-01-01 --end 2026-07-06
+```
+
+维护规则：
+
+- 缺少 `FRED_API_KEY` 时脚本输出 `WARN` 并退出 0，不会尝试匿名请求。
+- HTTP、JSON shape、provider 和 seed validation 失败输出 `FAIL` 并退出 1。
+- FRED 缺失值 `"."`、空值或非法 decimal 会被跳过，不得写成 0。
+- CPI/M2 YoY 只在当前值和同月去年值都存在且去年值非 0 时派生。
+- 入库仍走 `MarketIndicatorObservation`，components 必须保留 `source_series_id`、`source_url`、`retrieved_at`、`methodology` 或 `calculation`。
+- Source readiness 链接和 seed 模板不是 citation；dashboard/AI 只能引用成功入库的本地 observations。
+
 本地服务自检：
 
 ```bash
@@ -158,6 +182,34 @@ python scripts/task_run_health.py
 - 必须向用户显示 unavailable/degraded 文案。
 - 在详情页中，日线数据仍是主要依赖；分时图和深度数据是非致命增强，失败时不应导致整页失败。
 - 文案必须明确“当前数据源不支持/暂无已验证数据”。
+
+### Frontend provider trust visibility MVP
+
+前端新增了共享 trust normalizer 和 badge/summary 组件，用来统一展示 provider、source、freshness、延迟、缓存、session 和 no-data/degraded 原因。
+
+关键文件：
+
+- `apps/web/lib/data-trust.ts`：纯前端 normalizer；缺失 metadata 时必须返回 `unknown`，不能默认 fresh/live。
+- `apps/web/components/data-trust-badge.tsx`：compact / summary 两种展示模式；颜色是语义状态色，不是市场涨跌色。
+- `apps/web/components/market-overview-client.tsx`、`market-ticker.tsx`：首页 market overview 和黑底 ticker 的来源/状态可见性。
+- `apps/web/components/smart-recommendations.tsx`：推荐卡片不再默认宣称 realtime，显示 payload diagnostics。
+- `apps/web/components/instrument-detail-client.tsx`、`intraday-price-chart.tsx`：最新价、K 线、分时图展示 provider/source/freshness/session/cache。
+- `apps/web/app/[locale]/reports/**`、`generate-daily-report-button.tsx`：报告列表/详情展示 `source_summary`，生成报告时透传显式 provider 或提示使用后端默认。
+
+维护规则：
+
+- 如果 payload 没有 `is_realtime=true`，不要显示“实时”或 Level-2 等强声明。
+- mock/demo/fixture/provider_error 应优先显示为 mock/degraded/unavailable，而不是成功状态。
+- `provider` 和 `effective_provider` 不一致时，UI 应优先暴露 effective provider，并保留 requested provider 供排查。
+- `freshness.cache_status` 和 `session.status` 是数据解释 metadata，不代表完整生产 SLA 或低延迟 market-data plant。
+- 新增行情相关组件时，优先复用 `createDataTrustSignal` 和 `DataTrustBadge`，不要在组件内手写另一套状态映射。
+
+P0 provider trust 聚焦检查：
+
+```bash
+npx vitest run "apps/web/lib/data-trust.test.ts" "apps/web/components/data-trust-badge.test.tsx" "apps/web/components/market-ticker.test.tsx" "apps/web/app/[locale]/page.test.tsx" "apps/web/components/smart-recommendations.test.tsx" "apps/web/components/intraday-price-chart.test.tsx" "apps/web/app/[locale]/instruments/[symbol]/page.test.tsx" "apps/web/app/[locale]/reports/page.test.tsx" "apps/web/app/[locale]/reports/[reportId]/page.test.tsx" "apps/web/components/generate-daily-report-button.test.tsx" --reporter=dot
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+```
 
 ### Hot sector fund-flow contract
 

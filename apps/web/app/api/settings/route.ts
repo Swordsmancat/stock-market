@@ -7,6 +7,8 @@ type PlatformSettingsRoutePayload = {
   llm_api_base?: string;
   akshare_enabled?: boolean;
   tushare_token?: string;
+  tushare_http_url?: string;
+  color_scheme?: "china" | "international";
   llm_api_key_configured?: boolean;
   tushare_token_configured?: boolean;
   market_data_provider_capabilities?: unknown;
@@ -37,6 +39,8 @@ export async function PUT(request: Request) {
     llm_api_base?: string;
     akshare_enabled?: boolean;
     tushare_token?: string;
+    tushare_http_url?: string;
+    color_scheme?: "china" | "international";
   };
   const saved = await savePlatformSettings(body);
   return Response.json({ source: "platform_settings", ...buildPublicSettingsPayload(saved) });

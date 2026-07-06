@@ -1,8 +1,23 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import zhMessages from "../messages/zh.json";
 import { HotSectors } from "./hot-sectors";
+
+vi.mock("@/context/market-colors-context", () => ({
+  useMarketColorsContext: () => ({
+    getMovementColor: (value: number) => (value >= 0 ? "text-positive" : "text-negative"),
+    getMovementBg: (value: number) => (value >= 0 ? "bg-positive" : "bg-negative"),
+    colorScheme: "china",
+    setColorScheme: vi.fn(),
+    colors: {
+      up: "text-positive",
+      down: "text-negative",
+      upBg: "bg-positive",
+      downBg: "bg-negative",
+    },
+  }),
+}));
 
 afterEach(() => {
   cleanup();
@@ -91,7 +106,9 @@ it("renders live provider-backed sector data with metadata", () => {
   expect(screen.getByText(/贡献领先：测试龙头/)).toBeInTheDocument();
   expect(screen.getByText(/分类版本：sector-taxonomy-v1/)).toBeInTheDocument();
   expect(screen.getByText(/轮动历史：暂无可验证快照/)).toBeInTheDocument();
-  expect(screen.getByText(/流入 5.2亿/)).toBeInTheDocument();
+  const flowAmount = screen.getByText(/流入 5.2亿/);
+  expect(flowAmount).toBeInTheDocument();
+  expect(flowAmount.closest("div")).toHaveClass("text-positive");
 });
 
 it("renders delayed provider metadata distinctly from live data", () => {

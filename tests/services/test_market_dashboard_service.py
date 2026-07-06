@@ -1,10 +1,13 @@
-from datetime import date
+import re
+from datetime import date, datetime, timezone
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
+from packages.domain.models import GeneratedReport, NewsArticle
 from packages.services.market_dashboard import get_market_overview_payload
 from packages.services.market_data import MarketDataProviderUnavailableError
 from packages.shared.cache import clear_market_overview_cache
@@ -31,6 +34,19 @@ class FailingRedis:
 
     def set(self, key: str, value: str, ex: int | None = None) -> None:
         raise RuntimeError("redis write unavailable")
+
+
+@pytest.fixture(autouse=True)
+def disable_dashboard_llm(monkeypatch):
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_platform_settings",
+        lambda: {
+            "market_data_provider": "mock",
+            "llm_provider": "mock",
+            "llm_api_key": "",
+            "llm_api_base": "https://api.openai.com/v1",
+        },
+    )
 
 
 def make_session():
@@ -75,8 +91,200 @@ def test_market_overview_payload_contains_followed_indices_and_valuation_section
     assert index_items[-1]["code"] == "us_dow_jones"
 
     valuation_items = payload["valuation_indicators"]["items"]
-    assert [item["region"] for item in valuation_items] == ["CN", "HK", "US"]
+    assert payload["macro_indicators"]["items"] == valuation_items
+    assert [item["code"] for item in valuation_items] == [
+        "buffett_indicator_cn",
+        "buffett_indicator_hk",
+        "buffett_indicator_us",
+        "us_10y_yield",
+        "us_2y_yield",
+        "us_10y_2y_spread",
+        "us_cpi_yoy",
+        "us_m2_yoy",
+        "cn_m2_yoy",
+    ]
     assert all(item["status"] == "no_data" for item in valuation_items)
+
+    dashboard_brief = payload["dashboard_brief"]
+    assert dashboard_brief["status"] == "degraded"
+    assert dashboard_brief["safety"]["not_investment_advice"] is True
+    assert dashboard_brief["sections"][0]["id"] == "what_changed"
+    assert "no audited observations" in dashboard_brief["sections"][0]["items"][0]
+    assert dashboard_brief["diagnostics"][0]["code"] == "MACRO_INDICATOR_NO_DATA"
+    assert "generated reports and 0 stored news items" in dashboard_brief["sections"][1]["items"][2]
+    assert {diagnostic["code"] for diagnostic in dashboard_brief["diagnostics"]} >= {
+        "GENERATED_REPORTS_NO_DATA",
+        "NEWS_NO_DATA",
+        "FALLBACK_USED",
+    }
+    narrative = dashboard_brief["narrative"]
+    assert narrative["model"] == {
+        "provider": "deterministic",
+        "name": "dashboard-brief-deterministic-fallback",
+        "used_llm": False,
+        "fallback_reason": "OpenAI-compatible LLM provider is not configured.",
+    }
+    assert "not investment advice" in narrative["answer_markdown"]
+    assert narrative["context"]["source_mix"] == {
+        "macro_citations": 0,
+        "report_citations": 0,
+        "news_citations": 0,
+        "information_source_gaps": 9,
+    }
+
+    information_sources = payload["information_sources"]
+    assert information_sources["status"] == "degraded"
+    assert information_sources["summary"]["needs_action"] == 8
+    assert information_sources["items"][0]["id"] == "fred_us_rates"
+
+
+def test_market_overview_brief_includes_report_and_news_availability():
+    session = make_session()
+    session.add(
+        GeneratedReport(
+            symbol="AAPL",
+            report_type="stock_daily",
+            as_of=date(2026, 7, 2),
+            content_markdown="AAPL daily research report.",
+            citations=["bars_1d:AAPL:2026-07-02"],
+            source_summary={"source": "mock"},
+        )
+    )
+    session.add(
+        NewsArticle(
+            symbol="AAPL",
+            title="Apple reports strong growth in services revenue",
+            url="https://example.com/aapl-services-growth",
+            source="mock_news",
+            published_at=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
+            summary="Apple reports strong growth and record services profit in the quarter.",
+            dedupe_hash="aapl-services-growth",
+        )
+    )
+    session.commit()
+
+    payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    dashboard_brief = payload["dashboard_brief"]
+    assert "1 generated reports and 1 stored news items" in dashboard_brief["sections"][1]["items"][2]
+    citation_sources = {citation["source"] for citation in dashboard_brief["citations"]}
+    assert citation_sources >= {"generated_reports", "news"}
+    assert dashboard_brief["narrative"]["context"]["source_mix"]["report_citations"] == 1
+    assert dashboard_brief["narrative"]["context"]["source_mix"]["news_citations"] == 1
+    diagnostic_codes = {diagnostic["code"] for diagnostic in dashboard_brief["diagnostics"]}
+    assert "GENERATED_REPORTS_NO_DATA" not in diagnostic_codes
+    assert "NEWS_NO_DATA" not in diagnostic_codes
+
+
+def test_market_overview_brief_uses_llm_when_configured(monkeypatch):
+    session = make_session()
+    session.add(
+        GeneratedReport(
+            symbol="AAPL",
+            report_type="stock_daily",
+            as_of=date(2026, 7, 2),
+            content_markdown="AAPL daily research report.",
+            citations=["bars_1d:AAPL:2026-07-02"],
+            source_summary={"source": "mock"},
+        )
+    )
+    session.commit()
+
+    class FakeDashboardLLMProvider:
+        def generate(self, prompt: str) -> str:
+            assert "Allowed citations" in prompt
+            assert "Source readiness gaps, not citations" in prompt
+            match = re.search(r"\[(generated_report:[^\]]+)\]", prompt)
+            assert match is not None
+            return f"### Summary\nGenerated dashboard synthesis [{match.group(1)}]."
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_platform_settings",
+        lambda: {
+            "market_data_provider": "mock",
+            "llm_provider": "openai",
+            "llm_api_key": "test-key",
+            "llm_api_base": "https://example.test/v1",
+        },
+    )
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_llm_provider",
+        lambda: FakeDashboardLLMProvider(),
+    )
+
+    payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    narrative = payload["dashboard_brief"]["narrative"]
+    assert narrative["answer_markdown"].startswith("### Summary\nGenerated dashboard synthesis")
+    assert narrative["model"] == {
+        "provider": "openai",
+        "name": "gpt-4o-mini",
+        "used_llm": True,
+        "fallback_reason": None,
+    }
+    diagnostic_codes = {diagnostic["code"] for diagnostic in payload["dashboard_brief"]["diagnostics"]}
+    assert "FALLBACK_USED" not in diagnostic_codes
+
+
+def test_market_overview_brief_rejects_unknown_llm_citation(monkeypatch):
+    session = make_session()
+    session.add(
+        GeneratedReport(
+            symbol="AAPL",
+            report_type="stock_daily",
+            as_of=date(2026, 7, 2),
+            content_markdown="AAPL daily research report.",
+            citations=["bars_1d:AAPL:2026-07-02"],
+            source_summary={"source": "mock"},
+        )
+    )
+    session.commit()
+
+    class FakeDashboardLLMProvider:
+        def generate(self, prompt: str) -> str:
+            assert "Allowed citations" in prompt
+            return "### Summary\nInvented citation [generated_report:not-present]."
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_platform_settings",
+        lambda: {
+            "market_data_provider": "mock",
+            "llm_provider": "openai",
+            "llm_api_key": "test-key",
+            "llm_api_base": "https://example.test/v1",
+        },
+    )
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_llm_provider",
+        lambda: FakeDashboardLLMProvider(),
+    )
+
+    payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    dashboard_brief = payload["dashboard_brief"]
+    narrative = dashboard_brief["narrative"]
+    assert narrative["model"]["used_llm"] is False
+    assert narrative["model"]["fallback_reason"] == "LLM citation validation failed: unknown citation id."
+    assert "Invented citation" not in narrative["answer_markdown"]
+    diagnostics_by_code = {diagnostic["code"]: diagnostic for diagnostic in dashboard_brief["diagnostics"]}
+    assert diagnostics_by_code["CITATION_UNKNOWN_ID"]["details"] == {
+        "unknown_ids": ["generated_report:not-present"]
+    }
+    assert diagnostics_by_code["FALLBACK_USED"]["details"] == {
+        "reason": "LLM citation validation failed: unknown citation id."
+    }
 
 
 def test_market_overview_keeps_partial_results_when_index_provider_fails(monkeypatch):

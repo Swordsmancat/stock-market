@@ -1,0 +1,611 @@
+[
+  {
+    "route": "http://127.0.0.1:3000/zh",
+    "routeSlug": "home",
+    "viewport": {
+      "slug": "desktop-1440x900",
+      "width": 1440,
+      "height": 900
+    },
+    "theme": "dark",
+    "file": "screenshots/home-desktop-1440x900.png",
+    "observation": {
+      "bodyClientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "colorSchemeValues": [],
+      "docClientWidth": 1440,
+      "docScrollWidth": 1440,
+      "expectedText": "首页概览",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": false,
+      "mainClientWidth": 1169,
+      "mainScrollWidth": 1169,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh",
+      "wideElements": [
+        {
+          "className": "flex gap-6 min-w-max",
+          "clientWidth": 2390,
+          "left": 448,
+          "right": 2838,
+          "scrollWidth": 2390,
+          "tag": "div",
+          "text": "上证指数4,043.64+14.74 (+0.37%)深证成指15,597.51+98.70 (+0.64%)创业板指4,019.93-- (--)沪深300-",
+          "width": 2390
+        },
+        {
+          "className": "inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap",
+          "clientWidth": 184,
+          "left": 1375,
+          "right": 1559,
+          "scrollWidth": 184,
+          "tag": "div",
+          "text": "中证5008,745.26-- (--)",
+          "width": 184
+        },
+        {
+          "className": "font-bold",
+          "clientWidth": 62,
+          "left": 1436,
+          "right": 1498,
+          "scrollWidth": 62,
+          "tag": "span",
+          "text": "8,745.26",
+          "width": 62
+        },
+        {
+          "className": "text-gray-300",
+          "clientWidth": 54,
+          "left": 1506,
+          "right": 1559,
+          "scrollWidth": 54,
+          "tag": "span",
+          "text": "-- (--)",
+          "width": 54
+        },
+        {
+          "className": "inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap",
+          "clientWidth": 264,
+          "left": 1583,
+          "right": 1848,
+          "scrollWidth": 264,
+          "tag": "div",
+          "text": "恒生指数23,350.03+295.00 (+1.28%)",
+          "width": 264
+        },
+        {
+          "className": "text-gray-400 font-sans",
+          "clientWidth": 56,
+          "left": 1583,
+          "right": 1639,
+          "scrollWidth": 56,
+          "tag": "span",
+          "text": "恒生指数",
+          "width": 56
+        },
+        {
+          "className": "font-bold",
+          "clientWidth": 69,
+          "left": 1647,
+          "right": 1717,
+          "scrollWidth": 69,
+          "tag": "span",
+          "text": "23,350.03",
+          "width": 69
+        },
+        {
+          "className": "text-green-600 dark:text-green-400",
+          "clientWidth": 123,
+          "left": 1725,
+          "right": 1848,
+          "scrollWidth": 123,
+          "tag": "span",
+          "text": "+295.00 (+1.28%)",
+          "width": 123
+        },
+        {
+          "className": "inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap",
+          "clientWidth": 141,
+          "left": 1872,
+          "right": 2013,
+          "scrollWidth": 141,
+          "tag": "div",
+          "text": "恒生科技---- (--)",
+          "width": 141
+        },
+        {
+          "className": "text-gray-400 font-sans",
+          "clientWidth": 56,
+          "left": 1872,
+          "right": 1928,
+          "scrollWidth": 56,
+          "tag": "span",
+          "text": "恒生科技",
+          "width": 56
+        },
+        {
+          "className": "font-bold",
+          "clientWidth": 15,
+          "left": 1936,
+          "right": 1951,
+          "scrollWidth": 15,
+          "tag": "span",
+          "text": "--",
+          "width": 15
+        },
+        {
+          "className": "text-gray-300",
+          "clientWidth": 54,
+          "left": 1959,
+          "right": 2013,
+          "scrollWidth": 54,
+          "tag": "span",
+          "text": "-- (--)",
+          "width": 54
+        }
+      ]
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  },
+  {
+    "route": "http://127.0.0.1:3000/zh/settings",
+    "routeSlug": "settings",
+    "viewport": {
+      "slug": "desktop-1440x900",
+      "width": 1440,
+      "height": 900
+    },
+    "theme": "dark",
+    "file": "screenshots/settings-desktop-1440x900.png",
+    "observation": {
+      "bodyClientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "colorSchemeValues": [
+        "china",
+        "international"
+      ],
+      "docClientWidth": 1440,
+      "docScrollWidth": 1440,
+      "expectedText": "设置",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": true,
+      "mainClientWidth": 1169,
+      "mainScrollWidth": 1169,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh/settings",
+      "wideElements": []
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  },
+  {
+    "route": "http://127.0.0.1:3000/zh/instruments/AAPL",
+    "routeSlug": "instrument-aapl",
+    "viewport": {
+      "slug": "desktop-1440x900",
+      "width": 1440,
+      "height": 900
+    },
+    "theme": "dark",
+    "file": "screenshots/instrument-aapl-desktop-1440x900.png",
+    "observation": {
+      "bodyClientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "colorSchemeValues": [],
+      "docClientWidth": 1440,
+      "docScrollWidth": 1440,
+      "expectedText": "AAPL",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": false,
+      "mainClientWidth": 1169,
+      "mainScrollWidth": 1169,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh/instruments/AAPL",
+      "wideElements": []
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  },
+  {
+    "route": "http://127.0.0.1:3000/zh/watchlist",
+    "routeSlug": "watchlist",
+    "viewport": {
+      "slug": "desktop-1440x900",
+      "width": 1440,
+      "height": 900
+    },
+    "theme": "dark",
+    "file": "screenshots/watchlist-desktop-1440x900.png",
+    "observation": {
+      "bodyClientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "colorSchemeValues": [],
+      "docClientWidth": 1440,
+      "docScrollWidth": 1440,
+      "expectedText": "关注",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": false,
+      "mainClientWidth": 1184,
+      "mainScrollWidth": 1184,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh/watchlist",
+      "wideElements": []
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  },
+  {
+    "route": "http://127.0.0.1:3000/zh",
+    "routeSlug": "home",
+    "viewport": {
+      "slug": "mobile-390x844",
+      "width": 390,
+      "height": 844
+    },
+    "theme": "dark",
+    "file": "screenshots/home-mobile-390x844.png",
+    "observation": {
+      "bodyClientWidth": 390,
+      "bodyScrollWidth": 390,
+      "colorSchemeValues": [],
+      "docClientWidth": 390,
+      "docScrollWidth": 390,
+      "expectedText": "首页概览",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": false,
+      "mainClientWidth": 375,
+      "mainScrollWidth": 752,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh",
+      "wideElements": [
+        {
+          "className": "flex gap-6 min-w-max",
+          "clientWidth": 2390,
+          "left": 176,
+          "right": 2566,
+          "scrollWidth": 2390,
+          "tag": "div",
+          "text": "上证指数4,043.64+14.74 (+0.37%)深证成指15,597.51+98.70 (+0.64%)创业板指4,019.93-- (--)沪深300-",
+          "width": 2390
+        },
+        {
+          "className": "inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap",
+          "clientWidth": 249,
+          "left": 176,
+          "right": 425,
+          "scrollWidth": 249,
+          "tag": "div",
+          "text": "上证指数4,043.64+14.74 (+0.37%)",
+          "width": 249
+        },
+        {
+          "className": "text-green-600 dark:text-green-400",
+          "clientWidth": 115,
+          "left": 310,
+          "right": 425,
+          "scrollWidth": 115,
+          "tag": "span",
+          "text": "+14.74 (+0.37%)",
+          "width": 115
+        },
+        {
+          "className": "inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap",
+          "clientWidth": 257,
+          "left": 449,
+          "right": 706,
+          "scrollWidth": 257,
+          "tag": "div",
+          "text": "深证成指15,597.51+98.70 (+0.64%)",
+          "width": 257
+        },
+        {
+          "className": "text-gray-400 font-sans",
+          "clientWidth": 56,
+          "left": 449,
+          "right": 505,
+          "scrollWidth": 56,
+          "tag": "span",
+          "text": "深证成指",
+          "width": 56
+        },
+        {
+          "className": "font-bold",
+          "clientWidth": 69,
+          "left": 513,
+          "right": 582,
+          "scrollWidth": 69,
+          "tag": "span",
+          "text": "15,597.51",
+          "width": 69
+        },
+        {
+          "className": "text-green-600 dark:text-green-400",
+          "clientWidth": 115,
+          "left": 590,
+          "right": 706,
+          "scrollWidth": 115,
+          "tag": "span",
+          "text": "+98.70 (+0.64%)",
+          "width": 115
+        },
+        {
+          "className": "inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap",
+          "clientWidth": 188,
+          "left": 730,
+          "right": 917,
+          "scrollWidth": 188,
+          "tag": "div",
+          "text": "创业板指4,019.93-- (--)",
+          "width": 188
+        },
+        {
+          "className": "text-gray-400 font-sans",
+          "clientWidth": 56,
+          "left": 730,
+          "right": 786,
+          "scrollWidth": 56,
+          "tag": "span",
+          "text": "创业板指",
+          "width": 56
+        },
+        {
+          "className": "font-bold",
+          "clientWidth": 62,
+          "left": 794,
+          "right": 855,
+          "scrollWidth": 62,
+          "tag": "span",
+          "text": "4,019.93",
+          "width": 62
+        },
+        {
+          "className": "text-gray-300",
+          "clientWidth": 54,
+          "left": 863,
+          "right": 917,
+          "scrollWidth": 54,
+          "tag": "span",
+          "text": "-- (--)",
+          "width": 54
+        },
+        {
+          "className": "inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap",
+          "clientWidth": 138,
+          "left": 941,
+          "right": 1079,
+          "scrollWidth": 138,
+          "tag": "div",
+          "text": "沪深300---- (--)",
+          "width": 138
+        }
+      ]
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  },
+  {
+    "route": "http://127.0.0.1:3000/zh/settings",
+    "routeSlug": "settings",
+    "viewport": {
+      "slug": "mobile-390x844",
+      "width": 390,
+      "height": 844
+    },
+    "theme": "dark",
+    "file": "screenshots/settings-mobile-390x844.png",
+    "observation": {
+      "bodyClientWidth": 390,
+      "bodyScrollWidth": 390,
+      "colorSchemeValues": [
+        "china",
+        "international"
+      ],
+      "docClientWidth": 390,
+      "docScrollWidth": 390,
+      "expectedText": "设置",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": true,
+      "mainClientWidth": 375,
+      "mainScrollWidth": 375,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh/settings",
+      "wideElements": []
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  },
+  {
+    "route": "http://127.0.0.1:3000/zh/instruments/AAPL",
+    "routeSlug": "instrument-aapl",
+    "viewport": {
+      "slug": "mobile-390x844",
+      "width": 390,
+      "height": 844
+    },
+    "theme": "dark",
+    "file": "screenshots/instrument-aapl-mobile-390x844.png",
+    "observation": {
+      "bodyClientWidth": 390,
+      "bodyScrollWidth": 390,
+      "colorSchemeValues": [],
+      "docClientWidth": 390,
+      "docScrollWidth": 390,
+      "expectedText": "AAPL",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": false,
+      "mainClientWidth": 375,
+      "mainScrollWidth": 375,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh/instruments/AAPL",
+      "wideElements": []
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  },
+  {
+    "route": "http://127.0.0.1:3000/zh/watchlist",
+    "routeSlug": "watchlist",
+    "viewport": {
+      "slug": "mobile-390x844",
+      "width": 390,
+      "height": 844
+    },
+    "theme": "dark",
+    "file": "screenshots/watchlist-mobile-390x844.png",
+    "observation": {
+      "bodyClientWidth": 390,
+      "bodyScrollWidth": 390,
+      "colorSchemeValues": [],
+      "docClientWidth": 390,
+      "docScrollWidth": 390,
+      "expectedText": "关注",
+      "hasExpectedText": true,
+      "hasTushareHttpUrl": false,
+      "mainClientWidth": 375,
+      "mainScrollWidth": 375,
+      "runtimeErrorText": false,
+      "themeClass": "dark",
+      "title": "Stock Analysis Platform",
+      "url": "http://127.0.0.1:3000/zh/watchlist",
+      "wideElements": [
+        {
+          "className": "w-full caption-bottom text-sm",
+          "clientWidth": 739,
+          "left": 41,
+          "right": 780,
+          "scrollWidth": 739,
+          "tag": "table",
+          "text": "代码名称市场最新价RSI告警规则操作TESTTestUS$43.64暂无保存查看详情移除CN_SHANGHAI_COMPOSITE上证指数CN暂无暂无保存查看详",
+          "width": 739
+        },
+        {
+          "className": "[&_tr]:border-b",
+          "clientWidth": 739,
+          "left": 41,
+          "right": 780,
+          "scrollWidth": 739,
+          "tag": "thead",
+          "text": "代码名称市场最新价RSI告警规则操作",
+          "width": 739
+        },
+        {
+          "className": "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+          "clientWidth": 739,
+          "left": 41,
+          "right": 780,
+          "scrollWidth": 739,
+          "tag": "tr",
+          "text": "代码名称市场最新价RSI告警规则操作",
+          "width": 739
+        },
+        {
+          "className": "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+          "clientWidth": 72,
+          "left": 325,
+          "right": 397,
+          "scrollWidth": 72,
+          "tag": "th",
+          "text": "市场",
+          "width": 72
+        },
+        {
+          "className": "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+          "clientWidth": 81,
+          "left": 397,
+          "right": 478,
+          "scrollWidth": 81,
+          "tag": "th",
+          "text": "最新价",
+          "width": 81
+        },
+        {
+          "className": "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+          "clientWidth": 54,
+          "left": 478,
+          "right": 532,
+          "scrollWidth": 54,
+          "tag": "th",
+          "text": "RSI",
+          "width": 54
+        },
+        {
+          "className": "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+          "clientWidth": 128,
+          "left": 532,
+          "right": 660,
+          "scrollWidth": 128,
+          "tag": "th",
+          "text": "告警规则",
+          "width": 128
+        },
+        {
+          "className": "h-12 px-4 align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 text-right",
+          "clientWidth": 120,
+          "left": 660,
+          "right": 780,
+          "scrollWidth": 120,
+          "tag": "th",
+          "text": "操作",
+          "width": 120
+        },
+        {
+          "className": "[&_tr:last-child]:border-0",
+          "clientWidth": 739,
+          "left": 41,
+          "right": 780,
+          "scrollWidth": 739,
+          "tag": "tbody",
+          "text": "TESTTestUS$43.64暂无保存查看详情移除CN_SHANGHAI_COMPOSITE上证指数CN暂无暂无保存查看详情移除",
+          "width": 739
+        },
+        {
+          "className": "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+          "clientWidth": 739,
+          "left": 41,
+          "right": 780,
+          "scrollWidth": 739,
+          "tag": "tr",
+          "text": "TESTTestUS$43.64暂无保存查看详情移除",
+          "width": 739
+        },
+        {
+          "className": "p-4 align-middle [&:has([role=checkbox])]:pr-0",
+          "clientWidth": 72,
+          "left": 325,
+          "right": 397,
+          "scrollWidth": 72,
+          "tag": "td",
+          "text": "US",
+          "width": 72
+        },
+        {
+          "className": "p-4 align-middle [&:has([role=checkbox])]:pr-0",
+          "clientWidth": 81,
+          "left": 397,
+          "right": 478,
+          "scrollWidth": 81,
+          "tag": "td",
+          "text": "$43.64",
+          "width": 81
+        }
+      ]
+    },
+    "consoleErrorCount": 0,
+    "consoleErrors": []
+  }
+]

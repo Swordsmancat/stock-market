@@ -110,6 +110,13 @@ it("renders watchlist instruments with alert status from enriched API payload", 
 
   expect(screen.getAllByText("Watchlist")[0]).toBeInTheDocument();
   expect(screen.getByText("Track your favorite stocks and their latest performance.")).toBeInTheDocument();
+  expect(screen.getAllByText("Tracked symbols").length).toBeGreaterThan(0);
+  expect(screen.getByText("Active symbols")).toBeInTheDocument();
+  expect(screen.getByText("Triggered alerts")).toBeInTheDocument();
+  expect(screen.getByText("Priced symbols")).toBeInTheDocument();
+  expect(screen.getAllByText("Source: database").length).toBeGreaterThan(0);
+  expect(screen.getByText("Markets: 3")).toBeInTheDocument();
+  expect(screen.getByText("3 items in your watchlist.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "600519" })).toHaveAttribute("href", "/instruments/600519");
   expect(screen.getByRole("link", { name: "0700" })).toHaveAttribute("href", "/instruments/0700");
   expect(screen.getByRole("link", { name: "AAPL" })).toHaveAttribute("href", "/instruments/AAPL");

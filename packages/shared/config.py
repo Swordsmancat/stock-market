@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     daily_report_cron_minute: int = 30
     market_data_provider: str = "yfinance"
     task_run_stale_minutes: int = 30
+    fred_api_key: str | None = None
+    fred_api_base_url: str = "https://api.stlouisfed.org/fred"
 
     model_config = SettingsConfigDict(
         env_file=".env",

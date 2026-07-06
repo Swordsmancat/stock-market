@@ -25,6 +25,16 @@ type ReportItem = {
   as_of: string;
   content_markdown: string;
   task_run_id?: string | null;
+  source_summary?: ReportSourceSummary | null;
+};
+
+type ReportSourceSummary = {
+  source?: string | null;
+  price_source?: string | null;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  task_run_id?: string | null;
 };
 
 type ReportsPayload = {
@@ -64,6 +74,30 @@ function extractReportPreview(contentMarkdown: string, fallback: string): string
 
   const cleanedLine = cleanReportPreviewLine(meaningfulLine);
   return cleanedLine || fallback;
+}
+
+function buildReportSourceDetails(sourceSummary: ReportSourceSummary | null | undefined): string[] {
+  if (!sourceSummary) {
+    return [];
+  }
+
+  const details: string[] = [];
+  if (sourceSummary.source) {
+    details.push(`source: ${sourceSummary.source}`);
+  }
+  if (sourceSummary.price_source) {
+    details.push(`price_source: ${sourceSummary.price_source}`);
+  }
+  if (sourceSummary.effective_provider || sourceSummary.provider) {
+    details.push(`provider: ${sourceSummary.effective_provider ?? sourceSummary.provider}`);
+  }
+  if (sourceSummary.requested_provider) {
+    details.push(`requested_provider: ${sourceSummary.requested_provider}`);
+  }
+  if (sourceSummary.task_run_id) {
+    details.push(`task_run_id: ${sourceSummary.task_run_id}`);
+  }
+  return details;
 }
 
 export default async function ReportsCenterPage({
@@ -118,6 +152,7 @@ export default async function ReportsCenterPage({
             symbol={generateSymbol}
             start={analysis.start}
             end={analysis.end}
+            provider={params.symbol ? undefined : null}
             variant="default"
             size="default"
           />
@@ -207,8 +242,19 @@ export default async function ReportsCenterPage({
                     <TableCell>
                       {item.as_of ? new Date(item.as_of).toLocaleDateString() : "--"}
                     </TableCell>
-                    <TableCell className="max-w-[300px] truncate text-muted-foreground">
-                      {extractReportPreview(item.content_markdown, t("emptyPreview"))}
+                    <TableCell className="max-w-[300px] text-muted-foreground">
+                      <div className="truncate">
+                        {extractReportPreview(item.content_markdown, t("emptyPreview"))}
+                      </div>
+                      {buildReportSourceDetails(item.source_summary).length > 0 ? (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {buildReportSourceDetails(item.source_summary).map((detail) => (
+                            <Badge key={detail} variant="outline" className="text-[10px] font-normal">
+                              {detail}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       {item.task_run_id ? (

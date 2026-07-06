@@ -27,6 +27,13 @@ it("renders report detail with a task-run lineage link", async () => {
             citations: ["technical_indicators:AAPL:2026-01-20T00:00:00+00:00"],
             created_at: "2026-01-20T21:30:00+00:00",
             task_run_id: "task-run-12345678",
+            source_summary: {
+              source: "database",
+              price_source: "bars_1d",
+              provider: "yfinance",
+              effective_provider: "yfinance",
+              task_run_id: "task-run-12345678",
+            },
           }),
         ),
       );
@@ -46,5 +53,8 @@ it("renders report detail with a task-run lineage link", async () => {
     "href",
     "/task-runs/task-run-12345678",
   );
+  expect(screen.getByText("source: database")).toBeInTheDocument();
+  expect(screen.getByText("price_source: bars_1d")).toBeInTheDocument();
+  expect(screen.getByText("provider: yfinance")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "View instrument" })).toHaveAttribute("href", "/instruments/AAPL");
 });

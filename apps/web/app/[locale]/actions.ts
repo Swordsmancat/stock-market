@@ -224,6 +224,8 @@ export async function savePlatformSettingsAction(formData: FormData) {
       llm_api_base: String(formData.get("llm_api_base") ?? "https://api.openai.com/v1"),
       akshare_enabled: formData.get("akshare_enabled") === "on",
       tushare_token: String(formData.get("tushare_token") ?? ""),
+      tushare_http_url: String(formData.get("tushare_http_url") ?? ""),
+      color_scheme: String(formData.get("color_scheme") ?? "china") === "international" ? "international" : "china",
     });
     revalidatePath(`/${locale}/settings`);
   } catch {

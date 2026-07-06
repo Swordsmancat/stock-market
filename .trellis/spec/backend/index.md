@@ -41,6 +41,7 @@ Primary examples:
 | [Quality Guidelines](./quality-guidelines.md) | Focused pytest, non-mutating diagnostics, and subagent safety boundaries | Filled |
 | [Logging Guidelines](./logging-guidelines.md) | Current logging state and sensitive-data boundaries | Filled |
 | [Assistant Research Citation Contract](./assistant-research-citation-contract.md) | `/assistant/market` research-evidence citations, diagnostics, LLM citation validation, and safety boundaries | Filled |
+| [Market Indicator Seed Import Contract](./market-indicator-seed-import-contract.md) | Offline audited JSON/CSV macro observation import contract, validation rules, and CLI boundary | Filled |
 | [Hot Sector Contract](./hot-sector-contract.md) | `/sectors/hot` provider-backed payload fields, degraded states, and cross-layer tests | Filled |
 | [Intraday Minute Cache Contract](./intraday-cache-contract.md) | `/market-data/{symbol}/intraday` verified minute cache, session policy, freshness metadata, and no-fabrication rules | Filled |
 | [Market Depth Contract](./market-depth-contract.md) | `/market-data/{symbol}/depth` explicit provider boundary, section-level degraded states, large-order derivation, and no-fabrication rules | Filled |

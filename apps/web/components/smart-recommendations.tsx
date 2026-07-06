@@ -16,11 +16,52 @@ interface Recommendation {
   data: Record<string, any>;
 }
 
+type RecommendationDiagnostic = {
+  source?: string | null;
+  status?: string | null;
+  severity?: string | null;
+  code?: string | null;
+  message?: string | null;
+  category?: string | null;
+  provider?: string | null;
+};
+
 interface SmartRecommendationsProps {
   recommendations: Recommendation[];
   getInstrumentHref?: (symbol: string) => string;
+  status?: string | null;
+  generatedAt?: string | null;
+  source?: string | null;
+  provider?: string | null;
+  diagnostics?: RecommendationDiagnostic[];
   isLoading?: boolean;
   className?: string;
+}
+
+function buildRecommendationSourceDetails({
+  status,
+  generatedAt,
+  source,
+  provider,
+}: Pick<SmartRecommendationsProps, "status" | "generatedAt" | "source" | "provider">): string[] {
+  const details: string[] = [];
+  if (status) {
+    details.push(`status: ${status}`);
+  }
+  if (provider) {
+    details.push(`provider: ${provider}`);
+  }
+  if (source) {
+    details.push(`source: ${source}`);
+  }
+  if (generatedAt) {
+    details.push(`generated_at: ${generatedAt}`);
+  }
+  return details;
+}
+
+function getDiagnosticLabel(diagnostic: RecommendationDiagnostic, index: number): string {
+  return diagnostic.code ?? diagnostic.category ?? diagnostic.status ?? `diagnostic_${index + 1}`;
 }
 
 const typeConfig = {
@@ -53,15 +94,22 @@ const typeConfig = {
 export function SmartRecommendations({
   recommendations,
   getInstrumentHref,
+  status,
+  generatedAt,
+  source,
+  provider,
+  diagnostics = [],
   isLoading = false,
   className = "",
 }: SmartRecommendationsProps) {
+  const sourceDetails = buildRecommendationSourceDetails({ status, generatedAt, source, provider });
+
   if (isLoading) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle className="text-base">📈 今日推荐</CardTitle>
-          <CardDescription className="text-xs">基于技术分析的实时推荐，未附历史评估</CardDescription>
+          <CardDescription className="text-xs">基于可用数据的技术信号，未附历史评估</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -77,7 +125,7 @@ export function SmartRecommendations({
       <Card className={className}>
         <CardHeader>
           <CardTitle className="text-base">📈 今日推荐</CardTitle>
-          <CardDescription className="text-xs">基于技术分析的实时推荐，未附历史评估</CardDescription>
+          <CardDescription className="text-xs">基于可用数据的技术信号，未附历史评估</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-sm text-muted-foreground">
@@ -93,13 +141,35 @@ export function SmartRecommendations({
       <CardHeader>
         <CardTitle className="text-base">📈 今日推荐</CardTitle>
         <CardDescription className="text-xs">
-          基于技术分析的实时推荐 · {recommendations.length} 条
+          基于可用数据的技术信号 · {recommendations.length} 条
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <div className="mx-4 mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          当前卡片展示的是未回测的实时技术信号；历史评估需结合服务层 signal evaluation 的样本量、窗口收益和诊断查看，不能视为投资建议。
+          当前卡片展示的是未回测的技术信号；是否实时取决于上游数据源声明。历史评估需结合服务层 signal evaluation 的样本量、窗口收益和诊断查看，不能视为投资建议。
         </div>
+        {sourceDetails.length > 0 ? (
+          <div className="mx-4 mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {sourceDetails.map((detail) => (
+              <Badge key={detail} variant="outline" className="font-normal">
+                {detail}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        {diagnostics.length > 0 ? (
+          <div className="mx-4 mb-3 space-y-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+            <div className="font-medium text-slate-900">推荐诊断</div>
+            {diagnostics.map((diagnostic, index) => (
+              <div key={`${getDiagnosticLabel(diagnostic, index)}-${index}`}>
+                <span className="font-medium">{getDiagnosticLabel(diagnostic, index)}</span>
+                {diagnostic.provider ? <span> · provider: {diagnostic.provider}</span> : null}
+                {diagnostic.source ? <span> · source: {diagnostic.source}</span> : null}
+                {diagnostic.message ? <span> · {diagnostic.message}</span> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         <ScrollArea className="h-[400px]">
           <div className="space-y-3 p-4">
             {recommendations.map((rec, index) => {

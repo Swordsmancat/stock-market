@@ -4,6 +4,7 @@ import { TrendingUp, Activity, Briefcase, Newspaper, FileText, List, Bell } from
 import { AnalysisTriggerForm } from "@/components/analysis-trigger-form";
 import { IngestionTriggerForm } from "@/components/ingestion-trigger-form";
 import { FlashBanner } from "@/components/flash-banner";
+import { FinancialDashboardHero } from "@/components/financial-dashboard-hero";
 import { MarketTicker } from "@/components/market-ticker";
 import { MarketOverviewClient } from "@/components/market-overview-client";
 import { HotSectors } from "@/components/hot-sectors";
@@ -19,6 +20,7 @@ import { CompactCandlestickChart } from "@/components/compact-candlestick-chart"
 import { EmptyState } from "@/components/empty-state";
 import { getDashboardDateRanges } from "@/lib/dates";
 import { withProviderQuery } from "@/lib/market-data";
+import { getMarketMovementTextClass } from "@/lib/market-color-classes";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
 import { backendFetch } from "@/lib/backend-api";
 
@@ -137,10 +139,23 @@ type SmartRecommendationItem = {
   data: Record<string, unknown>;
 };
 
+type SmartRecommendationDiagnostic = {
+  source?: string | null;
+  status?: string | null;
+  severity?: string | null;
+  code?: string | null;
+  message?: string | null;
+  category?: string | null;
+  provider?: string | null;
+};
+
 type SmartRecommendationsPayload = {
   status?: string;
   generated_at?: string;
+  source?: string | null;
+  provider?: string | null;
   count?: number;
+  diagnostics?: SmartRecommendationDiagnostic[];
   items: SmartRecommendationItem[];
 };
 
@@ -236,6 +251,7 @@ type DashboardChartItem = {
   bars: DashboardBarItem[];
   source?: string | null;
   provider?: string | null;
+  requested_provider?: string | null;
   effective_provider?: string | null;
   no_data_reason?: string | null;
 };
@@ -272,6 +288,116 @@ type DashboardValuationIndicatorItem = {
   no_data_reason?: string | null;
 };
 
+type DashboardBriefSection = {
+  id: string;
+  title: string;
+  items: string[];
+};
+
+type DashboardBriefNarrativePayload = {
+  answer_markdown: string;
+  model: {
+    provider?: string | null;
+    name?: string | null;
+    used_llm?: boolean;
+    fallback_reason?: string | null;
+  };
+  context?: {
+    source_mix?: {
+      macro_citations?: number;
+      report_citations?: number;
+      news_citations?: number;
+      information_source_gaps?: number;
+    };
+  };
+};
+
+type DashboardBriefPayload = {
+  status: "ok" | "degraded" | string;
+  generated_at: string;
+  sections: DashboardBriefSection[];
+  citations?: Array<{
+    id: string;
+    label: string;
+    source: string;
+    source_type?: string | null;
+    as_of?: string | null;
+    provider?: string | null;
+    excerpt?: string | null;
+  }>;
+  diagnostics?: Array<{
+    source?: string;
+    status?: string;
+    severity?: string;
+    code?: string;
+    message?: string;
+  }>;
+  safety?: {
+    not_investment_advice?: boolean;
+    no_buy_sell_hold?: boolean;
+    no_fabricated_macro_data?: boolean;
+  };
+  narrative?: DashboardBriefNarrativePayload;
+};
+
+type InformationSourceItem = {
+  id: string;
+  label: string;
+  category: string;
+  authority?: string | null;
+  coverage?: string[];
+  status: "configured" | "needs_adapter" | "needs_manual_seed" | "no_data" | "future" | string;
+  freshness_policy?: string | null;
+  ai_usage?: string | null;
+  next_action?: string | null;
+  evidence_count?: number;
+  latest_as_of?: string | null;
+  collection_links?: Array<{
+    label: string;
+    url: string;
+    source_type?: string | null;
+  }>;
+  seed_template?: {
+    label: string;
+    description?: string | null;
+    target_indicator_codes?: string[];
+    required_fields?: string[];
+    json_template?: Record<string, unknown>;
+    csv_header?: string[];
+    csv_example_rows?: string[];
+    review_checklist?: Array<{
+      id: string;
+      label: string;
+      required?: boolean;
+      why?: string | null;
+    }>;
+    warnings?: string[];
+    import_command?: string | null;
+    citation_boundary?: string | null;
+  } | null;
+  collection_note?: string | null;
+  citation_policy?: string | null;
+};
+
+type InformationSourceGroup = {
+  category: string;
+  label: string;
+  items: InformationSourceItem[];
+};
+
+type InformationSourcesPayload = {
+  status: "ok" | "degraded" | string;
+  summary?: {
+    total?: number;
+    configured?: number;
+    needs_action?: number;
+    future?: number;
+  };
+  groups?: InformationSourceGroup[];
+  items?: InformationSourceItem[];
+  diagnostics?: Array<Record<string, unknown>>;
+};
+
 type MarketOverviewPayload = {
   generated_at: string;
   provider: string;
@@ -288,9 +414,14 @@ type MarketOverviewPayload = {
   indices: {
     items: DashboardIndexItem[];
   };
+  macro_indicators?: {
+    items: DashboardValuationIndicatorItem[];
+  };
   valuation_indicators: {
     items: DashboardValuationIndicatorItem[];
   };
+  dashboard_brief?: DashboardBriefPayload;
+  information_sources?: InformationSourcesPayload;
   diagnostics: Array<Record<string, unknown>>;
 };
 
@@ -378,9 +509,8 @@ async function fetchLatestBarResult(symbol: string, provider: string): Promise<L
   }
 }
 
-async function fetchPlatformProvider(): Promise<string> {
-  const settings = await getPlatformSettings();
-  return settings.market_data_provider;
+async function fetchDashboardPlatformSettings() {
+  return getPlatformSettings();
 }
 
 function citationUrl(citation: string): string | null {
@@ -638,6 +768,31 @@ function formatValuationIndicatorValue(
   return item.unit === "percent" ? `${formattedValue}%` : formattedValue;
 }
 
+function formatIndicatorCategoryLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "Uncategorized";
+  }
+
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function groupDashboardIndicatorItems(items: DashboardValuationIndicatorItem[]) {
+  const groups = new Map<string, DashboardValuationIndicatorItem[]>();
+  for (const item of items) {
+    const category = item.category ?? "uncategorized";
+    groups.set(category, [...(groups.get(category) ?? []), item]);
+  }
+  return Array.from(groups.entries()).map(([category, groupItems]) => ({
+    category,
+    label: formatIndicatorCategoryLabel(category),
+    items: groupItems,
+  }));
+}
+
 export default async function HomePage({
   params,
   searchParams = Promise.resolve({}),
@@ -657,7 +812,8 @@ export default async function HomePage({
   const locale = getSafeDashboardLocale(requestedLocale);
   const flash = await searchParams;
   const { recent, analysis } = getDashboardDateRanges();
-  const provider = await fetchPlatformProvider();
+  const platformSettings = await fetchDashboardPlatformSettings();
+  const provider = platformSettings.market_data_provider;
   const { getTranslations } = await import("next-intl/server");
   const t = await getTranslations("Dashboard");
 
@@ -760,7 +916,18 @@ export default async function HomePage({
   const marketOverviewPayload = marketOverviewResult.status === "loaded" ? marketOverviewResult.payload : null;
   const marketOverviewIndices = marketOverviewPayload?.indices.items ?? [];
   const marketOverviewFollowedItems = marketOverviewPayload?.followed.items ?? [];
-  const marketOverviewValuationItems = marketOverviewPayload?.valuation_indicators.items ?? [];
+  const marketOverviewValuationItems =
+    marketOverviewPayload?.macro_indicators?.items ?? marketOverviewPayload?.valuation_indicators.items ?? [];
+  const marketOverviewIndicatorGroups = groupDashboardIndicatorItems(marketOverviewValuationItems);
+  const dashboardBrief = marketOverviewPayload?.dashboard_brief ?? null;
+  const informationSources = marketOverviewPayload?.information_sources ?? null;
+  const sourceStatusLabels: Record<string, string> = {
+    configured: t("sourceStatusConfigured"),
+    needs_adapter: t("sourceStatusNeedsAdapter"),
+    needs_manual_seed: t("sourceStatusNeedsManualSeed"),
+    no_data: t("sourceStatusNoData"),
+    future: t("sourceStatusFuture"),
+  };
   const recommendationSymbols = marketOverviewFollowedItems.length > 0
     ? marketOverviewFollowedItems.map((item) => item.symbol).slice(0, 6)
     : instrumentsPayload.items.map((instrument) => instrument.symbol).slice(0, 6);
@@ -839,6 +1006,14 @@ export default async function HomePage({
     close: item.latest?.close ?? null,
     change: item.latest?.movement?.absolute_change ?? null,
     changePercent: item.latest?.movement?.percent_change ?? null,
+    status: item.status,
+    freshness: item.freshness,
+    source: item.source ?? null,
+    provider: item.provider ?? null,
+    requested_provider: item.requested_provider ?? null,
+    effective_provider: item.effective_provider ?? null,
+    generated_at: marketOverviewPayload?.generated_at ?? null,
+    no_data_reason: item.no_data_reason ?? null,
   }));
   const comparisonInstruments = [
     ...marketOverviewFollowedItems.map((item) => ({
@@ -855,6 +1030,36 @@ export default async function HomePage({
       market: item.market,
       bars: item.bars.map((bar) => ({ timestamp: bar.timestamp, close: bar.close })),
     })),
+  ];
+  const heroDailyMovementClass = dailyMovement
+    ? getMarketMovementTextClass(platformSettings.color_scheme, dailyMovement.absoluteChange)
+    : undefined;
+  const heroTaskDescription = t("itemsInTime", {
+    count: taskRunPayload.result_json?.item_count ?? 0,
+    time: taskRunPayload.duration_ms ?? 0,
+  });
+  const heroMetrics = [
+    {
+      label: t("latestPrice", { symbol: primaryInstrument.symbol }),
+      value: formatDashboardNumber(latestClose, locale, t("unavailableShort")),
+      description: t("source", { source: priceSource }),
+    },
+    {
+      label: t("dailyMovement"),
+      value: dailyMovementLabel,
+      description: t("latestDailyBarAsOf", { date: latestDailyBarDateLabel }),
+      className: heroDailyMovementClass,
+    },
+    {
+      label: t("portfolioValue"),
+      value: formatDashboardNumber(portfolioValue, locale, t("unavailableShort")),
+      description: t("checkedInstruments"),
+    },
+    {
+      label: t("latestTaskRun"),
+      value: taskRunPayload.status,
+      description: heroTaskDescription,
+    },
   ];
 
   return (
@@ -908,50 +1113,364 @@ export default async function HomePage({
         <FlashBanner variant="error" message={flash.msg ? t("analysisFailedDetail", { reason: flash.msg }) : t("analysisFailed")} />
       ) : null}
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="text-muted-foreground">
-            {t("description")}
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="outline" asChild>
-            <Link href="/task-runs">{t("viewTaskRuns")}</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/settings">{t("providerSettings")}</Link>
-          </Button>
-        </div>
-      </div>
-
       <section className="space-y-4">
-        <Card className="border-primary/20 bg-muted/20">
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{t("marketDashboardBadge")}</Badge>
-              <Badge variant="outline">{t("activeProvider", { provider })}</Badge>
-              {marketOverviewPayload ? (
-                <Badge variant="outline">
-                  {t("marketDashboardRange", {
-                    start: formatDashboardDate(marketOverviewPayload.range.start, locale, t("unavailableShort")),
-                    end: formatDashboardDate(marketOverviewPayload.range.end, locale, t("unavailableShort")),
-                  })}
-                </Badge>
-              ) : null}
-            </div>
-            <CardTitle className="text-2xl">{t("marketDashboardTitle")}</CardTitle>
-            <CardDescription>{t("marketDashboardDesc")}</CardDescription>
-          </CardHeader>
-          {marketOverviewResult.status === "failed" ? (
-            <CardContent>
+        <FinancialDashboardHero
+          title={t("title")}
+          description={t("description")}
+          badges={[
+            { label: t("marketDashboardBadge"), variant: "secondary" },
+            { label: t("activeProvider", { provider }) },
+            { label: marketOverviewScopeLabel },
+            ...(marketOverviewPayload
+              ? [
+                  {
+                    label: t("marketDashboardRange", {
+                      start: formatDashboardDate(marketOverviewPayload.range.start, locale, t("unavailableShort")),
+                      end: formatDashboardDate(marketOverviewPayload.range.end, locale, t("unavailableShort")),
+                    }),
+                  },
+                ]
+              : []),
+          ]}
+          metrics={heroMetrics}
+          actions={
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/task-runs">{t("viewTaskRuns")}</Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings">{t("providerSettings")}</Link>
+              </Button>
+            </>
+          }
+          warningPanel={
+            marketOverviewResult.status === "failed" ? (
               <div className="rounded-lg border bg-background p-4">
                 <div className="font-medium">{t("marketDashboardUnavailableTitle")}</div>
                 <p className="mt-1 text-sm text-muted-foreground">{t("marketDashboardUnavailableDesc")}</p>
               </div>
+            ) : null
+          }
+        />
+
+        {dashboardBrief ? (
+          <Card className="rounded-none border-x-0 border-primary/20">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={dashboardBrief.status === "ok" ? "secondary" : "outline"} className="text-[10px]">
+                  {dashboardBrief.status}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {formatDashboardDate(dashboardBrief.generated_at, locale, t("unavailableShort"))}
+                </Badge>
+              </div>
+              <CardTitle className="text-lg">{t("dashboardBriefTitle")}</CardTitle>
+              <CardDescription className="text-xs">{t("dashboardBriefDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {dashboardBrief.narrative?.answer_markdown ? (
+                <div className="rounded-none border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-semibold">{t("dashboardBriefNarrative")}</div>
+                    <Badge
+                      variant={dashboardBrief.narrative.model.used_llm ? "secondary" : "outline"}
+                      className="text-[10px]"
+                    >
+                      {dashboardBrief.narrative.model.used_llm
+                        ? t("dashboardBriefModelGenerated")
+                        : t("dashboardBriefModelFallback")}
+                    </Badge>
+                    {dashboardBrief.narrative.model.name ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        {t("dashboardBriefModelName", { name: dashboardBrief.narrative.model.name })}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                    {dashboardBrief.narrative.answer_markdown}
+                  </div>
+                  {dashboardBrief.narrative.model.fallback_reason ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {dashboardBrief.narrative.model.fallback_reason}
+                    </p>
+                  ) : null}
+                  {dashboardBrief.narrative.context?.source_mix ? (
+                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+                      <div>
+                        {t("dashboardBriefMacroEvidence", {
+                          count: dashboardBrief.narrative.context.source_mix.macro_citations ?? 0,
+                        })}
+                      </div>
+                      <div>
+                        {t("dashboardBriefReportEvidence", {
+                          count: dashboardBrief.narrative.context.source_mix.report_citations ?? 0,
+                        })}
+                      </div>
+                      <div>
+                        {t("dashboardBriefNewsEvidence", {
+                          count: dashboardBrief.narrative.context.source_mix.news_citations ?? 0,
+                        })}
+                      </div>
+                      <div>
+                        {t("dashboardBriefSourceGaps", {
+                          count: dashboardBrief.narrative.context.source_mix.information_source_gaps ?? 0,
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="grid gap-3 lg:grid-cols-4">
+                {dashboardBrief.sections.map((section) => (
+                  <div key={section.id} className="rounded-none border bg-background p-3">
+                    <div className="text-sm font-semibold">{section.title}</div>
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                      {section.items.map((item, index) => (
+                        <li key={`${section.id}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              {(dashboardBrief.citations?.length ?? 0) > 0 ? (
+                <div className="rounded-none border bg-muted/20 p-3">
+                  <div className="text-sm font-semibold">{t("dashboardBriefCitations")}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {dashboardBrief.citations?.map((citation) => (
+                      <Badge key={citation.id} variant="outline" className="text-[10px]">
+                        {citation.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {(dashboardBrief.diagnostics?.length ?? 0) > 0 ? (
+                <div className="rounded-none border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                  <div className="font-semibold">{t("dashboardBriefDiagnostics")}</div>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    {dashboardBrief.diagnostics?.map((diagnostic, index) => (
+                      <li key={`${diagnostic.source ?? "diagnostic"}-${diagnostic.code ?? index}`}>
+                        {diagnostic.code ? `${diagnostic.code}: ` : null}
+                        {diagnostic.message ?? diagnostic.status ?? t("unavailableShort")}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </CardContent>
-          ) : null}
-        </Card>
+          </Card>
+        ) : null}
+
+        {informationSources ? (
+          <Card className="rounded-none border-x-0 border-emerald-200/70 dark:border-emerald-900/60">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={informationSources.status === "ok" ? "secondary" : "outline"} className="text-[10px]">
+                  {informationSources.status}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {t("sourceReadinessConfigured", { count: informationSources.summary?.configured ?? 0 })}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {t("sourceReadinessNeedsAction", { count: informationSources.summary?.needs_action ?? 0 })}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {t("sourceReadinessFuture", { count: informationSources.summary?.future ?? 0 })}
+                </Badge>
+              </div>
+              <CardTitle className="text-lg">{t("sourceReadinessTitle")}</CardTitle>
+              <CardDescription className="text-xs">{t("sourceReadinessDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 lg:grid-cols-3">
+                {(informationSources.groups ?? []).map((group) => (
+                  <div key={group.category} className="rounded-none border bg-background p-3">
+                    <div className="text-sm font-semibold">{group.label}</div>
+                    <div className="mt-3 space-y-3">
+                      {group.items.map((item) => (
+                        <div key={item.id} className="border-l-2 border-muted pl-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-medium">{item.label}</div>
+                              <div className="text-[10px] text-muted-foreground">{item.authority ?? t("unavailableShort")}</div>
+                            </div>
+                            <Badge variant={item.status === "configured" ? "secondary" : "outline"} className="text-[10px]">
+                              {sourceStatusLabels[item.status] ?? item.status}
+                            </Badge>
+                          </div>
+                          {item.coverage && item.coverage.length > 0 ? (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {item.coverage.slice(0, 4).map((coverage) => (
+                                <Badge key={`${item.id}-${coverage}`} variant="outline" className="px-1 py-0 text-[10px]">
+                                  {coverage}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                            <p>{item.ai_usage ?? t("sourceReadinessNoAiUsage")}</p>
+                            <p>{item.freshness_policy ?? t("sourceReadinessNoFreshnessPolicy")}</p>
+                            <p className="font-medium text-foreground">{item.next_action ?? t("sourceReadinessNoNextAction")}</p>
+                          </div>
+                          {item.collection_note ? (
+                            <div className="mt-3 space-y-1 text-xs">
+                              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                {t("sourceReadinessCollectionNote")}
+                              </div>
+                              <p className="text-muted-foreground">{item.collection_note}</p>
+                            </div>
+                          ) : null}
+                          {item.citation_policy ? (
+                            <div className="mt-3 space-y-1 text-xs">
+                              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                {t("sourceReadinessCitationPolicy")}
+                              </div>
+                              <p className="text-muted-foreground">{item.citation_policy}</p>
+                            </div>
+                          ) : null}
+                          {item.collection_links && item.collection_links.length > 0 ? (
+                            <div className="mt-3 space-y-1 text-xs">
+                              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                {t("sourceReadinessCollectionLinks")}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {item.collection_links.map((link) => (
+                                  <a
+                                    key={`${item.id}-${link.url}`}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-none border px-2 py-1 text-primary hover:bg-muted hover:underline"
+                                  >
+                                    <span>{link.label}</span>
+                                    {link.source_type ? (
+                                      <span
+                                        aria-hidden="true"
+                                        className="text-[10px] uppercase text-muted-foreground"
+                                      >
+                                        {link.source_type.replaceAll("_", " ")}
+                                      </span>
+                                    ) : null}
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {item.seed_template ? (
+                            <div className="mt-3 space-y-2 border-t pt-3 text-xs">
+                              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                {t("sourceReadinessSeedTemplate")}
+                              </div>
+                              <div>
+                                <div className="font-medium text-foreground">{item.seed_template.label}</div>
+                                {item.seed_template.description ? (
+                                  <p className="mt-1 text-muted-foreground">{item.seed_template.description}</p>
+                                ) : null}
+                              </div>
+                              {item.seed_template.target_indicator_codes &&
+                              item.seed_template.target_indicator_codes.length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {t("sourceReadinessTemplateTargetCodes")}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {item.seed_template.target_indicator_codes.map((code) => (
+                                      <Badge key={`${item.id}-${code}`} variant="outline" className="px-1 py-0 text-[10px]">
+                                        {code}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {item.seed_template.required_fields && item.seed_template.required_fields.length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {t("sourceReadinessTemplateRequiredFields")}
+                                  </div>
+                                  <p className="text-muted-foreground">
+                                    {item.seed_template.required_fields.join(", ")}
+                                  </p>
+                                </div>
+                              ) : null}
+                              {item.seed_template.import_command ? (
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {t("sourceReadinessTemplateImportCommand")}
+                                  </div>
+                                  <code className="block break-all rounded-none border bg-muted/40 p-2 font-mono text-[10px] text-foreground">
+                                    {item.seed_template.import_command}
+                                  </code>
+                                </div>
+                              ) : null}
+                              {item.seed_template.json_template ? (
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {t("sourceReadinessTemplateJson")}
+                                  </div>
+                                  <pre className="max-h-32 overflow-auto rounded-none border bg-muted/30 p-2 text-[10px] text-foreground">
+                                    {JSON.stringify(item.seed_template.json_template, null, 2)}
+                                  </pre>
+                                </div>
+                              ) : null}
+                              {item.seed_template.csv_header || item.seed_template.csv_example_rows ? (
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {t("sourceReadinessTemplateCsv")}
+                                  </div>
+                                  <pre className="max-h-24 overflow-auto rounded-none border bg-muted/30 p-2 text-[10px] text-foreground">
+                                    {[
+                                      item.seed_template.csv_header?.join(","),
+                                      ...(item.seed_template.csv_example_rows ?? []),
+                                    ]
+                                      .filter(Boolean)
+                                      .join("\n")}
+                                  </pre>
+                                </div>
+                              ) : null}
+                              {item.seed_template.review_checklist &&
+                              item.seed_template.review_checklist.length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {t("sourceReadinessTemplateChecklist")}
+                                  </div>
+                                  <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
+                                    {item.seed_template.review_checklist.map((checklistItem) => (
+                                      <li key={`${item.id}-${checklistItem.id}`}>
+                                        <span className="font-medium text-foreground">{checklistItem.label}</span>
+                                        {checklistItem.why ? <span> {checklistItem.why}</span> : null}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+                              {item.seed_template.warnings && item.seed_template.warnings.length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {t("sourceReadinessTemplateWarnings")}
+                                  </div>
+                                  <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
+                                    {item.seed_template.warnings.map((warning) => (
+                                      <li key={`${item.id}-${warning}`}>{warning}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+                              {item.seed_template.citation_boundary ? (
+                                <p className="border-l-2 pl-2 text-muted-foreground">
+                                  {item.seed_template.citation_boundary}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <MarketOverviewClient
           initialData={marketOverviewPayload as any}
@@ -971,6 +1490,11 @@ export default async function HomePage({
         <div className="grid gap-4 xl:grid-cols-2">
           <SmartRecommendations
             recommendations={smartRecommendations}
+            status={recommendationsPayload.status ?? null}
+            generatedAt={recommendationsPayload.generated_at ?? null}
+            source={recommendationsPayload.source ?? null}
+            provider={recommendationsPayload.provider ?? null}
+            diagnostics={recommendationsPayload.diagnostics ?? []}
           />
           <HotSectors
             sectors={hotSectors}
@@ -1015,7 +1539,7 @@ export default async function HomePage({
                       const freshnessStatus = coerceFreshnessStatus(item.freshness);
                       const movement = item.latest?.movement;
                       const changeValue = movement?.absolute_change ?? 0;
-                      const changeColor = changeValue >= 0 ? "text-green-500" : "text-red-500";
+                      const changeColor = getMarketMovementTextClass(platformSettings.color_scheme, changeValue);
                       
                       return (
                         <TableRow key={`${item.market}-${item.symbol}`} className="border-border hover:bg-muted/30">
@@ -1088,28 +1612,35 @@ export default async function HomePage({
               <CardDescription className="text-xs">{t("valuationIndicatorsDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {marketOverviewValuationItems.length > 0 ? (
-                <div className="space-y-2">
-                  {marketOverviewValuationItems.map((item) => (
-                    <div key={item.code} className="rounded-none border p-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="font-semibold text-sm">{item.name}</div>
-                          <div className="text-[10px] text-muted-foreground">{item.region ?? t("unavailableShort")}</div>
+              {marketOverviewIndicatorGroups.length > 0 ? (
+                <div className="space-y-4">
+                  {marketOverviewIndicatorGroups.map((group) => (
+                    <div key={group.category} className="space-y-2">
+                      <div className="text-[11px] font-semibold uppercase text-muted-foreground">{group.label}</div>
+                      {group.items.map((item) => (
+                        <div key={item.code} className="rounded-none border p-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-semibold text-sm">{item.name}</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {[item.region, item.category].filter(Boolean).join(" / ") || t("unavailableShort")}
+                              </div>
+                            </div>
+                            <Badge variant={item.status === "ok" ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0">
+                              {item.status === "ok" ? t("available") : t("no_data")}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 text-xl font-bold font-mono">
+                            {formatValuationIndicatorValue(item, locale, t("unavailableShort"))}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-muted-foreground">
+                            {t("valuationAsOf", { date: formatDashboardDate(item.as_of, locale, t("unavailableShort")) })}
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {item.status === "ok" ? item.source : item.no_data_reason ?? t("indicatorNoData")}
+                          </p>
                         </div>
-                        <Badge variant={item.status === "ok" ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0">
-                          {item.status === "ok" ? t("available") : t("no_data")}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 text-xl font-bold font-mono">
-                        {formatValuationIndicatorValue(item, locale, t("unavailableShort"))}
-                      </div>
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">
-                        {t("valuationAsOf", { date: formatDashboardDate(item.as_of, locale, t("unavailableShort")) })}
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {item.status === "ok" ? item.source : item.no_data_reason ?? t("indicatorNoData")}
-                      </p>
+                      ))}
                     </div>
                   ))}
                 </div>

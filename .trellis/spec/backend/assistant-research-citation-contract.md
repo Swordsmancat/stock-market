@@ -84,3 +84,191 @@ diagnostics.append({
     "message": "Production filings retrieval is not configured for this assistant slice.",
 })
 ```
+
+## Scenario: Citation-aware Dashboard Brief Narrative
+
+### 1. Scope / Trigger
+
+- Trigger: `GET /dashboard/market-overview` returns an additive `dashboard_brief.narrative` payload.
+- Scope: dashboard service logic in `packages/services/market_dashboard.py`, dashboard API tests, homepage local payload types/rendering, and dashboard documentation.
+- Non-goals: new external macro adapters, filings/transcript ingestion, vector search, persisted brief history, broker execution, terminal parity, or trading instructions.
+
+### 2. Signatures
+
+- API: `GET /dashboard/market-overview`
+- Service entry: `get_market_overview_payload(...)`
+- Existing `dashboard_brief` fields preserved: `status`, `generated_at`, `sections`, `citations`, `diagnostics`, `safety`
+- Additive field: `dashboard_brief.narrative`
+- Narrative fields:
+  - `answer_markdown`
+  - `model.provider`
+  - `model.name`
+  - `model.used_llm`
+  - `model.fallback_reason`
+  - `context.source_mix.macro_citations`
+  - `context.source_mix.report_citations`
+  - `context.source_mix.news_citations`
+  - `context.source_mix.information_source_gaps`
+
+### 3. Contracts
+
+- The narrative may summarize only existing dashboard brief sections, dashboard citations, dashboard diagnostics, safety flags, and information-source readiness gaps.
+- LLM generation is allowed only when `get_platform_settings()` reports `llm_provider == "openai"` and a non-empty `llm_api_key`.
+- Use `get_llm_provider()` for generation so tests can monkeypatch the provider without live network calls.
+- LLM prompts must list the allowed citation IDs and instruct the model to use only those IDs.
+- `needs_adapter`, `needs_manual_seed`, `no_data`, and `future` information-source items are context gaps/next actions, not citations.
+- Missing LLM configuration, provider errors, empty responses, or unknown inline citation IDs must return deterministic fallback metadata:
+  - `provider = "deterministic"`
+  - `name = "dashboard-brief-deterministic-fallback"`
+  - `used_llm = false`
+  - `fallback_reason = <sanitized reason>`
+- Diagnostics may include safe codes such as `FALLBACK_USED` and `CITATION_UNKNOWN_ID`, but must not include API keys, hidden prompts, raw stack traces, or provider secrets.
+
+### 4. Validation & Error Matrix
+
+- No OpenAI-compatible provider/API key -> deterministic fallback, `FALLBACK_USED`.
+- LLM provider raises -> deterministic fallback with sanitized `LLM generation failed: <ExceptionClass>.`
+- LLM returns empty/whitespace -> deterministic fallback.
+- LLM response cites an ID not present in `dashboard_brief.citations` -> `CITATION_UNKNOWN_ID` diagnostic and deterministic fallback.
+- Information-source registry has missing adapters/manual seeds/future entries -> increment `information_source_gaps`; do not add citations for those entries.
+- Old clients ignore `dashboard_brief.narrative` -> existing fields remain usable.
+
+### 5. Good/Base/Bad Cases
+
+- Good: macro observation, generated report, and news citations exist; LLM returns markdown using only those citation IDs; `used_llm=true`.
+- Base: no LLM configured; deterministic narrative summarizes available sections and source gaps with fallback metadata.
+- Base: no citable dashboard evidence exists; deterministic or LLM narrative may state the limitation but must not invent citations.
+- Bad: source-readiness entry such as `fred_us_rates` is cited as `[fred_us_rates]` before an adapter/seed creates actual evidence.
+- Bad: LLM output with `[generated_report:not-present]` is rendered as valid evidence.
+- Bad: narrative produces buy/sell/hold, target price, position sizing, or execution advice.
+
+### 6. Tests Required
+
+- Service test for no LLM config asserting deterministic fallback metadata, `FALLBACK_USED`, and source-mix gap counts.
+- Service test for LLM success with monkeypatched settings/provider asserting `used_llm=true` and known citation use.
+- Service test for unknown citation IDs asserting `CITATION_UNKNOWN_ID` and deterministic fallback.
+- API test asserting `dashboard_brief.narrative` is present without breaking existing fields.
+- Frontend homepage test asserting narrative markdown-ish text, model/fallback state, citations, and diagnostics remain visible.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+return {
+    "id": "fred_us_rates",
+    "label": "FRED US Treasury rates",
+    "source": "information_sources",
+}
+```
+
+This turns source readiness into evidence before a configured adapter or audited seed observation exists.
+
+#### Correct
+
+```python
+diagnostics.append({
+    "source": "information_sources",
+    "status": "needs_adapter",
+    "severity": "warning",
+    "code": "FRED_US_RATES_NEEDS_ADAPTER",
+    "message": "FRED US rates need an adapter or reviewed seed import before they can be cited.",
+})
+```
+
+## Scenario: Information Source Collection Guidance
+
+### 1. Scope / Trigger
+
+- Trigger: `GET /dashboard/market-overview` includes additive source-readiness collection guidance fields from `get_information_source_readiness_payload(...)`.
+- Scope: source definitions in `packages/services/information_sources.py`, dashboard aggregation in `packages/services/market_dashboard.py`, API compatibility tests, homepage rendering, and user documentation.
+- Non-goals: live FRED/PBOC/SEC adapters, scraping, document ingestion, licensed corpus storage, vector search, broker features, or professional trading-terminal parity.
+
+### 2. Signatures
+
+- Service entry: `get_information_source_readiness_payload(session=...)`
+- Source item existing fields preserved: `id`, `label`, `category`, `authority`, `status`, `freshness_policy`, `ai_usage`, `next_action`, `evidence_count`, `latest_as_of`, `coverage`
+- Additive source item fields:
+  - `collection_note: str`
+  - `citation_policy: str`
+  - `collection_links: list[{ label: str, url: str, source_type: str }]`
+- These fields appear in both `information_sources.items[]` and grouped `information_sources.groups[].items[]` because groups reuse the source item payloads.
+
+### 3. Contracts
+
+- Collection links are source-gathering guidance only. They must not be copied into `dashboard_brief.citations` or assistant `citations` unless an audited local evidence object exists.
+- Citable evidence still comes from configured local sources such as `MarketIndicatorObservation`, `GeneratedReport`, and `NewsArticle`.
+- `needs_adapter`, `needs_manual_seed`, `no_data`, and `future` statuses keep their existing meaning after collection guidance is added.
+- `future` document sources such as filings/transcripts must remain non-citeable until ingestion, licensing, storage, and citation metadata are implemented.
+- Tests must not fetch collection links or depend on external network availability.
+- Frontend links must use safe external navigation (`target="_blank"` and `rel="noreferrer"`).
+- Documentation must state that this is not scraping, not automatic ingestion, not licensed document storage, and not investment advice.
+
+### 4. Validation & Error Matrix
+
+- Source has collection links but no local observations -> source remains `needs_adapter` or `needs_manual_seed`, not `configured`.
+- Future SEC/document source has official search links -> source remains `future`; no dashboard citation is created.
+- Generated reports/news exist locally -> those evidence-backed sources may become `configured`; collection guidance remains descriptive metadata.
+- Old consumers ignore collection guidance fields -> existing readiness payload remains backward compatible.
+
+### 5. Good/Base/Bad Cases
+
+- Good: FRED rates source lists DGS10/DGS2/T10Y2Y official links and says rates become citeable only after reviewed observations are stored locally.
+- Good: Buffett Indicator source lists market-cap/GDP and GDP component links and says the ratio is citeable only after components and calculation method are stored locally.
+- Base: a source has no collection links but still exposes a collection note and citation policy.
+- Bad: `fred_us_rates` appears as a dashboard or assistant citation before a reviewed `MarketIndicatorObservation` exists.
+- Bad: SEC filing search links are treated as proof that filings/transcripts have been ingested.
+
+### 6. Tests Required
+
+- Service tests cover one official macro source, one manual valuation source, and one future document source.
+- API/dashboard tests assert source guidance fields are additive on `information_sources`.
+- Frontend tests assert collection guidance, citation boundary text, and safe external links render.
+- Focused validation should include source service tests, dashboard API tests, homepage tests, TypeScript, ruff for touched Python files, and `git diff --check`.
+
+## Scenario: Source-to-Seed Template Guidance
+
+### 1. Scope / Trigger
+
+- Trigger: `get_information_source_readiness_payload(...)` returns additive `seed_template` metadata for macro/valuation source-readiness items.
+- Scope: source definitions in `packages/services/information_sources.py`, dashboard payload compatibility, homepage rendering, seed-import documentation, and focused tests.
+- Non-goals: live official-source adapters, automatic imports, scraping, document ingestion, database writes, LLM-generated observations, or trading recommendations.
+
+### 2. Signatures
+
+- Source item additive field: `seed_template | null`
+- `seed_template` fields:
+  - `label`
+  - `description`
+  - `target_indicator_codes`
+  - `required_fields`
+  - `json_template`
+  - `csv_header`
+  - `csv_example_rows`
+  - `review_checklist`
+  - `warnings`
+  - `import_command`
+  - `citation_boundary`
+
+### 3. Contracts
+
+- Seed templates are operator guidance only. They must not affect `status`, `evidence_count`, `latest_as_of`, `dashboard_brief.citations`, or assistant `citations`.
+- Template rows must use visible placeholders such as `YYYY-MM-DD`, `<reviewed decimal>`, and `<operator review note>`.
+- CSV examples must preserve the existing seed import contract: `code,as_of,value,source,components_json`, where `components_json` is valid JSON text after placeholder replacement.
+- Template checklist items should map to the importer contract: known code, ISO date, decimal value, reviewed source note, source reference metadata, and method/review metadata.
+- Citable macro/valuation evidence still begins only after `scripts/import_market_indicator_seeds.py` validates and stores local `MarketIndicatorObservation` rows.
+
+### 4. Good/Base/Bad Cases
+
+- Good: FRED rates source shows target codes, placeholder JSON/CSV rows, review checklist, and import command while staying `needs_adapter`.
+- Good: Buffett source shows component-oriented calculation placeholders and source URLs while staying `needs_manual_seed`.
+- Bad: a template row with fake numeric market values is presented as sample evidence.
+- Bad: source/template IDs appear in dashboard or assistant citation lists.
+- Bad: the frontend implies the import command has already run or that source links are locally stored evidence.
+
+### 5. Tests Required
+
+- Service tests assert seed templates for FRED rates, Buffett components, and generic user seed files.
+- API tests assert `seed_template` is additive and dashboard citations exclude source/template IDs.
+- Frontend tests assert template label, target codes, required fields, JSON/CSV previews, placeholder value, checklist, warnings, and citation boundary render.
+- Docs/spec updates must preserve no-fetch/no-scrape/no-advice/no-citation-until-imported boundaries.

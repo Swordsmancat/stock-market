@@ -97,6 +97,116 @@
 - [ ] 页面过渡动画流畅，无卡顿感
 - [ ] K 线图清晰易读，不干扰数据阅读
 
+## 2026-07-05 Automated Completion Assessment
+
+The automated, code-verifiable portion is partially complete but this task should not be archived yet because several acceptance criteria require visual/manual validation across viewports and pages.
+
+Completed or materially improved with code/test evidence:
+
+- Platform settings expose `color_scheme`, and the settings page includes China/international market-color choices.
+- `MarketColorsProvider` is wired into the localized app layout.
+- Homepage market ticker, market-overview table, and shared `PriceChangeBadge` now consume `useMarketColorsContext()` instead of hard-coded green/red movement classes.
+- Homepage dashboard already includes a Yahoo Finance-style black ticker, compact market overview table, refresh controls, and focused tests.
+
+Focused validation passed:
+
+```powershell
+npx vitest run "apps/web/components/price-change-badge.test.tsx" "apps/web/components/market-ticker.test.tsx" "apps/web/app/[locale]/page.test.tsx" "apps/web/app/api/settings/route.test.ts" --reporter=dot
+# 4 test files passed, 10 tests passed
+
+npm run test:web
+# 32 test files passed, 109 tests passed
+```
+
+Still requiring manual or follow-up validation before full acceptance:
+
+- Prove 15+ index/followed instruments are visible in the first viewport for common desktop sizes.
+- Verify all major pages, not only the homepage/settings path, have consistent financial styling.
+- Verify light/dark WCAG AA contrast and responsive layouts across desktop/tablet/mobile.
+- Verify skeleton/error states and transition smoothness in a browser.
+- Continue replacing movement-color hard-coding in lower-priority secondary components as follow-up work, especially areas where colors encode domain roles rather than simple price movement.
+
+## 2026-07-05 Follow-up Validation and Fixes
+
+This follow-up continued the incomplete work instead of archiving the task.
+
+Newly completed:
+
+- Fixed TypeScript blockers in portfolio page props, instrument-detail chart bar normalization, platform-settings fields, and the missing shadcn-style `Skeleton` primitive.
+- Persisted `tushare_http_url` and `color_scheme` through the settings server action and API route payload types/tests.
+- Centralized movement-color class mapping in `apps/web/lib/market-color-classes.ts`.
+- Extended settings-driven movement colors to homepage followed-instrument movement values, instrument-detail absolute change, hot-sector leader/sector movement values, and portfolio PnL/return values.
+- Wrote professional-dashboard comparison research to `research/financial-dashboard-current-state-and-professional-gap.md`.
+- Updated `docs/manual/user-guide.md` and `README.md` with the current dashboard UI status and professional-product gap plan.
+
+Validation evidence:
+
+```powershell
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+# passed
+
+npx vitest run "apps/web/components/hot-sectors.test.tsx" "apps/web/app/[locale]/portfolios/page.test.tsx" "apps/web/app/[locale]/instruments/[symbol]/page.test.tsx" "apps/web/app/[locale]/page.test.tsx" "apps/web/components/market-ticker.test.tsx" "apps/web/components/price-change-badge.test.tsx" --reporter=dot
+# 6 test files passed, 19 tests passed
+
+npm run test:web -- --reporter=dot
+# 32 test files passed, 109 tests passed
+```
+
+Browser smoke evidence on `http://127.0.0.1:3000`:
+
+- `/zh` returned 200, rendered `首页概览`, had no runtime-error text, no horizontal overflow at 1440x900, and the first viewport included the compact ticker plus visible market-overview rows.
+- `/zh` at 390x844 had no runtime-error text and no horizontal overflow.
+- `/zh/settings` returned 200, rendered `设置`, exposed `color_scheme` radio values `china` and `international`, exposed `tushare_http_url`, and had no horizontal overflow.
+
+Remaining before archival:
+
+- Capture durable screenshot artifacts if the project requires visual evidence, not just DOM/browser audit output.
+- Run an explicit light/dark contrast pass for WCAG AA.
+- Decide whether professional-dashboard parity should be tracked in this UI polish task or only in `07-03-professional-financial-dashboard`.
+- Continue P0/P1/P2 professional gaps from the research file: production data providers, Level-2/fund-flow validation, screener/backtest UI, configurable workspaces, and richer research corpus.
+
+## 2026-07-05 Final Audit Closure
+
+The final Trellis check found two small movement-display issues and fixed both:
+
+- Flat market movement now maps to neutral text/background classes instead of the up color.
+- Hot-sector movement arrows now render only for strictly positive or negative values, not for flat or missing values.
+
+Final quality gate:
+
+```powershell
+git diff --check
+# passed; CRLF conversion warnings only
+
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+# passed
+
+npm run test:web -- --reporter=dot
+# 33 test files passed, 111 tests passed
+
+pytest
+# 288 tests passed
+```
+
+Final browser smoke:
+
+- `/zh` and `/zh/settings` rendered successfully on desktop and mobile viewports.
+- `/zh/settings` exposed `color_scheme` values `china` and `international`, plus `tushare_http_url`.
+- No browser console errors were captured.
+
+This completes the code-verifiable audit requested by the user. Durable screenshot evidence and WCAG AA contrast proof are now captured in the follow-up evidence task; future professional-dashboard parity remains separate roadmap work.
+
+## 2026-07-05 Evidence Closure Update
+
+The durable evidence gap has been closed by `07-05-dashboard-visual-evidence-wcag`:
+
+- Screenshot artifacts now exist for `/zh`, `/zh/settings`, `/zh/instruments/AAPL`, and `/zh/watchlist` at desktop `1440x900` and mobile `390x844`.
+- Browser observations recorded successful route rendering, route-specific text, no runtime-error text, no captured console errors, and no document/body horizontal overflow.
+- Settings evidence confirms `color_scheme` values `china` and `international`, plus the `tushare_http_url` field.
+- Light/dark contrast samples passed WCAG AA for sampled text sizes after the black ticker neutral value was changed to `text-gray-300`.
+
+The UI polish task is now archive-ready from an implementation/evidence perspective, assuming no separate product owner review requires additional routes or manual screenshots. Professional-terminal parity remains intentionally tracked as future work in `07-03-professional-financial-dashboard`.
+
 ## Out of Scope
 
 - 后端 API 修改

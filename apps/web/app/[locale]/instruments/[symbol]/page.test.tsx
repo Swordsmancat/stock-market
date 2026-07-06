@@ -19,16 +19,43 @@ vi.mock("@/components/intraday-price-chart", () => ({
     reason,
     points,
     previousClose,
+    source,
+    provider,
+    effectiveProvider,
+    availability,
+    freshness,
+    session,
   }: {
     status?: string;
     reason?: string | null;
     points?: Array<{ timestamp?: string; price?: number; close?: number }>;
     previousClose?: number | null;
+    source?: string | null;
+    provider?: string | null;
+    effectiveProvider?: string | null;
+    availability?: { status?: string | null } | null;
+    freshness?: { status?: string | null } | null;
+    session?: { status?: string | null } | null;
   }) => (
     <div data-testid="intraday-price-chart">
-      Intraday chart status {status} {reason} points {points?.length ?? 0} previous {previousClose ?? "none"}
+      Intraday chart status {status} {reason} points {points?.length ?? 0} previous {previousClose ?? "none"} source {source ?? "none"} provider {effectiveProvider ?? provider ?? "none"} availability {availability?.status ?? "none"} freshness {freshness?.status ?? "none"} session {session?.status ?? "none"}
     </div>
   ),
+}));
+
+vi.mock("@/context/market-colors-context", () => ({
+  useMarketColorsContext: () => ({
+    colorScheme: "china",
+    setColorScheme: vi.fn(),
+    getMovementColor: (value: number) => value >= 0 ? "text-positive" : "text-negative",
+    getMovementBg: (value: number) => value >= 0 ? "bg-positive" : "bg-negative",
+    colors: {
+      up: "text-positive",
+      down: "text-negative",
+      upBg: "bg-positive",
+      downBg: "bg-negative",
+    },
+  }),
 }));
 
 vi.mock("@/lib/instrument-detail", () => ({
@@ -67,9 +94,29 @@ function mockInstrumentDetailResponse(
       symbol: "AAPL",
       request_symbol: "AAPL",
       latest: latestClose === undefined
-        ? { status: "unavailable", item: null }
-        : { status: "ok", item: { timestamp: "2026-01-20", close: latestClose } },
-      bars: { items },
+        ? {
+            status: "unavailable",
+            item: null,
+            source: "database",
+            provider: "yfinance",
+            effective_provider: "yfinance",
+            no_data_reason: "No latest quote was available for the requested symbol.",
+          }
+        : {
+            status: "ok",
+            item: { timestamp: "2026-01-20", close: latestClose },
+            source: "database",
+            provider: "yfinance",
+            effective_provider: "yfinance",
+          },
+      bars: {
+        items,
+        status: items.length > 0 ? "ok" : "no_data",
+        source: "database",
+        provider: "yfinance",
+        effective_provider: "yfinance",
+        no_data_reason: items.length > 0 ? null : "No daily bars were available for the requested symbol/date range.",
+      },
       intraday: intradayPayload ?? {
         symbol: "AAPL",
         timeframe: "1m",
@@ -181,6 +228,8 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getByText("深度数据")).toBeInTheDocument();
   expect(screen.getByText("展示可用的五档买卖盘、逐笔成交、大单追踪和资金流摘要。")).toBeInTheDocument();
   expect(screen.getByText("当前数据源暂不支持深度数据。")).toBeInTheDocument();
+  expect(screen.getAllByText("provider: yfinance").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("source: database").length).toBeGreaterThan(0);
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");
   expect(screen.getByTestId("advanced-candlestick-chart")).toHaveTextContent("Advanced chart for AAPL");
 });
@@ -228,6 +277,17 @@ it("passes real intraday minute data to the intraday chart", async () => {
         is_delayed: true,
         delay_minutes: null,
       },
+      freshness: {
+        status: "fresh",
+        reason: null,
+        cache_status: "hit",
+        data_as_of: "2026-01-20T13:30:00+00:00",
+        fetched_at: "2026-01-20T13:31:00+00:00",
+      },
+      session: {
+        status: "closed",
+        reason: "Regular session closed.",
+      },
     },
   );
 
@@ -236,6 +296,10 @@ it("passes real intraday minute data to the intraday chart", async () => {
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status ok");
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("points 1");
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("previous 213.55");
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("source provider");
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("provider yfinance");
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("freshness fresh");
+  expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("session closed");
 });
 
 it("renders real market depth rows when the detail payload includes provider-backed depth", async () => {
