@@ -433,3 +433,36 @@ Audited MVP feature completion, hardened dashboard market-overview caching/proxy
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Macro Valuation Evidence Center
+
+**Date**: 2026-07-06
+**Task**: Macro Valuation Evidence Center
+**Branch**: `master`
+
+### Summary
+
+Added a dedicated Evidence Center route for macro and valuation evidence, source readiness, seed templates, AI summary boundaries, navigation, documentation, and focused tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1fe5a14` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
