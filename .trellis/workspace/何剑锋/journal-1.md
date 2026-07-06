@@ -466,3 +466,36 @@ Added a dedicated Evidence Center route for macro and valuation evidence, source
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: Macro seed import review
+
+**Date**: 2026-07-06
+**Task**: Macro seed import review
+**Branch**: `master`
+
+### Summary
+
+Implemented reviewed macro/valuation seed preview and confirmed import workflow with paste and browser file input, backend API, tests, docs, and spec updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b85d58b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
