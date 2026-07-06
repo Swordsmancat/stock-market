@@ -11,6 +11,20 @@ python -m pytest -v
 npm run test:web
 ```
 
+证据中心聚焦检查：
+
+```bash
+npx vitest run "apps/web/app/[locale]/evidence/page.test.tsx" "apps/web/components/navigation-items.test.ts" --reporter=dot
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+```
+
+证据中心只消费 `GET /dashboard/market-overview`，当前不新增后端 endpoint。维护时应确认：
+
+- `macro_indicators.items` / `valuation_indicators.items` 继续包含全部宏观和估值指标代码，缺失观测值必须保持 `null`/`N/A`，不能显示为 0。
+- `information_sources.items` 和 `groups` 继续保留 status、authority、coverage、freshness_policy、ai_usage、next_action、collection_links、seed_template、evidence_count 和 latest_as_of。
+- source-readiness 链接和 seed 模板仍是 collection guidance，不是 AI citation。
+- `dashboard_brief.narrative` 可以是 LLM 输出或 deterministic fallback，但 citations 必须来自 payload 中已有的本地证据 ID。
+
 近期 Phase 3 degraded-safe contract 的聚焦检查：
 
 ```bash
@@ -150,6 +164,7 @@ python scripts/task_run_health.py
 | `GET /fundamentals/{symbol}` | 基本面 | 已实现 |
 | `GET /sectors/hot?limit=5&provider=static_fixture` | 热点板块/资金流 provider contract，返回板块 taxonomy、资金流口径、数据模式、provider/as-of、延迟和成分股元数据 | Provider-backed MVP；默认 `static_fixture` 明确为 `degraded + mock`，可选 `provider=akshare` 在环境支持时尝试延迟板块资金流 |
 | `POST /assistant/market` | 聊天式市场助手，聚合单标的日线、指标、基本面、新闻和已生成报告上下文，返回 answer/citations/diagnostics/safety | Research-citation MVP；已有统一 evidence/citation 层、可选 citation metadata、diagnostic severity/code 和 LLM citation validation；缺失上下文时返回 `no_data` / `degraded` |
+| `GET /dashboard/market-overview?provider=...` | 首页和证据中心共享的市场/宏观/估值/来源就绪度/AI brief 聚合 payload | Evidence Center source；保持 backward compatible，不要把 source links 或 seed templates 升级为 citations |
 
 ### Portfolio, watchlist, alerts, and task runs
 

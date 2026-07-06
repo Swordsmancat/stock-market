@@ -16,6 +16,7 @@
 | Phase 3 | 深度数据（五档 / 大单） | Provider-boundary MVP | 个股详情页深度卡片支持真实 provider-backed 行和局部可用状态；内置生产 provider 尚未验证 Level-2 时仍明确显示不可用。 |
 | Phase 3 | 技术指标库（MACD / RSI / KDJ） | 已完成 | K 线图指标工作台支持 MA、BOLL、成交量、MACD、RSI、KDJ。 |
 | Phase 3 | AI 助手 | Research-citation MVP | 个股详情页已提供聊天式 AI 市场助手，可基于可验证日线、指标、基本面、新闻和已生成报告上下文回答问题，并显示可追踪引用、诊断和免责声明。 |
+| P0 | 证据中心 | 已完成 | `/evidence` 提供专门的宏观/估值证据、信息源就绪度、seed 模板和 AI 摘要工作台，不再只依赖首页综合看板查找这些信息。 |
 | P0 | 宏观/估值指标与 AI 日摘要 | No-data-safe MVP | 首页已扩展巴菲特指标、美国长短债收益率/利差、CPI、M2 和中国 M2 等观察点，并展示确定性 AI-ready 日摘要、引用、诊断和数据缺口。 |
 | P0 | FRED 官方宏观刷新 | Opt-in adapter MVP | 配置 `FRED_API_KEY` 后，可用本地脚本刷新 DGS10、DGS2、T10Y2Y、CPIAUCSL 派生 YoY 和 M2SL 派生 YoY；成功入库后才成为 AI 可引用证据。 |
 | P1 | 可审计宏观 seed 导入 | Manual import MVP | 已支持从本地 JSON/CSV 文件导入人工复核后的宏观/估值观测值；每行必须包含 source、as-of、components 和 methodology/notes 等审计信息。 |
@@ -32,6 +33,21 @@
 - 智能推荐线索，例如突破、超跌反弹、成交异常和强势动量。
 - AI 报告、每日任务和运行状态入口。
 - 宏观/估值指标与 AI 研究摘要，用于快速发现需要继续查证的市场背景和数据缺口。
+
+## 证据中心
+
+证据中心位于 `/evidence`，是当前宏观/估值研究的第一入口。它复用 `GET /dashboard/market-overview` 的既有 payload，不新增交易终端能力，重点回答四个问题：
+
+- 哪些宏观/估值指标已经有本地、带来源和日期的观测值，可以进入 AI 摘要引用范围。
+- 哪些指标仍然是 `needs_adapter`、`needs_manual_seed`、`no_data` 或 `future`，下一步应补适配器、人工 seed 还是等待未来文档能力。
+- 当前 AI 摘要使用了哪些本地 citation，哪些只是 source-readiness 缺口，模型是 LLM 生成还是 deterministic fallback。
+- 官方/合法来源链接、seed 模板、导入命令、复核清单和引用边界分别是什么。
+
+页面顶部先展示 AI 证据摘要、引用计数、诊断和安全边界，再展示宏观/估值指标表。指标表会列出 code、名称、地区、分类、value、as-of、source、AI 可引用状态、source/method metadata 是否存在，以及 no-data 原因。缺失值显示为“暂无”/`N/A`，不会渲染成 0。
+
+来源就绪度区域会按类别展示 FRED、PBOC、中国 M2、巴菲特指标组件、已生成报告、已存新闻、未来文档和用户 seed 文件等来源。外部链接只用于人工核对；seed 模板只用于准备本地 JSON/CSV。只有导入并通过校验的本地 observation、已生成报告和已存新闻，才能被 AI 当作 citation。
+
+证据中心的安全边界与首页一致：它用于信息汇总、缺口追踪和 AI 研究摘要，不输出买入、卖出、持有、目标价、仓位或执行建议。
 
 ### 数据可信度标签
 
@@ -334,12 +350,12 @@ AI 市场助手当前能力：
 
 | 对标对象 | 成熟平台能力 | 当前已满足 | 主要缺口 |
 |---|---|---|---|
-| Koyfin / MacroMicro | 宏观、估值、经济周期、市场图表和跨资产 dashboard | 已有宏观/估值 definitions-first 指标、no-data-safe 展示、source readiness 和 seed 模板 | 还缺官方宏观 adapter、发布日历、跨指标图表和可复用宏观专题页。 |
+| Koyfin / MacroMicro | 宏观、估值、经济周期、市场图表和跨资产 dashboard | 已有专门证据中心、宏观/估值 definitions-first 指标、no-data-safe 展示、source readiness 和 seed 模板 | 还缺官方宏观 adapter、发布日历、跨指标图表和可复用宏观专题页。 |
 | TradingView / Yahoo Finance 类工具 | watchlist、图表、新闻、日历、筛选器和个人跟踪工作流 | 已有首页汇总、watchlist、K 线/指标、推荐线索、报告和 provider/degraded 状态 | 还缺 watchlist 事件监控、日/周 digest、保存的研究问题和更系统的提醒。 |
 | AlphaSense 类研究产品 | 对 filings、transcripts、新闻和研究资料做 AI 搜索、监控、摘要和引用 | 已有 citation-aware dashboard narrative、AI 报告和个股 AI assistant 的引用校验 | 还缺合法研究语料库、文档 ingest policy、保存的 AI follow-up 和主题追踪。 |
 | FRED / World Bank / SEC EDGAR / Trading Economics | 官方或 API 化宏观、公司文档、经济日历和指标源 | 已有 FRED opt-in adapter、官方/合法来源链接、导入边界、manual seed import 和 source-to-seed 模板 | 还缺 source capability matrix、宏观发布日历、更多官方源和 license/freshness 运营记录。 |
 
-因此，当前实现已经满足一个个人研究 cockpit 的 MVP：它能把市场、watchlist、报告、推荐、新闻、宏观指标、来源缺口和 AI 摘要放到同一工作台，并且明确区分“可引用证据”和“还需要收集/复核的来源”。但它还不是完整的信息平台：数据源仍以人工 seed 和本地证据为主，官方宏观源、文档语料、日历、watchlist 级监控和历史化 AI digest 仍是后续重点。
+因此，当前实现已经满足一个个人研究 cockpit 的 MVP：它能把市场、watchlist、报告、推荐、新闻、宏观指标、来源缺口和 AI 摘要放到同一工作台，并通过证据中心明确区分“可引用证据”和“还需要收集/复核的来源”。但它还不是完整的信息平台：数据源仍以人工 seed 和本地证据为主，官方宏观源、文档语料、日历、watchlist 级监控和历史化 AI digest 仍是后续重点。
 
 不建议优先追逐的能力：
 

@@ -9,6 +9,7 @@ it("keeps the shared navigation configuration complete and stable", () => {
   expect(navigationHrefs).toEqual([
     "/",
     "/instruments",
+    "/evidence",
     "/watchlist",
     "/portfolios",
     "/reports",
@@ -16,6 +17,7 @@ it("keeps the shared navigation configuration complete and stable", () => {
     "/task-runs",
     "/settings",
   ]);
+  expect(navigationTitleKeys).toContain("evidence");
   expect(navigationTitleKeys).toContain("taskRuns");
   expect(new Set(navigationHrefs).size).toBe(navigationHrefs.length);
 });

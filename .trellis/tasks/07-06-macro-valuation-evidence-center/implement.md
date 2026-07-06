@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Planning. Do not start implementation until the user approves these artifacts.
+Execution in progress. User approved the reviewed artifacts; implementation is additive and evidence-focused.
 
 ## Pre-Development
 
@@ -13,40 +13,40 @@ Planning. Do not start implementation until the user approves these artifacts.
 
 ## Step 1: Evidence Center Route and Navigation
 
-- [ ] Add an evidence route, preferably `apps/web/app/[locale]/evidence/page.tsx`.
-- [ ] Fetch `GET /dashboard/market-overview` through `backendFetch` using the selected provider.
-- [ ] Add a localized navigation item in the existing navigation system.
-- [ ] Add route/page tests for loaded and failed states.
+- [x] Add an evidence route, preferably `apps/web/app/[locale]/evidence/page.tsx`.
+- [x] Fetch `GET /dashboard/market-overview` through `backendFetch` using the selected provider.
+- [x] Add a localized navigation item in the existing navigation system.
+- [x] Add route/page tests for loaded and failed states.
 
 ## Step 2: Evidence Summary
 
-- [ ] Render `dashboard_brief.narrative.answer_markdown` or deterministic fallback text.
-- [ ] Show model provider/name, `used_llm`, fallback reason, source-mix counts, and safety flags.
-- [ ] Show citations and diagnostics while preserving unknown optional fields.
-- [ ] Test LLM/fallback/source-mix rendering using mocked payloads.
+- [x] Render `dashboard_brief.narrative.answer_markdown` or deterministic fallback text.
+- [x] Show model provider/name, `used_llm`, fallback reason, source-mix counts, and safety flags.
+- [x] Show citations and diagnostics while preserving unknown optional fields.
+- [x] Test LLM/fallback/source-mix rendering using mocked payloads.
 
 ## Step 3: Macro and Valuation Indicator Table
 
-- [ ] Render all `macro_indicators.items` or `valuation_indicators.items`.
-- [ ] Show value/as-of/source when available.
-- [ ] Show no-data reason when absent.
-- [ ] Derive and display AI-citable vs not-citable state.
-- [ ] Show whether source/method metadata is present in `components`.
-- [ ] Test no-data rows do not render as zero.
+- [x] Render all `macro_indicators.items` or `valuation_indicators.items`.
+- [x] Show value/as-of/source when available.
+- [x] Show no-data reason when absent.
+- [x] Derive and display AI-citable vs not-citable state.
+- [x] Show whether source/method metadata is present in `components`.
+- [x] Test no-data rows do not render as zero.
 
 ## Step 4: Source Readiness and Collection Workflow
 
-- [ ] Render grouped `information_sources.groups`.
-- [ ] Show source status, authority, coverage, freshness policy, AI usage, next action, collection note, citation policy, evidence count, and latest as-of.
-- [ ] Render collection links with safe external link attributes.
-- [ ] Render seed-template details: target codes, required fields, JSON preview, CSV preview, checklist, warnings, import command, and citation boundary.
-- [ ] Test FRED, Buffett Indicator, PBOC/manual, future documents, and generic seed-file examples.
+- [x] Render grouped `information_sources.groups`.
+- [x] Show source status, authority, coverage, freshness policy, AI usage, next action, collection note, citation policy, evidence count, and latest as-of.
+- [x] Render collection links with safe external link attributes.
+- [x] Render seed-template details: target codes, required fields, JSON preview, CSV preview, checklist, warnings, import command, and citation boundary.
+- [x] Test FRED, Buffett Indicator, source status fallback, and generic seed-file examples with a focused route fixture.
 
 ## Step 5: Documentation
 
-- [ ] Update `docs/manual/user-guide.md` with the Evidence Center workflow.
-- [ ] Update `docs/runbooks/developer-maintenance.md` with focused validation commands.
-- [ ] Mention that source links/templates are collection guidance, not citations.
+- [x] Update `docs/manual/user-guide.md` with the Evidence Center workflow.
+- [x] Update `docs/runbooks/developer-maintenance.md` with focused validation commands.
+- [x] Mention that source links/templates are collection guidance, not citations.
 
 ## Validation Commands
 
@@ -72,8 +72,8 @@ git diff --check
 
 ## Review Gate
 
-- [ ] User reviews PRD/design/implement plan.
-- [ ] If approved, run `python ./.trellis/scripts/task.py start .trellis/tasks/07-06-macro-valuation-evidence-center`.
+- [x] User reviews PRD/design/implement plan.
+- [x] If approved, run `python ./.trellis/scripts/task.py start .trellis/tasks/07-06-macro-valuation-evidence-center`.
 
 ## Risk Points
 
