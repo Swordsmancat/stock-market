@@ -1,13 +1,42 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, FileUp, NotebookPen, Save, Search, XCircle } from "lucide-react";
+import { CheckCircle2, FileUp, Link2, NotebookPen, Save, Search, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+
+export type ResearchSourceReviewChecklist = {
+  source_identity?: boolean;
+  source_url_or_document?: boolean;
+  date_metadata?: boolean;
+  excerpt?: boolean;
+  methodology?: boolean;
+  targets?: boolean;
+  license_note?: boolean;
+};
+
+export type ResearchSourceCompleteness = {
+  score?: number;
+  total?: number;
+  status?: "complete" | "partial" | "missing" | string;
+};
+
+export type ResearchSourceWorkflowMetadata = {
+  source_id?: string | null;
+  source_label?: string | null;
+  source_category?: string | null;
+  target_indicator_codes?: string[];
+  component_role?: string | null;
+  methodology_note?: string | null;
+  license_note?: string | null;
+  review_checklist?: ResearchSourceReviewChecklist;
+  completeness?: ResearchSourceCompleteness;
+  [key: string]: unknown;
+};
 
 export type ResearchSourceNote = {
   id: string;
@@ -26,7 +55,16 @@ export type ResearchSourceNote = {
   review_status: "draft" | "reviewed" | "archived" | string;
   is_citable: boolean;
   citation_id?: string | null;
+  metadata?: ResearchSourceWorkflowMetadata;
   created_at?: string | null;
+};
+
+export type ResearchSourceTargetOption = {
+  id: string;
+  label: string;
+  category: string;
+  status?: string | null;
+  targetIndicatorCodes?: string[];
 };
 
 export type ResearchSourceNotebookLabels = {
@@ -43,6 +81,20 @@ export type ResearchSourceNotebookLabels = {
   sourceTypePlaceholder: string;
   sourceUrlLabel: string;
   sourceUrlPlaceholder: string;
+  sourceTargetLabel: string;
+  sourceTargetPlaceholder: string;
+  targetIndicatorsLabel: string;
+  targetIndicatorsPlaceholder: string;
+  componentRoleLabel: string;
+  componentRoleGeneral: string;
+  componentRoleMarketCap: string;
+  componentRoleGdp: string;
+  componentRoleCpi: string;
+  componentRoleM2: string;
+  componentRoleRate: string;
+  componentRoleYieldSpread: string;
+  componentRoleFiling: string;
+  componentRoleContext: string;
   symbolsLabel: string;
   symbolsPlaceholder: string;
   tagsLabel: string;
@@ -53,6 +105,10 @@ export type ResearchSourceNotebookLabels = {
   excerptPlaceholder: string;
   noteLabel: string;
   notePlaceholder: string;
+  methodologyNoteLabel: string;
+  methodologyNotePlaceholder: string;
+  licenseNoteLabel: string;
+  licenseNotePlaceholder: string;
   aiFollowUpLabel: string;
   aiFollowUpPlaceholder: string;
   reviewStatusLabel: string;
@@ -79,12 +135,28 @@ export type ResearchSourceNotebookLabels = {
   collectionBadge: string;
   citationId: string;
   sourceLink: string;
+  linkedSourceBadge: string;
+  targetIndicatorsBadge: string;
+  componentRoleBadge: string;
+  reviewChecklistTitle: string;
+  completenessSummary: string;
+  completenessComplete: string;
+  completenessPartial: string;
+  completenessMissing: string;
+  checklistSourceIdentity: string;
+  checklistSourceUrlOrDocument: string;
+  checklistDateMetadata: string;
+  checklistExcerpt: string;
+  checklistMethodology: string;
+  checklistTargets: string;
+  checklistLicenseNote: string;
   unavailableShort: string;
 };
 
 type ResearchSourceNotebookProps = {
   labels: ResearchSourceNotebookLabels;
   initialNotes: ResearchSourceNote[];
+  sourceTargets?: ResearchSourceTargetOption[];
   loadFailed?: boolean;
 };
 
@@ -93,12 +165,17 @@ type FormState = {
   sourceName: string;
   sourceType: string;
   sourceUrl: string;
+  sourceId: string;
+  targetIndicatorCodes: string;
+  componentRole: string;
   symbols: string;
   tags: string;
   asOf: string;
   publishedAt: string;
   excerpt: string;
   note: string;
+  methodologyNote: string;
+  licenseNote: string;
   aiFollowUp: string;
   reviewStatus: "draft" | "reviewed" | "archived";
   isCitable: boolean;
@@ -109,22 +186,143 @@ const emptyForm: FormState = {
   sourceName: "",
   sourceType: "",
   sourceUrl: "",
+  sourceId: "",
+  targetIndicatorCodes: "",
+  componentRole: "",
   symbols: "",
   tags: "",
   asOf: "",
   publishedAt: "",
   excerpt: "",
   note: "",
+  methodologyNote: "",
+  licenseNote: "",
   aiFollowUp: "",
   reviewStatus: "draft",
   isCitable: false,
 };
+
+type ChecklistLabelKey =
+  | "checklistSourceIdentity"
+  | "checklistSourceUrlOrDocument"
+  | "checklistDateMetadata"
+  | "checklistExcerpt"
+  | "checklistMethodology"
+  | "checklistTargets"
+  | "checklistLicenseNote";
+
+const reviewChecklistItems: Array<{ key: keyof ResearchSourceReviewChecklist; labelKey: ChecklistLabelKey }> = [
+  { key: "source_identity", labelKey: "checklistSourceIdentity" },
+  { key: "source_url_or_document", labelKey: "checklistSourceUrlOrDocument" },
+  { key: "date_metadata", labelKey: "checklistDateMetadata" },
+  { key: "excerpt", labelKey: "checklistExcerpt" },
+  { key: "methodology", labelKey: "checklistMethodology" },
+  { key: "targets", labelKey: "checklistTargets" },
+  { key: "license_note", labelKey: "checklistLicenseNote" },
+];
 
 function splitList(value: string): string[] {
   return value
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function getNoteMetadata(note: ResearchSourceNote): ResearchSourceWorkflowMetadata {
+  return note.metadata && typeof note.metadata === "object" ? note.metadata : {};
+}
+
+function metadataString(metadata: ResearchSourceWorkflowMetadata, key: keyof ResearchSourceWorkflowMetadata): string {
+  const value = metadata[key];
+  return typeof value === "string" ? value : "";
+}
+
+function metadataStringList(metadata: ResearchSourceWorkflowMetadata, key: keyof ResearchSourceWorkflowMetadata): string[] {
+  const value = metadata[key];
+  return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+}
+
+function getCompletenessStatusLabel(status: string | undefined, labels: ResearchSourceNotebookLabels): string {
+  if (status === "complete") {
+    return labels.completenessComplete;
+  }
+  if (status === "missing") {
+    return labels.completenessMissing;
+  }
+  return labels.completenessPartial;
+}
+
+function buildCompleteness(checklist: ResearchSourceReviewChecklist): ResearchSourceCompleteness {
+  const total = reviewChecklistItems.length;
+  const score = reviewChecklistItems.filter((item) => Boolean(checklist[item.key])).length;
+  if (score === total) {
+    return { score, total, status: "complete" };
+  }
+  if (score > 0) {
+    return { score, total, status: "partial" };
+  }
+  return { score, total, status: "missing" };
+}
+
+function getStoredCompleteness(
+  metadata: ResearchSourceWorkflowMetadata,
+  fallbackChecklist: ResearchSourceReviewChecklist,
+): ResearchSourceCompleteness {
+  const value = metadata.completeness;
+  if (value && typeof value === "object") {
+    return {
+      score: typeof value.score === "number" ? value.score : undefined,
+      total: typeof value.total === "number" ? value.total : undefined,
+      status: typeof value.status === "string" ? value.status : undefined,
+    };
+  }
+  return buildCompleteness(fallbackChecklist);
+}
+
+function getStoredChecklist(metadata: ResearchSourceWorkflowMetadata): ResearchSourceReviewChecklist | null {
+  const value = metadata.review_checklist;
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return reviewChecklistItems.reduce<ResearchSourceReviewChecklist>((accumulator, item) => {
+    accumulator[item.key] = Boolean(value[item.key]);
+    return accumulator;
+  }, {});
+}
+
+function buildFormChecklist(form: FormState, filename: string | null): ResearchSourceReviewChecklist {
+  return {
+    source_identity: Boolean(form.title.trim() && form.sourceName.trim() && form.sourceType.trim()),
+    source_url_or_document: Boolean(form.sourceUrl.trim() || filename),
+    date_metadata: Boolean(form.asOf || form.publishedAt),
+    excerpt: Boolean(form.excerpt.trim()),
+    methodology: Boolean(form.note.trim() || form.methodologyNote.trim()),
+    targets: Boolean(
+      form.sourceId ||
+        form.targetIndicatorCodes.trim() ||
+        form.tags.trim() ||
+        form.symbols.trim(),
+    ),
+    license_note: Boolean(form.licenseNote.trim()),
+  };
+}
+
+function buildNoteFallbackChecklist(note: ResearchSourceNote): ResearchSourceReviewChecklist {
+  const metadata = getNoteMetadata(note);
+  return {
+    source_identity: Boolean(note.title && note.source_name && note.source_type),
+    source_url_or_document: Boolean(note.source_url || metadataString(metadata, "browser_filename")),
+    date_metadata: Boolean(note.as_of || note.published_at || note.retrieved_at),
+    excerpt: Boolean(note.excerpt),
+    methodology: Boolean(note.note || metadataString(metadata, "methodology_note")),
+    targets: Boolean(
+      metadataString(metadata, "source_id") ||
+        metadataStringList(metadata, "target_indicator_codes").length > 0 ||
+        (note.tags ?? []).length > 0 ||
+        (note.symbols ?? []).length > 0,
+    ),
+    license_note: Boolean(metadataString(metadata, "license_note")),
+  };
 }
 
 function labelForStatus(status: string, labels: ResearchSourceNotebookLabels): string {
@@ -160,7 +358,12 @@ async function readJsonSafe(response: Response): Promise<Record<string, unknown>
   }
 }
 
-export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = false }: ResearchSourceNotebookProps) {
+export function ResearchSourceNotebook({
+  labels,
+  initialNotes,
+  sourceTargets = [],
+  loadFailed = false,
+}: ResearchSourceNotebookProps) {
   const [form, setForm] = React.useState<FormState>(emptyForm);
   const [notes, setNotes] = React.useState<ResearchSourceNote[]>(initialNotes);
   const [filename, setFilename] = React.useState<string | null>(null);
@@ -170,12 +373,30 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [citableOnly, setCitableOnly] = React.useState(false);
   const router = useRouter();
+  const selectedSourceTarget = sourceTargets.find((target) => target.id === form.sourceId) ?? null;
+  const formChecklist = buildFormChecklist(form, filename);
+  const formCompleteness = buildCompleteness(formChecklist);
+  const componentRoleOptions = [
+    { value: "", label: labels.componentRoleGeneral },
+    { value: "market_cap", label: labels.componentRoleMarketCap },
+    { value: "gdp", label: labels.componentRoleGdp },
+    { value: "cpi_source", label: labels.componentRoleCpi },
+    { value: "m2_source", label: labels.componentRoleM2 },
+    { value: "rate_source", label: labels.componentRoleRate },
+    { value: "yield_spread_source", label: labels.componentRoleYieldSpread },
+    { value: "filing_note", label: labels.componentRoleFiling },
+    { value: "general_context", label: labels.componentRoleContext },
+  ];
 
   const filteredNotes = notes.filter((note) => {
     const haystack = [
       note.title,
       note.source_name,
       note.source_type,
+      metadataString(getNoteMetadata(note), "source_label"),
+      metadataString(getNoteMetadata(note), "source_category"),
+      metadataString(getNoteMetadata(note), "component_role"),
+      ...metadataStringList(getNoteMetadata(note), "target_indicator_codes"),
       ...(note.symbols ?? []),
       ...(note.tags ?? []),
       note.excerpt ?? "",
@@ -191,6 +412,18 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleSourceTargetChange(sourceId: string) {
+    const target = sourceTargets.find((item) => item.id === sourceId) ?? null;
+    setForm((current) => ({
+      ...current,
+      sourceId,
+      sourceName: current.sourceName || target?.label || "",
+      sourceType: current.sourceType || target?.category || "",
+      targetIndicatorCodes:
+        current.targetIndicatorCodes || (target?.targetIndicatorCodes ?? []).join(", "),
+    }));
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -230,12 +463,19 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
           source_name: form.sourceName,
           source_type: form.sourceType,
           source_url: form.sourceUrl || null,
+          source_id: form.sourceId || null,
+          source_label: selectedSourceTarget?.label ?? null,
+          source_category: selectedSourceTarget?.category ?? null,
+          target_indicator_codes: splitList(form.targetIndicatorCodes),
+          component_role: form.componentRole || null,
           symbols: splitList(form.symbols),
           tags: splitList(form.tags),
           as_of: form.asOf || null,
           published_at: form.publishedAt || null,
           excerpt: form.excerpt || null,
           note: form.note || null,
+          methodology_note: form.methodologyNote || null,
+          license_note: form.licenseNote || null,
           ai_follow_up: form.aiFollowUp || null,
           review_status: form.reviewStatus,
           is_citable: form.isCitable,
@@ -297,6 +537,24 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium" htmlFor="source-note-source-target">
+                {labels.sourceTargetLabel}
+              </label>
+              <select
+                id="source-note-source-target"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={form.sourceId}
+                onChange={(event) => handleSourceTargetChange(event.target.value)}
+              >
+                <option value="">{labels.sourceTargetPlaceholder}</option>
+                {sourceTargets.map((target) => (
+                  <option key={target.id} value={target.id}>
+                    {target.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium" htmlFor="source-note-title">
                 {labels.titleLabel}
               </label>
@@ -330,6 +588,23 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium" htmlFor="source-note-component-role">
+                {labels.componentRoleLabel}
+              </label>
+              <select
+                id="source-note-component-role"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={form.componentRole}
+                onChange={(event) => updateField("componentRole", event.target.value)}
+              >
+                {componentRoleOptions.map((option) => (
+                  <option key={option.value || "general"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium" htmlFor="source-note-source-url">
                 {labels.sourceUrlLabel}
               </label>
@@ -338,6 +613,17 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
                 value={form.sourceUrl}
                 placeholder={labels.sourceUrlPlaceholder}
                 onChange={(event) => updateField("sourceUrl", event.target.value)}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium" htmlFor="source-note-target-indicators">
+                {labels.targetIndicatorsLabel}
+              </label>
+              <Input
+                id="source-note-target-indicators"
+                value={form.targetIndicatorCodes}
+                placeholder={labels.targetIndicatorsPlaceholder}
+                onChange={(event) => updateField("targetIndicatorCodes", event.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -423,6 +709,60 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
                   placeholder={labels.aiFollowUpPlaceholder}
                   onChange={(event) => updateField("aiFollowUp", event.target.value)}
                 />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="source-note-methodology-note">
+                  {labels.methodologyNoteLabel}
+                </label>
+                <textarea
+                  id="source-note-methodology-note"
+                  className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={form.methodologyNote}
+                  placeholder={labels.methodologyNotePlaceholder}
+                  onChange={(event) => updateField("methodologyNote", event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="source-note-license-note">
+                  {labels.licenseNoteLabel}
+                </label>
+                <textarea
+                  id="source-note-license-note"
+                  className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={form.licenseNote}
+                  placeholder={labels.licenseNotePlaceholder}
+                  onChange={(event) => updateField("licenseNote", event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="border bg-muted/20 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-semibold">{labels.reviewChecklistTitle}</div>
+                <Badge variant={formCompleteness.status === "complete" ? "secondary" : "outline"}>
+                  {labels.completenessSummary
+                    .replace("{score}", String(formCompleteness.score ?? 0))
+                    .replace("{total}", String(formCompleteness.total ?? reviewChecklistItems.length))}
+                </Badge>
+                <Badge variant={formCompleteness.status === "complete" ? "secondary" : "outline"}>
+                  {getCompletenessStatusLabel(formCompleteness.status, labels)}
+                </Badge>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                {reviewChecklistItems.map((item) => {
+                  const complete = Boolean(formChecklist[item.key]);
+                  return (
+                    <div key={item.key} className="flex items-center gap-2 text-muted-foreground">
+                      {complete ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5" />
+                      )}
+                      <span>{labels[item.labelKey]}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="flex flex-col gap-3 border bg-muted/20 p-3 md:flex-row md:items-center md:justify-between">
@@ -526,59 +866,119 @@ export function ResearchSourceNotebook({ labels, initialNotes, loadFailed = fals
             <div className="border bg-muted/20 p-4 text-sm text-muted-foreground">{labels.noNotes}</div>
           ) : (
             <div className="grid gap-3 xl:grid-cols-2">
-              {filteredNotes.map((note) => (
-                <article key={note.id} className="border bg-background p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <h4 className="font-semibold">{note.title}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {[note.source_name, note.source_type].filter(Boolean).join(" / ") || labels.unavailableShort}
-                      </p>
+              {filteredNotes.map((note) => {
+                const metadata = getNoteMetadata(note);
+                const checklist = getStoredChecklist(metadata) ?? buildNoteFallbackChecklist(note);
+                const completeness = getStoredCompleteness(metadata, checklist);
+                const sourceLabel = metadataString(metadata, "source_label");
+                const sourceCategory = metadataString(metadata, "source_category");
+                const targetCodes = metadataStringList(metadata, "target_indicator_codes");
+                const componentRole = metadataString(metadata, "component_role");
+                return (
+                  <article key={note.id} className="border bg-background p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <h4 className="font-semibold">{note.title}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {[note.source_name, note.source_type].filter(Boolean).join(" / ") ||
+                            labels.unavailableShort}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <Badge variant={badgeVariant(note.review_status, note.is_citable)}>
+                          {labelForStatus(note.review_status, labels)}
+                        </Badge>
+                        <Badge variant={note.is_citable ? "secondary" : "outline"}>
+                          {note.is_citable ? labels.citableBadge : labels.collectionBadge}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <Badge variant={badgeVariant(note.review_status, note.is_citable)}>
-                        {labelForStatus(note.review_status, labels)}
-                      </Badge>
-                      <Badge variant={note.is_citable ? "secondary" : "outline"}>
-                        {note.is_citable ? labels.citableBadge : labels.collectionBadge}
-                      </Badge>
+
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {sourceLabel ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          <Link2 className="h-3 w-3" />
+                          {labels.linkedSourceBadge.replace("{label}", sourceLabel)}
+                        </Badge>
+                      ) : null}
+                      {sourceCategory ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          {sourceCategory}
+                        </Badge>
+                      ) : null}
+                      {componentRole ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          {labels.componentRoleBadge.replace("{role}", componentRole)}
+                        </Badge>
+                      ) : null}
+                      {targetCodes.map((code) => (
+                        <Badge key={`${note.id}-target-${code}`} variant="outline" className="text-[10px]">
+                          {labels.targetIndicatorsBadge.replace("{code}", code)}
+                        </Badge>
+                      ))}
+                      {(note.symbols ?? []).map((symbol) => (
+                        <Badge key={`${note.id}-${symbol}`} variant="outline" className="text-[10px]">
+                          {symbol}
+                        </Badge>
+                      ))}
+                      {(note.tags ?? []).map((tag) => (
+                        <Badge key={`${note.id}-${tag}`} variant="outline" className="text-[10px]">
+                          {tag}
+                        </Badge>
+                      ))}
                     </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {(note.symbols ?? []).map((symbol) => (
-                      <Badge key={`${note.id}-${symbol}`} variant="outline" className="text-[10px]">
-                        {symbol}
-                      </Badge>
-                    ))}
-                    {(note.tags ?? []).map((tag) => (
-                      <Badge key={`${note.id}-${tag}`} variant="outline" className="text-[10px]">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  {note.excerpt ? (
-                    <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{note.excerpt}</p>
-                  ) : null}
-                  {note.note ? <p className="mt-2 line-clamp-2 text-sm">{note.note}</p> : null}
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>{note.as_of ?? note.published_at ?? note.retrieved_at ?? labels.unavailableShort}</span>
-                    {note.citation_id ? (
-                      <span className="font-mono">{labels.citationId.replace("{id}", note.citation_id)}</span>
+                    {note.excerpt ? (
+                      <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{note.excerpt}</p>
                     ) : null}
-                    {note.source_url ? (
-                      <a
-                        href={note.source_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-primary hover:underline"
-                      >
-                        <FileUp className="h-3 w-3" />
-                        {labels.sourceLink}
-                      </a>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+                    {note.note ? <p className="mt-2 line-clamp-2 text-sm">{note.note}</p> : null}
+                    <div className="mt-3 border bg-muted/20 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold">{labels.reviewChecklistTitle}</div>
+                        <Badge variant={completeness.status === "complete" ? "secondary" : "outline"}>
+                          {labels.completenessSummary
+                            .replace("{score}", String(completeness.score ?? 0))
+                            .replace("{total}", String(completeness.total ?? reviewChecklistItems.length))}
+                        </Badge>
+                        <Badge variant={completeness.status === "complete" ? "secondary" : "outline"}>
+                          {getCompletenessStatusLabel(completeness.status, labels)}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+                        {reviewChecklistItems.map((item) => {
+                          const complete = Boolean(checklist[item.key]);
+                          return (
+                            <div key={`${note.id}-${item.key}`} className="flex items-center gap-2 text-muted-foreground">
+                              {complete ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                              ) : (
+                                <XCircle className="h-3.5 w-3.5" />
+                              )}
+                              <span>{labels[item.labelKey]}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{note.as_of ?? note.published_at ?? note.retrieved_at ?? labels.unavailableShort}</span>
+                      {note.citation_id ? (
+                        <span className="font-mono">{labels.citationId.replace("{id}", note.citation_id)}</span>
+                      ) : null}
+                      {note.source_url ? (
+                        <a
+                          href={note.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <FileUp className="h-3 w-3" />
+                          {labels.sourceLink}
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>

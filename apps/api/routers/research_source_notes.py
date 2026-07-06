@@ -32,6 +32,13 @@ class ResearchSourceNoteCreateInput(BaseModel):
     review_status: str = "draft"
     is_citable: bool = False
     metadata: dict[str, object] = Field(default_factory=dict)
+    source_id: str | None = Field(default=None, max_length=128)
+    source_label: str | None = Field(default=None, max_length=256)
+    source_category: str | None = Field(default=None, max_length=64)
+    target_indicator_codes: list[str] = Field(default_factory=list)
+    component_role: str | None = Field(default=None, max_length=64)
+    methodology_note: str | None = None
+    license_note: str | None = None
 
 
 @router.get("")
@@ -74,6 +81,13 @@ def create_note(
                 review_status=payload.review_status,
                 is_citable=payload.is_citable,
                 metadata=payload.metadata,
+                source_id=payload.source_id,
+                source_label=payload.source_label,
+                source_category=payload.source_category,
+                target_indicator_codes=payload.target_indicator_codes,
+                component_role=payload.component_role,
+                methodology_note=payload.methodology_note,
+                license_note=payload.license_note,
             ),
             session=session,
         )

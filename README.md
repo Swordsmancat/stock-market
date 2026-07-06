@@ -161,9 +161,11 @@ For macro and valuation sources that can be imported manually, the same panel al
 
 ## Source notebook
 
-The Evidence Center now includes a hard-to-find source notebook for personal research collection. Use it for reviewed links, local text/Markdown/CSV/JSON file excerpts read by the browser, valuation or macro calculation notes, tags, symbols, and AI follow-up prompts.
+The Evidence Center now includes a hard-to-find source notebook for personal research collection. Use it for reviewed links, local text/Markdown/CSV/JSON file excerpts read by the browser, valuation or macro calculation notes, tags, symbols, source-readiness targets, target indicator codes, component roles, methodology notes, license/usage notes, and AI follow-up prompts.
 
 Notebook entries are intentionally not a scraper or document corpus. The browser file picker reads text into editable fields; the backend stores the reviewed excerpt and notes, not raw binary files. Draft entries remain collection notes. A notebook entry becomes available to AI only when it is explicitly saved as `reviewed` and `AI-citable`; those rows produce stable `research_source_note:<id>` citation IDs that the dashboard brief and market assistant may use in their allowed-citation lists.
+
+Source Notebook entries can now be linked to source-readiness targets such as FRED rates, PBOC China M2, or Buffett Indicator manual valuation components. Linked entries show target indicator badges and a review completeness checklist for source identity, URL/document, date metadata, excerpt, methodology, targets, and license/usage note. Completeness is review guidance only; it does not import observations or make a draft note AI-citable.
 
 Use this for information that normal trading sites do not organize well, such as Buffett Indicator source components, manual macro source checks, filing search notes, and one-off research excerpts. Keep full filings/transcripts, bulk scraping, licensed research corpora, and automated ingestion out of scope until source rights, storage policy, and citation metadata are designed.
 

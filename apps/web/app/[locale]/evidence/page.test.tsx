@@ -249,6 +249,25 @@ function createResearchSourceNotesPayload() {
         is_citable: true,
         citation_id: "research_source_note:note-1",
         retrieved_at: "2026-01-02T00:00:00+00:00",
+        metadata: {
+          source_id: "buffett_manual_valuation_components",
+          source_label: "Buffett Indicator manual valuation components",
+          source_category: "valuation",
+          target_indicator_codes: ["buffett_indicator_cn"],
+          component_role: "market_cap",
+          methodology_note: "Reviewed market-cap component.",
+          license_note: "Public source for personal research review.",
+          review_checklist: {
+            source_identity: true,
+            source_url_or_document: true,
+            date_metadata: true,
+            excerpt: true,
+            methodology: true,
+            targets: true,
+            license_note: true,
+          },
+          completeness: { score: 7, total: 7, status: "complete" },
+        },
       },
     ],
     summary: { total: 1, returned: 1, citable: 1 },
@@ -304,7 +323,11 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
   expect(screen.getByText("python scripts/import_market_indicator_seeds.py path/to/macro-seeds.json")).toBeInTheDocument();
   expect(screen.getByText("This template is not evidence; imported observations become citeable only after validation.")).toBeInTheDocument();
   expect(screen.getAllByText("Source notebook").length).toBeGreaterThan(0);
-  expect(screen.getByText("AAPL valuation source note")).toBeInTheDocument();
+  expect(screen.getAllByText("AAPL valuation source note").length).toBeGreaterThan(0);
+  expect(screen.getByText("Linked: Buffett Indicator manual valuation components")).toBeInTheDocument();
+  expect(screen.getByText("Target: buffett_indicator_cn")).toBeInTheDocument();
+  expect(screen.getByText("Linked notebook entries: 1")).toBeInTheDocument();
+  expect(screen.getByText("Seed-review ready: 1")).toBeInTheDocument();
   expect(screen.getByText("Citation: research_source_note:note-1")).toBeInTheDocument();
 
   const fredLink = screen.getByRole("link", { name: /FRED DGS10/ });

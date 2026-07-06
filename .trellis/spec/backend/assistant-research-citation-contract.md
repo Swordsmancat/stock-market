@@ -99,6 +99,10 @@ diagnostics.append({
 - DB table: `research_source_notes`
 - Model fields: `id`, `title`, `source_url`, `source_name`, `source_type`, `symbols_json`, `tags_json`, `published_at`, `as_of`, `retrieved_at`, `excerpt`, `note`, `ai_follow_up`, `review_status`, `is_citable`, `metadata_json`, `created_at`, `updated_at`
 - Service input: `ResearchSourceNoteInput`
+- Additive service/API workflow fields: `source_id`, `source_label`, `source_category`, `target_indicator_codes`, `component_role`, `methodology_note`, `license_note`
+- Workflow storage keys in `metadata_json`: `source_id`, `source_label`, `source_category`, `target_indicator_codes`, `component_role`, `methodology_note`, `license_note`, `review_checklist`, `completeness`
+- Review checklist keys: `source_identity`, `source_url_or_document`, `date_metadata`, `excerpt`, `methodology`, `targets`, `license_note`
+- Completeness payload: `{ "score": int, "total": int, "status": "complete" | "partial" | "missing" }`
 - Service create: `create_research_source_note(payload, *, session)`
 - Service list: `list_research_source_notes(*, session, limit=50, review_status=None, source_type=None, citable_only=False)`
 - Citation list: `list_citable_research_source_note_citations(*, session, symbols=None, limit=6)`
@@ -115,9 +119,13 @@ diagnostics.append({
 - `is_citable=true` requires `review_status=reviewed`, a non-empty reviewed excerpt, and either `source_url` or `source_name` plus date metadata (`as_of` or `published_at`).
 - Browser upload is client-side text extraction into editable fields. The backend receives JSON only and stores reviewed excerpt/note text, not raw files.
 - Tags are trimmed and de-duplicated. Symbols are trimmed, de-duplicated, and uppercased.
-- AI citation payloads may include `url`, `as_of`, `provider`, `retrieved_at`, clipped `excerpt`, and metadata for source name/type, symbols, tags, and review status.
+- Source Notebook entries may link to information-source readiness IDs such as `fred_us_rates`, `pboc_cn_m2_public_manual`, or `buffett_manual_valuation_components`. If a known `source_id` is provided and `target_indicator_codes` is empty, the service derives target indicator codes from that readiness source's seed template, indicator codes, or coverage.
+- Workflow metadata is additive and stored in `metadata_json`; unknown existing metadata keys must be preserved.
+- Review completeness is advisory. `review_checklist` and `completeness` help users prepare source evidence, but they do not automatically import macro observations and do not override the explicit `reviewed + is_citable` citation gate.
+- AI citation payloads may include `url`, `as_of`, `provider`, `retrieved_at`, clipped `excerpt`, and metadata for source name/type, symbols, tags, review status, source linkage, target indicator codes, component role, methodology/license notes, and completeness state.
 - Dashboard and assistant citation builders must request only reviewed/citable notebook entries. Draft, archived, and non-citable notes remain visible in the notebook but are not allowed citation IDs.
 - Symbol filtering is advisory: if requested symbols are present and a note has symbols, include only notes whose symbols intersect; untagged citable notes may still serve as general macro/context evidence.
+- Evidence Center UI may display source-linked notebook entries near the matching source-readiness card. Those linked notebook entries remain collection/review records unless the row also satisfies `reviewed + is_citable`.
 
 ### 4. Validation & Error Matrix
 
@@ -129,25 +137,31 @@ diagnostics.append({
 - `is_citable=true` without excerpt -> validation error / HTTP 422.
 - `is_citable=true` without `source_url` and without date metadata -> validation error / HTTP 422.
 - Oversized excerpt/note fields -> service clips to the configured prompt/storage limits rather than expanding AI context unbounded.
+- Unknown `source_id` -> preserve the user-provided ID in metadata without deriving label/category/target codes.
+- Known `source_id` with no explicit targets -> derive target indicator codes from the source-readiness registry.
+- Incomplete checklist -> return `completeness.status="partial"` or `"missing"` without failing creation.
 - Source note creation succeeds -> market overview cache is cleared so the dashboard can pick up new citable evidence.
 
 ### 5. Good/Base/Bad Cases
 
-- Good: a reviewed Buffett Indicator component note with source URL, excerpt, tags, symbols, and `is_citable=true` appears as `research_source_note:<uuid>` in dashboard/assistant allowed citations.
+- Good: a reviewed Buffett Indicator component note with source URL, excerpt, tags, symbols, source-readiness link, target indicator codes, and `is_citable=true` appears as `research_source_note:<uuid>` in dashboard/assistant allowed citations with workflow metadata.
 - Good: a draft browser-upload excerpt is saved and visible in `/evidence`, but no AI prompt receives its citation ID.
+- Good: a FRED-linked note with `source_id="fred_us_rates"` and no explicit targets stores the seed template's rates indicator codes as review guidance.
 - Base: a reviewed note without symbol tags can support general macro/valuation context when citable.
+- Base: a complete checklist on a draft note shows source-review readiness but still remains outside assistant/dashboard allowed citations.
 - Bad: uploaded raw file bytes are persisted or treated as a managed document corpus.
 - Bad: a draft link or source-readiness collection URL is included as a dashboard or assistant citation.
+- Bad: a source-readiness ID, seed template, or linked notebook draft is cited as evidence before a reviewed/citable local row or imported observation exists.
 - Bad: a source notebook citation is used to produce buy/sell/hold, target price, position sizing, or execution advice.
 
 ### 6. Tests Required
 
 - Domain/migration tests assert `research_source_notes` schema exists and model metadata aligns with `Base.metadata.create_all()`.
-- Service tests cover create/list, normalization, URL-scheme validation, validation failures, citable-only listing, citation ID prefix, excerpt clipping, and draft/non-citable exclusion.
-- API tests cover `GET /research-source-notes`, `POST /research-source-notes`, HTTP 422 validation, and cache-clearing metadata.
+- Service tests cover create/list, normalization, URL-scheme validation, validation failures, citable-only listing, citation ID prefix, excerpt clipping, workflow metadata storage, registry-derived targets, completeness calculation, citation metadata, and draft/non-citable exclusion.
+- API tests cover `GET /research-source-notes`, `POST /research-source-notes`, additive workflow fields, HTTP 422 validation, and cache-clearing metadata.
 - Frontend route tests cover proxy status/content-type/payload forwarding for list and create.
-- Component/page tests cover paste entry, browser file text prefill, status/citable controls, saved-entry display, filters, localized labels, and error/success states.
-- Dashboard and assistant tests assert reviewed/citable source notes are included in allowed citations and draft/non-citable rows are excluded.
+- Component/page tests cover paste entry, browser file text prefill, source target selection, component role, target indicator display, review checklist/completeness, linked source-readiness summaries, status/citable controls, saved-entry display, filters, localized labels, and error/success states.
+- Dashboard and assistant tests assert reviewed/citable source notes are included in allowed citations with workflow metadata and draft/non-citable rows are excluded.
 
 ### 7. Wrong vs Correct
 

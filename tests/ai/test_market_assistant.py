@@ -293,6 +293,11 @@ def test_market_assistant_includes_only_reviewed_citable_source_notes(monkeypatc
             excerpt="Reviewed citable excerpt.",
             review_status="reviewed",
             is_citable=True,
+            source_id="buffett_manual_valuation_components",
+            target_indicator_codes=["buffett_indicator_us"],
+            component_role="market_cap",
+            methodology_note="Reviewed market-cap component.",
+            license_note="Public source for personal research review.",
         ),
         session=session,
     )
@@ -383,6 +388,13 @@ def test_market_assistant_includes_only_reviewed_citable_source_notes(monkeypatc
     citation_ids = {citation["id"] for citation in payload["citations"]}
     citation_labels = {citation["label"] for citation in payload["citations"]}
     assert citable_note["citation_id"] in citation_ids
+    source_note_citation = next(
+        citation for citation in payload["citations"] if citation["id"] == citable_note["citation_id"]
+    )
+    assert source_note_citation["metadata"]["source_id"] == "buffett_manual_valuation_components"
+    assert source_note_citation["metadata"]["target_indicator_codes"] == ["buffett_indicator_us"]
+    assert source_note_citation["metadata"]["component_role"] == "market_cap"
+    assert source_note_citation["metadata"]["completeness"]["status"] == "partial"
     assert "AAPL draft source" not in citation_labels
     assert "AAPL reviewed collection source" not in citation_labels
 

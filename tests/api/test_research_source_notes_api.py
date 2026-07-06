@@ -46,6 +46,13 @@ def test_research_source_notes_api_creates_and_lists_reviewed_note(monkeypatch):
                 "as_of": "2026-07-03",
                 "excerpt": "Reviewed source excerpt.",
                 "note": "Calculation note.",
+                "source_id": "buffett_manual_valuation_components",
+                "source_label": "Buffett Indicator manual valuation components",
+                "source_category": "valuation",
+                "target_indicator_codes": ["buffett_indicator_us"],
+                "component_role": "gdp",
+                "methodology_note": "Reviewed GDP component methodology.",
+                "license_note": "Public source for personal research review.",
                 "review_status": "reviewed",
                 "is_citable": True,
             },
@@ -58,11 +65,16 @@ def test_research_source_notes_api_creates_and_lists_reviewed_note(monkeypatch):
     created = create_response.json()
     assert created["title"] == "Buffett Indicator source review"
     assert created["citation_id"].startswith("research_source_note:")
+    assert created["metadata"]["source_id"] == "buffett_manual_valuation_components"
+    assert created["metadata"]["target_indicator_codes"] == ["buffett_indicator_us"]
+    assert created["metadata"]["component_role"] == "gdp"
+    assert created["metadata"]["completeness"] == {"score": 7, "total": 7, "status": "complete"}
     assert created["cache"]["market_overview_cleared"] == 3
     assert list_response.status_code == 200
     listed = list_response.json()
     assert listed["summary"]["total"] == 1
     assert listed["items"][0]["title"] == "Buffett Indicator source review"
+    assert listed["items"][0]["metadata"]["source_label"] == "Buffett Indicator manual valuation components"
 
 
 def test_research_source_notes_api_rejects_citable_drafts():

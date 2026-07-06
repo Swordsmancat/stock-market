@@ -174,6 +174,11 @@ def test_market_overview_brief_includes_report_and_news_availability():
             excerpt="Reviewed source excerpt for valuation context.",
             review_status="reviewed",
             is_citable=True,
+            source_id="buffett_manual_valuation_components",
+            target_indicator_codes=["buffett_indicator_us"],
+            component_role="market_cap",
+            methodology_note="Reviewed market-cap component.",
+            license_note="Public source for personal research review.",
         ),
         session=session,
     )
@@ -216,6 +221,13 @@ def test_market_overview_brief_includes_report_and_news_availability():
     assert citation_sources >= {"generated_reports", "news", "research_source_notes"}
     citation_ids = {citation["id"] for citation in dashboard_brief["citations"]}
     assert source_note["citation_id"] in citation_ids
+    source_note_citation = next(
+        citation for citation in dashboard_brief["citations"] if citation["id"] == source_note["citation_id"]
+    )
+    assert source_note_citation["metadata"]["source_id"] == "buffett_manual_valuation_components"
+    assert source_note_citation["metadata"]["target_indicator_codes"] == ["buffett_indicator_us"]
+    assert source_note_citation["metadata"]["component_role"] == "market_cap"
+    assert source_note_citation["metadata"]["completeness"]["status"] == "partial"
     citation_labels = {citation["label"] for citation in dashboard_brief["citations"]}
     assert "Draft source note" not in citation_labels
     assert "Reviewed collection note" not in citation_labels

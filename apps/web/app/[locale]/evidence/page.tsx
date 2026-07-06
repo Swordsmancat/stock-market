@@ -11,6 +11,7 @@ import {
   ResearchSourceNotebook,
   type ResearchSourceNotebookLabels,
   type ResearchSourceNote,
+  type ResearchSourceTargetOption,
 } from "@/components/research-source-notebook";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -228,6 +229,45 @@ function getSourceGroups(informationSources: InformationSourcesPayload | null) {
   }));
 }
 
+function buildNotebookSourceTargets(informationSources: InformationSourcesPayload | null): ResearchSourceTargetOption[] {
+  const seen = new Set<string>();
+  return (informationSources?.items ?? []).flatMap((item) => {
+    if (seen.has(item.id)) {
+      return [];
+    }
+    seen.add(item.id);
+    return [
+      {
+        id: item.id,
+        label: item.label,
+        category: item.category,
+        status: item.status,
+        targetIndicatorCodes:
+          item.seed_template?.target_indicator_codes && item.seed_template.target_indicator_codes.length > 0
+            ? item.seed_template.target_indicator_codes
+            : item.coverage ?? [],
+      },
+    ];
+  });
+}
+
+function getNoteMetadata(note: ResearchSourceNote): Record<string, unknown> {
+  return note.metadata && typeof note.metadata === "object" ? note.metadata : {};
+}
+
+function getLinkedNotesForSource(sourceId: string, notes: ResearchSourceNote[]): ResearchSourceNote[] {
+  return notes.filter((note) => getNoteMetadata(note).source_id === sourceId);
+}
+
+function getNoteCompletenessStatus(note: ResearchSourceNote): string {
+  const completeness = getNoteMetadata(note).completeness;
+  if (!completeness || typeof completeness !== "object" || !("status" in completeness)) {
+    return "missing";
+  }
+  const status = completeness.status;
+  return typeof status === "string" ? status : "missing";
+}
+
 function countCitableIndicators(items: MarketOverviewIndicatorItem[]): number {
   return items.filter(isIndicatorCitable).length;
 }
@@ -338,6 +378,20 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
     sourceTypePlaceholder: t("sourceTypePlaceholder"),
     sourceUrlLabel: t("sourceUrlLabel"),
     sourceUrlPlaceholder: t("sourceUrlPlaceholder"),
+    sourceTargetLabel: t("sourceTargetLabel"),
+    sourceTargetPlaceholder: t("sourceTargetPlaceholder"),
+    targetIndicatorsLabel: t("targetIndicatorsLabel"),
+    targetIndicatorsPlaceholder: t("targetIndicatorsPlaceholder"),
+    componentRoleLabel: t("componentRoleLabel"),
+    componentRoleGeneral: t("componentRoleGeneral"),
+    componentRoleMarketCap: t("componentRoleMarketCap"),
+    componentRoleGdp: t("componentRoleGdp"),
+    componentRoleCpi: t("componentRoleCpi"),
+    componentRoleM2: t("componentRoleM2"),
+    componentRoleRate: t("componentRoleRate"),
+    componentRoleYieldSpread: t("componentRoleYieldSpread"),
+    componentRoleFiling: t("componentRoleFiling"),
+    componentRoleContext: t("componentRoleContext"),
     symbolsLabel: t("symbolsLabel"),
     symbolsPlaceholder: t("symbolsPlaceholder"),
     tagsLabel: t("tagsLabel"),
@@ -348,6 +402,10 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
     excerptPlaceholder: t("excerptPlaceholder"),
     noteLabel: t("noteLabel"),
     notePlaceholder: t("notePlaceholder"),
+    methodologyNoteLabel: t("methodologyNoteLabel"),
+    methodologyNotePlaceholder: t("methodologyNotePlaceholder"),
+    licenseNoteLabel: t("licenseNoteLabel"),
+    licenseNotePlaceholder: t("licenseNotePlaceholder"),
     aiFollowUpLabel: t("aiFollowUpLabel"),
     aiFollowUpPlaceholder: t("aiFollowUpPlaceholder"),
     reviewStatusLabel: t("reviewStatusLabel"),
@@ -374,6 +432,21 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
     collectionBadge: t("collectionBadge"),
     citationId: t("citationId"),
     sourceLink: t("sourceLink"),
+    linkedSourceBadge: t("linkedSourceBadge"),
+    targetIndicatorsBadge: t("targetIndicatorsBadge"),
+    componentRoleBadge: t("componentRoleBadge"),
+    reviewChecklistTitle: t("reviewChecklistTitle"),
+    completenessSummary: t("completenessSummary"),
+    completenessComplete: t("completenessComplete"),
+    completenessPartial: t("completenessPartial"),
+    completenessMissing: t("completenessMissing"),
+    checklistSourceIdentity: t("checklistSourceIdentity"),
+    checklistSourceUrlOrDocument: t("checklistSourceUrlOrDocument"),
+    checklistDateMetadata: t("checklistDateMetadata"),
+    checklistExcerpt: t("checklistExcerpt"),
+    checklistMethodology: t("checklistMethodology"),
+    checklistTargets: t("checklistTargets"),
+    checklistLicenseNote: t("checklistLicenseNote"),
     unavailableShort: t("unavailableShort"),
   };
 }
@@ -419,6 +492,7 @@ export default async function EvidenceCenterPage({
   const dashboardBrief = payload.dashboard_brief ?? null;
   const informationSources = payload.information_sources ?? null;
   const sourceGroups = getSourceGroups(informationSources);
+  const sourceTargetOptions = buildNotebookSourceTargets(informationSources);
   const citableIndicatorCount = countCitableIndicators(indicators);
   const missingIndicatorCount = countMissingIndicators(indicators);
   const sourceStatusLabels: Record<string, string> = {
@@ -477,6 +551,7 @@ export default async function EvidenceCenterPage({
       <ResearchSourceNotebook
         labels={buildNotebookLabels(notebookT)}
         initialNotes={researchSourceNotesResult.items}
+        sourceTargets={sourceTargetOptions}
         loadFailed={researchSourceNotesResult.status === "failed"}
       />
 
@@ -731,7 +806,12 @@ export default async function EvidenceCenterPage({
                     <p className="text-sm text-muted-foreground">{t("sourceGroupCount", { count: group.items.length })}</p>
                   </div>
                   <div className="grid gap-3 xl:grid-cols-2">
-                    {group.items.map((item) => (
+                    {group.items.map((item) => {
+                      const linkedNotes = getLinkedNotesForSource(item.id, researchSourceNotesResult.items);
+                      const seedReadyNotes = linkedNotes.filter(
+                        (note) => getNoteCompletenessStatus(note) === "complete",
+                      );
+                      return (
                       <div key={item.id} className="border bg-background p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
@@ -799,6 +879,23 @@ export default async function EvidenceCenterPage({
                                 </a>
                               ))}
                             </div>
+                          </div>
+                        ) : null}
+                        {linkedNotes.length > 0 ? (
+                          <div className="mt-3 border bg-muted/20 p-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">
+                                {t("sourceLinkedNotebookEntries", { count: linkedNotes.length })}
+                              </Badge>
+                              <Badge variant={seedReadyNotes.length > 0 ? "secondary" : "outline"}>
+                                {t("sourceLinkedNotebookReady", { count: seedReadyNotes.length })}
+                              </Badge>
+                            </div>
+                            <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                              {linkedNotes.slice(0, 3).map((note) => (
+                                <li key={`${item.id}-${note.id}`}>{note.title}</li>
+                              ))}
+                            </ul>
                           </div>
                         ) : null}
                         {item.seed_template ? (
@@ -907,7 +1004,8 @@ export default async function EvidenceCenterPage({
                           </div>
                         ) : null}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               ))}

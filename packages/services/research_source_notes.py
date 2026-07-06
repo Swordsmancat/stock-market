@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 
 from packages.domain.models import ResearchSourceNote
+from packages.services.information_sources import INFORMATION_SOURCE_DEFINITIONS
 
 
 RESEARCH_SOURCE_NOTE_CITATION_PREFIX = "research_source_note:"
@@ -16,6 +17,27 @@ DEFAULT_NOTE_LIMIT = 50
 MAX_EXCERPT_CHARS = 12000
 MAX_NOTE_CHARS = 8000
 MAX_AI_EXCERPT_CHARS = 420
+INFORMATION_SOURCE_DEFINITION_BY_ID = {
+    definition.id: definition for definition in INFORMATION_SOURCE_DEFINITIONS
+}
+DOCUMENT_METADATA_KEYS = ("browser_filename", "source_document", "document_name")
+METHODOLOGY_METADATA_KEYS = (
+    "methodology",
+    "calculation",
+    "review_note",
+    "methodology_note",
+)
+WORKFLOW_METADATA_KEYS = (
+    "source_id",
+    "source_label",
+    "source_category",
+    "target_indicator_codes",
+    "component_role",
+    "methodology_note",
+    "license_note",
+    "review_checklist",
+    "completeness",
+)
 
 
 class ResearchSourceNoteValidationError(ValueError):
@@ -41,6 +63,13 @@ class ResearchSourceNoteInput:
     review_status: str = "draft"
     is_citable: bool = False
     metadata: dict[str, object] | None = None
+    source_id: str | None = None
+    source_label: str | None = None
+    source_category: str | None = None
+    target_indicator_codes: list[str] | None = None
+    component_role: str | None = None
+    methodology_note: str | None = None
+    license_note: str | None = None
 
 
 def create_research_source_note(payload: ResearchSourceNoteInput, *, session: Session) -> dict[str, object]:
@@ -119,6 +148,17 @@ def list_citable_research_source_note_citations(
 
 def build_research_source_note_citation(item: dict[str, object]) -> dict[str, object]:
     excerpt = _clip_text(str(item.get("excerpt") or item.get("note") or ""), MAX_AI_EXCERPT_CHARS)
+    item_metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    citation_metadata: dict[str, object] = {
+        "source_name": item.get("source_name"),
+        "source_type": item.get("source_type"),
+        "symbols": item.get("symbols") or [],
+        "tags": item.get("tags") or [],
+        "review_status": item.get("review_status"),
+    }
+    for key in WORKFLOW_METADATA_KEYS:
+        if key in item_metadata:
+            citation_metadata[key] = item_metadata[key]
     return {
         "id": f"{RESEARCH_SOURCE_NOTE_CITATION_PREFIX}{item['id']}",
         "label": str(item.get("title") or "Research source note"),
@@ -129,13 +169,7 @@ def build_research_source_note_citation(item: dict[str, object]) -> dict[str, ob
         "provider": item.get("source_name"),
         "retrieved_at": item.get("retrieved_at"),
         "excerpt": excerpt,
-        "metadata": {
-            "source_name": item.get("source_name"),
-            "source_type": item.get("source_type"),
-            "symbols": item.get("symbols") or [],
-            "tags": item.get("tags") or [],
-            "review_status": item.get("review_status"),
-        },
+        "metadata": citation_metadata,
     }
 
 
@@ -174,7 +208,35 @@ def _normalize_payload(payload: ResearchSourceNoteInput) -> ResearchSourceNoteIn
     review_status = _clean_optional(payload.review_status) or "draft"
     symbols = _normalize_symbols(payload.symbols)
     tags = _normalize_list(payload.tags)
-    metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    metadata = dict(payload.metadata) if isinstance(payload.metadata, dict) else {}
+    source_id = _clean_optional(payload.source_id) or _metadata_string(metadata, "source_id")
+    source_definition = INFORMATION_SOURCE_DEFINITION_BY_ID.get(source_id or "")
+    source_label = (
+        _clean_optional(payload.source_label)
+        or _metadata_string(metadata, "source_label")
+        or (source_definition.label if source_definition else None)
+    )
+    source_category = (
+        _clean_optional(payload.source_category)
+        or _metadata_string(metadata, "source_category")
+        or (source_definition.category if source_definition else None)
+    )
+    target_indicator_codes = _normalize_list(
+        payload.target_indicator_codes
+        if payload.target_indicator_codes is not None
+        else metadata.get("target_indicator_codes")
+    )
+    if not target_indicator_codes and source_definition is not None:
+        target_indicator_codes = _target_indicator_codes_for_source(source_definition)
+    component_role = _clean_optional(payload.component_role) or _metadata_string(metadata, "component_role")
+    methodology_note = _clip_text(
+        _clean_optional(payload.methodology_note) or _metadata_string(metadata, "methodology_note"),
+        MAX_NOTE_CHARS,
+    )
+    license_note = _clip_text(
+        _clean_optional(payload.license_note) or _metadata_string(metadata, "license_note"),
+        MAX_NOTE_CHARS,
+    )
 
     errors: list[str] = []
     if review_status not in VALID_REVIEW_STATUSES:
@@ -193,6 +255,28 @@ def _normalize_payload(payload: ResearchSourceNoteInput) -> ResearchSourceNoteIn
     if errors:
         raise ResearchSourceNoteValidationError(errors)
 
+    metadata = _merge_workflow_metadata(
+        metadata,
+        title=title,
+        source_name=source_name,
+        source_type=source_type,
+        source_url=source_url,
+        symbols=symbols,
+        tags=tags,
+        as_of=payload.as_of,
+        published_at=payload.published_at,
+        retrieved_at=payload.retrieved_at,
+        excerpt=excerpt,
+        note=note,
+        source_id=source_id,
+        source_label=source_label,
+        source_category=source_category,
+        target_indicator_codes=target_indicator_codes,
+        component_role=component_role,
+        methodology_note=methodology_note,
+        license_note=license_note,
+    )
+
     return ResearchSourceNoteInput(
         title=title,
         source_name=source_name,
@@ -209,7 +293,137 @@ def _normalize_payload(payload: ResearchSourceNoteInput) -> ResearchSourceNoteIn
         review_status=review_status,
         is_citable=payload.is_citable,
         metadata=metadata,
+        source_id=source_id,
+        source_label=source_label,
+        source_category=source_category,
+        target_indicator_codes=target_indicator_codes,
+        component_role=component_role,
+        methodology_note=methodology_note,
+        license_note=license_note,
     )
+
+
+def _target_indicator_codes_for_source(definition: object) -> list[str]:
+    seed_template = getattr(definition, "seed_template", None)
+    if seed_template is not None:
+        return list(getattr(seed_template, "target_indicator_codes", ()))
+    indicator_codes = list(getattr(definition, "indicator_codes", ()))
+    if indicator_codes:
+        return indicator_codes
+    return list(getattr(definition, "coverage", ()))
+
+
+def _merge_workflow_metadata(
+    metadata: dict[str, object],
+    *,
+    title: str,
+    source_name: str,
+    source_type: str,
+    source_url: str | None,
+    symbols: list[str],
+    tags: list[str],
+    as_of: date | None,
+    published_at: datetime | None,
+    retrieved_at: datetime | None,
+    excerpt: str | None,
+    note: str | None,
+    source_id: str | None,
+    source_label: str | None,
+    source_category: str | None,
+    target_indicator_codes: list[str],
+    component_role: str | None,
+    methodology_note: str | None,
+    license_note: str | None,
+) -> dict[str, object]:
+    merged = dict(metadata)
+    workflow_values: dict[str, object | None] = {
+        "source_id": source_id,
+        "source_label": source_label,
+        "source_category": source_category,
+        "target_indicator_codes": target_indicator_codes,
+        "component_role": component_role,
+        "methodology_note": methodology_note,
+        "license_note": license_note,
+    }
+    for key, value in workflow_values.items():
+        if value:
+            merged[key] = value
+
+    checklist = _build_review_checklist(
+        metadata=merged,
+        title=title,
+        source_name=source_name,
+        source_type=source_type,
+        source_url=source_url,
+        symbols=symbols,
+        tags=tags,
+        as_of=as_of,
+        published_at=published_at,
+        retrieved_at=retrieved_at,
+        excerpt=excerpt,
+        note=note,
+        source_id=source_id,
+        target_indicator_codes=target_indicator_codes,
+        methodology_note=methodology_note,
+        license_note=license_note,
+    )
+    merged["review_checklist"] = checklist
+    merged["completeness"] = _build_completeness(checklist)
+    return merged
+
+
+def _build_review_checklist(
+    *,
+    metadata: dict[str, object],
+    title: str,
+    source_name: str,
+    source_type: str,
+    source_url: str | None,
+    symbols: list[str],
+    tags: list[str],
+    as_of: date | None,
+    published_at: datetime | None,
+    retrieved_at: datetime | None,
+    excerpt: str | None,
+    note: str | None,
+    source_id: str | None,
+    target_indicator_codes: list[str],
+    methodology_note: str | None,
+    license_note: str | None,
+) -> dict[str, bool]:
+    return {
+        "source_identity": bool(title and source_name and source_type),
+        "source_url_or_document": bool(source_url or _has_source_document_metadata(metadata)),
+        "date_metadata": bool(as_of or published_at or retrieved_at),
+        "excerpt": bool(excerpt),
+        "methodology": bool(note or methodology_note or _has_methodology_metadata(metadata)),
+        "targets": bool(source_id or target_indicator_codes or tags or symbols),
+        "license_note": bool(license_note),
+    }
+
+
+def _build_completeness(checklist: dict[str, bool]) -> dict[str, object]:
+    total = len(checklist)
+    score = sum(1 for value in checklist.values() if value)
+    if score == total:
+        status = "complete"
+    elif score > 0:
+        status = "partial"
+    else:
+        status = "missing"
+    return {"score": score, "total": total, "status": status}
+
+
+def _has_source_document_metadata(metadata: dict[str, object]) -> bool:
+    return any(_clean_optional(metadata.get(key)) for key in DOCUMENT_METADATA_KEYS)
+
+
+def _has_methodology_metadata(metadata: dict[str, object]) -> bool:
+    return any(_clean_optional(metadata.get(key)) for key in METHODOLOGY_METADATA_KEYS)
+
+
+def _metadata_string(metadata: dict[str, object], key: str) -> str | None:
+    return _clean_optional(metadata.get(key))
 
 
 def _clean_required(value: str, field_name: str) -> str:

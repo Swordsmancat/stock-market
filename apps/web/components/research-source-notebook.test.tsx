@@ -31,6 +31,20 @@ const labels: ResearchSourceNotebookLabels = {
   sourceTypePlaceholder: "macro_indicator",
   sourceUrlLabel: "Source URL",
   sourceUrlPlaceholder: "https://...",
+  sourceTargetLabel: "Source-readiness target",
+  sourceTargetPlaceholder: "Unlinked collection note",
+  targetIndicatorsLabel: "Target indicator codes",
+  targetIndicatorsPlaceholder: "buffett_indicator_us",
+  componentRoleLabel: "Component role",
+  componentRoleGeneral: "General",
+  componentRoleMarketCap: "Market cap source",
+  componentRoleGdp: "GDP source",
+  componentRoleCpi: "CPI source",
+  componentRoleM2: "M2 source",
+  componentRoleRate: "Rate source",
+  componentRoleYieldSpread: "Yield-spread source",
+  componentRoleFiling: "Filing note",
+  componentRoleContext: "General context",
   symbolsLabel: "Symbols",
   symbolsPlaceholder: "AAPL",
   tagsLabel: "Tags",
@@ -41,6 +55,10 @@ const labels: ResearchSourceNotebookLabels = {
   excerptPlaceholder: "Paste excerpt",
   noteLabel: "Calculation note",
   notePlaceholder: "Record method",
+  methodologyNoteLabel: "Methodology note",
+  methodologyNotePlaceholder: "Record methodology",
+  licenseNoteLabel: "License / usage note",
+  licenseNotePlaceholder: "Record usage limits",
   aiFollowUpLabel: "AI follow-up",
   aiFollowUpPlaceholder: "Follow up",
   reviewStatusLabel: "Review status",
@@ -67,6 +85,21 @@ const labels: ResearchSourceNotebookLabels = {
   collectionBadge: "Collection note",
   citationId: "Citation: {id}",
   sourceLink: "Source link",
+  linkedSourceBadge: "Linked: {label}",
+  targetIndicatorsBadge: "Target: {code}",
+  componentRoleBadge: "Role: {role}",
+  reviewChecklistTitle: "Review completeness",
+  completenessSummary: "{score}/{total} checks",
+  completenessComplete: "Complete",
+  completenessPartial: "Partial",
+  completenessMissing: "Missing",
+  checklistSourceIdentity: "Source identity",
+  checklistSourceUrlOrDocument: "URL or source document",
+  checklistDateMetadata: "Date metadata",
+  checklistExcerpt: "Reviewed excerpt",
+  checklistMethodology: "Methodology note",
+  checklistTargets: "Tags or indicator targets",
+  checklistLicenseNote: "License / usage note",
   unavailableShort: "N/A",
 };
 
@@ -85,6 +118,35 @@ const initialNotes: ResearchSourceNote[] = [
     is_citable: true,
     citation_id: "research_source_note:note-1",
     retrieved_at: "2026-07-03T12:00:00+00:00",
+    metadata: {
+      source_id: "buffett_manual_valuation_components",
+      source_label: "Buffett Indicator manual valuation components",
+      source_category: "valuation",
+      target_indicator_codes: ["buffett_indicator_us"],
+      component_role: "gdp",
+      methodology_note: "Reviewed GDP component.",
+      license_note: "Public source for personal review.",
+      review_checklist: {
+        source_identity: true,
+        source_url_or_document: true,
+        date_metadata: true,
+        excerpt: true,
+        methodology: true,
+        targets: true,
+        license_note: true,
+      },
+      completeness: { score: 7, total: 7, status: "complete" },
+    },
+  },
+];
+
+const sourceTargets = [
+  {
+    id: "buffett_manual_valuation_components",
+    label: "Buffett Indicator manual valuation components",
+    category: "valuation",
+    status: "needs_manual_seed",
+    targetIndicatorCodes: ["buffett_indicator_us"],
   },
 ];
 
@@ -100,6 +162,10 @@ it("renders saved notes with provenance, status, citation id, and safe source li
   expect(screen.getByText("AAPL valuation source")).toBeInTheDocument();
   expect(screen.getByText("Manual notebook / valuation_component")).toBeInTheDocument();
   expect(screen.getByText("AI-citable")).toBeInTheDocument();
+  expect(screen.getByText("Linked: Buffett Indicator manual valuation components")).toBeInTheDocument();
+  expect(screen.getByText("Target: buffett_indicator_us")).toBeInTheDocument();
+  expect(screen.getByText("7/7 checks")).toBeInTheDocument();
+  expect(screen.getByText("Complete")).toBeInTheDocument();
   expect(screen.getByText("Citation: research_source_note:note-1")).toBeInTheDocument();
   const sourceLink = screen.getByRole("link", { name: "Source link" });
   expect(sourceLink).toHaveAttribute("href", "https://example.com/aapl");
@@ -139,16 +205,41 @@ it("saves reviewed citable notes through the browser proxy and refreshes server 
         review_status: "reviewed",
         is_citable: true,
         citation_id: "research_source_note:note-2",
+        metadata: {
+          source_id: "buffett_manual_valuation_components",
+          source_label: "Buffett Indicator manual valuation components",
+          source_category: "valuation",
+          target_indicator_codes: ["buffett_indicator_us"],
+          component_role: "gdp",
+          methodology_note: "Reviewed methodology.",
+          license_note: "Public source.",
+          review_checklist: {
+            source_identity: true,
+            source_url_or_document: true,
+            date_metadata: false,
+            excerpt: true,
+            methodology: true,
+            targets: true,
+            license_note: true,
+          },
+          completeness: { score: 6, total: 7, status: "partial" },
+        },
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     ),
   );
-  render(<ResearchSourceNotebook labels={labels} initialNotes={[]} />);
+  render(<ResearchSourceNotebook labels={labels} initialNotes={[]} sourceTargets={sourceTargets} />);
 
+  fireEvent.change(screen.getByLabelText("Source-readiness target"), {
+    target: { value: "buffett_manual_valuation_components" },
+  });
   fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Buffett component source" } });
   fireEvent.change(screen.getByLabelText("Source name"), { target: { value: "World Bank" } });
   fireEvent.change(screen.getByLabelText("Source type"), { target: { value: "valuation_component" } });
   fireEvent.change(screen.getByLabelText("Source URL"), { target: { value: "https://example.com/gdp" } });
+  fireEvent.change(screen.getByLabelText("Component role"), { target: { value: "gdp" } });
+  fireEvent.change(screen.getByLabelText("Methodology note"), { target: { value: "Reviewed methodology." } });
+  fireEvent.change(screen.getByLabelText("License / usage note"), { target: { value: "Public source." } });
   fireEvent.change(screen.getByLabelText("Symbols"), { target: { value: "aapl" } });
   fireEvent.change(screen.getByLabelText("Tags"), { target: { value: "macro" } });
   fireEvent.change(screen.getByLabelText("Reviewed excerpt"), { target: { value: "Reviewed source excerpt." } });
@@ -165,12 +256,19 @@ it("saves reviewed citable notes through the browser proxy and refreshes server 
         source_name: "World Bank",
         source_type: "valuation_component",
         source_url: "https://example.com/gdp",
+        source_id: "buffett_manual_valuation_components",
+        source_label: "Buffett Indicator manual valuation components",
+        source_category: "valuation",
+        target_indicator_codes: ["buffett_indicator_us"],
+        component_role: "gdp",
         symbols: ["aapl"],
         tags: ["macro"],
         as_of: null,
         published_at: null,
         excerpt: "Reviewed source excerpt.",
         note: "Calculation note.",
+        methodology_note: "Reviewed methodology.",
+        license_note: "Public source.",
         ai_follow_up: null,
         review_status: "reviewed",
         is_citable: true,
