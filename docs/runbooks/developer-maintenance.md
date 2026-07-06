@@ -14,16 +14,28 @@ npm run test:web
 证据中心聚焦检查：
 
 ```bash
-npx vitest run "apps/web/app/[locale]/evidence/page.test.tsx" "apps/web/components/navigation-items.test.ts" --reporter=dot
+python -m pytest tests/services/test_market_indicators_service.py tests/api/test_market_indicators_api.py -q
+npx vitest run "apps/web/app/[locale]/evidence/page.test.tsx" "apps/web/components/evidence-seed-import-review.test.tsx" "apps/web/components/navigation-items.test.ts" "apps/web/app/api/market-indicators/seeds/preview/route.test.ts" "apps/web/app/api/market-indicators/seeds/import/route.test.ts" --reporter=dot
 npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
 ```
 
-证据中心只消费 `GET /dashboard/market-overview`，当前不新增后端 endpoint。维护时应确认：
+证据中心读取态继续消费 `GET /dashboard/market-overview`；宏观/估值 seed 导入审阅通过 `POST /market-indicators/seeds/preview` 和 `POST /market-indicators/seeds/import` 写入本地 observation。维护时应确认：
 
 - `macro_indicators.items` / `valuation_indicators.items` 继续包含全部宏观和估值指标代码，缺失观测值必须保持 `null`/`N/A`，不能显示为 0。
 - `information_sources.items` 和 `groups` 继续保留 status、authority、coverage、freshness_policy、ai_usage、next_action、collection_links、seed_template、evidence_count 和 latest_as_of。
 - source-readiness 链接和 seed 模板仍是 collection guidance，不是 AI citation。
 - `dashboard_brief.narrative` 可以是 LLM 输出或 deterministic fallback，但 citations 必须来自 payload 中已有的本地证据 ID。
+- seed preview 必须复用 `packages/services/market_indicators.py` 的审计规则，不写入数据库，并报告 row-level valid/invalid、metadata、insert/update 和错误。
+- seed import 必须重新校验并保持 all-or-nothing；检测到 update 时，没有 `overwrite_acknowledged=true` 应返回 HTTP 409。
+- 浏览器文件选择只读取文本内容用于 preview/import，不得把原始上传文件存成文档语料；成功 import 后应清理 market overview cache。
+
+宏观/估值 seed 导入审阅的完整回归：
+
+```bash
+python -m pytest tests/services/test_market_indicators_service.py tests/api/test_market_indicators_api.py tests/scripts/test_import_market_indicator_seeds.py tests/services/test_market_dashboard_service.py tests/api/test_dashboard_api.py -q
+npx vitest run "apps/web/app/[locale]/evidence/page.test.tsx" "apps/web/components/evidence-seed-import-review.test.tsx" "apps/web/app/api/market-indicators/seeds/preview/route.test.ts" "apps/web/app/api/market-indicators/seeds/import/route.test.ts" --reporter=dot
+npm run test:web -- --reporter=dot
+```
 
 近期 Phase 3 degraded-safe contract 的聚焦检查：
 
@@ -165,6 +177,8 @@ python scripts/task_run_health.py
 | `GET /sectors/hot?limit=5&provider=static_fixture` | 热点板块/资金流 provider contract，返回板块 taxonomy、资金流口径、数据模式、provider/as-of、延迟和成分股元数据 | Provider-backed MVP；默认 `static_fixture` 明确为 `degraded + mock`，可选 `provider=akshare` 在环境支持时尝试延迟板块资金流 |
 | `POST /assistant/market` | 聊天式市场助手，聚合单标的日线、指标、基本面、新闻和已生成报告上下文，返回 answer/citations/diagnostics/safety | Research-citation MVP；已有统一 evidence/citation 层、可选 citation metadata、diagnostic severity/code 和 LLM citation validation；缺失上下文时返回 `no_data` / `degraded` |
 | `GET /dashboard/market-overview?provider=...` | 首页和证据中心共享的市场/宏观/估值/来源就绪度/AI brief 聚合 payload | Evidence Center source；保持 backward compatible，不要把 source links 或 seed templates 升级为 citations |
+| `POST /market-indicators/seeds/preview` | 预览粘贴或浏览器文件读取出来的 JSON/CSV seed 内容，返回 row-level 校验、metadata 和 insert/update 意图 | Preview-only；HTTP 200 可承载 invalid preview；不得写入 observation |
+| `POST /market-indicators/seeds/import` | 确认导入已复核宏观/估值 seed 内容，写入本地 `MarketIndicatorObservation` | All-or-nothing import；invalid 返回 422，缺少覆盖确认返回 409，成功后清理 market overview cache |
 
 ### Portfolio, watchlist, alerts, and task runs
 

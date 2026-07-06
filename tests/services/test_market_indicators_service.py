@@ -14,10 +14,14 @@ from packages.services.market_indicators import (
     DEFAULT_MARKET_INDICATOR_DEFINITIONS,
     MarketIndicatorSeedImportError,
     MarketIndicatorObservationSeed,
+    MarketIndicatorSeedOverwriteRequiredError,
     get_latest_market_indicator_payload,
     get_macro_indicator_payloads,
+    import_market_indicator_observation_seed_content,
     import_market_indicator_observation_seed_file,
+    parse_market_indicator_observation_seed_content,
     parse_market_indicator_observation_seed_file,
+    preview_market_indicator_observation_seed_content,
     seed_market_indicators,
     upsert_market_indicator_observation,
 )
@@ -271,3 +275,228 @@ def test_import_market_indicator_observation_seed_file_rejects_unknown_code_atom
     assert "unknown_macro_code" in str(error.value)
     assert session.query(MarketIndicatorObservation).count() == 0
     assert payload["status"] == "no_data"
+
+
+def test_parse_market_indicator_observation_seed_content_accepts_json_with_filename_hint():
+    content = json.dumps(
+        {
+            "observations": [
+                {
+                    "code": "us_10y_yield",
+                    "as_of": "2026-07-03",
+                    "value": "4.250000",
+                    "source": "Audited seed: FRED DGS10",
+                    "components": {
+                        "source_series_id": "DGS10",
+                        "methodology": "Daily 10-year Treasury constant maturity rate.",
+                    },
+                }
+            ]
+        }
+    )
+
+    seeds = parse_market_indicator_observation_seed_content(
+        content,
+        filename="macro-seeds.json",
+    )
+
+    assert len(seeds) == 1
+    assert seeds[0].code == "us_10y_yield"
+    assert seeds[0].value == Decimal("4.250000")
+
+
+def test_preview_market_indicator_seed_content_reports_insert_without_writing():
+    session = make_session()
+    content = json.dumps(
+        [
+            {
+                "code": "cn_m2_yoy",
+                "as_of": "2026-06-30",
+                "value": "8.300000",
+                "source": "Audited seed: PBOC public monetary statistics",
+                "components": {
+                    "source_url": "https://example.com/pboc-m2-release",
+                    "methodology": "Manual YoY value reviewed from public release.",
+                },
+            }
+        ]
+    )
+
+    preview = preview_market_indicator_observation_seed_content(
+        content,
+        session=session,
+        format_hint="json",
+    )
+
+    assert preview["status"] == "valid"
+    assert preview["can_import"] is True
+    assert preview["summary"]["inserts"] == 1
+    assert preview["summary"]["updates"] == 0
+    assert preview["rows"][0]["intent"] == "insert"
+    assert preview["rows"][0]["name"] == "China M2 Money Supply YoY"
+    assert preview["rows"][0]["metadata"] == {
+        "source_present": True,
+        "method_present": True,
+    }
+    assert session.query(MarketIndicatorObservation).count() == 0
+
+
+def test_preview_market_indicator_seed_content_accepts_csv_text():
+    session = make_session()
+    content = "\n".join(
+        [
+            "code,as_of,value,source,components_json",
+            'us_cpi_yoy,2026-06-30,3.100000,Audited seed: FRED CPIAUCSL derived YoY,"{""source_series_id"": ""CPIAUCSL"", ""calculation"": ""Reviewed YoY calculation.""}"',
+        ]
+    )
+
+    preview = preview_market_indicator_observation_seed_content(
+        content,
+        session=session,
+        filename="macro-seeds.csv",
+    )
+
+    assert preview["status"] == "valid"
+    assert preview["format"] == "csv"
+    assert preview["summary"]["affected_codes"] == ["us_cpi_yoy"]
+    assert preview["rows"][0]["value"] == "3.100000"
+
+
+def test_preview_market_indicator_seed_content_keeps_valid_rows_visible_when_another_row_fails():
+    session = make_session()
+    content = json.dumps(
+        [
+            {
+                "code": "us_10y_yield",
+                "as_of": "2026-07-03",
+                "value": "4.250000",
+                "source": "Audited seed: FRED DGS10",
+                "components": {
+                    "source_series_id": "DGS10",
+                    "methodology": "Daily 10-year Treasury constant maturity rate.",
+                },
+            },
+            {
+                "code": "unknown_macro_code",
+                "as_of": "2026-07-03",
+                "value": "1.000000",
+                "source": "Audited seed: unsupported code",
+                "components": {
+                    "source_name": "Example source",
+                    "notes": "Reviewed but unsupported indicator code.",
+                },
+            },
+            {
+                "code": "cn_m2_yoy",
+                "as_of": "2026-06-30",
+                "value": "8.300000",
+                "source": "Audited seed: PBOC public monetary statistics",
+                "components": {"source_url": "https://example.com/pboc-m2-release"},
+            },
+        ]
+    )
+
+    preview = preview_market_indicator_observation_seed_content(
+        content,
+        session=session,
+    )
+
+    assert preview["status"] == "invalid"
+    assert preview["can_import"] is False
+    assert preview["summary"]["valid_rows"] == 1
+    assert preview["summary"]["invalid_rows"] == 2
+    assert [row["status"] for row in preview["rows"]] == ["valid", "invalid", "invalid"]
+    assert "unknown_macro_code" in "; ".join(preview["errors"])
+    assert "components must include one of" in "; ".join(preview["errors"])
+    assert session.query(MarketIndicatorObservation).count() == 0
+
+
+def test_preview_market_indicator_seed_content_detects_existing_observation_update():
+    session = make_session()
+    seed_market_indicators(session=session)
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="us_10y_yield",
+            as_of=date(2026, 7, 3),
+            value=Decimal("4.250000"),
+            source="Audited seed: FRED DGS10",
+            components={
+                "source_series_id": "DGS10",
+                "methodology": "Initial reviewed value.",
+            },
+        ),
+        session=session,
+    )
+    content = json.dumps(
+        [
+            {
+                "code": "us_10y_yield",
+                "as_of": "2026-07-03",
+                "value": "4.310000",
+                "source": "Audited seed: FRED DGS10 revised",
+                "components": {
+                    "source_series_id": "DGS10",
+                    "review_note": "Operator reviewed revised value.",
+                },
+            }
+        ]
+    )
+
+    preview = preview_market_indicator_observation_seed_content(
+        content,
+        session=session,
+    )
+
+    assert preview["status"] == "valid"
+    assert preview["summary"]["updates"] == 1
+    assert preview["rows"][0]["intent"] == "update"
+    assert get_latest_market_indicator_payload("us_10y_yield", session=session)["value"] == 4.25
+
+
+def test_import_market_indicator_seed_content_requires_overwrite_acknowledgement():
+    session = make_session()
+    seed_market_indicators(session=session)
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="us_10y_yield",
+            as_of=date(2026, 7, 3),
+            value=Decimal("4.250000"),
+            source="Audited seed: FRED DGS10",
+            components={
+                "source_series_id": "DGS10",
+                "methodology": "Initial reviewed value.",
+            },
+        ),
+        session=session,
+    )
+    content = json.dumps(
+        [
+            {
+                "code": "us_10y_yield",
+                "as_of": "2026-07-03",
+                "value": "4.310000",
+                "source": "Audited seed: FRED DGS10 revised",
+                "components": {
+                    "source_series_id": "DGS10",
+                    "review_note": "Operator reviewed revised value.",
+                },
+            }
+        ]
+    )
+
+    with pytest.raises(MarketIndicatorSeedOverwriteRequiredError) as error:
+        import_market_indicator_observation_seed_content(content, session=session)
+
+    assert error.value.preview["summary"]["updates"] == 1
+    assert get_latest_market_indicator_payload("us_10y_yield", session=session)["value"] == 4.25
+
+    result = import_market_indicator_observation_seed_content(
+        content,
+        session=session,
+        overwrite_acknowledged=True,
+    )
+
+    assert result["status"] == "imported"
+    assert result["observations"] == 1
+    assert result["summary"] == {"inserts": 0, "updates": 1}
+    assert get_latest_market_indicator_payload("us_10y_yield", session=session)["value"] == 4.31

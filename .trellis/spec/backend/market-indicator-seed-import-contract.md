@@ -115,6 +115,132 @@ import_market_indicator_observation_seed_file(
 
 The seed file must carry source and method metadata, the service validates every row first, and the existing observation upsert path remains the only persistence mechanism.
 
+## Scenario: Seed Content Preview And Confirmed Browser Import
+
+### 1. Scope / Trigger
+
+- Trigger: previewing and importing manually reviewed macro and valuation seed observations from pasted JSON/CSV content or from a browser file picker that reads local `.json` / `.csv` text.
+- Applies to `packages/services/market_indicators.py`, `apps/api/routers/market_indicators.py`, `apps/web/app/api/market-indicators/seeds/*/route.ts`, and `apps/web/components/evidence-seed-import-review.tsx`.
+- The workflow is for personal evidence collection and AI-citable local observations. It is not a scraper, scheduled refresh job, trading recommendation, broker workflow, or document-corpus upload.
+
+### 2. Signatures
+
+- Service parse helper:
+  - `parse_market_indicator_observation_seed_content(content: str, format_hint: str = "auto", filename: str | None = None) -> list[MarketIndicatorObservationSeed]`
+- Service preview helper:
+  - `preview_market_indicator_observation_seed_content(content: str, session: Session, format_hint: str = "auto", filename: str | None = None) -> MarketIndicatorSeedPreviewResult`
+- Service import helper:
+  - `import_market_indicator_observation_seed_content(content: str, session: Session, format_hint: str = "auto", filename: str | None = None, overwrite_acknowledged: bool = False) -> MarketIndicatorSeedImportResult`
+- FastAPI endpoints:
+  - `POST /market-indicators/seeds/preview`
+  - `POST /market-indicators/seeds/import`
+- Next.js same-origin proxies:
+  - `POST /api/market-indicators/seeds/preview`
+  - `POST /api/market-indicators/seeds/import`
+
+### 3. Contracts
+
+Request payload for preview:
+
+```json
+{
+  "content": "{\"observations\": []}",
+  "format": "auto",
+  "filename": "macro-seeds.json"
+}
+```
+
+Request payload for import:
+
+```json
+{
+  "content": "code,as_of,value,source,components_json\n...",
+  "format": "csv",
+  "filename": "macro-seeds.csv",
+  "overwrite_acknowledged": false
+}
+```
+
+- `content` is required and must be non-empty seed text.
+- `format` is optional and must be `auto`, `json`, or `csv`; default is `auto`.
+- `filename` is optional and used only for format inference/display.
+- `overwrite_acknowledged` is import-only and must be true when preview/import detects update rows.
+
+Format inference order:
+
+1. explicit `format=json` or `format=csv`;
+2. `filename` extension `.json` or `.csv`;
+3. first non-whitespace character `{` or `[` means JSON;
+4. otherwise parse as CSV.
+
+Preview response must include:
+
+- top-level `status`, `can_import`, `format`, `filename`, `summary`, `rows`, and `errors`.
+- per-row `row_label`, `status`, `intent`, `code`, `name`, `category`, `region`, `unit`, `as_of`, `value`, `source`, `metadata`, and `errors`.
+- `intent` is `insert`, `update`, or `invalid`.
+- `metadata.source_present` and `metadata.method_present` reflect the same audit metadata contract used by file imports.
+
+Import success response must include imported observation count, affected codes, latest as-of date, insert/update summary, and cache-clear status when called through the API route.
+
+### 4. Validation & Error Matrix
+
+| Condition | Behavior |
+|---|---|
+| Empty `content` | Return preview/import validation error; no writes. |
+| Unsupported `format` | Raise/return validation error; no writes. |
+| Bad JSON/CSV shape | Preview returns `status=invalid`, `can_import=false`; confirmed import returns HTTP 422. |
+| Any row violates the seed audit contract | Preview shows row-level errors and writes nothing; confirmed import returns HTTP 422 and writes nothing. |
+| Unknown indicator code | Preview marks the row invalid; confirmed import writes nothing. |
+| Existing `(indicator_id, as_of)` observation | Preview row intent is `update`. |
+| Import has update rows and `overwrite_acknowledged=false` | API returns HTTP 409 with preview details; no writes. |
+| Import succeeds through API | All rows are upserted through the service, then market-overview cache is cleared. |
+| Cache clear fails after successful import | Import remains successful; cache failure must not roll back observations. |
+| Browser file selected | Client reads `File.text()` into the same content flow; raw file is not stored as a document corpus. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: user selects `macro-seeds.json` in `/evidence`, preview shows one `insert` row with source and methodology metadata, then confirmed import writes one local observation.
+- Good: preview detects an existing `us_10y_yield` date as `update`; the import button stays disabled until the user acknowledges overwriting.
+- Base: pasted CSV and browser-read CSV both use the same content parser and audit validation as the CLI file importer.
+- Bad: preview writes definitions or observations as a side effect beyond reading/seeding known indicator definitions needed for validation.
+- Bad: the browser upload path stores the raw file as a licensed document corpus.
+- Bad: the UI treats source links, seed templates, or preview rows as AI citations before a confirmed import succeeds.
+
+### 6. Tests Required
+
+- Service tests must assert content JSON/CSV parsing, format inference, invalid row previews, no-write preview behavior, insert/update detection, all-or-nothing confirmed import, and overwrite acknowledgement enforcement.
+- API tests must assert preview returns HTTP 200 for validation feedback, invalid confirmed import returns HTTP 422, missing overwrite acknowledgement returns HTTP 409, success returns import summary, and market-overview cache clear is attempted after success.
+- Next.js proxy tests must assert upstream URL, method, status, content type, and payload forwarding for preview/import.
+- Component tests must assert pasted preview, browser file text read, invalid/no-import messaging, update acknowledgement gating, successful import, and `router.refresh()` after success.
+- Compatibility tests must keep `scripts/import_market_indicator_seeds.py` file import behavior unchanged.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+await uploadRawFileToCorpus(file);
+await fetch("/api/market-indicators/seeds/import", {
+  method: "POST",
+  body: JSON.stringify({ filename: file.name }),
+});
+```
+
+This turns a convenience file picker into document storage and bypasses the reviewed content parser.
+
+#### Correct
+
+```typescript
+const content = await file.text();
+await fetch("/api/market-indicators/seeds/preview", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ content, format: "auto", filename: file.name }),
+});
+```
+
+The browser reads text into the same preview/import contract, keeps raw files out of storage, and only confirmed imports can create AI-citable observations.
+
 ## Scenario: Source-Readiness Seed Templates
 
 ### 1. Scope / Trigger

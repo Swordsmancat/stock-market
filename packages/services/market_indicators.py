@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +90,14 @@ class MarketIndicatorSeedImportError(ValueError):
         self.errors = errors
         joined_errors = "; ".join(errors)
         super().__init__(f"Market indicator seed import failed: {joined_errors}")
+
+
+class MarketIndicatorSeedOverwriteRequiredError(ValueError):
+    def __init__(self, preview: dict[str, object]) -> None:
+        self.preview = preview
+        super().__init__(
+            "Market indicator seed import requires overwrite acknowledgement for existing observations."
+        )
 
 
 AUDIT_SOURCE_COMPONENT_KEYS = frozenset(
@@ -245,6 +254,22 @@ def parse_market_indicator_observation_seed_file(
     return [parsed.seed for parsed in _parse_market_indicator_observation_seed_file(path)]
 
 
+def parse_market_indicator_observation_seed_content(
+    content: str,
+    *,
+    format_hint: str = "auto",
+    filename: str | None = None,
+) -> list[MarketIndicatorObservationSeed]:
+    return [
+        parsed.seed
+        for parsed in _parse_market_indicator_observation_seed_content(
+            content,
+            format_hint=format_hint,
+            filename=filename,
+        )
+    ]
+
+
 def import_market_indicator_observation_seed_file(
     path: str | Path,
     session: Session,
@@ -273,6 +298,147 @@ def import_market_indicator_observation_seed_file(
         codes=tuple(sorted({parsed_seed.seed.code for parsed_seed in parsed_seeds})),
         latest_as_of=max(as_of_values).isoformat() if as_of_values else None,
     )
+
+
+def preview_market_indicator_observation_seed_content(
+    content: str,
+    *,
+    session: Session,
+    format_hint: str = "auto",
+    filename: str | None = None,
+) -> dict[str, object]:
+    try:
+        resolved_format = _resolve_seed_content_format(
+            content,
+            format_hint=format_hint,
+            filename=filename,
+        )
+        row_items = _read_seed_rows_from_content(content, resolved_format)
+    except MarketIndicatorSeedImportError as error:
+        return _build_seed_preview_result(
+            resolved_format=str(format_hint or "auto").lower(),
+            filename=filename,
+            rows=[],
+            errors=error.errors,
+        )
+
+    definition_lookup = _get_market_indicator_definition_lookup(session=session)
+    preview_rows: list[dict[str, object]] = []
+    errors: list[str] = []
+
+    if not row_items:
+        errors.append("seed content contains no observations")
+
+    for row_label, row in row_items:
+        parsed_seed, row_errors = _parse_seed_row_with_errors(
+            row_label=row_label,
+            row=row,
+        )
+        if row_errors or parsed_seed is None:
+            errors.extend(row_errors)
+            preview_rows.append(
+                _build_invalid_seed_preview_row(
+                    row_label=row_label,
+                    row=row,
+                    errors=row_errors,
+                )
+            )
+            continue
+
+        definition = definition_lookup.get(parsed_seed.seed.code)
+        if definition is None:
+            row_error = f"{row_label}: code {parsed_seed.seed.code!r} is not a known market indicator"
+            errors.append(row_error)
+            preview_rows.append(
+                _build_seed_preview_row(
+                    parsed_seed,
+                    definition=None,
+                    intent="invalid",
+                    errors=[row_error],
+                )
+            )
+            continue
+
+        preview_rows.append(
+            _build_seed_preview_row(
+                parsed_seed,
+                definition=definition,
+                intent=_detect_seed_preview_intent(
+                    parsed_seed.seed,
+                    definition=definition,
+                    session=session,
+                ),
+                errors=[],
+            )
+        )
+
+    return _build_seed_preview_result(
+        resolved_format=resolved_format,
+        filename=filename,
+        rows=preview_rows,
+        errors=errors,
+    )
+
+
+def import_market_indicator_observation_seed_content(
+    content: str,
+    *,
+    session: Session,
+    format_hint: str = "auto",
+    filename: str | None = None,
+    overwrite_acknowledged: bool = False,
+) -> dict[str, object]:
+    preview = preview_market_indicator_observation_seed_content(
+        content,
+        session=session,
+        format_hint=format_hint,
+        filename=filename,
+    )
+    if not preview["can_import"]:
+        preview_errors = preview.get("errors")
+        errors = (
+            [str(error) for error in preview_errors]
+            if isinstance(preview_errors, list) and preview_errors
+            else ["seed content is invalid"]
+        )
+        raise MarketIndicatorSeedImportError(errors)
+
+    summary = preview["summary"] if isinstance(preview["summary"], dict) else {}
+    updates = int(summary.get("updates") or 0)
+    if updates > 0 and not overwrite_acknowledged:
+        raise MarketIndicatorSeedOverwriteRequiredError(preview)
+
+    parsed_seeds = _parse_market_indicator_observation_seed_content(
+        content,
+        format_hint=format_hint,
+        filename=filename,
+    )
+    try:
+        seed_market_indicators(session=session, observations=(), commit=False)
+        _validate_seed_indicator_codes(parsed_seeds, session=session)
+        for parsed_seed in parsed_seeds:
+            upsert_market_indicator_observation(
+                parsed_seed.seed,
+                session=session,
+                commit=False,
+            )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+    return {
+        "status": "imported",
+        "observations": len(parsed_seeds),
+        "codes": list(summary.get("affected_codes") or []),
+        "latest_as_of": summary.get("latest_as_of"),
+        "summary": {
+            "inserts": int(summary.get("inserts") or 0),
+            "updates": updates,
+        },
+        "format": preview.get("format"),
+        "filename": filename,
+    }
 
 
 def refresh_fred_macro_indicators(
@@ -556,23 +722,103 @@ def _parse_market_indicator_observation_seed_file(
             [f"unsupported seed file extension {suffix!r}; expected .json or .csv"]
         )
 
-    errors: list[str] = []
-    parsed_seeds: list[_ParsedMarketIndicatorObservationSeed] = []
-    for row_label, row in row_items:
-        parsed_seed = _parse_seed_row(row_label=row_label, row=row, errors=errors)
-        if parsed_seed is not None:
-            parsed_seeds.append(parsed_seed)
-
-    if not row_items:
-        errors.append("seed file contains no observations")
+    parsed_seeds, errors = _parse_market_indicator_observation_seed_rows(
+        row_items,
+        empty_error="seed file contains no observations",
+    )
     if errors:
         raise MarketIndicatorSeedImportError(errors)
     return parsed_seeds
 
 
+def _parse_market_indicator_observation_seed_content(
+    content: str,
+    *,
+    format_hint: str = "auto",
+    filename: str | None = None,
+) -> list[_ParsedMarketIndicatorObservationSeed]:
+    resolved_format = _resolve_seed_content_format(
+        content,
+        format_hint=format_hint,
+        filename=filename,
+    )
+    row_items = _read_seed_rows_from_content(content, resolved_format)
+    parsed_seeds, errors = _parse_market_indicator_observation_seed_rows(
+        row_items,
+        empty_error="seed content contains no observations",
+    )
+    if errors:
+        raise MarketIndicatorSeedImportError(errors)
+    return parsed_seeds
+
+
+def _parse_market_indicator_observation_seed_rows(
+    row_items: list[tuple[str, object]],
+    *,
+    empty_error: str,
+) -> tuple[list[_ParsedMarketIndicatorObservationSeed], list[str]]:
+    errors: list[str] = []
+    parsed_seeds: list[_ParsedMarketIndicatorObservationSeed] = []
+    for row_label, row in row_items:
+        parsed_seed, row_errors = _parse_seed_row_with_errors(
+            row_label=row_label,
+            row=row,
+        )
+        errors.extend(row_errors)
+        if parsed_seed is not None:
+            parsed_seeds.append(parsed_seed)
+
+    if not row_items:
+        errors.append(empty_error)
+    return parsed_seeds, errors
+
+
+def _resolve_seed_content_format(
+    content: str,
+    *,
+    format_hint: str = "auto",
+    filename: str | None = None,
+) -> str:
+    normalized_hint = (format_hint or "auto").strip().lower()
+    if normalized_hint in {"json", "csv"}:
+        resolved_format = normalized_hint
+    elif normalized_hint == "auto":
+        suffix = Path(filename).suffix.lower() if filename else ""
+        if suffix == ".json":
+            resolved_format = "json"
+        elif suffix == ".csv":
+            resolved_format = "csv"
+        else:
+            stripped_content = content.strip()
+            if not stripped_content:
+                raise MarketIndicatorSeedImportError(["seed content is required"])
+            resolved_format = "json" if stripped_content[0] in {"{", "["} else "csv"
+    else:
+        raise MarketIndicatorSeedImportError(
+            [f"unsupported seed content format {format_hint!r}; expected auto, json, or csv"]
+        )
+
+    if not content.strip():
+        raise MarketIndicatorSeedImportError(["seed content is required"])
+    return resolved_format
+
+
+def _read_seed_rows_from_content(content: str, resolved_format: str) -> list[tuple[str, object]]:
+    if resolved_format == "json":
+        return _read_json_seed_rows_from_text(content)
+    if resolved_format == "csv":
+        return _read_csv_seed_rows_from_text(content)
+    raise MarketIndicatorSeedImportError(
+        [f"unsupported seed content format {resolved_format!r}; expected json or csv"]
+    )
+
+
 def _read_json_seed_rows(seed_path: Path) -> list[tuple[str, object]]:
     try:
-        raw_payload = json.loads(seed_path.read_text(encoding="utf-8"))
+        return _read_json_seed_rows_from_text(
+            seed_path.read_text(encoding="utf-8"),
+            source_label="file",
+        )
     except json.JSONDecodeError as error:
         raise MarketIndicatorSeedImportError(
             [f"JSON seed file is invalid: {error.msg}"]
@@ -580,6 +826,19 @@ def _read_json_seed_rows(seed_path: Path) -> list[tuple[str, object]]:
     except OSError as error:
         raise MarketIndicatorSeedImportError(
             [f"seed file could not be read: {error}"]
+        ) from error
+
+
+def _read_json_seed_rows_from_text(
+    content: str,
+    *,
+    source_label: str = "content",
+) -> list[tuple[str, object]]:
+    try:
+        raw_payload = json.loads(content)
+    except json.JSONDecodeError as error:
+        raise MarketIndicatorSeedImportError(
+            [f"JSON seed {source_label} is invalid: {error.msg}"]
         ) from error
 
     if isinstance(raw_payload, dict):
@@ -596,18 +855,28 @@ def _read_json_seed_rows(seed_path: Path) -> list[tuple[str, object]]:
 
 def _read_csv_seed_rows(seed_path: Path) -> list[tuple[str, object]]:
     try:
-        with seed_path.open(encoding="utf-8-sig", newline="") as file_handle:
-            reader = csv.DictReader(file_handle)
-            if reader.fieldnames is None:
-                raise MarketIndicatorSeedImportError(["CSV seed file must include a header row"])
-            return [
-                (f"row {line_number}", row)
-                for line_number, row in enumerate(reader, start=2)
-            ]
+        return _read_csv_seed_rows_from_text(
+            seed_path.read_text(encoding="utf-8-sig"),
+            source_label="file",
+        )
     except OSError as error:
         raise MarketIndicatorSeedImportError(
             [f"seed file could not be read: {error}"]
         ) from error
+
+
+def _read_csv_seed_rows_from_text(
+    content: str,
+    *,
+    source_label: str = "content",
+) -> list[tuple[str, object]]:
+    reader = csv.DictReader(StringIO(content))
+    if reader.fieldnames is None:
+        raise MarketIndicatorSeedImportError([f"CSV seed {source_label} must include a header row"])
+    return [
+        (f"row {line_number}", row)
+        for line_number, row in enumerate(reader, start=2)
+    ]
 
 
 def _parse_seed_row(
@@ -616,9 +885,21 @@ def _parse_seed_row(
     row: object,
     errors: list[str],
 ) -> _ParsedMarketIndicatorObservationSeed | None:
+    parsed_seed, row_errors = _parse_seed_row_with_errors(
+        row_label=row_label,
+        row=row,
+    )
+    errors.extend(row_errors)
+    return parsed_seed
+
+
+def _parse_seed_row_with_errors(
+    *,
+    row_label: str,
+    row: object,
+) -> tuple[_ParsedMarketIndicatorObservationSeed | None, list[str]]:
     if not isinstance(row, Mapping):
-        errors.append(f"{row_label}: row must be a JSON object or CSV record")
-        return None
+        return None, [f"{row_label}: row must be a JSON object or CSV record"]
 
     row_errors: list[str] = []
     code = _parse_required_text(row, "code", row_label, row_errors)
@@ -628,11 +909,10 @@ def _parse_seed_row(
     components = _parse_components(row, row_label, row_errors)
 
     if row_errors:
-        errors.extend(row_errors)
-        return None
+        return None, row_errors
 
     if code is None or as_of is None or value is None or source is None or components is None:
-        return None
+        return None, row_errors
 
     return _ParsedMarketIndicatorObservationSeed(
         row_label=row_label,
@@ -643,7 +923,7 @@ def _parse_seed_row(
             source=source,
             components=components,
         ),
-    )
+    ), []
 
 
 def _parse_required_text(
@@ -752,11 +1032,193 @@ def _has_non_empty_component(
     return False
 
 
+def _build_seed_preview_result(
+    *,
+    resolved_format: str,
+    filename: str | None,
+    rows: list[dict[str, object]],
+    errors: list[str],
+) -> dict[str, object]:
+    valid_rows = [row for row in rows if row.get("status") == "valid"]
+    insert_count = sum(1 for row in valid_rows if row.get("intent") == "insert")
+    update_count = sum(1 for row in valid_rows if row.get("intent") == "update")
+    as_of_values = [
+        str(row.get("as_of"))
+        for row in valid_rows
+        if row.get("as_of")
+    ]
+    affected_codes = sorted(
+        {
+            str(row.get("code"))
+            for row in valid_rows
+            if row.get("code")
+        }
+    )
+    can_import = not errors and bool(valid_rows)
+    return {
+        "status": "valid" if can_import else "invalid",
+        "can_import": can_import,
+        "format": resolved_format,
+        "filename": filename,
+        "summary": {
+            "rows": len(rows),
+            "valid_rows": len(valid_rows),
+            "invalid_rows": len(rows) - len(valid_rows),
+            "inserts": insert_count,
+            "updates": update_count,
+            "affected_codes": affected_codes,
+            "latest_as_of": max(as_of_values) if as_of_values else None,
+        },
+        "rows": rows,
+        "errors": errors,
+    }
+
+
+def _get_market_indicator_definition_lookup(
+    *,
+    session: Session,
+) -> dict[str, dict[str, object]]:
+    definitions: dict[str, dict[str, object]] = {}
+    for indicator in session.query(MarketIndicator).filter(MarketIndicator.is_active.is_(True)).all():
+        definitions[indicator.code] = {
+            "id": indicator.id,
+            "code": indicator.code,
+            "name": indicator.name,
+            "category": indicator.category,
+            "region": indicator.region,
+            "unit": indicator.unit,
+        }
+
+    for definition in DEFAULT_MARKET_INDICATOR_DEFINITIONS:
+        definitions.setdefault(
+            definition.code,
+            {
+                "id": None,
+                "code": definition.code,
+                "name": definition.name,
+                "category": definition.category,
+                "region": definition.region,
+                "unit": definition.unit,
+            },
+        )
+    return definitions
+
+
+def _detect_seed_preview_intent(
+    seed: MarketIndicatorObservationSeed,
+    *,
+    definition: dict[str, object],
+    session: Session,
+) -> str:
+    indicator_id = definition.get("id")
+    if indicator_id is None:
+        return "insert"
+    existing_observation = (
+        session.query(MarketIndicatorObservation)
+        .filter(MarketIndicatorObservation.indicator_id == indicator_id)
+        .filter(MarketIndicatorObservation.as_of == seed.as_of)
+        .first()
+    )
+    return "update" if existing_observation is not None else "insert"
+
+
+def _build_seed_preview_row(
+    parsed_seed: _ParsedMarketIndicatorObservationSeed,
+    *,
+    definition: dict[str, object] | None,
+    intent: str,
+    errors: list[str],
+) -> dict[str, object]:
+    seed = parsed_seed.seed
+    return {
+        "row_label": parsed_seed.row_label,
+        "status": "invalid" if errors else "valid",
+        "intent": intent,
+        "code": seed.code,
+        "name": definition.get("name") if definition else None,
+        "category": definition.get("category") if definition else None,
+        "region": definition.get("region") if definition else None,
+        "unit": definition.get("unit") if definition else None,
+        "as_of": seed.as_of.isoformat(),
+        "value": str(seed.value),
+        "source": seed.source,
+        "metadata": _build_seed_preview_metadata(seed.components),
+        "errors": errors,
+    }
+
+
+def _build_invalid_seed_preview_row(
+    *,
+    row_label: str,
+    row: object,
+    errors: list[str],
+) -> dict[str, object]:
+    components = _extract_preview_components(row)
+    return {
+        "row_label": row_label,
+        "status": "invalid",
+        "intent": "invalid",
+        "code": _extract_preview_text(row, "code"),
+        "name": None,
+        "category": None,
+        "region": None,
+        "unit": None,
+        "as_of": _extract_preview_text(row, "as_of"),
+        "value": _extract_preview_text(row, "value"),
+        "source": _extract_preview_text(row, "source"),
+        "metadata": _build_seed_preview_metadata(components),
+        "errors": errors,
+    }
+
+
+def _extract_preview_text(row: object, key: str) -> str | None:
+    if not isinstance(row, Mapping):
+        return None
+    raw_value = row.get(key)
+    if raw_value is None:
+        return None
+    value = str(raw_value).strip()
+    return value or None
+
+
+def _extract_preview_components(row: object) -> dict[str, object]:
+    if not isinstance(row, Mapping):
+        return {}
+    raw_components = row.get("components")
+    if raw_components is None:
+        raw_components = row.get("components_json")
+    if isinstance(raw_components, str):
+        try:
+            decoded_components = json.loads(raw_components)
+        except json.JSONDecodeError:
+            return {}
+    else:
+        decoded_components = raw_components
+    return dict(decoded_components) if isinstance(decoded_components, Mapping) else {}
+
+
+def _build_seed_preview_metadata(components: Mapping[str, object]) -> dict[str, bool]:
+    return {
+        "source_present": _has_non_empty_component(components, AUDIT_SOURCE_COMPONENT_KEYS),
+        "method_present": _has_non_empty_component(components, AUDIT_METHOD_COMPONENT_KEYS),
+    }
+
+
 def _validate_seed_indicator_codes(
     parsed_seeds: list[_ParsedMarketIndicatorObservationSeed],
     *,
     session: Session,
 ) -> None:
+    errors = _find_seed_indicator_code_errors(parsed_seeds, session=session)
+    if errors:
+        raise MarketIndicatorSeedImportError(errors)
+
+
+def _find_seed_indicator_code_errors(
+    parsed_seeds: list[_ParsedMarketIndicatorObservationSeed],
+    *,
+    session: Session,
+) -> list[str]:
     requested_codes = {parsed_seed.seed.code for parsed_seed in parsed_seeds}
     existing_codes = {
         code
@@ -764,13 +1226,11 @@ def _validate_seed_indicator_codes(
         .filter(MarketIndicator.code.in_(requested_codes))
         .all()
     }
-    errors = [
+    return [
         f"{parsed_seed.row_label}: code {parsed_seed.seed.code!r} is not a known market indicator"
         for parsed_seed in parsed_seeds
         if parsed_seed.seed.code not in existing_codes
     ]
-    if errors:
-        raise MarketIndicatorSeedImportError(errors)
 
 
 def _decimal_to_float(value: Decimal | None) -> float | None:

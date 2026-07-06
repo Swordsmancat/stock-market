@@ -2,6 +2,10 @@ import { getTranslations } from "next-intl/server";
 import { Database, ExternalLink, FileCheck2, FileWarning, SearchCheck, ShieldCheck } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import {
+  EvidenceSeedImportReview,
+  type EvidenceSeedImportReviewLabels,
+} from "@/components/evidence-seed-import-review";
 import { ErrorState } from "@/components/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -237,15 +241,70 @@ function renderBriefSectionList(brief: DashboardBriefPayload) {
   ));
 }
 
+function buildSeedImportLabels(t: Awaited<ReturnType<typeof getTranslations>>): EvidenceSeedImportReviewLabels {
+  return {
+    title: t("title"),
+    description: t("description"),
+    fileLabel: t("fileLabel"),
+    fileButton: t("fileButton"),
+    selectedFile: t("selectedFile"),
+    pasteLabel: t("pasteLabel"),
+    pastePlaceholder: t("pastePlaceholder"),
+    formatLabel: t("formatLabel"),
+    formatAuto: t("formatAuto"),
+    formatJson: t("formatJson"),
+    formatCsv: t("formatCsv"),
+    previewAction: t("previewAction"),
+    previewing: t("previewing"),
+    importAction: t("importAction"),
+    importing: t("importing"),
+    clearAction: t("clearAction"),
+    contentRequired: t("contentRequired"),
+    fileReadFailed: t("fileReadFailed"),
+    previewFailed: t("previewFailed"),
+    importFailed: t("importFailed"),
+    importSuccess: t("importSuccess"),
+    invalidNoImport: t("invalidNoImport"),
+    overwriteWarning: t("overwriteWarning"),
+    overwriteCheckbox: t("overwriteCheckbox"),
+    citationBoundary: t("citationBoundary"),
+    summaryRows: t("summaryRows"),
+    summaryValid: t("summaryValid"),
+    summaryInvalid: t("summaryInvalid"),
+    summaryInserts: t("summaryInserts"),
+    summaryUpdates: t("summaryUpdates"),
+    rowColumn: t("rowColumn"),
+    stateColumn: t("stateColumn"),
+    intentColumn: t("intentColumn"),
+    indicatorColumn: t("indicatorColumn"),
+    asOfColumn: t("asOfColumn"),
+    valueColumn: t("valueColumn"),
+    sourceColumn: t("sourceColumn"),
+    metadataColumn: t("metadataColumn"),
+    errorsColumn: t("errorsColumn"),
+    stateValid: t("stateValid"),
+    stateInvalid: t("stateInvalid"),
+    intentInsert: t("intentInsert"),
+    intentUpdate: t("intentUpdate"),
+    intentInvalid: t("intentInvalid"),
+    metadataComplete: t("metadataComplete"),
+    metadataMissing: t("metadataMissing"),
+    noRows: t("noRows"),
+    returnToEvidence: t("returnToEvidence"),
+    unavailableShort: t("unavailableShort"),
+  };
+}
+
 export default async function EvidenceCenterPage({
   params = Promise.resolve({ locale: "en" }),
   searchParams = Promise.resolve({}),
 }: EvidenceCenterPageProps = {}) {
-  const [{ locale: requestedLocale }, query, platformSettings, t] = await Promise.all([
+  const [{ locale: requestedLocale }, query, platformSettings, t, seedImportT] = await Promise.all([
     params,
     searchParams,
     getPlatformSettings(),
     getTranslations("EvidenceCenter"),
+    getTranslations("EvidenceSeedImport"),
   ]);
   const locale = getSafeLocale(requestedLocale);
   const provider = query.provider?.trim() || platformSettings.market_data_provider;
@@ -325,6 +384,8 @@ export default async function EvidenceCenterPage({
           t("metricSourcesNeedActionDesc"),
         )}
       </section>
+
+      <EvidenceSeedImportReview labels={buildSeedImportLabels(seedImportT)} />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <Card className="border-primary/20">
