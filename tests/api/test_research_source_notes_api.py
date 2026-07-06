@@ -88,3 +88,24 @@ def test_research_source_notes_api_rejects_citable_drafts():
     assert response.json()["detail"]["errors"] == [
         "Citable notes must have review_status=reviewed."
     ]
+
+
+def test_research_source_notes_api_rejects_unsafe_source_url():
+    session = make_session()
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/research-source-notes",
+            json={
+                "title": "Unsafe source URL",
+                "source_name": "Manual source",
+                "source_type": "macro_note",
+                "source_url": "data:text/html,<script>alert(1)</script>",
+                "excerpt": "Reviewed excerpt.",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["errors"] == ["source_url must use http or https."]

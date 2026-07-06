@@ -98,6 +98,7 @@
     "dashboardBriefMacroEvidence": "宏观依据：{count}",
     "dashboardBriefReportEvidence": "报告依据：{count}",
     "dashboardBriefNewsEvidence": "新闻依据：{count}",
+    "dashboardBriefSourceNoteEvidence": "来源笔记依据：{count}",
     "dashboardBriefSourceGaps": "来源缺口：{count}",
     "dashboardBriefCitations": "摘要依据",
     "dashboardBriefDiagnostics": "摘要诊断",

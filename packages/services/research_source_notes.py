@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from urllib.parse import urlparse
+
 from sqlalchemy.orm import Session
 
 from packages.domain.models import ResearchSourceNote
@@ -9,6 +11,7 @@ from packages.domain.models import ResearchSourceNote
 
 RESEARCH_SOURCE_NOTE_CITATION_PREFIX = "research_source_note:"
 VALID_REVIEW_STATUSES = {"draft", "reviewed", "archived"}
+ALLOWED_SOURCE_URL_SCHEMES = {"http", "https"}
 DEFAULT_NOTE_LIMIT = 50
 MAX_EXCERPT_CHARS = 12000
 MAX_NOTE_CHARS = 8000
@@ -176,6 +179,8 @@ def _normalize_payload(payload: ResearchSourceNoteInput) -> ResearchSourceNoteIn
     errors: list[str] = []
     if review_status not in VALID_REVIEW_STATUSES:
         errors.append("review_status must be one of draft, reviewed, or archived.")
+    if source_url and not _has_allowed_source_url_scheme(source_url):
+        errors.append("source_url must use http or https.")
     if not source_url and not excerpt:
         errors.append("Either source_url or excerpt is required.")
     if payload.is_citable:
@@ -219,6 +224,11 @@ def _clean_optional(value: object) -> str | None:
         return None
     cleaned = str(value).strip()
     return cleaned or None
+
+
+def _has_allowed_source_url_scheme(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme.lower() in ALLOWED_SOURCE_URL_SCHEMES and bool(parsed.netloc)
 
 
 def _clip_text(value: str | None, limit: int) -> str | None:

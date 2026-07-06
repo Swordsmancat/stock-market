@@ -130,6 +130,7 @@ def test_market_overview_payload_contains_followed_indices_and_valuation_section
         "macro_citations": 0,
         "report_citations": 0,
         "news_citations": 0,
+        "research_source_note_citations": 0,
         "information_source_gaps": 9,
     }
 
@@ -176,6 +177,32 @@ def test_market_overview_brief_includes_report_and_news_availability():
         ),
         session=session,
     )
+    create_research_source_note(
+        ResearchSourceNoteInput(
+            title="Draft source note",
+            source_name="Manual research notebook",
+            source_type="valuation_component",
+            source_url="https://example.com/aapl-draft",
+            symbols=["AAPL"],
+            excerpt="Draft source excerpt.",
+            review_status="draft",
+            is_citable=False,
+        ),
+        session=session,
+    )
+    create_research_source_note(
+        ResearchSourceNoteInput(
+            title="Reviewed collection note",
+            source_name="Manual research notebook",
+            source_type="valuation_component",
+            source_url="https://example.com/aapl-reviewed-collection",
+            symbols=["AAPL"],
+            excerpt="Reviewed but not citable source excerpt.",
+            review_status="reviewed",
+            is_citable=False,
+        ),
+        session=session,
+    )
 
     payload = get_market_overview_payload(
         session=session,
@@ -189,11 +216,37 @@ def test_market_overview_brief_includes_report_and_news_availability():
     assert citation_sources >= {"generated_reports", "news", "research_source_notes"}
     citation_ids = {citation["id"] for citation in dashboard_brief["citations"]}
     assert source_note["citation_id"] in citation_ids
+    citation_labels = {citation["label"] for citation in dashboard_brief["citations"]}
+    assert "Draft source note" not in citation_labels
+    assert "Reviewed collection note" not in citation_labels
     assert dashboard_brief["narrative"]["context"]["source_mix"]["report_citations"] == 1
     assert dashboard_brief["narrative"]["context"]["source_mix"]["news_citations"] == 1
+    assert dashboard_brief["narrative"]["context"]["source_mix"]["research_source_note_citations"] == 1
     diagnostic_codes = {diagnostic["code"] for diagnostic in dashboard_brief["diagnostics"]}
     assert "GENERATED_REPORTS_NO_DATA" not in diagnostic_codes
     assert "NEWS_NO_DATA" not in diagnostic_codes
+
+
+def test_market_overview_degrades_when_source_notebook_is_unavailable(monkeypatch):
+    session = make_session()
+
+    def fail_source_note_lookup(*args, **kwargs):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.list_citable_research_source_note_citations",
+        fail_source_note_lookup,
+    )
+
+    payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    diagnostic_codes = {diagnostic["code"] for diagnostic in payload["dashboard_brief"]["diagnostics"]}
+    assert "SOURCE_UNAVAILABLE" in diagnostic_codes
+    assert payload["dashboard_brief"]["narrative"]["context"]["source_mix"]["research_source_note_citations"] == 0
 
 
 def test_market_overview_brief_uses_llm_when_configured(monkeypatch):

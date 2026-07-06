@@ -115,6 +115,25 @@ def test_citable_notes_require_reviewed_excerpt_and_source_identity():
     assert "Citable notes require a reviewed excerpt." in missing_excerpt.value.errors
 
 
+def test_source_url_requires_http_or_https_scheme():
+    session = make_session()
+
+    with pytest.raises(ResearchSourceNoteValidationError) as error:
+        create_research_source_note(
+            ResearchSourceNoteInput(
+                title="Unsafe source URL",
+                source_name="Manual review",
+                source_type="macro_note",
+                source_url="javascript:alert(1)",
+                excerpt="Reviewed excerpt.",
+                review_status="draft",
+            ),
+            session=session,
+        )
+
+    assert "source_url must use http or https." in error.value.errors
+
+
 def test_citable_citation_payload_filters_by_symbol():
     session = make_session()
     first = create_research_source_note(

@@ -91,6 +91,7 @@
     "dashboardBriefMacroEvidence": "Macro evidence: {count}",
     "dashboardBriefReportEvidence": "Report evidence: {count}",
     "dashboardBriefNewsEvidence": "News evidence: {count}",
+    "dashboardBriefSourceNoteEvidence": "Source-note evidence: {count}",
     "dashboardBriefSourceGaps": "Source gaps: {count}",
     "dashboardBriefCitations": "Brief evidence",
     "dashboardBriefDiagnostics": "Brief diagnostics",

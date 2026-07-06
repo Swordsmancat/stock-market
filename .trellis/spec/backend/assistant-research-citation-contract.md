@@ -14,8 +14,8 @@
 - Service entry: market-assistant payload builder in `packages/services/market_assistant.py`
 - AI generation: prompt construction and citation validation in `packages/ai/market_assistant.py`
 - Response fields preserved: `answer_markdown`, `model`, `context`, `citations`, `diagnostics`, `safety`
-- Citation required fields: `id`, `label`, `source`, `url`
-- Citation optional fields: `source_type`, `as_of`, `provider`, `retrieved_at`, `excerpt`, `metadata`
+- Citation required fields: `id`, `label`, `source`
+- Citation optional fields: `url`, `source_type`, `as_of`, `provider`, `retrieved_at`, `excerpt`, `metadata`
 - Diagnostic required fields: `source`, `status`, `message`
 - Diagnostic optional fields: `severity`, `code`, `citation_id`, `details`
 
@@ -110,6 +110,7 @@ diagnostics.append({
 
 - `title`, `source_name`, and `source_type` are required.
 - At least one of `source_url` or `excerpt` is required for every row.
+- When `source_url` is provided, it must be an absolute `http://` or `https://` URL.
 - `review_status` must be one of `draft`, `reviewed`, or `archived`.
 - `is_citable=true` requires `review_status=reviewed`, a non-empty reviewed excerpt, and either `source_url` or `source_name` plus date metadata (`as_of` or `published_at`).
 - Browser upload is client-side text extraction into editable fields. The backend receives JSON only and stores reviewed excerpt/note text, not raw files.
@@ -122,6 +123,7 @@ diagnostics.append({
 
 - Missing `title`, `source_name`, or `source_type` -> validation error / HTTP 422.
 - Missing both `source_url` and `excerpt` -> validation error / HTTP 422.
+- `source_url` uses an unsafe or relative scheme -> validation error / HTTP 422.
 - Unknown `review_status` -> validation error / HTTP 422.
 - `is_citable=true` with `review_status!=reviewed` -> validation error / HTTP 422.
 - `is_citable=true` without excerpt -> validation error / HTTP 422.
@@ -141,7 +143,7 @@ diagnostics.append({
 ### 6. Tests Required
 
 - Domain/migration tests assert `research_source_notes` schema exists and model metadata aligns with `Base.metadata.create_all()`.
-- Service tests cover create/list, normalization, validation failures, citable-only listing, citation ID prefix, excerpt clipping, and draft/non-citable exclusion.
+- Service tests cover create/list, normalization, URL-scheme validation, validation failures, citable-only listing, citation ID prefix, excerpt clipping, and draft/non-citable exclusion.
 - API tests cover `GET /research-source-notes`, `POST /research-source-notes`, HTTP 422 validation, and cache-clearing metadata.
 - Frontend route tests cover proxy status/content-type/payload forwarding for list and create.
 - Component/page tests cover paste entry, browser file text prefill, status/citable controls, saved-entry display, filters, localized labels, and error/success states.
@@ -192,6 +194,7 @@ This centralizes the `reviewed` plus `is_citable` boundary and applies the stabl
   - `context.source_mix.macro_citations`
   - `context.source_mix.report_citations`
   - `context.source_mix.news_citations`
+  - `context.source_mix.research_source_note_citations`
   - `context.source_mix.information_source_gaps`
 
 ### 3. Contracts

@@ -405,13 +405,28 @@ def _build_research_availability_payload(
             }
         )
 
-    citations.extend(
-        list_citable_research_source_note_citations(
-            session=session,
-            symbols=symbols,
-            limit=4,
+    try:
+        citations.extend(
+            list_citable_research_source_note_citations(
+                session=session,
+                symbols=symbols,
+                limit=4,
+            )
         )
-    )
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        diagnostics.append(
+            {
+                "source": "research_source_notes",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Reviewed source notebook entries could not be loaded.",
+            }
+        )
 
     return {
         "reports": {"status": "ok" if report_count else "no_data", "count": report_count, "latest": latest_report_payload},
@@ -419,6 +434,10 @@ def _build_research_availability_payload(
         "citations": citations,
         "diagnostics": diagnostics,
     }
+
+
+def _is_research_source_note_citation(citation: dict[str, object]) -> bool:
+    return citation.get("source") == "research_source_notes" or citation.get("source_type") == "research_source_note"
 
 
 def _extract_dashboard_source_gaps(
@@ -461,6 +480,7 @@ def _build_dashboard_narrative_source_mix(
             for citation in citations
             if citation.get("source") == "news" or citation.get("source_type") == "news"
         ),
+        "research_source_note_citations": sum(1 for citation in citations if _is_research_source_note_citation(citation)),
         "information_source_gaps": len(_extract_dashboard_source_gaps(information_sources_payload)),
     }
 

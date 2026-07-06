@@ -307,6 +307,7 @@ type DashboardBriefNarrativePayload = {
       macro_citations?: number;
       report_citations?: number;
       news_citations?: number;
+      research_source_note_citations?: number;
       information_source_gaps?: number;
     };
   };
@@ -1195,7 +1196,7 @@ export default async function HomePage({
                     </p>
                   ) : null}
                   {dashboardBrief.narrative.context?.source_mix ? (
-                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-5">
                       <div>
                         {t("dashboardBriefMacroEvidence", {
                           count: dashboardBrief.narrative.context.source_mix.macro_citations ?? 0,
@@ -1209,6 +1210,11 @@ export default async function HomePage({
                       <div>
                         {t("dashboardBriefNewsEvidence", {
                           count: dashboardBrief.narrative.context.source_mix.news_citations ?? 0,
+                        })}
+                      </div>
+                      <div>
+                        {t("dashboardBriefSourceNoteEvidence", {
+                          count: dashboardBrief.narrative.context.source_mix.research_source_note_citations ?? 0,
                         })}
                       </div>
                       <div>

@@ -1,5 +1,10 @@
 from datetime import date
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import packages.domain.models  # noqa: F401
 from packages.ai.market_assistant import (
     MarketAssistantCitation,
     MarketAssistantPromptContext,
@@ -7,6 +12,18 @@ from packages.ai.market_assistant import (
     build_deterministic_market_answer,
 )
 from packages.services import market_assistant as market_assistant_service
+from packages.services.research_source_notes import ResearchSourceNoteInput, create_research_source_note
+from packages.shared.database import Base
+
+
+def make_session():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
 
 
 def test_deterministic_answer_refuses_direct_trading_instruction():
@@ -262,6 +279,112 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     assert citations_by_source_type["generated_report"]["id"] == "generated_report:11111111-1111-1111-1111-111111111111"
     assert citations_by_source_type["research_source_note"]["id"].startswith("research_source_note:")
     assert "Reviewed source notebook entries available" in payload["context"]["research_summary"]
+
+
+def test_market_assistant_includes_only_reviewed_citable_source_notes(monkeypatch):
+    session = make_session()
+    citable_note = create_research_source_note(
+        ResearchSourceNoteInput(
+            title="AAPL reviewed citable source",
+            source_name="Manual notebook",
+            source_type="valuation_component",
+            source_url="https://example.com/aapl-citable",
+            symbols=["AAPL"],
+            excerpt="Reviewed citable excerpt.",
+            review_status="reviewed",
+            is_citable=True,
+        ),
+        session=session,
+    )
+    create_research_source_note(
+        ResearchSourceNoteInput(
+            title="AAPL draft source",
+            source_name="Manual notebook",
+            source_type="valuation_component",
+            source_url="https://example.com/aapl-draft",
+            symbols=["AAPL"],
+            excerpt="Draft excerpt.",
+            review_status="draft",
+            is_citable=False,
+        ),
+        session=session,
+    )
+    create_research_source_note(
+        ResearchSourceNoteInput(
+            title="AAPL reviewed collection source",
+            source_name="Manual notebook",
+            source_type="valuation_component",
+            source_url="https://example.com/aapl-reviewed-collection",
+            symbols=["AAPL"],
+            excerpt="Reviewed but not citable excerpt.",
+            review_status="reviewed",
+            is_citable=False,
+        ),
+        session=session,
+    )
+
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "AAPL",
+            "timeframe": "1d",
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "items": [
+                {"timestamp": "2026-01-01", "close": 100.0},
+                {"timestamp": "2026-01-03", "close": 105.0},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_stored_indicators_payload",
+        lambda symbol, session: {
+            "symbol": symbol,
+            "source": "database",
+            "as_of": None,
+            "indicators": {},
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_fundamental_payload",
+        lambda symbol, as_of=None, session=None: {"symbol": symbol, "source": "database", "item": None},
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_news_sentiment_payload",
+        lambda symbol, session: {"symbol": symbol, "source": "database", "summary": {}, "items": []},
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "list_reports_payload",
+        lambda *args, **kwargs: {"source": "database", "total": 0, "items": []},
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="AAPL",
+        question="Summarize source notebook context.",
+        locale="en",
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 3),
+        provider_name="mock",
+        session=session,
+    )
+
+    citation_ids = {citation["id"] for citation in payload["citations"]}
+    citation_labels = {citation["label"] for citation in payload["citations"]}
+    assert citable_note["citation_id"] in citation_ids
+    assert "AAPL draft source" not in citation_labels
+    assert "AAPL reviewed collection source" not in citation_labels
 
 
 def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):

@@ -155,6 +155,12 @@ function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", marke
           label: "US 10Y Treasury Yield",
           source: "market_indicators",
         },
+        {
+          id: "research_source_note:note-1",
+          label: "Reviewed macro source note",
+          source: "research_source_notes",
+          source_type: "research_source_note",
+        },
       ],
       diagnostics: [
         {
@@ -184,6 +190,7 @@ function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", marke
             macro_citations: 1,
             report_citations: 0,
             news_citations: 0,
+            research_source_note_citations: 1,
             information_source_gaps: 3,
           },
         },
@@ -630,6 +637,7 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("Model: dashboard-brief-deterministic-fallback")).toBeInTheDocument();
   expect(screen.getByText(/US 10Y remains the cited macro datapoint/)).toBeInTheDocument();
   expect(screen.getByText("Macro evidence: 1")).toBeInTheDocument();
+  expect(screen.getByText("Source-note evidence: 1")).toBeInTheDocument();
   expect(screen.getByText("Source gaps: 3")).toBeInTheDocument();
   expect(screen.getByText("What changed")).toBeInTheDocument();
   expect(screen.getByText(/US 10Y Treasury Yield: 4.25%/)).toBeInTheDocument();
