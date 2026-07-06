@@ -499,3 +499,36 @@ Implemented reviewed macro/valuation seed preview and confirmed import workflow 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: Reviewed Source Notebook
+
+**Date**: 2026-07-06
+**Task**: Reviewed Source Notebook
+**Branch**: `master`
+
+### Summary
+
+Added Evidence Center source notebook for reviewed hard-to-find sources, browser text upload, AI-citable citation boundary, docs/spec updates, and focused tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3bd09c9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
