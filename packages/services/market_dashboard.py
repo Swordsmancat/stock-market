@@ -16,6 +16,7 @@ from packages.services.market_data import (
 from packages.services.market_indices import DEFAULT_MARKET_INDICES, MarketIndexDefinition, resolve_provider_symbol
 from packages.services.market_indicators import get_macro_indicator_payloads
 from packages.services.platform_settings import get_platform_settings
+from packages.services.research_source_notes import list_citable_research_source_note_citations
 from packages.services.watchlists import get_active_watchlist_item_dicts
 from packages.shared.cache import cache_market_overview
 
@@ -30,6 +31,7 @@ DASHBOARD_BRIEF_CITATION_ID_PREFIXES = (
     "market_indicator:",
     "generated_report:",
     "news:",
+    "research_source_note:",
 )
 DASHBOARD_BRIEF_SOURCE_GAP_STATUSES = {
     "needs_adapter",
@@ -402,6 +404,14 @@ def _build_research_availability_payload(
                 "message": "No stored news articles are available for the followed symbols.",
             }
         )
+
+    citations.extend(
+        list_citable_research_source_note_citations(
+            session=session,
+            symbols=symbols,
+            limit=4,
+        )
+    )
 
     return {
         "reports": {"status": "ok" if report_count else "no_data", "count": report_count, "latest": latest_report_payload},

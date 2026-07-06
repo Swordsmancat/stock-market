@@ -232,11 +232,37 @@ function createMarketOverviewPayload() {
   };
 }
 
+function createResearchSourceNotesPayload() {
+  return {
+    items: [
+      {
+        id: "note-1",
+        title: "AAPL valuation source note",
+        source_name: "Manual notebook",
+        source_type: "valuation_component",
+        source_url: "https://example.com/aapl-valuation-source",
+        symbols: ["AAPL"],
+        tags: ["valuation"],
+        excerpt: "Reviewed source excerpt for AAPL valuation.",
+        note: "Use this source for Buffett Indicator comparison.",
+        review_status: "reviewed",
+        is_citable: true,
+        citation_id: "research_source_note:note-1",
+        retrieved_at: "2026-01-02T00:00:00+00:00",
+      },
+    ],
+    summary: { total: 1, returned: 1, citable: 1 },
+  };
+}
+
 it("renders macro evidence, AI brief, source templates, and citation boundaries", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
     if (url.endsWith("/dashboard/market-overview?provider=yfinance")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
+    }
+    if (url.endsWith("/research-source-notes?limit=50")) {
+      return Promise.resolve(new Response(JSON.stringify(createResearchSourceNotesPayload())));
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
@@ -277,6 +303,9 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
   expect(screen.getByText("FRED rates seed template")).toBeInTheDocument();
   expect(screen.getByText("python scripts/import_market_indicator_seeds.py path/to/macro-seeds.json")).toBeInTheDocument();
   expect(screen.getByText("This template is not evidence; imported observations become citeable only after validation.")).toBeInTheDocument();
+  expect(screen.getAllByText("Source notebook").length).toBeGreaterThan(0);
+  expect(screen.getByText("AAPL valuation source note")).toBeInTheDocument();
+  expect(screen.getByText("Citation: research_source_note:note-1")).toBeInTheDocument();
 
   const fredLink = screen.getByRole("link", { name: /FRED DGS10/ });
   expect(fredLink).toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");
@@ -289,7 +318,13 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
 });
 
 it("renders a failed-load state when the market overview endpoint fails", async () => {
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 503 }));
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/research-source-notes?limit=50")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+    }
+    return Promise.resolve(new Response("", { status: 503 }));
+  });
 
   render(
     await EvidenceCenterPage({

@@ -10,6 +10,7 @@ import packages.domain.models  # noqa: F401
 from packages.domain.models import GeneratedReport, NewsArticle
 from packages.services.market_dashboard import get_market_overview_payload
 from packages.services.market_data import MarketDataProviderUnavailableError
+from packages.services.research_source_notes import ResearchSourceNoteInput, create_research_source_note
 from packages.shared.cache import clear_market_overview_cache
 from packages.shared.database import Base
 
@@ -162,6 +163,19 @@ def test_market_overview_brief_includes_report_and_news_availability():
         )
     )
     session.commit()
+    source_note = create_research_source_note(
+        ResearchSourceNoteInput(
+            title="AAPL hard-to-find source review",
+            source_name="Manual research notebook",
+            source_type="valuation_component",
+            source_url="https://example.com/aapl-valuation-source",
+            symbols=["AAPL"],
+            excerpt="Reviewed source excerpt for valuation context.",
+            review_status="reviewed",
+            is_citable=True,
+        ),
+        session=session,
+    )
 
     payload = get_market_overview_payload(
         session=session,
@@ -172,7 +186,9 @@ def test_market_overview_brief_includes_report_and_news_availability():
     dashboard_brief = payload["dashboard_brief"]
     assert "1 generated reports and 1 stored news items" in dashboard_brief["sections"][1]["items"][2]
     citation_sources = {citation["source"] for citation in dashboard_brief["citations"]}
-    assert citation_sources >= {"generated_reports", "news"}
+    assert citation_sources >= {"generated_reports", "news", "research_source_notes"}
+    citation_ids = {citation["id"] for citation in dashboard_brief["citations"]}
+    assert source_note["citation_id"] in citation_ids
     assert dashboard_brief["narrative"]["context"]["source_mix"]["report_citations"] == 1
     assert dashboard_brief["narrative"]["context"]["source_mix"]["news_citations"] == 1
     diagnostic_codes = {diagnostic["code"] for diagnostic in dashboard_brief["diagnostics"]}

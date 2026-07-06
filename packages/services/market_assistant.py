@@ -23,6 +23,7 @@ from packages.services.indicators import get_stored_indicators_payload
 from packages.services.market_data import get_bars_payload
 from packages.services.news import get_news_sentiment_payload
 from packages.services.platform_settings import get_platform_settings
+from packages.services.research_source_notes import list_citable_research_source_note_citations
 from packages.services.reports import list_reports_payload
 
 
@@ -38,6 +39,7 @@ ASSISTANT_CITATION_ID_PREFIXES = (
     "news:",
     "news_articles:",
     "generated_report:",
+    "research_source_note:",
 )
 
 
@@ -146,10 +148,16 @@ def answer_market_assistant_question(
         session,
         diagnostics,
     )
+    source_note_summary, source_note_evidence = _build_research_source_note_context(
+        normalized_symbol,
+        session,
+        diagnostics,
+    )
     research_evidence.extend(indicator_evidence)
     research_evidence.extend(fundamental_evidence)
     research_evidence.extend(news_evidence)
     research_evidence.extend(generated_report_evidence)
+    research_evidence.extend(source_note_evidence)
     citations = _rank_research_citations(research_evidence)
 
     prompt_context = MarketAssistantPromptContext(
@@ -167,7 +175,7 @@ def answer_market_assistant_question(
         indicator_summary=indicator_summary,
         fundamental_summary=fundamental_summary,
         news_summary=news_summary,
-        research_summary=generated_report_summary,
+        research_summary=f"{generated_report_summary} {source_note_summary}",
         citations=citations,
         diagnostics=diagnostics,
     )
@@ -785,6 +793,74 @@ def _build_generated_report_context(
 
     report_titles = [item.title for item in evidence_items if item.title]
     return f"Generated reports available: {'; '.join(report_titles)}.", evidence_items
+
+
+def _build_research_source_note_context(
+    symbol: str,
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
+    if session is None:
+        diagnostics.append(
+            {
+                "source": "research_source_notes",
+                "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
+                "message": "No database session is available for research source notes.",
+            }
+        )
+        return "No reviewed source notebook entries were loaded.", []
+
+    try:
+        citations = list_citable_research_source_note_citations(
+            session=session,
+            symbols=[symbol],
+            limit=3,
+        )
+    except Exception:
+        _rollback_session_if_possible(session)
+        diagnostics.append(
+            {
+                "source": "research_source_notes",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Reviewed source notebook entries could not be loaded.",
+            }
+        )
+        return "Reviewed source notebook entries could not be loaded.", []
+
+    if not citations:
+        return "No reviewed source notebook entries are available for this symbol.", []
+
+    evidence_items = [
+        MarketAssistantResearchEvidence(
+            citation=MarketAssistantCitation(
+                id=str(citation["id"]),
+                label=str(citation.get("label") or "Research source note"),
+                source=str(citation.get("source") or "research_source_notes"),
+                url=_stringify_optional(citation.get("url")),
+                source_type=_stringify_optional(citation.get("source_type")),
+                as_of=_stringify_optional(citation.get("as_of")),
+                provider=_stringify_optional(citation.get("provider")),
+                retrieved_at=_stringify_optional(citation.get("retrieved_at")),
+                excerpt=_stringify_optional(citation.get("excerpt")),
+                metadata=citation.get("metadata") if isinstance(citation.get("metadata"), dict) else None,
+            ),
+            summary=str(citation.get("excerpt") or citation.get("label") or "Reviewed source note."),
+            priority=45 + item_index,
+            source_type="research_source_note",
+            title=_stringify_optional(citation.get("label")),
+            as_of=_stringify_optional(citation.get("as_of")),
+            url=_stringify_optional(citation.get("url")),
+            provider=_stringify_optional(citation.get("provider")),
+            metadata=citation.get("metadata") if isinstance(citation.get("metadata"), dict) else None,
+        )
+        for item_index, citation in enumerate(citations)
+    ]
+    titles = [item.title for item in evidence_items if item.title]
+    return f"Reviewed source notebook entries available: {'; '.join(titles)}.", evidence_items
 
 
 def _build_generated_report_evidence_item(

@@ -325,6 +325,39 @@ class GeneratedReport(Base):
     )
 
 
+class ResearchSourceNote(Base):
+    __tablename__ = "research_source_notes"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    title: Mapped[str] = mapped_column(String(512))
+    source_url: Mapped[str | None] = mapped_column(String(1024), default=None)
+    source_name: Mapped[str] = mapped_column(String(256))
+    source_type: Mapped[str] = mapped_column(String(64))
+    symbols_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    tags_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    as_of: Mapped[date | None] = mapped_column(Date, default=None)
+    retrieved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    excerpt: Mapped[str | None] = mapped_column(Text, default=None)
+    note: Mapped[str | None] = mapped_column(Text, default=None)
+    ai_follow_up: Mapped[str | None] = mapped_column(Text, default=None)
+    review_status: Mapped[str] = mapped_column(String(32), default="draft")
+    is_citable: Mapped[bool] = mapped_column(Boolean, default=False)
+    metadata_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class AlertTrigger(Base):
     __tablename__ = "alert_triggers"
 

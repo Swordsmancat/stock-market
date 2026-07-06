@@ -6,7 +6,7 @@
 
 - Trigger: `POST /assistant/market` now returns enriched research citations and diagnostics built from existing platform evidence.
 - Scope: assistant service logic in `packages/services/market_assistant.py`, prompt/citation validation in `packages/ai/market_assistant.py`, FastAPI route behavior in `apps/api/routers/assistant.py`, frontend route/card consumers under `apps/web`, and focused assistant tests.
-- Non-goals: production filings/transcripts/announcements ingestion, embeddings/vector search, persistent notebooks, streaming responses, watchlist-level monitoring, paid research entitlements, or direct trading recommendations.
+- Non-goals: production filings/transcripts/announcements ingestion, embeddings/vector search, raw document corpus storage, streaming responses, watchlist-level monitoring, paid research entitlements, or direct trading recommendations.
 
 ### 2. Signatures
 
@@ -23,9 +23,9 @@
 
 - Daily bars remain the core evidence gate. If required market data is unavailable, the assistant must return `no_data` / degraded-safe output and avoid LLM generation.
 - Existing top-level response fields and old minimal citation payloads must remain backward compatible.
-- Evidence may come from existing platform sources only: daily bars, stored technical indicators, fundamentals snapshots, news / sentiment payloads, and generated reports.
+- Evidence may come from existing platform sources only: daily bars, stored technical indicators, fundamentals snapshots, news / sentiment payloads, generated reports, and reviewed/citable research source notebook entries.
 - Missing optional sources must produce diagnostics, not fabricated evidence or fake citations.
-- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, or `generated_report:{id}`.
+- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, or `research_source_note:{id}`.
 - LLM prompts must list available citation IDs and instruct the model to use only those IDs.
 - LLM output citation IDs must be validated against the payload citations. Unknown IDs must produce `CITATION_UNKNOWN_ID` diagnostics and should fall back to deterministic output when needed.
 - Diagnostics may include safe severity/code metadata, but must not include API keys, prompt internals, stack traces, raw provider secrets, or hidden chain-of-thought.
@@ -36,6 +36,7 @@
 - Core daily bars unavailable -> response does not call LLM; returns no-data/degraded diagnostics.
 - Optional indicators/fundamentals/news/reports missing -> non-blocking diagnostics such as `SOURCE_NO_DATA` or `SOURCE_OMITTED`.
 - Source service failure -> sanitized `SOURCE_UNAVAILABLE` diagnostics; no raw secret or stack trace.
+- Draft or non-citable research source notes -> remain collection records; they are not included in allowed assistant citation IDs.
 - LLM returns unknown inline citation ID -> `CITATION_UNKNOWN_ID` diagnostic and degraded/fallback output; unknown citation is not presented as valid.
 - User asks for direct trading instruction -> assistant refuses/reframes per safety policy.
 - Old frontend payload with only `id`, `label`, `source`, `url` citations -> still renders.
@@ -43,7 +44,7 @@
 
 ### 5. Good/Base/Bad Cases
 
-- Good: daily bars, indicators, fundamentals, news, and a generated report are available; response contains deterministic citation IDs, optional metadata/excerpts, compact diagnostics, and an answer using only known citation IDs.
+- Good: daily bars, indicators, fundamentals, news, a generated report, and reviewed/citable source notebook entries are available; response contains deterministic citation IDs, optional metadata/excerpts, compact diagnostics, and an answer using only known citation IDs.
 - Base: only daily bars are available; answer remains traceable to bars and diagnostics state missing optional sources.
 - Bad: a missing filing/transcript is represented as a live citation. These sources are not production integrations in this slice.
 - Bad: an LLM-invented citation ID is rendered as if it existed in `citations`.
@@ -51,7 +52,7 @@
 
 ### 6. Tests Required
 
-- Service/AI tests assert citations are generated for available bars, indicators, fundamentals, news, and generated reports.
+- Service/AI tests assert citations are generated for available bars, indicators, fundamentals, news, generated reports, and reviewed/citable research source notes.
 - Service tests assert missing optional evidence produces diagnostics rather than fabricated citation items.
 - AI tests assert unknown LLM citation IDs are detected and handled with diagnostics/fallback behavior.
 - API tests assert backward compatibility and enriched optional fields.
@@ -84,6 +85,89 @@ diagnostics.append({
     "message": "Production filings retrieval is not configured for this assistant slice.",
 })
 ```
+
+## Scenario: Reviewed Source Notebook Citations
+
+### 1. Scope / Trigger
+
+- Trigger: `/evidence` can persist user-reviewed hard-to-find research source notes and expose only reviewed/citable rows to dashboard and assistant evidence.
+- Scope: `ResearchSourceNote` in `packages/domain/models.py`, migration `0011_research_source_notes`, service logic in `packages/services/research_source_notes.py`, FastAPI router `apps/api/routers/research_source_notes.py`, Next proxy/UI under `apps/web`, dashboard citation assembly in `packages/services/market_dashboard.py`, and assistant citation assembly in `packages/services/market_assistant.py`.
+- Non-goals: scraping, scheduled crawling, OCR/PDF parsing, raw binary file storage, licensed corpus ingestion, vector search, multi-user permissions, trading advice, target prices, position sizing, or broker execution.
+
+### 2. Signatures
+
+- DB table: `research_source_notes`
+- Model fields: `id`, `title`, `source_url`, `source_name`, `source_type`, `symbols_json`, `tags_json`, `published_at`, `as_of`, `retrieved_at`, `excerpt`, `note`, `ai_follow_up`, `review_status`, `is_citable`, `metadata_json`, `created_at`, `updated_at`
+- Service input: `ResearchSourceNoteInput`
+- Service create: `create_research_source_note(payload, *, session)`
+- Service list: `list_research_source_notes(*, session, limit=50, review_status=None, source_type=None, citable_only=False)`
+- Citation list: `list_citable_research_source_note_citations(*, session, symbols=None, limit=6)`
+- API: `GET /research-source-notes`, `POST /research-source-notes`
+- Web proxy: `GET/POST /api/research-source-notes`
+- Citation ID prefix: `research_source_note:`
+
+### 3. Contracts
+
+- `title`, `source_name`, and `source_type` are required.
+- At least one of `source_url` or `excerpt` is required for every row.
+- `review_status` must be one of `draft`, `reviewed`, or `archived`.
+- `is_citable=true` requires `review_status=reviewed`, a non-empty reviewed excerpt, and either `source_url` or `source_name` plus date metadata (`as_of` or `published_at`).
+- Browser upload is client-side text extraction into editable fields. The backend receives JSON only and stores reviewed excerpt/note text, not raw files.
+- Tags are trimmed and de-duplicated. Symbols are trimmed, de-duplicated, and uppercased.
+- AI citation payloads may include `url`, `as_of`, `provider`, `retrieved_at`, clipped `excerpt`, and metadata for source name/type, symbols, tags, and review status.
+- Dashboard and assistant citation builders must request only reviewed/citable notebook entries. Draft, archived, and non-citable notes remain visible in the notebook but are not allowed citation IDs.
+- Symbol filtering is advisory: if requested symbols are present and a note has symbols, include only notes whose symbols intersect; untagged citable notes may still serve as general macro/context evidence.
+
+### 4. Validation & Error Matrix
+
+- Missing `title`, `source_name`, or `source_type` -> validation error / HTTP 422.
+- Missing both `source_url` and `excerpt` -> validation error / HTTP 422.
+- Unknown `review_status` -> validation error / HTTP 422.
+- `is_citable=true` with `review_status!=reviewed` -> validation error / HTTP 422.
+- `is_citable=true` without excerpt -> validation error / HTTP 422.
+- `is_citable=true` without `source_url` and without date metadata -> validation error / HTTP 422.
+- Oversized excerpt/note fields -> service clips to the configured prompt/storage limits rather than expanding AI context unbounded.
+- Source note creation succeeds -> market overview cache is cleared so the dashboard can pick up new citable evidence.
+
+### 5. Good/Base/Bad Cases
+
+- Good: a reviewed Buffett Indicator component note with source URL, excerpt, tags, symbols, and `is_citable=true` appears as `research_source_note:<uuid>` in dashboard/assistant allowed citations.
+- Good: a draft browser-upload excerpt is saved and visible in `/evidence`, but no AI prompt receives its citation ID.
+- Base: a reviewed note without symbol tags can support general macro/valuation context when citable.
+- Bad: uploaded raw file bytes are persisted or treated as a managed document corpus.
+- Bad: a draft link or source-readiness collection URL is included as a dashboard or assistant citation.
+- Bad: a source notebook citation is used to produce buy/sell/hold, target price, position sizing, or execution advice.
+
+### 6. Tests Required
+
+- Domain/migration tests assert `research_source_notes` schema exists and model metadata aligns with `Base.metadata.create_all()`.
+- Service tests cover create/list, normalization, validation failures, citable-only listing, citation ID prefix, excerpt clipping, and draft/non-citable exclusion.
+- API tests cover `GET /research-source-notes`, `POST /research-source-notes`, HTTP 422 validation, and cache-clearing metadata.
+- Frontend route tests cover proxy status/content-type/payload forwarding for list and create.
+- Component/page tests cover paste entry, browser file text prefill, status/citable controls, saved-entry display, filters, localized labels, and error/success states.
+- Dashboard and assistant tests assert reviewed/citable source notes are included in allowed citations and draft/non-citable rows are excluded.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+citations.append({
+    "id": f"research_source_note:{note.id}",
+    "label": note.title,
+    "source": "research_source_notes",
+})
+```
+
+This cites any notebook row regardless of review state or excerpt quality.
+
+#### Correct
+
+```python
+citations = list_citable_research_source_note_citations(session=session, symbols=[symbol])
+```
+
+This centralizes the `reviewed` plus `is_citable` boundary and applies the stable `research_source_note:<id>` prefix.
 
 ## Scenario: Citation-aware Dashboard Brief Narrative
 

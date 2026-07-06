@@ -66,6 +66,16 @@ def load_intraday_minute_cache_migration():
     return module
 
 
+def load_research_source_notes_migration():
+    migration_path = Path("alembic/versions/0011_research_source_notes.py")
+    spec = importlib.util.spec_from_file_location("research_source_notes_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -189,4 +199,34 @@ def test_intraday_minute_cache_migration_creates_cache_metadata_table():
         "last_ts",
         "fetched_at",
         "cached_at",
+    }.issubset(columns)
+
+
+def test_research_source_notes_migration_creates_notebook_table():
+    initial_migration = load_initial_migration()
+    research_source_notes_migration = load_research_source_notes_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(research_source_notes_migration, connection)
+
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        columns = {column["name"] for column in inspector.get_columns("research_source_notes")}
+
+    assert "research_source_notes" in tables
+    assert {
+        "title",
+        "source_url",
+        "source_name",
+        "source_type",
+        "symbols_json",
+        "tags_json",
+        "excerpt",
+        "note",
+        "ai_follow_up",
+        "review_status",
+        "is_citable",
+        "metadata_json",
     }.issubset(columns)

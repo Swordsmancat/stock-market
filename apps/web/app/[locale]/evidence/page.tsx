@@ -7,6 +7,11 @@ import {
   type EvidenceSeedImportReviewLabels,
 } from "@/components/evidence-seed-import-review";
 import { ErrorState } from "@/components/error-state";
+import {
+  ResearchSourceNotebook,
+  type ResearchSourceNotebookLabels,
+  type ResearchSourceNote,
+} from "@/components/research-source-notebook";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +44,10 @@ type MarketOverviewLoadResult =
   | { status: "loaded"; payload: MarketOverviewPayload }
   | { status: "failed" };
 
+type ResearchSourceNotesLoadResult =
+  | { status: "loaded"; items: ResearchSourceNote[] }
+  | { status: "failed"; items: [] };
+
 type IndicatorEvidenceState =
   | "ai_citable"
   | "needs_adapter"
@@ -66,6 +75,25 @@ async function fetchMarketOverview(provider: string): Promise<MarketOverviewLoad
     };
   } catch {
     return { status: "failed" };
+  }
+}
+
+async function fetchResearchSourceNotes(): Promise<ResearchSourceNotesLoadResult> {
+  try {
+    const response = await backendFetch("/research-source-notes?limit=50", {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      return { status: "failed", items: [] };
+    }
+
+    const payload = (await response.json()) as { items?: ResearchSourceNote[] };
+    return {
+      status: "loaded",
+      items: payload.items ?? [],
+    };
+  } catch {
+    return { status: "failed", items: [] };
   }
 }
 
@@ -295,20 +323,79 @@ function buildSeedImportLabels(t: Awaited<ReturnType<typeof getTranslations>>): 
   };
 }
 
+function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): ResearchSourceNotebookLabels {
+  return {
+    title: t("title"),
+    description: t("description"),
+    selectedFile: t("selectedFile"),
+    fileLabel: t("fileLabel"),
+    fileReadFailed: t("fileReadFailed"),
+    titleLabel: t("titleLabel"),
+    titlePlaceholder: t("titlePlaceholder"),
+    sourceNameLabel: t("sourceNameLabel"),
+    sourceNamePlaceholder: t("sourceNamePlaceholder"),
+    sourceTypeLabel: t("sourceTypeLabel"),
+    sourceTypePlaceholder: t("sourceTypePlaceholder"),
+    sourceUrlLabel: t("sourceUrlLabel"),
+    sourceUrlPlaceholder: t("sourceUrlPlaceholder"),
+    symbolsLabel: t("symbolsLabel"),
+    symbolsPlaceholder: t("symbolsPlaceholder"),
+    tagsLabel: t("tagsLabel"),
+    tagsPlaceholder: t("tagsPlaceholder"),
+    asOfLabel: t("asOfLabel"),
+    publishedAtLabel: t("publishedAtLabel"),
+    excerptLabel: t("excerptLabel"),
+    excerptPlaceholder: t("excerptPlaceholder"),
+    noteLabel: t("noteLabel"),
+    notePlaceholder: t("notePlaceholder"),
+    aiFollowUpLabel: t("aiFollowUpLabel"),
+    aiFollowUpPlaceholder: t("aiFollowUpPlaceholder"),
+    reviewStatusLabel: t("reviewStatusLabel"),
+    statusDraft: t("statusDraft"),
+    statusReviewed: t("statusReviewed"),
+    statusArchived: t("statusArchived"),
+    citableLabel: t("citableLabel"),
+    saveAction: t("saveAction"),
+    saving: t("saving"),
+    clearAction: t("clearAction"),
+    saveSuccess: t("saveSuccess"),
+    saveFailed: t("saveFailed"),
+    contentRequired: t("contentRequired"),
+    citableBoundary: t("citableBoundary"),
+    recentTitle: t("recentTitle"),
+    loadFailed: t("loadFailed"),
+    noNotes: t("noNotes"),
+    filterLabel: t("filterLabel"),
+    filterPlaceholder: t("filterPlaceholder"),
+    statusFilterLabel: t("statusFilterLabel"),
+    allStatuses: t("allStatuses"),
+    citableOnlyLabel: t("citableOnlyLabel"),
+    citableBadge: t("citableBadge"),
+    collectionBadge: t("collectionBadge"),
+    citationId: t("citationId"),
+    sourceLink: t("sourceLink"),
+    unavailableShort: t("unavailableShort"),
+  };
+}
+
 export default async function EvidenceCenterPage({
   params = Promise.resolve({ locale: "en" }),
   searchParams = Promise.resolve({}),
 }: EvidenceCenterPageProps = {}) {
-  const [{ locale: requestedLocale }, query, platformSettings, t, seedImportT] = await Promise.all([
+  const [{ locale: requestedLocale }, query, platformSettings, t, seedImportT, notebookT] = await Promise.all([
     params,
     searchParams,
     getPlatformSettings(),
     getTranslations("EvidenceCenter"),
     getTranslations("EvidenceSeedImport"),
+    getTranslations("ResearchSourceNotebook"),
   ]);
   const locale = getSafeLocale(requestedLocale);
   const provider = query.provider?.trim() || platformSettings.market_data_provider;
-  const marketOverviewResult = await fetchMarketOverview(provider);
+  const [marketOverviewResult, researchSourceNotesResult] = await Promise.all([
+    fetchMarketOverview(provider),
+    fetchResearchSourceNotes(),
+  ]);
 
   if (marketOverviewResult.status === "failed") {
     return (
@@ -386,6 +473,12 @@ export default async function EvidenceCenterPage({
       </section>
 
       <EvidenceSeedImportReview labels={buildSeedImportLabels(seedImportT)} />
+
+      <ResearchSourceNotebook
+        labels={buildNotebookLabels(notebookT)}
+        initialNotes={researchSourceNotesResult.items}
+        loadFailed={researchSourceNotesResult.status === "failed"}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <Card className="border-primary/20">

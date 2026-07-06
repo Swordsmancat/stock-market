@@ -220,6 +220,24 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     )
     monkeypatch.setattr(
         market_assistant_service,
+        "list_citable_research_source_note_citations",
+        lambda *args, **kwargs: [
+            {
+                "id": "research_source_note:11111111-2222-3333-4444-555555555555",
+                "label": "AAPL reviewed source note",
+                "source": "research_source_notes",
+                "source_type": "research_source_note",
+                "url": "https://example.com/aapl-source",
+                "as_of": "2026-01-03",
+                "provider": "Manual research notebook",
+                "retrieved_at": "2026-01-03T13:30:00+00:00",
+                "excerpt": "Reviewed notebook excerpt for AAPL.",
+                "metadata": {"symbols": ["AAPL"], "tags": ["valuation"]},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
         "get_platform_settings",
         lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
     )
@@ -239,9 +257,11 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     assert "fundamental" in citations_by_source_type
     assert "news" in citations_by_source_type
     assert "generated_report" in citations_by_source_type
+    assert "research_source_note" in citations_by_source_type
     assert citations_by_source_type["news"]["url"] == "https://example.com/aapl-services"
     assert citations_by_source_type["generated_report"]["id"] == "generated_report:11111111-1111-1111-1111-111111111111"
-    assert payload["context"]["research_summary"].startswith("Generated reports available")
+    assert citations_by_source_type["research_source_note"]["id"].startswith("research_source_note:")
+    assert "Reviewed source notebook entries available" in payload["context"]["research_summary"]
 
 
 def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):
