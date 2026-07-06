@@ -532,3 +532,36 @@ Added Evidence Center source notebook for reviewed hard-to-find sources, browser
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Source Notebook Citation Hardening
+
+**Date**: 2026-07-06
+**Task**: Source Notebook Citation Hardening
+**Branch**: `master`
+
+### Summary
+
+Addressed Trellis check findings by validating source-note URL schemes, making dashboard notebook citations degrade safely, exposing source-note evidence counts, and adding boundary regression tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `084d795` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
