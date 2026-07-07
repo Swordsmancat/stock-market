@@ -358,6 +358,25 @@ class ResearchSourceNote(Base):
     )
 
 
+class ResearchBrief(Base):
+    __tablename__ = "research_briefs"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    title: Mapped[str] = mapped_column(String(512))
+    brief_type: Mapped[str] = mapped_column(String(64), default="evidence_center")
+    scope_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    content_markdown: Mapped[str] = mapped_column(Text)
+    citations_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    source_summary_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    diagnostics_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    model_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    safety_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
 class AlertTrigger(Base):
     __tablename__ = "alert_triggers"
 

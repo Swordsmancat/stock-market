@@ -76,6 +76,16 @@ def load_research_source_notes_migration():
     return module
 
 
+def load_research_briefs_migration():
+    migration_path = Path("alembic/versions/0012_research_briefs.py")
+    spec = importlib.util.spec_from_file_location("research_briefs_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -229,4 +239,32 @@ def test_research_source_notes_migration_creates_notebook_table():
         "review_status",
         "is_citable",
         "metadata_json",
+    }.issubset(columns)
+
+
+def test_research_briefs_migration_creates_brief_inbox_table():
+    initial_migration = load_initial_migration()
+    research_briefs_migration = load_research_briefs_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(research_briefs_migration, connection)
+
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        columns = {column["name"] for column in inspector.get_columns("research_briefs")}
+
+    assert "research_briefs" in tables
+    assert {
+        "title",
+        "brief_type",
+        "scope_json",
+        "content_markdown",
+        "citations_json",
+        "source_summary_json",
+        "diagnostics_json",
+        "model_json",
+        "safety_json",
+        "created_at",
     }.issubset(columns)

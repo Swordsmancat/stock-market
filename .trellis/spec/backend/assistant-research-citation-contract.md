@@ -458,6 +458,102 @@ items.append({
 
 This keeps the queue item actionable while preserving the citation boundary.
 
+## Scenario: Saved Research Brief Inbox
+
+### 1. Scope / Trigger
+
+- Trigger: `/evidence` can generate and persist saved AI research briefs from the current Evidence Center context.
+- Scope: `ResearchBrief` in `packages/domain/models.py`, migration `0012_research_briefs`, service logic in `packages/services/research_briefs.py`, FastAPI router `apps/api/routers/research_briefs.py`, Next proxy/UI under `apps/web`, and focused service/API/component/page tests.
+- Non-goals: professional trading-terminal parity, scheduled scraping, raw document corpus storage, vector search, automatic external source ingestion, licensed research storage, buy/sell/hold calls, target prices, position sizing, or trade execution.
+
+### 2. Signatures
+
+- DB table: `research_briefs`
+- Model fields: `id`, `title`, `brief_type`, `scope_json`, `content_markdown`, `citations_json`, `source_summary_json`, `diagnostics_json`, `model_json`, `safety_json`, `created_at`
+- Service input: `ResearchBriefGenerateInput`
+- Service create: `generate_and_store_research_brief(payload, *, session)`
+- Service list: `list_research_briefs(*, session, limit=20)`
+- Serializer: `serialize_research_brief(brief)`
+- API: `GET /research-briefs?limit=20`
+- API: `POST /research-briefs/generate`
+- Web proxy: `GET /api/research-briefs`
+- Web proxy: `POST /api/research-briefs`
+- Request fields: `provider?: str`, `locale?: "en" | "zh"`, `title?: str`
+- Allowed saved-brief citation ID prefixes: `market_indicator:`, `generated_report:`, `news:`, `research_source_note:`
+
+### 3. Contracts
+
+- Saved briefs are generated from current `get_market_overview_payload(...)` context: dashboard brief sections/citations/diagnostics, information-source readiness gaps, and research follow-up queue items.
+- `research_briefs` is the durable history table for Evidence Center research summaries. Do not overload symbol-oriented `generated_reports` for this workflow.
+- `limit` on list is bounded to `1..100`; default is `20`.
+- `locale` normalizes to `zh` only for exact `zh`; every other value becomes `en`.
+- `title` is optional and clipped to 180 characters in service input; missing titles use a generated Evidence Center timestamp title.
+- LLM generation may run only when `get_platform_settings()` reports `llm_provider == "openai"` and a non-empty `llm_api_key`.
+- Use `get_llm_provider()` for generation so tests can monkeypatch the provider without live network calls.
+- LLM prompts must list allowed citation IDs and instruct the model to use only those IDs.
+- Source-readiness entries, seed templates, draft notes, browser-upload suggestions, and follow-up queue items without an existing allowed citation ID are gaps/prompts, not evidence citations.
+- LLM output is acceptable only when inline citation IDs with the allowed prefixes are present in the assembled citation list.
+- Persisted payloads must include `content_markdown`, allowed `citations`, `source_summary`, sanitized `diagnostics`, `model`, and `safety` metadata.
+- Safety metadata must preserve the personal research boundary: not investment advice, no buy/sell/hold, no target price, no position sizing, no automated trading, and no fabricated macro data.
+
+### 4. Validation & Error Matrix
+
+- Missing OpenAI-compatible provider/API key -> deterministic fallback with `RESEARCH_BRIEF_FALLBACK_USED`.
+- LLM provider raises -> deterministic fallback with sanitized reason `LLM generation failed: <ExceptionClass>.`
+- LLM returns empty/whitespace -> deterministic fallback.
+- LLM returns an inline citation ID with an allowed prefix but not present in assembled citations -> `CITATION_UNKNOWN_ID` diagnostic and deterministic fallback.
+- LLM references a source-readiness ID, seed-template ID, draft note, upload suggestion, or queue-only item as evidence -> reject by citation validation or keep it as a source gap/research prompt.
+- Dashboard brief or follow-up queue diagnostics are present -> include sanitized diagnostics in the saved brief; do not expose API keys, hidden prompts, raw stack traces, or provider secrets.
+- No local citations exist -> saved brief may still be stored, but content must state the evidence limitation and must not invent citation IDs.
+- Frontend generation request fails -> UI shows a failure state and does not append a fabricated brief.
+
+### 5. Good/Base/Bad Cases
+
+- Good: current Evidence Center context includes a Buffett Indicator macro observation and a reviewed/citable Source Notebook note; the saved brief cites only `market_indicator:...` and `research_source_note:...` IDs already present in dashboard citations.
+- Good: an OpenAI-compatible provider returns concise markdown with only known citation IDs; the stored `model.used_llm` is `true`.
+- Base: no LLM is configured; deterministic fallback stores summary, key evidence, source/data gaps, follow-up questions, diagnostics, and safety metadata.
+- Base: source-readiness gaps for Buffett components or macro adapters appear in `source_summary.source_gaps` and the markdown's gap section, not in `citations`.
+- Bad: `buffett_manual_valuation_components`, `seed_template:fred_us_rates`, or a browser-upload suggestion appears as a saved-brief citation.
+- Bad: an LLM-invented `[market_indicator:not-present:2026-07-01]` is persisted as valid evidence.
+- Bad: the saved brief emits a buy/sell/hold recommendation, target price, position size, or execution instruction because citable evidence exists.
+
+### 6. Tests Required
+
+- Domain/migration tests assert `research_briefs` schema exists with JSON/markdown/model/safety columns and aligns with `Base.metadata.create_all()`.
+- Service tests assert deterministic fallback without LLM configuration, successful LLM storage with a fake provider, unknown citation fallback, title/locale normalization, citation/source mix summaries, saved safety metadata, and recent list ordering/limit behavior.
+- API tests assert `GET /research-briefs` list behavior and `POST /research-briefs/generate` stores and returns a saved brief.
+- Web proxy tests assert list/generate method, body, query, status, content-type, and no-store forwarding.
+- Component/page tests assert `/evidence` renders the inbox, empty/load-failed states, generate action, generated/fallback model labels, brief markdown, counts, diagnostics, and safety badges.
+- Full validation should include focused research-brief backend tests, focused web tests, `python -m pytest -q`, `npm run test:web`, TypeScript, ruff for touched Python files, JSON message parsing, and `git diff --check`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+brief = ResearchBrief(
+    title="AI summary",
+    citations_json=[{"id": "buffett_manual_valuation_components"}],
+    content_markdown="Buffett source is ready [buffett_manual_valuation_components].",
+)
+```
+
+This turns source-readiness guidance into persisted evidence before a local observation or reviewed/citable note exists.
+
+#### Correct
+
+```python
+brief = ResearchBrief(
+    title=title,
+    citations_json=assembled["citations"],
+    source_summary_json=assembled["source_summary"],
+    content_markdown=generated["content_markdown"],
+    safety_json=_safety_payload(),
+)
+```
+
+The saved brief stores only the assembled, validated local citations and keeps source-readiness work in the gap summary.
+
 ## Scenario: Information Source Collection Guidance
 
 ### 1. Scope / Trigger

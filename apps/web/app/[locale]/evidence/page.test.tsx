@@ -350,6 +350,41 @@ function createResearchSourceNotesPayload() {
   };
 }
 
+function createResearchBriefsPayload() {
+  return {
+    items: [
+      {
+        id: "brief-1",
+        title: "Morning macro evidence",
+        brief_type: "evidence_center",
+        content_markdown:
+          "### Summary\n- US 10Y remains the cited macro datapoint [market_indicator:us_10y_yield:2026-01-02].",
+        citations: [
+          {
+            id: "market_indicator:us_10y_yield:2026-01-02",
+            label: "US 10Y Treasury Yield",
+            source: "market_indicators",
+          },
+        ],
+        source_summary: { source_gap_count: 2 },
+        diagnostics: [],
+        model: {
+          provider: "deterministic",
+          name: "research-brief-deterministic-fallback",
+          used_llm: false,
+        },
+        safety: {
+          not_investment_advice: true,
+          no_buy_sell_hold: true,
+          no_fabricated_macro_data: true,
+        },
+        created_at: "2026-01-02T00:00:00+00:00",
+      },
+    ],
+    summary: { total: 1, returned: 1 },
+  };
+}
+
 it("renders macro evidence, AI brief, source templates, and citation boundaries", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
@@ -358,6 +393,9 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
     }
     if (url.endsWith("/research-source-notes?limit=50")) {
       return Promise.resolve(new Response(JSON.stringify(createResearchSourceNotesPayload())));
+    }
+    if (url.endsWith("/research-briefs?limit=10")) {
+      return Promise.resolve(new Response(JSON.stringify(createResearchBriefsPayload())));
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
@@ -371,8 +409,8 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
 
   expect(screen.getByRole("heading", { name: "Evidence Center" })).toBeInTheDocument();
   expect(screen.getByText("Active provider: yfinance")).toBeInTheDocument();
-  expect(screen.getByText(/US 10Y remains the cited macro datapoint/)).toBeInTheDocument();
-  expect(screen.getByText("Deterministic fallback")).toBeInTheDocument();
+  expect(screen.getAllByText(/US 10Y remains the cited macro datapoint/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Deterministic fallback").length).toBeGreaterThan(0);
   expect(screen.getByText("Macro evidence: 1")).toBeInTheDocument();
   expect(screen.getByText("Source gaps: 2")).toBeInTheDocument();
   expect(screen.getByText("MACRO_INDICATOR_NO_DATA: Some macro indicators do not have audited observations yet.")).toBeInTheDocument();
@@ -409,13 +447,16 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
   expect(screen.getByText("Research follow-up queue")).toBeInTheDocument();
   expect(screen.getByText("AI questions")).toBeInTheDocument();
   expect(screen.getAllByText("Seed prep").length).toBeGreaterThan(0);
-  expect(screen.getByText("Source gaps")).toBeInTheDocument();
+  expect(screen.getAllByText("Source gaps").length).toBeGreaterThan(0);
   expect(screen.getByText("AI summary question")).toBeInTheDocument();
   expect(screen.getAllByText("Guidance only").length).toBeGreaterThan(0);
   expect(screen.getByText("Citable evidence")).toBeInTheDocument();
   expect(screen.getAllByText(/research_source_note:note-1/).length).toBeGreaterThan(0);
   expect(screen.getByText(/Summarize whether this note is ready/)).toBeInTheDocument();
   expect(screen.getByText(/Queue items are research prompts and evidence-preparation tasks only/)).toBeInTheDocument();
+  expect(screen.getByText("Saved research brief inbox")).toBeInTheDocument();
+  expect(screen.getByText("Morning macro evidence")).toBeInTheDocument();
+  expect(screen.getByText("research-brief-deterministic-fallback", { exact: false })).toBeInTheDocument();
 
   const fredLink = screen.getByRole("link", { name: /FRED DGS10/ });
   expect(fredLink).toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");
@@ -424,7 +465,7 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
 
   expect(screen.getByText("Citation boundary")).toBeInTheDocument();
   expect(screen.getByText("Collection links and seed templates stay collection guidance until reviewed observations are imported.")).toBeInTheDocument();
-  expect(screen.getByText("Not investment advice")).toBeInTheDocument();
+  expect(screen.getAllByText("Not investment advice").length).toBeGreaterThan(0);
 });
 
 it("renders a failed-load state when the market overview endpoint fails", async () => {

@@ -13,6 +13,11 @@ import {
   type ResearchSourceNote,
   type ResearchSourceTargetOption,
 } from "@/components/research-source-notebook";
+import {
+  ResearchBriefInbox,
+  type ResearchBriefInboxLabels,
+  type ResearchBriefPayload,
+} from "@/components/research-brief-inbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +54,10 @@ type MarketOverviewLoadResult =
 
 type ResearchSourceNotesLoadResult =
   | { status: "loaded"; items: ResearchSourceNote[] }
+  | { status: "failed"; items: [] };
+
+type ResearchBriefsLoadResult =
+  | { status: "loaded"; items: ResearchBriefPayload[] }
   | { status: "failed"; items: [] };
 
 type IndicatorEvidenceState =
@@ -91,6 +100,25 @@ async function fetchResearchSourceNotes(): Promise<ResearchSourceNotesLoadResult
     }
 
     const payload = (await response.json()) as { items?: ResearchSourceNote[] };
+    return {
+      status: "loaded",
+      items: payload.items ?? [],
+    };
+  } catch {
+    return { status: "failed", items: [] };
+  }
+}
+
+async function fetchResearchBriefs(): Promise<ResearchBriefsLoadResult> {
+  try {
+    const response = await backendFetch("/research-briefs?limit=10", {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      return { status: "failed", items: [] };
+    }
+
+    const payload = (await response.json()) as { items?: ResearchBriefPayload[] };
     return {
       status: "loaded",
       items: payload.items ?? [],
@@ -676,23 +704,53 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
   };
 }
 
+function buildResearchBriefInboxLabels(t: Awaited<ReturnType<typeof getTranslations>>): ResearchBriefInboxLabels {
+  return {
+    title: t("title"),
+    description: t("description"),
+    generateAction: t("generateAction"),
+    generating: t("generating"),
+    generateSuccess: t("generateSuccess"),
+    generateFailed: t("generateFailed"),
+    loadFailedTitle: t("loadFailedTitle"),
+    loadFailedDescription: t("loadFailedDescription"),
+    emptyTitle: t("emptyTitle"),
+    emptyDescription: t("emptyDescription"),
+    createdAt: t("createdAt"),
+    modelGenerated: t("modelGenerated"),
+    modelFallback: t("modelFallback"),
+    modelName: t("modelName"),
+    citationsCount: t("citationsCount"),
+    sourceGapsCount: t("sourceGapsCount"),
+    diagnosticsCount: t("diagnosticsCount"),
+    contentTitle: t("contentTitle"),
+    safetyTitle: t("safetyTitle"),
+    safetyNotAdvice: t("safetyNotAdvice"),
+    safetyNoTrading: t("safetyNoTrading"),
+    safetyNoFabricatedData: t("safetyNoFabricatedData"),
+    unavailableShort: t("unavailableShort"),
+  };
+}
+
 export default async function EvidenceCenterPage({
   params = Promise.resolve({ locale: "en" }),
   searchParams = Promise.resolve({}),
 }: EvidenceCenterPageProps = {}) {
-  const [{ locale: requestedLocale }, query, platformSettings, t, seedImportT, notebookT] = await Promise.all([
+  const [{ locale: requestedLocale }, query, platformSettings, t, seedImportT, notebookT, researchBriefT] = await Promise.all([
     params,
     searchParams,
     getPlatformSettings(),
     getTranslations("EvidenceCenter"),
     getTranslations("EvidenceSeedImport"),
     getTranslations("ResearchSourceNotebook"),
+    getTranslations("ResearchBriefInbox"),
   ]);
   const locale = getSafeLocale(requestedLocale);
   const provider = query.provider?.trim() || platformSettings.market_data_provider;
-  const [marketOverviewResult, researchSourceNotesResult] = await Promise.all([
+  const [marketOverviewResult, researchSourceNotesResult, researchBriefsResult] = await Promise.all([
     fetchMarketOverview(provider),
     fetchResearchSourceNotes(),
+    fetchResearchBriefs(),
   ]);
 
   if (marketOverviewResult.status === "failed") {
@@ -921,6 +979,14 @@ export default async function EvidenceCenterPage({
           </CardContent>
         </Card>
       </section>
+
+      <ResearchBriefInbox
+        labels={buildResearchBriefInboxLabels(researchBriefT)}
+        initialBriefs={researchBriefsResult.items}
+        loadFailed={researchBriefsResult.status === "failed"}
+        provider={provider}
+        locale={locale}
+      />
 
       <Card>
         <CardHeader>
