@@ -1,5 +1,5 @@
 import { Link } from "@/src/i18n/routing";
-import { TrendingUp, Activity, Briefcase, Newspaper, FileText, List, Bell } from "lucide-react";
+import { TrendingUp, Activity, Briefcase, Newspaper, FileText, List, Bell, BrainCircuit } from "lucide-react";
 
 import { AnalysisTriggerForm } from "@/components/analysis-trigger-form";
 import { IngestionTriggerForm } from "@/components/ingestion-trigger-form";
@@ -1168,6 +1168,12 @@ export default async function HomePage({
           actions={
             <>
               <Button variant="outline" size="sm" asChild>
+                <Link href="/ai-research" className="gap-2">
+                  <BrainCircuit className="h-4 w-4" aria-hidden="true" />
+                  {t("openAiResearch")}
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
                 <Link href="/task-runs">{t("viewTaskRuns")}</Link>
               </Button>
               <Button variant="outline" size="sm" asChild>
@@ -1198,6 +1204,7 @@ export default async function HomePage({
               </div>
               <CardTitle className="text-lg">{t("dashboardBriefTitle")}</CardTitle>
               <CardDescription className="text-xs">{t("dashboardBriefDesc")}</CardDescription>
+              <p className="text-xs text-muted-foreground">{t("openAiResearchHint")}</p>
             </CardHeader>
             <CardContent className="space-y-4">
               {dashboardBrief.narrative?.answer_markdown ? (
@@ -1608,7 +1615,26 @@ export default async function HomePage({
 
         <div className="grid gap-4 xl:grid-cols-2">
           <SmartRecommendations
+            locale={locale}
             recommendations={smartRecommendations}
+            labels={{
+              title: t("smartRecommendationsTitle"),
+              description: t("smartRecommendationsDesc", { count: smartRecommendations.length }),
+              loadingMessage: t("smartRecommendationsLoading"),
+              emptyMessage: t("smartRecommendationsEmpty"),
+              safetyNotice: t("smartRecommendationsSafety"),
+              diagnosticsTitle: t("smartRecommendationsDiagnostics"),
+              confidence: t("smartRecommendationsConfidence"),
+              sourceStatus: t("smartRecommendationsSourceStatus"),
+              sourceProvider: t("smartRecommendationsSourceProvider"),
+              source: t("smartRecommendationsSource"),
+              generatedAt: t("smartRecommendationsGeneratedAt"),
+              signalBreakout: t("smartRecommendationsSignalBreakout"),
+              signalVolumeAnomaly: t("smartRecommendationsSignalVolumeAnomaly"),
+              signalOversoldRebound: t("smartRecommendationsSignalOversoldRebound"),
+              signalStrongMomentum: t("smartRecommendationsSignalStrongMomentum"),
+              signalUnknown: t("smartRecommendationsSignalUnknown"),
+            }}
             status={recommendationsPayload.status ?? null}
             generatedAt={recommendationsPayload.generated_at ?? null}
             source={recommendationsPayload.source ?? null}

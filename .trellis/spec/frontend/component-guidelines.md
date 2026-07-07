@@ -26,6 +26,28 @@ The frontend uses server-rendered pages for data-heavy screens and small client 
 - Keep component props serializable when the component is used from a server page.
 - Use union types for variants when following existing UI primitives, as in `GenerateDailyReportButton`.
 
+### Convention: Localized Labels For Server-Rendered Client Components
+
+**What**: When a server page renders a client component that needs localized shell text, pass a serializable `labels` object of translated strings from the server page instead of passing formatter functions or hardcoding one language inside the client component.
+
+**Why**: Server-to-client props must remain serializable, and isolated component tests should not need a full `next-intl` provider just to verify rendering. This also prevents English pages from showing Chinese-only component chrome while preserving backend-provided data such as recommendation titles and reasons.
+
+**Example**:
+
+```tsx
+<SmartRecommendations
+  locale={locale}
+  recommendations={items}
+  labels={{
+    title: t("smartRecommendationsTitle"),
+    description: t("smartRecommendationsDesc", { count: items.length }),
+    emptyMessage: t("smartRecommendationsEmpty"),
+  }}
+/>
+```
+
+Do not pass functions such as `description: (count) => t("key", { count })` across the server/client boundary.
+
 ---
 
 ## Styling Patterns

@@ -26,8 +26,29 @@ type RecommendationDiagnostic = {
   provider?: string | null;
 };
 
+export type SmartRecommendationsLabels = {
+  title: string;
+  description: string;
+  loadingMessage: string;
+  emptyMessage: string;
+  safetyNotice: string;
+  diagnosticsTitle: string;
+  confidence: string;
+  sourceStatus: string;
+  sourceProvider: string;
+  source: string;
+  generatedAt: string;
+  signalBreakout: string;
+  signalVolumeAnomaly: string;
+  signalOversoldRebound: string;
+  signalStrongMomentum: string;
+  signalUnknown: string;
+};
+
 interface SmartRecommendationsProps {
   recommendations: Recommendation[];
+  labels: SmartRecommendationsLabels;
+  locale: string;
   getInstrumentHref?: (symbol: string) => string;
   status?: string | null;
   generatedAt?: string | null;
@@ -43,19 +64,20 @@ function buildRecommendationSourceDetails({
   generatedAt,
   source,
   provider,
-}: Pick<SmartRecommendationsProps, "status" | "generatedAt" | "source" | "provider">): string[] {
+  labels,
+}: Pick<SmartRecommendationsProps, "status" | "generatedAt" | "source" | "provider" | "labels">): string[] {
   const details: string[] = [];
   if (status) {
-    details.push(`status: ${status}`);
+    details.push(`${labels.sourceStatus}: ${status}`);
   }
   if (provider) {
-    details.push(`provider: ${provider}`);
+    details.push(`${labels.sourceProvider}: ${provider}`);
   }
   if (source) {
-    details.push(`source: ${source}`);
+    details.push(`${labels.source}: ${source}`);
   }
   if (generatedAt) {
-    details.push(`generated_at: ${generatedAt}`);
+    details.push(`${labels.generatedAt}: ${generatedAt}`);
   }
   return details;
 }
@@ -67,32 +89,49 @@ function getDiagnosticLabel(diagnostic: RecommendationDiagnostic, index: number)
 const typeConfig = {
   breakout: {
     icon: TrendingUp,
-    label: "突破",
     color: "text-blue-600",
     bgColor: "bg-blue-50",
   },
   volume_anomaly: {
     icon: Activity,
-    label: "成交异常",
     color: "text-purple-600",
     bgColor: "bg-purple-50",
   },
   oversold_rebound: {
     icon: AlertCircle,
-    label: "超跌反弹",
     color: "text-orange-600",
     bgColor: "bg-orange-50",
   },
   strong_momentum: {
     icon: Zap,
-    label: "强势",
     color: "text-green-600",
     bgColor: "bg-green-50",
   },
 };
 
+function getSignalLabel(type: Recommendation["type"], labels: SmartRecommendationsLabels): string {
+  switch (type) {
+    case "breakout":
+      return labels.signalBreakout;
+    case "volume_anomaly":
+      return labels.signalVolumeAnomaly;
+    case "oversold_rebound":
+      return labels.signalOversoldRebound;
+    case "strong_momentum":
+      return labels.signalStrongMomentum;
+    default:
+      return labels.signalUnknown;
+  }
+}
+
+function getDateLocale(locale: string): string {
+  return locale.startsWith("zh") ? "zh-CN" : "en-US";
+}
+
 export function SmartRecommendations({
   recommendations,
+  labels,
+  locale,
   getInstrumentHref,
   status,
   generatedAt,
@@ -102,18 +141,23 @@ export function SmartRecommendations({
   isLoading = false,
   className = "",
 }: SmartRecommendationsProps) {
-  const sourceDetails = buildRecommendationSourceDetails({ status, generatedAt, source, provider });
+  const sourceDetails = buildRecommendationSourceDetails({ status, generatedAt, source, provider, labels });
+  const dateLocale = getDateLocale(locale);
 
   if (isLoading) {
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="text-base">📈 今日推荐</CardTitle>
-          <CardDescription className="text-xs">基于可用数据的技术信号，未附历史评估</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingUp className="h-4 w-4" aria-hidden="true" />
+            {labels.title}
+          </CardTitle>
+          <CardDescription className="text-xs">{labels.description}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="sr-only">{labels.loadingMessage}</span>
           </div>
         </CardContent>
       </Card>
@@ -124,12 +168,15 @@ export function SmartRecommendations({
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="text-base">📈 今日推荐</CardTitle>
-          <CardDescription className="text-xs">基于可用数据的技术信号，未附历史评估</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingUp className="h-4 w-4" aria-hidden="true" />
+            {labels.title}
+          </CardTitle>
+          <CardDescription className="text-xs">{labels.description}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-sm text-muted-foreground">
-            暂无推荐,继续监控市场中...
+            {labels.emptyMessage}
           </div>
         </CardContent>
       </Card>
@@ -139,14 +186,15 @@ export function SmartRecommendations({
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-base">📈 今日推荐</CardTitle>
-        <CardDescription className="text-xs">
-          基于可用数据的技术信号 · {recommendations.length} 条
-        </CardDescription>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TrendingUp className="h-4 w-4" aria-hidden="true" />
+          {labels.title}
+        </CardTitle>
+        <CardDescription className="text-xs">{labels.description}</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <div className="mx-4 mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          当前卡片展示的是未回测的技术信号；是否实时取决于上游数据源声明。历史评估需结合服务层 signal evaluation 的样本量、窗口收益和诊断查看，不能视为投资建议。
+          {labels.safetyNotice}
         </div>
         {sourceDetails.length > 0 ? (
           <div className="mx-4 mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -159,12 +207,12 @@ export function SmartRecommendations({
         ) : null}
         {diagnostics.length > 0 ? (
           <div className="mx-4 mb-3 space-y-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-            <div className="font-medium text-slate-900">推荐诊断</div>
+            <div className="font-medium text-slate-900">{labels.diagnosticsTitle}</div>
             {diagnostics.map((diagnostic, index) => (
               <div key={`${getDiagnosticLabel(diagnostic, index)}-${index}`}>
                 <span className="font-medium">{getDiagnosticLabel(diagnostic, index)}</span>
-                {diagnostic.provider ? <span> · provider: {diagnostic.provider}</span> : null}
-                {diagnostic.source ? <span> · source: {diagnostic.source}</span> : null}
+                {diagnostic.provider ? <span> · {labels.sourceProvider}: {diagnostic.provider}</span> : null}
+                {diagnostic.source ? <span> · {labels.source}: {diagnostic.source}</span> : null}
                 {diagnostic.message ? <span> · {diagnostic.message}</span> : null}
               </div>
             ))}
@@ -173,10 +221,11 @@ export function SmartRecommendations({
         <ScrollArea className="h-[400px]">
           <div className="space-y-3 p-4">
             {recommendations.map((rec, index) => {
-              const config = typeConfig[rec.type];
+              const config = typeConfig[rec.type as keyof typeof typeConfig] ?? typeConfig.strong_momentum;
               const Icon = config.icon;
               const confidencePercent = Math.round(rec.confidence * 100);
               const instrumentHref = getInstrumentHref?.(rec.symbol) ?? `/instruments/${encodeURIComponent(rec.symbol)}`;
+              const signalLabel = getSignalLabel(rec.type, labels);
 
               return (
                 <Link
@@ -192,7 +241,7 @@ export function SmartRecommendations({
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h4 className="font-semibold text-sm">{rec.title}</h4>
                       <Badge variant="secondary" className="text-xs flex-shrink-0">
-                        {config.label}
+                        {signalLabel}
                       </Badge>
                     </div>
                     
@@ -202,11 +251,11 @@ export function SmartRecommendations({
                     
                     <div className="flex items-center gap-2 text-xs">
                       <span className="text-muted-foreground">
-                        置信度: {confidencePercent}%
+                        {labels.confidence}: {confidencePercent}%
                       </span>
                       <span className="text-muted-foreground">•</span>
                       <span className="text-muted-foreground">
-                        {new Date(rec.timestamp).toLocaleDateString("zh-CN")}
+                        {new Date(rec.timestamp).toLocaleDateString(dateLocale)}
                       </span>
                     </div>
                   </div>

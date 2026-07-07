@@ -632,6 +632,8 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
   expect(screen.getByText("AI research brief")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open AI research" })).toHaveAttribute("href", "/ai-research");
+  expect(screen.getByText(/Use the AI Research Desk to combine selected stocks/)).toBeInTheDocument();
   expect(screen.getByText("Narrative synthesis")).toBeInTheDocument();
   expect(screen.getByText("Deterministic fallback")).toBeInTheDocument();
   expect(screen.getByText("Model: dashboard-brief-deterministic-fallback")).toBeInTheDocument();
@@ -684,6 +686,10 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
   expect(screen.getByRole("link", { name: /AAPL 突破20日均线/ })).toHaveAttribute("href", "/instruments/AAPL");
   expect(screen.getByText("AAPL 突破20日均线")).toBeInTheDocument();
+  expect(screen.getByText("Research candidates")).toBeInTheDocument();
+  expect(screen.getByText("Technical signal candidates from available data: 1")).toBeInTheDocument();
+  expect(screen.getByText("Breakout")).toBeInTheDocument();
+  expect(screen.queryByText("今日推荐")).not.toBeInTheDocument();
   expect(screen.getByText("Mock data")).toBeInTheDocument();
   expect(screen.getByText(/This sector data is not complete verified realtime fund-flow data/)).toBeInTheDocument();
   expect(screen.getByText(/Provider: static_fixture/)).toBeInTheDocument();
@@ -871,7 +877,7 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
   expect(screen.getByText("AI research brief")).toBeInTheDocument();
   expect(screen.getByText("Narrative synthesis")).toBeInTheDocument();
   expect(screen.getByText("Core market indices")).toBeInTheDocument();
-  expect(screen.getByText("暂无推荐,继续监控市场中...")).toBeInTheDocument();
+  expect(screen.getByText("No research candidates yet. Keep monitoring the available data.")).toBeInTheDocument();
   expect(screen.getByText("No live hot-sector data available.")).toBeInTheDocument();
   expect(screen.getByText("对比分析")).toBeInTheDocument();
   expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
