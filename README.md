@@ -84,6 +84,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 - **Market data**: yfinance provider (US/HK/CN), provider-neutral `/ingestion/snapshot`, Celery scheduled ingestion
 - **Information aggregation**: watchlists, market overview, generated reports, news/fundamentals context, provider diagnostics, and task-run status in one personal dashboard
 - **Information source readiness**: explicit source registry for official macro candidates, valuation seed inputs, generated reports, stored news, future documents, and user-curated seed files, with official/legal collection links and citation boundaries
+- **China macro source capability matrix**: validation-only registry and opt-in probe script for NBS, PBOC, World Bank/IMF-style fallbacks, Trading Economics, and AkShare/Tushare candidates, with license/freshness notes and no AI citation until local observations exist
 - **Macro and valuation indicators**: curated Buffett Indicator, rates, inflation, and liquidity definitions with explicit audited-source/no-data states
 - **FRED macro adapter**: opt-in official FRED refresh path for US rates, yield spread, CPI YoY, and M2 YoY observations with source URL, series ID, retrieval time, and calculation metadata
 - **World Bank macro adapter**: opt-in public API refresh path for Buffett Indicator market-cap-to-GDP observations with GDP context, source URL, country/indicator IDs, retrieval time, and annual-data metadata
@@ -109,6 +110,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | P0 | FRED official macro adapter | Implemented / opt-in refresh MVP | `scripts/refresh_fred_macro_indicators.py` can refresh audited FRED observations for DGS10, DGS2, T10Y2Y, CPIAUCSL-derived YoY, and M2SL-derived YoY when `FRED_API_KEY` is configured. Tests use mocked HTTP responses; no automatic scheduling or dashboard citation occurs until observations are stored locally. |
 | P0 | World Bank Buffett Indicator adapter | Implemented / opt-in refresh MVP | `scripts/refresh_world_bank_macro_indicators.py` can refresh audited World Bank market-cap-to-GDP observations for China, Hong Kong, and the United States, with same-year GDP context when available. Tests use mocked HTTP responses; no automatic scheduling or dashboard citation occurs until observations are stored locally. |
 | P1 | Information source readiness | Implemented / collection-guidance MVP | Dashboard overview now includes a source-readiness registry for FRED/PBOC-style macro candidates, World Bank Buffett adapter coverage, Buffett manual seed inputs, generated reports, stored news, future filings/documents, and user seed files. It performs no live network fetches unless an explicit refresh script is run; it shows current local evidence, missing adapters/manual seeds, official/legal collection links, collection notes, citation boundaries, and next collection actions. |
+| P1 | China macro source capability matrix | Implemented / validation-only MVP | `information_sources.source_capabilities` now records China macro source candidates for NBS, PBOC, World Bank, IMF, Trading Economics, and AkShare/Tushare. `scripts/validate_china_macro_sources.py` can rerun non-mutating no-network summaries or opt-in live probes. Capability rows, probe statuses, and source links are guidance only and never become AI citations. |
 | P1 | Audited macro seed import | Implemented / template-assisted manual import MVP | Reviewed JSON/CSV seed files can import macro and valuation observations into `MarketIndicatorObservation`. Each row requires source and audit/method metadata; imports validate all rows before writing and do not fetch live data. The source-readiness panel now shows seed templates, placeholder JSON/CSV rows, review checklists, and the import command for FRED/PBOC/Buffett-style inputs. |
 | P1 | Hard-to-find source notebook | Implemented / reviewed-source MVP | `/evidence` now includes a persistent source notebook for user-reviewed links, excerpts, browser-uploaded text, calculation notes, tags/symbols, and AI follow-up notes. Draft notes remain collection records; only entries saved as `reviewed` and `AI-citable` produce `research_source_note:<id>` citations for the dashboard brief and market assistant. |
 | P1 | Source ingestion hub | Implemented / LLM extraction MVP | `/evidence` now includes a source-ingestion panel inside the Source Notebook workflow. It accepts pasted text or browser-readable `.txt` / `.md` / `.csv` / `.json` files, calls the configured OpenAI-compatible LLM when available, and falls back deterministically to suggest summaries, key indicators, citation clues, editable metadata, and follow-up questions. Suggestions remain collection notes until the user explicitly saves a reviewed/citable Source Notebook row. |
@@ -166,6 +168,20 @@ python scripts/refresh_world_bank_macro_indicators.py --target buffett_indicator
 The refresh path writes through the same audited `MarketIndicatorObservation` evidence layer. It stores the World Bank country code, indicator ID, source URL, retrieved timestamp, source observation date, methodology, and same-year GDP current-USD context when available.
 
 World Bank macro data is annual and often lagged. Missing current-year values are normal reporting lag, not a market signal. Source links and adapter diagnostics remain guidance only; AI summaries may cite World Bank Buffett Indicator values only after the refresh stores validated local observations.
+
+## China macro source validation
+
+Use the capability matrix and opt-in probe script before building any NBS/PBOC/China macro adapter:
+
+```bash
+python scripts/validate_china_macro_sources.py
+python scripts/validate_china_macro_sources.py --source world_bank_china_macro --live-network
+python scripts/validate_china_macro_sources.py --live-network --timeout 8
+```
+
+The default command performs no live network requests and writes no database rows. `--live-network` runs shallow reachability/schema probes only after explicit opt-in. On 2026-07-07, the local live probe returned: NBS 403, PBOC page OK, World Bank API OK, IMF 403, Trading Economics skipped for license/credential review, and AkShare/Tushare skipped for dependency/upstream validation.
+
+The current recommendation is to use World Bank as the next low-risk China macro follow-up for annual GDP/context data, while keeping monthly China CPI/PPI/PMI/M2 in validation or manual seed mode. Capability rows, source links, and probe diagnostics are not AI evidence; AI may cite China macro values only after audited local observations are stored.
 
 ## Source collection guidance
 

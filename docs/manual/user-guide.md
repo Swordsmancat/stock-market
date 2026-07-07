@@ -20,6 +20,7 @@
 | P0 | 宏观/估值指标与 AI 日摘要 | No-data-safe MVP | 首页已扩展巴菲特指标、美国长短债收益率/利差、CPI、M2 和中国 M2 等观察点，并展示确定性 AI-ready 日摘要、引用、诊断和数据缺口。 |
 | P0 | FRED 官方宏观刷新 | Opt-in adapter MVP | 配置 `FRED_API_KEY` 后，可用本地脚本刷新 DGS10、DGS2、T10Y2Y、CPIAUCSL 派生 YoY 和 M2SL 派生 YoY；成功入库后才成为 AI 可引用证据。 |
 | P0 | World Bank 巴菲特指标刷新 | Opt-in adapter MVP | 可用本地脚本刷新 World Bank 市值/GDP 年度观察值，覆盖中国、香港、美国巴菲特指标，并在可用时保存同年 GDP 上下文；成功入库后才成为 AI 可引用证据。 |
+| P1 | 中国宏观来源能力矩阵 | Validation-only MVP | 系统现在记录 NBS、PBOC、World Bank、IMF、Trading Economics、AkShare/Tushare 等中国宏观来源候选状态，并提供可选 live probe；这些状态只是采集决策依据，不是 AI 可引用数据。 |
 | P1 | 可审计宏观 seed 导入 | Review + import MVP | `/evidence` 已支持粘贴 JSON/CSV 或通过浏览器选择本地 `.json`/`.csv` 文件，先预览校验和 insert/update 状态，再确认写入；CLI 文件导入仍可用于维护流程。 |
 | P1 | Hard-to-find source notebook | Reviewed-source MVP | `/evidence` 已支持保存用户复核过的链接、浏览器上传文本摘录、计算备注、标签/标的和 AI follow-up。草稿只作为收集记录；只有 `reviewed` 且明确允许 AI 引用的条目才会进入 dashboard brief 和 AI 助手的 citation 列表。 |
 | P1 | 已保存研究摘要收件箱 | LLM+fallback history MVP | `/evidence` 已支持把当前证据中心上下文生成并保存为可回看的研究摘要，包含 markdown 内容、允许引用、来源缺口、follow-up 上下文、诊断、模型元数据和安全边界。 |
@@ -232,6 +233,30 @@ python scripts/refresh_world_bank_macro_indicators.py --target buffett_indicator
 - 只有成功写入本地、带 source/as-of/components 的观测值，才能被首页宏观指标、证据中心、已保存研究摘要和 AI 助手引用。
 - 如果 World Bank 某个地区/年份没有可用值，系统会跳过缺失值，不会写成 0。
 
+### 中国宏观来源能力矩阵
+
+中国宏观数据下一步先采用“验证优先”，不直接把 NBS/PBOC/第三方接口做成生产 adapter。后端会在 `information_sources.source_capabilities` 中记录候选来源、覆盖指标、访问方式、adapter 状态、是否需要凭证、license/usage note、新鲜度策略、验证摘要和下一步动作。
+
+当前矩阵覆盖：
+
+- NBS：GDP、CPI、PPI、PMI、工业/活动类指标候选；需要继续验证官方数据库访问、schema 和使用边界。
+- PBOC：中国 M2/流动性；当前仍建议作为人工复核/seed 来源，直到验证稳定机器可读入口。
+- World Bank：中国年度 GDP 和估值上下文；已具备低频公开 API 路径，是下一步最稳的低风险 adapter 候选。
+- IMF：全球宏观 fallback 候选；仍需验证访问行为、指标映射和 observation/forecast 语义。
+- Trading Economics：覆盖广，但属于 vendor API，必须先确认凭证、配额、付费授权和再分发边界。
+- AkShare/Tushare：可作为便利库候选，但必须记录上游来源、依赖、token、license 和 schema 稳定性，不能默认等同于官方证据。
+
+维护者可以运行：
+
+```powershell
+python scripts/validate_china_macro_sources.py
+python scripts/validate_china_macro_sources.py --live-network --timeout 8
+```
+
+2026-07-07 的本地 live probe 结果是：NBS 返回 HTTP 403，PBOC 页面可达，World Bank API 可达，IMF 返回 HTTP 403，Trading Economics 因凭证/授权待审跳过，AkShare/Tushare 因依赖/上游验证待审跳过。这个结果只说明当前环境下的来源能力，不代表宏观数据已经入库。
+
+引用边界：capability matrix、HTTP 状态、probe diagnostics、source readiness 链接都不是 AI citation。只有后续 adapter 或可审计 seed import 写入本地 `MarketIndicatorObservation`，并带有 source、as-of、methodology/notes metadata 后，AI 才可以引用对应宏观数据。
+
 ### 信息源就绪度
 
 首页现在也会展示“信息源就绪度”。这个模块不是实时数据源，也不是数据授权系统；它是个人研究 cockpit 的缺口地图，用来说明哪些来源已经有本地证据、哪些还需要适配器、哪些需要人工 seed，哪些只是未来方向。
@@ -437,7 +462,7 @@ AI 市场助手当前能力：
 | Koyfin / MacroMicro | 宏观、估值、经济周期、市场图表和跨资产 dashboard | 已有专门证据中心、宏观/估值 definitions-first 指标、no-data-safe 展示、source readiness 和 seed 模板 | 还缺官方宏观 adapter、发布日历、跨指标图表和可复用宏观专题页。 |
 | TradingView / Yahoo Finance 类工具 | watchlist、图表、新闻、日历、筛选器和个人跟踪工作流 | 已有首页汇总、watchlist、K 线/指标、推荐线索、报告和 provider/degraded 状态 | 还缺 watchlist 事件监控、日/周 digest、保存的研究问题和更系统的提醒。 |
 | AlphaSense 类研究产品 | 对 filings、transcripts、新闻和研究资料做 AI 搜索、监控、摘要和引用 | 已有 citation-aware dashboard narrative、已保存研究摘要收件箱、AI 报告、个股 AI assistant 的引用校验，以及人工复核来源笔记本 | 还缺合法研究语料库、文档 ingest policy、全文 ingest、主题追踪和更细的摘要筛选。 |
-| FRED / World Bank / SEC EDGAR / Trading Economics | 官方或 API 化宏观、公司文档、经济日历和指标源 | 已有 FRED opt-in adapter、World Bank 巴菲特指标 opt-in adapter、官方/合法来源链接、导入边界、manual seed import 和 source-to-seed 模板 | 还缺 source capability matrix、宏观发布日历、更多官方源和 license/freshness 运营记录。 |
+| FRED / World Bank / SEC EDGAR / Trading Economics | 官方或 API 化宏观、公司文档、经济日历和指标源 | 已有 FRED opt-in adapter、World Bank 巴菲特指标 opt-in adapter、中国宏观 source capability matrix、官方/合法来源链接、导入边界、manual seed import 和 source-to-seed 模板 | 还缺宏观发布日历、更多官方源的生产 adapter 和 license/freshness 运营记录。 |
 
 因此，当前实现已经满足一个个人研究 cockpit 的 MVP：它能把市场、watchlist、报告、推荐、新闻、宏观指标、来源缺口和 AI 摘要放到同一工作台，并通过证据中心明确区分“可引用证据”和“还需要收集/复核的来源”。但它还不是完整的信息平台：数据源仍以人工 seed 和本地证据为主，官方宏观源、文档语料、日历、watchlist 级监控和历史化 AI digest 仍是后续重点。
 
@@ -451,7 +476,7 @@ AI 市场助手当前能力：
 ## 优先优化路线
 
 1. **P0 宏观发布日历与缺口追踪**：在 FRED 和 World Bank opt-in adapters 的基础上，为 CPI、M2、利率、GDP/市值组件等核心指标建立 release calendar / freshness policy，让首页直接显示“下一次该更新什么、当前缺哪一项”。
-2. **P1 source capability matrix**：记录每个宏观源的 adapter 状态、license/usage note、retrieved_at、失败诊断和人工复核要求。
+2. **P1 source capability matrix 增强**：基础中国宏观矩阵已实现；下一步可把验证结果做成 Evidence Center 可视化卡片，并为通过验证的来源创建独立生产 adapter 任务。
 3. **P1 saved brief 增强**：已完成 Evidence Center 摘要保存 MVP；下一步可增加日/周分组、筛选、专题标签、导出和与 watchlist 事件的关联。
 4. **P1 watchlist 事件监控**：把 watchlist 价格异动、报告更新、新闻事件、宏观发布和 source readiness 变化汇总成个人研究 inbox。
 5. **P1 source notebook 到宏观证据工作流**：继续增强已实现的来源笔记本、source-readiness linkage 和 research follow-up queue，让一个来源条目更自然地进入“收集 -> 复核 -> seed/import 准备 -> 入库 -> AI 可引用”的流程。

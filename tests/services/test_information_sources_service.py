@@ -37,7 +37,14 @@ def test_information_source_readiness_returns_no_data_registry():
     items = _item_by_id(payload)
     statuses = {item["status"] for item in items.values()}
 
-    assert set(payload) == {"status", "summary", "groups", "items", "diagnostics"}
+    assert set(payload) == {
+        "status",
+        "summary",
+        "groups",
+        "items",
+        "diagnostics",
+        "source_capabilities",
+    }
     assert statuses >= {"needs_adapter", "needs_manual_seed", "no_data", "future"}
     assert payload["summary"]["total"] == 10
     assert payload["summary"]["configured"] == 0
@@ -82,6 +89,10 @@ def test_information_source_readiness_returns_no_data_registry():
         "info",
         "warning",
     }
+    assert payload["source_capabilities"]["summary"]["total"] >= 6
+    assert payload["source_capabilities"]["citation_policy"].startswith(
+        "Capability metadata is not evidence"
+    )
 
 
 def test_information_source_readiness_includes_official_macro_collection_links():

@@ -23,6 +23,7 @@ npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
 
 - `macro_indicators.items` / `valuation_indicators.items` 继续包含全部宏观和估值指标代码，缺失观测值必须保持 `null`/`N/A`，不能显示为 0。
 - `information_sources.items` 和 `groups` 继续保留 status、authority、coverage、freshness_policy、ai_usage、next_action、collection_links、seed_template、evidence_count 和 latest_as_of。
+- `information_sources.source_capabilities` 是中国宏观来源能力矩阵；它是 adapter 决策元数据，不是 AI citation，也不应改变 source readiness 的 `configured` / evidence_count 语义。
 - source-readiness 链接和 seed 模板仍是 collection guidance，不是 AI citation。
 - `dashboard_brief.narrative` 可以是 LLM 输出或 deterministic fallback，但 citations 必须来自 payload 中已有的本地证据 ID。
 - seed preview 必须复用 `packages/services/market_indicators.py` 的审计规则，不写入数据库，并报告 row-level valid/invalid、metadata、insert/update 和错误。
@@ -164,6 +165,36 @@ python scripts/refresh_world_bank_macro_indicators.py --target buffett_indicator
 - 入库仍走 `MarketIndicatorObservation`，components 必须保留 `provider=world_bank`、`country_code`、`source_indicator_id`、`source_url`、`retrieved_at` 和 `methodology` 或 `calculation`。
 - Source readiness、World Bank 链接、adapter ID 和 diagnostics 不是 citation；dashboard/AI 只能引用成功入库的本地 observations。
 - 测试必须 mock HTTP，不得默认访问真实 World Bank 网络。
+
+中国宏观来源能力矩阵聚焦检查：
+
+```bash
+python -m pytest tests/services/test_source_capabilities.py tests/scripts/test_validate_china_macro_sources.py tests/services/test_information_sources_service.py -q
+ruff check packages/services/source_capabilities.py scripts/validate_china_macro_sources.py tests/services/test_source_capabilities.py tests/scripts/test_validate_china_macro_sources.py
+```
+
+能力矩阵是 validation-only，不写入 `MarketIndicatorObservation`。默认命令不访问外网，只输出当前 registry 状态：
+
+```powershell
+python scripts/validate_china_macro_sources.py
+```
+
+需要 live smoke 时必须显式 opt-in：
+
+```powershell
+python scripts/validate_china_macro_sources.py --source world_bank_china_macro --live-network
+python scripts/validate_china_macro_sources.py --live-network --timeout 8
+```
+
+维护规则：
+
+- 该脚本只做来源可达性/schema marker 浅探测，不写数据库，不生成 `market_indicator:` citation。
+- 默认 no-network 输出 `WARN` 是正常行为，表示 live probe 被显式跳过。
+- 2026-07-07 本地 live probe 快照：NBS HTTP 403；PBOC 页面 HTTP 200 且包含 M2 marker；World Bank API HTTP 200 且包含 China marker；IMF HTTP 403；Trading Economics 因 credential/license 待审跳过；AkShare/Tushare 因 dependency/upstream-source/schema 待审跳过。
+- 当前推荐的后续生产 adapter 候选是 World Bank China annual macro context；它适合低频 GDP/估值上下文，不解决中国 CPI/PPI/PMI/M2 月度新鲜度。
+- PBOC 中国 M2 保持 `manual_only`，直到验证稳定机器可读入口；NBS/IMF 保持 `candidate`，不要基于 HTTP 403 结果强行做 adapter。
+- Trading Economics、AkShare、Tushare 需要先确认凭证、license、上游来源和 schema 监控策略。
+- Capability rows、probe HTTP 状态、collection links 和 diagnostics 都是 guidance only；dashboard brief、saved research brief 和 assistant 只能引用本地 observation/report/news/reviewed-note citations。
 
 本地服务自检：
 

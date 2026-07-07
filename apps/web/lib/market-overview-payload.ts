@@ -121,6 +121,15 @@ export type InformationSourcesPayload = {
   groups?: InformationSourceGroup[];
   items?: InformationSourceItem[];
   diagnostics?: Array<Record<string, unknown>>;
+  source_capabilities?: {
+    status?: "ok" | "degraded" | string;
+    summary?: Record<string, unknown>;
+    groups?: Array<Record<string, unknown>>;
+    items?: Array<Record<string, unknown>>;
+    diagnostics?: Array<Record<string, unknown>>;
+    citation_policy?: string;
+    recommended_next_action?: string;
+  };
 };
 
 export type ResearchFollowUpQueueItem = {

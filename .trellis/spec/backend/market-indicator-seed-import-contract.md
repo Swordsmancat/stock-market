@@ -276,6 +276,113 @@ Seed-template JSON and CSV examples must mirror the importer contract above:
 - Bad: a template includes realistic-looking sample yields, CPI values, or Buffett ratios that could be mistaken for market observations.
 - Bad: `seed_template:fred_us_rates` or `fred_us_rates` appears in dashboard or assistant citation lists before a validated import creates local evidence.
 
+## Scenario: China Macro Source Capability Matrix
+
+### 1. Scope / Trigger
+
+- Trigger: validating China macro source candidates before building any production NBS/PBOC/vendor/library adapter.
+- Applies to `packages/services/source_capabilities.py`, `packages/services/information_sources.py`, `scripts/validate_china_macro_sources.py`, dashboard payload consumers, docs, and focused tests.
+- The feature is a validation-only decision layer for personal macro information collection. It is not a data adapter, live feed, seed import, scraper, scheduled refresh job, or trading signal.
+
+### 2. Signatures
+
+- Service registry:
+  - `CHINA_MACRO_SOURCE_CAPABILITIES: tuple[SourceCapability, ...]`
+  - `get_china_macro_source_capability_payload() -> dict[str, object]`
+  - `get_source_capability_by_id(source_id: str) -> SourceCapability | None`
+- Additive source-readiness payload:
+  - `get_information_source_readiness_payload(session)["source_capabilities"]`
+- CLI command:
+  - `python scripts/validate_china_macro_sources.py`
+  - `python scripts/validate_china_macro_sources.py --source world_bank_china_macro --live-network`
+  - `python scripts/validate_china_macro_sources.py --live-network --timeout 8`
+
+### 3. Contracts
+
+Capability items must serialize stable fields:
+
+- `id`
+- `label`
+- `authority`
+- `region`
+- `indicator_families`
+- `indicator_codes`
+- `access_mode`: `official_api`, `public_page`, `manual_seed`, `vendor_api`, `library_wrapper`, or `unsupported`
+- `adapter_status`: `implemented`, `adapter_ready`, `candidate`, `manual_only`, `blocked`, or `future`
+- `credential_required`
+- `license_note`
+- `freshness_policy`
+- `collection_links`
+- `validation`: `{ status, checked_at, summary, diagnostics }`
+- `citation_policy`
+- `recommended_next_action`
+- `probe_url`
+- `is_ai_citable=false`
+
+The matrix must include at least:
+
+- NBS China macro candidate.
+- PBOC China M2/manual source.
+- World Bank China annual macro fallback.
+- IMF or World Bank-style global fallback.
+- Trading Economics or equivalent vendor API candidate.
+- AkShare/Tushare-style library wrapper candidate.
+
+`validate_china_macro_sources.py` defaults to no live network. Live probes run only with `--live-network`, perform shallow reachability/schema-marker checks, print `OK` / `WARN` / `FAIL`, and write no database rows.
+
+### 4. Validation & Error Matrix
+
+| Condition | Behavior |
+|---|---|
+| Default command without `--live-network` | Print `WARN` skipped probe rows and exit 0 unless source selection is invalid. |
+| Unknown `--source` | Print `FAIL`, list supported source IDs, and exit nonzero. |
+| Capability has no live probe URL | Print `WARN`; manual/license validation is required. |
+| Live probe HTTP 2xx and expected markers present | Print `OK`; no observations are written. |
+| Live probe HTTP 2xx but marker missing | Print `WARN`; schema must be inspected before adapter promotion. |
+| Live probe HTTP 4xx/5xx | Print `FAIL`; keep source candidate/manual/blocked. |
+| Live probe raises | Print sanitized exception class only; do not expose secrets, raw stack traces, or raw payload dumps. |
+| Capability row appears in dashboard payload | It remains guidance only; it must not alter source readiness `configured`, `evidence_count`, or `latest_as_of`. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: World Bank China annual macro is marked `adapter_ready` and documented as a low-frequency follow-up candidate without claiming monthly China macro coverage.
+- Good: PBOC M2 remains `manual_only` until a stable machine-readable source is validated.
+- Base: NBS live probe returns HTTP 403; source stays `candidate` and no adapter is built.
+- Base: Trading Economics is listed as `vendor_api` with `credential_required=true`.
+- Bad: `source_capability:nbs_cn_macro`, `nbs_cn_macro`, or a probe URL appears in `dashboard_brief.citations`, saved-brief citations, or assistant citations.
+- Bad: a live probe `OK` row is treated as a stored China macro observation.
+- Bad: an AkShare/Tushare wrapper is promoted to official evidence without recording upstream source, credential, license, and schema validation.
+
+### 6. Tests Required
+
+- Service tests assert required source families exist, payload fields serialize, summary/status counts are stable, and `is_ai_citable=false`.
+- Script tests assert default no-network behavior, focused source selection, unknown source failure, fake live `OK`, fake schema-mismatch `WARN`, and sanitized live-probe failures.
+- Information-source tests assert `source_capabilities` is additive and does not change existing source-readiness status/evidence semantics.
+- Dashboard/API tests assert source gaps and citation lists do not include capability IDs or probe IDs.
+- Type-check should cover the optional frontend `InformationSourcesPayload.source_capabilities` field.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+citations.append({
+    "id": "source_capability:nbs_cn_macro",
+    "label": "NBS China macro statistics",
+    "source": "source_capabilities",
+})
+```
+
+This turns a source candidate and probe decision row into evidence before any audited local observation exists.
+
+#### Correct
+
+```python
+payload["information_sources"]["source_capabilities"] = get_china_macro_source_capability_payload()
+```
+
+The matrix is additive decision metadata. It can guide the next adapter task, but AI may cite China macro values only after a follow-up adapter or audited seed import stores local `MarketIndicatorObservation` rows.
+
 ## Scenario: Official FRED Macro Observation Refresh
 
 ### 1. Scope / Trigger

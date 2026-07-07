@@ -13,6 +13,7 @@ from packages.domain.models import (
     MarketIndicatorObservation,
     NewsArticle,
 )
+from packages.services.source_capabilities import get_china_macro_source_capability_payload
 from packages.services.market_indicators import MACRO_INDICATOR_CODES
 
 
@@ -793,6 +794,7 @@ def get_information_source_readiness_payload(session: Session) -> dict[str, obje
         "groups": _build_groups(items),
         "items": items,
         "diagnostics": _build_diagnostics(items),
+        "source_capabilities": get_china_macro_source_capability_payload(),
     }
 
 
