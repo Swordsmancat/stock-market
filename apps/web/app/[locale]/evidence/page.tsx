@@ -1,5 +1,15 @@
 import { getTranslations } from "next-intl/server";
-import { Database, ExternalLink, FileCheck2, FileWarning, ListChecks, SearchCheck, ShieldCheck } from "lucide-react";
+import {
+  Database,
+  ExternalLink,
+  FileCheck2,
+  FileWarning,
+  ListChecks,
+  RefreshCw,
+  SearchCheck,
+  ShieldCheck,
+  TerminalSquare,
+} from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -71,6 +81,20 @@ type IndicatorEvidenceState =
 const FALLBACK_LOCALE = "en-US";
 const AUDIT_SOURCE_COMPONENT_KEYS = ["source_url", "source_series_id", "source_document", "source_name"];
 const AUDIT_METHOD_COMPONENT_KEYS = ["methodology", "calculation", "notes", "review_note"];
+const FRED_OFFICIAL_REFRESH_CODES = [
+  "us_10y_yield",
+  "us_2y_yield",
+  "us_10y_2y_spread",
+  "us_cpi_yoy",
+  "us_m2_yoy",
+];
+const WORLD_BANK_BUFFETT_REFRESH_CODES = [
+  "buffett_indicator_us",
+  "buffett_indicator_cn",
+  "buffett_indicator_hk",
+];
+const FRED_OFFICIAL_SOURCE_IDS = new Set(["fred_us_rates", "fred_us_inflation", "fred_us_liquidity"]);
+const WORLD_BANK_OFFICIAL_SOURCE_IDS = new Set(["world_bank_buffett_indicator"]);
 
 async function fetchMarketOverview(provider: string): Promise<MarketOverviewLoadResult> {
   try {
@@ -306,6 +330,28 @@ function countMissingIndicators(items: MarketOverviewIndicatorItem[]): number {
   return items.filter((item) => !isIndicatorCitable(item)).length;
 }
 
+function getRefreshCoverage(items: MarketOverviewIndicatorItem[], codes: string[]) {
+  const itemsByCode = new Map(items.map((item) => [item.code, item]));
+  const matchedItems = codes.map((code) => itemsByCode.get(code)).filter(Boolean) as MarketOverviewIndicatorItem[];
+  const citableCount = matchedItems.filter(isIndicatorCitable).length;
+  const latestAsOf = matchedItems
+    .map((item) => item.as_of)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+
+  return {
+    citableCount,
+    total: codes.length,
+    missingCount: codes.length - citableCount,
+    latestAsOf,
+  };
+}
+
+function getSourcesByIds(informationSources: InformationSourcesPayload | null, sourceIds: Set<string>) {
+  return (informationSources?.items ?? []).filter((item) => sourceIds.has(item.id));
+}
+
 function badgeVariantForStatus(status: string): "secondary" | "outline" | "destructive" {
   if (status === "ok" || status === "configured" || status === "ai_citable") {
     return "secondary";
@@ -337,6 +383,151 @@ function renderBriefSectionList(brief: DashboardBriefPayload) {
       </ul>
     </div>
   ));
+}
+
+function renderOfficialRefreshPanel({
+  title,
+  description,
+  commandLabel,
+  command,
+  dryRunLabel,
+  dryRunCommand,
+  coverage,
+  coverageLabel,
+  latestLabel,
+  missingLabel,
+  sourceItems,
+  sourceStatusLabels,
+  unavailableLabel,
+}: {
+  title: string;
+  description: string;
+  commandLabel: string;
+  command: string;
+  dryRunLabel: string;
+  dryRunCommand: string;
+  coverage: ReturnType<typeof getRefreshCoverage>;
+  coverageLabel: string;
+  latestLabel: string;
+  missingLabel: string;
+  sourceItems: InformationSourceItem[];
+  sourceStatusLabels: Record<string, string>;
+  unavailableLabel: string;
+}) {
+  return (
+    <div className="border bg-background p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold">{title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+        <Badge variant={coverage.missingCount === 0 ? "secondary" : "outline"}>{coverageLabel}</Badge>
+      </div>
+      <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+        <div className="border bg-muted/20 p-2">
+          <div className="text-xs font-semibold uppercase text-muted-foreground">{commandLabel}</div>
+          <code className="mt-1 block break-all font-mono text-xs">{command}</code>
+        </div>
+        <div className="border bg-muted/20 p-2">
+          <div className="text-xs font-semibold uppercase text-muted-foreground">{dryRunLabel}</div>
+          <code className="mt-1 block break-all font-mono text-xs">{dryRunCommand}</code>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+        <Badge variant="outline">{latestLabel}</Badge>
+        <Badge variant={coverage.missingCount > 0 ? "destructive" : "secondary"}>{missingLabel}</Badge>
+        {sourceItems.map((item) => (
+          <Badge key={item.id} variant={badgeVariantForStatus(item.status)}>
+            {item.label}: {sourceStatusLabels[item.status] ?? item.status}
+          </Badge>
+        ))}
+        {sourceItems.length === 0 ? <Badge variant="outline">{unavailableLabel}</Badge> : null}
+      </div>
+    </div>
+  );
+}
+
+function renderOfficialRefreshGuidance(
+  indicators: MarketOverviewIndicatorItem[],
+  informationSources: InformationSourcesPayload | null,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+  locale: string,
+  sourceStatusLabels: Record<string, string>,
+) {
+  const unavailableLabel = t("unavailableShort");
+  const fredCoverage = getRefreshCoverage(indicators, FRED_OFFICIAL_REFRESH_CODES);
+  const worldBankCoverage = getRefreshCoverage(indicators, WORLD_BANK_BUFFETT_REFRESH_CODES);
+  const fredSources = getSourcesByIds(informationSources, FRED_OFFICIAL_SOURCE_IDS);
+  const worldBankSources = getSourcesByIds(informationSources, WORLD_BANK_OFFICIAL_SOURCE_IDS);
+
+  return (
+    <Card className="border-emerald-200/70 dark:border-emerald-900/60">
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">{t("officialRefreshManualBadge")}</Badge>
+          <Badge variant="outline">{t("officialRefreshNoWebActionBadge")}</Badge>
+        </div>
+        <CardTitle className="flex items-center gap-2 text-xl">
+          <RefreshCw className="h-5 w-5" />
+          {t("officialRefreshTitle")}
+        </CardTitle>
+        <CardDescription>{t("officialRefreshDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 xl:grid-cols-2">
+          {renderOfficialRefreshPanel({
+            title: t("officialRefreshFredTitle"),
+            description: t("officialRefreshFredDescription"),
+            commandLabel: t("officialRefreshWriteCommand"),
+            command: t("officialRefreshFredCommand"),
+            dryRunLabel: t("officialRefreshDryRunCommand"),
+            dryRunCommand: t("officialRefreshFredDryRunCommand"),
+            coverage: fredCoverage,
+            coverageLabel: t("officialRefreshCoverage", {
+              configured: fredCoverage.citableCount,
+              total: fredCoverage.total,
+            }),
+            latestLabel: t("officialRefreshLatest", {
+              date: formatDate(fredCoverage.latestAsOf, locale, unavailableLabel),
+            }),
+            missingLabel: t("officialRefreshMissing", { count: fredCoverage.missingCount }),
+            sourceItems: fredSources,
+            sourceStatusLabels,
+            unavailableLabel,
+          })}
+          {renderOfficialRefreshPanel({
+            title: t("officialRefreshWorldBankTitle"),
+            description: t("officialRefreshWorldBankDescription"),
+            commandLabel: t("officialRefreshWriteCommand"),
+            command: t("officialRefreshWorldBankCommand"),
+            dryRunLabel: t("officialRefreshDryRunCommand"),
+            dryRunCommand: t("officialRefreshWorldBankDryRunCommand"),
+            coverage: worldBankCoverage,
+            coverageLabel: t("officialRefreshCoverage", {
+              configured: worldBankCoverage.citableCount,
+              total: worldBankCoverage.total,
+            }),
+            latestLabel: t("officialRefreshLatest", {
+              date: formatDate(worldBankCoverage.latestAsOf, locale, unavailableLabel),
+            }),
+            missingLabel: t("officialRefreshMissing", { count: worldBankCoverage.missingCount }),
+            sourceItems: worldBankSources,
+            sourceStatusLabels,
+            unavailableLabel,
+          })}
+        </div>
+        <div className="border bg-muted/20 p-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 font-semibold text-foreground">
+            <TerminalSquare className="h-4 w-4" />
+            {t("officialRefreshRunbookTitle")}
+          </div>
+          <p className="mt-1">{t("officialRefreshRunbookPath")}</p>
+          <p className="mt-2">{t("officialRefreshCitationBoundary")}</p>
+          <p className="mt-2">{t("officialRefreshUnsupportedGap")}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function followUpKindLabel(kind: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {
@@ -828,6 +1019,8 @@ export default async function EvidenceCenterPage({
           t("metricSourcesNeedActionDesc"),
         )}
       </section>
+
+      {renderOfficialRefreshGuidance(indicators, informationSources, t, locale, sourceStatusLabels)}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <Card className="border-primary/20">

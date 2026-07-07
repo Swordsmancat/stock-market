@@ -6,6 +6,8 @@ This is an inline Codex task. Do not dispatch implement/check subagents.
 
 The first implementation slice should verify and productize the official macro refresh paths that already exist. Avoid duplicating provider/service code unless tests reveal a concrete defect.
 
+Confirmed user scope: implement runbook plus read-only status/guidance UI first. Do not add web-triggered refresh buttons, mutation routes, scheduled jobs, or background refresh workers in this task.
+
 ## Pre-Implementation
 
 - Use `trellis-before-dev` before editing runtime code.
@@ -54,10 +56,11 @@ The first implementation slice should verify and productize the official macro r
   - known gaps such as `cn_m2_yoy`.
 - Keep language clear that refresh writes local audited observations and that source links/templates are not citations.
 
-### 3. Optional UI Guidance
+### 3. Read-Only UI Guidance
 
-- If inspection shows a natural existing place, add a small guidance block in Settings or Macro Research.
-- Do not add web-triggered refresh mutation unless the user explicitly chooses that scope.
+- Add a small guidance block in Settings or Macro Research.
+- The UI may show manual refresh status, coverage/gaps, and runbook pointers.
+- Do not add web-triggered refresh mutation.
 - If UI changes are made, localize strings in both `apps/web/messages/en.json` and `apps/web/messages/zh.json`.
 
 ### 4. Data Closure Check
@@ -110,10 +113,7 @@ python ./.trellis/scripts/task.py validate .trellis/tasks/07-07-official-macro-i
 
 ## Review Gate Before Start
 
-- User reviews and approves `prd.md`, `design.md`, and `implement.md`.
-- Decide the open product question:
-  - recommended: runbook/status guidance only in this task;
-  - later: web-triggered refresh buttons.
+- User has confirmed the scope as runbook plus status/guidance UI.
 - Then run:
 
 ```powershell

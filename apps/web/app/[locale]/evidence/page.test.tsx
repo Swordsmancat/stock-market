@@ -413,11 +413,23 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   expect(screen.getAllByText("Deterministic fallback").length).toBeGreaterThan(0);
   expect(screen.getByText("Macro evidence: 1")).toBeInTheDocument();
   expect(screen.getByText("Source gaps: 2")).toBeInTheDocument();
+  expect(screen.getByText("Official macro refresh status")).toBeInTheDocument();
+  expect(screen.getByText("Manual runbook")).toBeInTheDocument();
+  expect(screen.getByText("No web refresh action")).toBeInTheDocument();
+  expect(screen.getByText("FRED US macro")).toBeInTheDocument();
+  expect(screen.getByText("World Bank Buffett Indicator")).toBeInTheDocument();
+  expect(screen.getByText("1/5 local observations")).toBeInTheDocument();
+  expect(screen.getByText("0/3 local observations")).toBeInTheDocument();
+  expect(screen.getByText("python scripts/refresh_fred_macro_indicators.py --series all --latest-only")).toBeInTheDocument();
+  expect(screen.getByText("python scripts/refresh_world_bank_macro_indicators.py --target all")).toBeInTheDocument();
+  expect(screen.getByText("Runbook path: docs/runbooks/official-macro-refresh.md")).toBeInTheDocument();
+  expect(screen.getByText(/cn_m2_yoy remain source gaps/)).toBeInTheDocument();
   expect(screen.getByText("MACRO_INDICATOR_NO_DATA: Some macro indicators do not have audited observations yet.")).toBeInTheDocument();
   expect(screen.queryByText("ResearchSourceNotebook.completenessSummary")).not.toBeInTheDocument();
   expect(screen.getAllByText("7/7 checks").length).toBeGreaterThan(0);
 
   const pageText = document.body.textContent ?? "";
+  expect(pageText.indexOf("Official macro refresh status")).toBeLessThan(pageText.indexOf("AI evidence summary"));
   expect(pageText.indexOf("AI evidence summary")).toBeLessThan(pageText.indexOf("Macro and valuation evidence"));
   expect(pageText.indexOf("Saved research brief inbox")).toBeLessThan(pageText.indexOf("Macro and valuation evidence"));
   expect(pageText.indexOf("Macro and valuation evidence")).toBeLessThan(

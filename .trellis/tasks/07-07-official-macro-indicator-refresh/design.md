@@ -58,11 +58,12 @@ The official providers fetch external source rows. Service-layer refresh functio
 
 ## Product Surface Options
 
-### Recommended First Slice
+### This Slice
 
 - Keep refresh manual/opt-in.
 - Add or update docs/runbook with exact commands and verification steps.
-- Optionally add a small Settings or Macro Research guidance block only if it helps discoverability and does not create a backend mutation surface.
+- Add a small read-only Settings or Macro Research guidance block so the user can see the refresh status, source coverage, and next manual steps.
+- Do not add web-triggered refresh buttons, mutation routes, scheduled jobs, or background workers.
 
 ### Later Slice
 

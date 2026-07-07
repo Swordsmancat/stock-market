@@ -3,7 +3,7 @@
   "name": "official-macro-indicator-refresh",
   "title": "Official macro indicator refresh for homepage favorites",
   "description": "Add opt-in official-source macro refresh paths for FRED rates/inflation/liquidity and World Bank Buffett Indicator observations so homepage macro favorites can show audited values.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

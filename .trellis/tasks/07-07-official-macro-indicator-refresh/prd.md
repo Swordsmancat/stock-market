@@ -45,9 +45,9 @@ The product value is practical information aggregation: the app should collect h
 
 ### R2. Fill Product Gaps Around Refresh Usability
 
-- Identify whether the existing scripts are enough for personal use or whether a small UI/runbook entry is needed.
-- If a small UI addition is low-risk, surface refresh guidance from Settings or Macro Research without adding scheduled jobs.
-- If a UI mutation is too broad for this task, document exact commands and environment variables in the user/manual docs.
+- Add a concise runbook for manual refresh operation.
+- Add a small read-only status/guidance UI in the macro workflow so the user can discover how refresh works and understand which indicators still need data.
+- Do not add a web-triggered refresh button or mutation endpoint in this task.
 - Keep refresh opt-in. Do not add background scheduler, automatic scraping, broker workflow, or realtime terminal behavior.
 
 ### R3. Homepage Macro Data Closure
@@ -86,6 +86,7 @@ The product value is practical information aggregation: the app should collect h
 - [ ] Missing `cn_m2_yoy` or other unsupported China macro values are documented as source gaps, not fabricated values.
 - [ ] Source-readiness IDs, source-capability IDs, collection links, probe URLs, and seed templates do not appear in dashboard/assistant/saved-brief citation lists.
 - [ ] User manual/runbook explains how to refresh official macro indicators and verify the result.
+- [ ] A read-only status/guidance UI explains the manual refresh workflow without triggering backend refresh jobs.
 - [ ] Validation includes focused backend tests, relevant frontend tests if UI copy changes, TypeScript when web files change, `git diff --check`, and Trellis task validation.
 
 ## Out Of Scope
@@ -96,7 +97,3 @@ The product value is practical information aggregation: the app should collect h
 - Paid/vendor macro data integrations.
 - Professional trading terminal features, realtime quotes, Level-2 data, broker execution, or alert automation.
 - Direct investment advice, buy/sell/hold recommendations, target prices, position sizing, or execution instructions.
-
-## Open Product Decision
-
-The remaining decision is whether this task should add a small UI/runbook entry only, or also add a same-origin web action/button to trigger refresh scripts. Recommended answer: start with runbook plus status/guidance UI only, because official refresh may need secrets and long-running network calls; keep web-triggered refresh for a later task if manual use feels too clunky.
