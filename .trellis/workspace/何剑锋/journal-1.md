@@ -829,3 +829,36 @@ Added homepage macro favorite indicators, settings-backed favorite codes, Macro 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: Official macro refresh runbook and guidance UI
+
+**Date**: 2026-07-07
+**Task**: Official macro refresh runbook and guidance UI
+**Branch**: `master`
+
+### Summary
+
+Added a manual official macro refresh runbook, linked it from the user guide, and surfaced read-only FRED/World Bank refresh coverage guidance in Macro Research with localized UI and tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cec304c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

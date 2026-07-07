@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 25
+- **Total Sessions**: 26
 - **Last Active**: 2026-07-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~831 | Active |
+| `journal-1.md` | ~864 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 26 | 2026-07-07 | Official macro refresh runbook and guidance UI | `cec304c` | `master` |
 | 25 | 2026-07-07 | Macro research cockpit favorites | `11a5920` | `master` |
 | 24 | 2026-07-07 | China macro source validation | `0496e7612145d57be9d4e7e53e92746937faec6c` | `master` |
 | 23 | 2026-07-07 | World Bank macro source adapter | `328ab36` | `master` |
