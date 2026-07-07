@@ -18,6 +18,7 @@ from apps.api.routers.research_source_notes import router as research_source_not
 from apps.api.routers.reports import router as reports_router
 from apps.api.routers.sectors import router as sectors_router
 from apps.api.routers.settings import router as settings_router
+from apps.api.routers.source_ingestion import router as source_ingestion_router
 from apps.api.routers.task_runs import router as task_runs_router
 from apps.api.routers.watchlists import router as watchlists_router
 
@@ -40,5 +41,6 @@ app.include_router(research_source_notes_router)
 app.include_router(reports_router)
 app.include_router(sectors_router)
 app.include_router(settings_router)
+app.include_router(source_ingestion_router)
 app.include_router(task_runs_router)
 app.include_router(watchlists_router)

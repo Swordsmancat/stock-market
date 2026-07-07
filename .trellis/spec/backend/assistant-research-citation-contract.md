@@ -185,6 +185,105 @@ citations = list_citable_research_source_note_citations(session=session, symbols
 
 This centralizes the `reviewed` plus `is_citable` boundary and applies the stable `research_source_note:<id>` prefix.
 
+## Scenario: Source Ingestion Extraction
+
+### 1. Scope / Trigger
+
+- Trigger: `/evidence` can request LLM-assisted extraction for pasted or browser-uploaded text before saving a Source Notebook entry.
+- Scope: extraction service in `packages/services/source_ingestion.py`, FastAPI route `apps/api/routers/source_ingestion.py`, Next proxy `apps/web/app/api/source-ingestion/extract/route.ts`, Source Notebook UI, localization, and focused backend/frontend tests.
+- Non-goals: PDF/OCR parsing, raw binary storage, automatic web scraping, persistent document corpus, vector search, automatic macro observation import, full AI recommendation panels, or trading recommendations.
+
+### 2. Signatures
+
+- API: `POST /source-ingestion/extract`
+- Web proxy: `POST /api/source-ingestion/extract`
+- Service input: `SourceIngestionExtractionInput`
+- Request fields:
+  - `content: str`
+  - `filename?: str`
+  - `source_url?: str`
+  - `source_id?: str`
+  - `source_label?: str`
+  - `source_category?: str`
+  - `target_indicator_codes?: list[str]`
+  - `component_role?: str`
+  - `locale: "en" | "zh"`
+- Response fields:
+  - `status: "ok" | "fallback" | "invalid_input"`
+  - `summary: str`
+  - `key_indicators: list[{ label, code, reason }]`
+  - `citation_clues: list[{ kind, label, value }]`
+  - `follow_up_questions: list[str]`
+  - `suggested_fields: { title, source_name, source_type, tags, target_indicator_codes, methodology_note, license_note, ai_follow_up }`
+  - `model: { provider, name, used_llm, fallback_reason }`
+  - `diagnostics: list[{ source, status, severity, code, message, details? }]`
+  - `safety: { not_investment_advice, drafts_are_not_citations, no_automated_trading }`
+
+### 3. Contracts
+
+- Browser file reading remains client-side text extraction into editable fields. The backend receives JSON only.
+- LLM extraction may run only when `get_platform_settings()` reports `llm_provider == "openai"` and a non-empty `llm_api_key`.
+- Use `get_llm_provider()` for generation so tests can monkeypatch the provider without live network calls.
+- LLM prompts must request JSON only and must tell the model not to invent market data, source URLs, dates, citation IDs, buy/sell/hold calls, target prices, or position sizing.
+- The service must bound content before prompting the LLM and must normalize/clamp returned strings and arrays.
+- LLM extraction suggestions are collection guidance only. They must not create `research_source_note:<id>` IDs and must not mark notes reviewed or citable.
+- The UI may apply suggestions into editable Source Notebook fields, but saving still uses the existing `POST /research-source-notes` review/citation gate.
+- Extraction metadata may be saved inside `ResearchSourceNote.metadata_json` for auditability, but it does not alter source-note citation eligibility.
+
+### 4. Validation & Error Matrix
+
+- Empty or too-short `content` -> response `status="invalid_input"` with `SOURCE_INGESTION_CONTENT_REQUIRED`; no LLM call.
+- LLM not configured -> deterministic response `status="fallback"` with `SOURCE_INGESTION_FALLBACK_USED`.
+- LLM raises -> deterministic fallback with sanitized reason `LLM extraction failed: <ExceptionClass>.`
+- LLM returns empty content -> deterministic fallback.
+- LLM returns invalid JSON or unsupported required structure -> deterministic fallback.
+- Staged content mentions broad macro terms -> fallback may suggest indicators, but should prefer selected source-target codes over ambiguous regional guesses.
+- Extraction suggestions saved to a draft note -> note remains non-citable unless the existing source-note validation passes `reviewed + is_citable`.
+
+### 5. Good/Base/Bad Cases
+
+- Good: a Buffett Indicator source excerpt plus `source_id="buffett_manual_valuation_components"` returns a summary, Buffett indicator code suggestions, market-cap/GDP citation clues, and follow-up questions; applying them fills editable fields only.
+- Good: an OpenAI-compatible provider returns valid JSON and the response has `model.used_llm=true`.
+- Base: no LLM key is configured; deterministic extraction still suggests tags, target codes, methodology/license placeholders, and follow-up questions.
+- Base: source target is selected but source name is incomplete; applying suggestions may replace the target label with an actual source name such as World Bank.
+- Bad: extraction output creates a `research_source_note:<id>` before saving a reviewed/citable note.
+- Bad: an LLM-suggested source URL or date is treated as verified evidence without user review.
+- Bad: extracted follow-up questions are presented as completed AI recommendations or trading actions.
+
+### 6. Tests Required
+
+- Service tests assert deterministic fallback without LLM configuration, LLM success with a fake provider, invalid-JSON fallback, invalid-input status, macro/valuation indicator suggestions, and sanitized diagnostics.
+- API tests assert `POST /source-ingestion/extract` returns the extraction contract and invalid-input payload.
+- Web proxy tests assert method/body/status/content-type forwarding.
+- Component tests assert browser text can be extracted, extraction results render, applying suggestions updates editable fields, and the citable checkbox remains off.
+- Existing Source Notebook service/API tests must continue to prove draft/non-citable notes are excluded from AI citations.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+return {
+    "citation_id": f"research_source_note:{uuid4()}",
+    "summary": generated_summary,
+}
+```
+
+This turns an extraction suggestion into evidence before the user reviewed and saved a citable Source Notebook row.
+
+#### Correct
+
+```python
+return {
+    "status": "fallback",
+    "summary": summary,
+    "suggested_fields": {"ai_follow_up": follow_up_question},
+    "safety": {"drafts_are_not_citations": True},
+}
+```
+
+The extraction result stays editable guidance. Citation IDs remain owned by the existing reviewed/citable Source Notebook contract.
+
 ## Scenario: Citation-aware Dashboard Brief Narrative
 
 ### 1. Scope / Trigger

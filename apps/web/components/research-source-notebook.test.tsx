@@ -20,6 +20,27 @@ import {
 const labels: ResearchSourceNotebookLabels = {
   title: "Source notebook",
   description: "Collect reviewed source notes.",
+  ingestionTitle: "Source ingestion hub",
+  ingestionDescription: "Extract summary and clues.",
+  acceptedFormats: "Accepted files: .txt, .md, .csv, .json.",
+  extractAction: "Extract with AI",
+  extracting: "Extracting...",
+  extractFailed: "Source extraction failed.",
+  extractionContentRequired: "Paste or upload source text before extraction.",
+  applyExtraction: "Apply suggestions",
+  extractionBoundary: "Extraction suggestions are collection notes only.",
+  extractionStatusOk: "LLM extracted",
+  extractionStatusFallback: "Fallback extraction",
+  extractionStatusInvalid: "Needs source text",
+  extractionModelLlm: "LLM",
+  extractionModelFallback: "Deterministic",
+  extractionFallbackReason: "Fallback reason: {reason}",
+  extractionSummaryTitle: "Source summary",
+  extractionIndicatorsTitle: "Key indicators",
+  extractionCitationCluesTitle: "Citation clues",
+  extractionFollowUpsTitle: "Follow-up questions",
+  extractionSuggestedFieldsTitle: "Suggested metadata",
+  extractionDiagnosticsTitle: "Extraction diagnostics",
   selectedFile: "File: {name}",
   fileLabel: "Browser file",
   fileReadFailed: "File read failed.",
@@ -187,6 +208,90 @@ it("reads a browser file into the editable excerpt field", async () => {
   expect(await screen.findByDisplayValue("Reviewed uploaded excerpt.")).toBeInTheDocument();
   expect(screen.getByDisplayValue("buffett-note")).toBeInTheDocument();
   expect(screen.getByText("File: buffett-note.md")).toBeInTheDocument();
+});
+
+it("extracts source suggestions and applies them without making the draft citable", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        status: "fallback",
+        summary: "World Bank market cap and GDP source summary.",
+        key_indicators: [
+          {
+            label: "Buffett Indicator",
+            code: "buffett_indicator_us",
+            reason: "Market cap and GDP were mentioned.",
+          },
+        ],
+        citation_clues: [{ kind: "date", label: "As-of date", value: "2026-07-07" }],
+        follow_up_questions: ["Verify component timing before import."],
+        suggested_fields: {
+          title: "Buffett source review",
+          source_name: "World Bank",
+          source_type: "valuation",
+          tags: ["macro", "valuation"],
+          target_indicator_codes: ["buffett_indicator_us"],
+          methodology_note: "Review ratio calculation.",
+          license_note: "Confirm public-source usage.",
+          ai_follow_up: "Verify component timing before import.",
+        },
+        model: {
+          provider: "deterministic",
+          name: "source-ingestion-deterministic-fallback",
+          used_llm: false,
+          fallback_reason: "OpenAI-compatible LLM provider is not configured.",
+        },
+        diagnostics: [
+          {
+            code: "SOURCE_INGESTION_FALLBACK_USED",
+            message: "Source extraction used deterministic fallback instead of an LLM answer.",
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  );
+  render(<ResearchSourceNotebook labels={labels} initialNotes={[]} sourceTargets={sourceTargets} />);
+
+  fireEvent.change(screen.getByLabelText("Source-readiness target"), {
+    target: { value: "buffett_manual_valuation_components" },
+  });
+  fireEvent.change(screen.getByLabelText("Reviewed excerpt"), {
+    target: { value: "World Bank market cap and GDP source." },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Extract with AI" }));
+
+  await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith("/api/source-ingestion/extract", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        content: "World Bank market cap and GDP source.",
+        filename: null,
+        source_url: null,
+        source_id: "buffett_manual_valuation_components",
+        source_label: "Buffett Indicator manual valuation components",
+        source_category: "valuation",
+        target_indicator_codes: ["buffett_indicator_us"],
+        component_role: null,
+        locale: "en",
+      }),
+    });
+  });
+  expect(await screen.findByText("World Bank market cap and GDP source summary.")).toBeInTheDocument();
+  expect(screen.getByText("Buffett Indicator / buffett_indicator_us")).toBeInTheDocument();
+  expect(screen.getByText(/Fallback reason:/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Apply suggestions" }));
+
+  expect(screen.getByDisplayValue("Buffett source review")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("World Bank")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("valuation")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("macro, valuation")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("Review ratio calculation.")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("Confirm public-source usage.")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("Verify component timing before import.")).toBeInTheDocument();
+  expect(screen.getByLabelText("Allow AI citation")).not.toBeChecked();
 });
 
 it("saves reviewed citable notes through the browser proxy and refreshes server data", async () => {

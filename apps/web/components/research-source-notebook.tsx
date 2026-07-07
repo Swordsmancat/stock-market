@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, FileUp, Link2, NotebookPen, Save, Search, XCircle } from "lucide-react";
+import { CheckCircle2, FileUp, Link2, NotebookPen, Save, Search, Sparkles, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +70,27 @@ export type ResearchSourceTargetOption = {
 export type ResearchSourceNotebookLabels = {
   title: string;
   description: string;
+  ingestionTitle: string;
+  ingestionDescription: string;
+  acceptedFormats: string;
+  extractAction: string;
+  extracting: string;
+  extractFailed: string;
+  extractionContentRequired: string;
+  applyExtraction: string;
+  extractionBoundary: string;
+  extractionStatusOk: string;
+  extractionStatusFallback: string;
+  extractionStatusInvalid: string;
+  extractionModelLlm: string;
+  extractionModelFallback: string;
+  extractionFallbackReason: string;
+  extractionSummaryTitle: string;
+  extractionIndicatorsTitle: string;
+  extractionCitationCluesTitle: string;
+  extractionFollowUpsTitle: string;
+  extractionSuggestedFieldsTitle: string;
+  extractionDiagnosticsTitle: string;
   selectedFile: string;
   fileLabel: string;
   fileReadFailed: string;
@@ -179,6 +200,52 @@ type FormState = {
   aiFollowUp: string;
   reviewStatus: "draft" | "reviewed" | "archived";
   isCitable: boolean;
+};
+
+type SourceIngestionExtractionModel = {
+  provider?: string;
+  name?: string;
+  used_llm?: boolean;
+  fallback_reason?: string | null;
+};
+
+type SourceIngestionKeyIndicator = {
+  label: string;
+  code?: string;
+  reason?: string;
+};
+
+type SourceIngestionCitationClue = {
+  kind: string;
+  label: string;
+  value: string;
+};
+
+type SourceIngestionSuggestedFields = {
+  title?: string;
+  source_name?: string;
+  source_type?: string;
+  tags?: string[];
+  target_indicator_codes?: string[];
+  methodology_note?: string;
+  license_note?: string;
+  ai_follow_up?: string;
+};
+
+type SourceIngestionDiagnostic = {
+  code?: string;
+  message?: string;
+};
+
+type SourceIngestionExtractionResult = {
+  status: string;
+  summary: string;
+  key_indicators: SourceIngestionKeyIndicator[];
+  citation_clues: SourceIngestionCitationClue[];
+  follow_up_questions: string[];
+  suggested_fields: SourceIngestionSuggestedFields;
+  model: SourceIngestionExtractionModel;
+  diagnostics: SourceIngestionDiagnostic[];
 };
 
 const emptyForm: FormState = {
@@ -358,6 +425,103 @@ async function readJsonSafe(response: Response): Promise<Record<string, unknown>
   }
 }
 
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeExtractionIndicators(value: unknown): SourceIngestionKeyIndicator[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => objectValue(item))
+    .map((item) => ({
+      label: stringValue(item.label),
+      code: stringValue(item.code),
+      reason: stringValue(item.reason),
+    }))
+    .filter((item) => item.label);
+}
+
+function normalizeExtractionClues(value: unknown): SourceIngestionCitationClue[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => objectValue(item))
+    .map((item) => ({
+      kind: stringValue(item.kind) || "source",
+      label: stringValue(item.label),
+      value: stringValue(item.value),
+    }))
+    .filter((item) => item.label && item.value);
+}
+
+function normalizeExtractionDiagnostics(value: unknown): SourceIngestionDiagnostic[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => objectValue(item))
+    .map((item) => ({
+      code: stringValue(item.code),
+      message: stringValue(item.message),
+    }))
+    .filter((item) => item.code || item.message);
+}
+
+function normalizeExtractionResult(payload: Record<string, unknown>): SourceIngestionExtractionResult {
+  const model = objectValue(payload.model);
+  const suggestedFields = objectValue(payload.suggested_fields);
+  return {
+    status: stringValue(payload.status) || "fallback",
+    summary: stringValue(payload.summary),
+    key_indicators: normalizeExtractionIndicators(payload.key_indicators),
+    citation_clues: normalizeExtractionClues(payload.citation_clues),
+    follow_up_questions: stringList(payload.follow_up_questions),
+    suggested_fields: {
+      title: stringValue(suggestedFields.title),
+      source_name: stringValue(suggestedFields.source_name),
+      source_type: stringValue(suggestedFields.source_type),
+      tags: stringList(suggestedFields.tags),
+      target_indicator_codes: stringList(suggestedFields.target_indicator_codes),
+      methodology_note: stringValue(suggestedFields.methodology_note),
+      license_note: stringValue(suggestedFields.license_note),
+      ai_follow_up: stringValue(suggestedFields.ai_follow_up),
+    },
+    model: {
+      provider: stringValue(model.provider),
+      name: stringValue(model.name),
+      used_llm: model.used_llm === true,
+      fallback_reason: stringValue(model.fallback_reason) || null,
+    },
+    diagnostics: normalizeExtractionDiagnostics(payload.diagnostics),
+  };
+}
+
+function mergeCommaValues(current: string, suggestions: string[] | undefined): string {
+  const merged = new Set([...splitList(current), ...(suggestions ?? [])]);
+  return Array.from(merged).join(", ");
+}
+
+function extractionStatusLabel(status: string, labels: ResearchSourceNotebookLabels): string {
+  if (status === "ok") {
+    return labels.extractionStatusOk;
+  }
+  if (status === "invalid_input") {
+    return labels.extractionStatusInvalid;
+  }
+  return labels.extractionStatusFallback;
+}
+
 export function ResearchSourceNotebook({
   labels,
   initialNotes,
@@ -369,6 +533,8 @@ export function ResearchSourceNotebook({
   const [filename, setFilename] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(loadFailed ? labels.loadFailed : null);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isExtracting, setIsExtracting] = React.useState(false);
+  const [extraction, setExtraction] = React.useState<SourceIngestionExtractionResult | null>(null);
   const [filterText, setFilterText] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [citableOnly, setCitableOnly] = React.useState(false);
@@ -436,6 +602,7 @@ export function ResearchSourceNotebook({
       const text = await file.text();
       setFilename(file.name);
       setMessage(null);
+      setExtraction(null);
       setForm((current) => ({
         ...current,
         title: current.title || file.name.replace(/\.[^.]+$/, ""),
@@ -444,6 +611,66 @@ export function ResearchSourceNotebook({
     } catch {
       setMessage(labels.fileReadFailed);
     }
+  }
+
+  async function handleExtract() {
+    if (!form.excerpt.trim() && !form.sourceUrl.trim()) {
+      setMessage(labels.extractionContentRequired);
+      return;
+    }
+
+    setIsExtracting(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/source-ingestion/extract", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          content: form.excerpt,
+          filename,
+          source_url: form.sourceUrl || null,
+          source_id: form.sourceId || null,
+          source_label: selectedSourceTarget?.label ?? null,
+          source_category: selectedSourceTarget?.category ?? null,
+          target_indicator_codes: splitList(form.targetIndicatorCodes),
+          component_role: form.componentRole || null,
+          locale: document.documentElement.lang.toLowerCase().startsWith("zh") ? "zh" : "en",
+        }),
+      });
+      const payload = readPayload(await readJsonSafe(response));
+      if (!response.ok) {
+        setMessage(labels.extractFailed);
+        return;
+      }
+      setExtraction(normalizeExtractionResult(payload));
+    } catch {
+      setMessage(labels.extractFailed);
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  function handleApplyExtraction() {
+    if (!extraction) {
+      return;
+    }
+    const suggestions = extraction.suggested_fields;
+    setForm((current) => ({
+      ...current,
+      title: suggestions.title || current.title,
+      sourceName: suggestions.source_name || current.sourceName,
+      sourceType: suggestions.source_type || current.sourceType,
+      targetIndicatorCodes: mergeCommaValues(current.targetIndicatorCodes, suggestions.target_indicator_codes),
+      tags: mergeCommaValues(current.tags, suggestions.tags),
+      note: current.note || extraction.summary || "",
+      methodologyNote: current.methodologyNote || suggestions.methodology_note || "",
+      licenseNote: current.licenseNote || suggestions.license_note || "",
+      aiFollowUp:
+        current.aiFollowUp ||
+        suggestions.ai_follow_up ||
+        extraction.follow_up_questions[0] ||
+        "",
+    }));
   }
 
   async function handleSave() {
@@ -479,7 +706,22 @@ export function ResearchSourceNotebook({
           ai_follow_up: form.aiFollowUp || null,
           review_status: form.reviewStatus,
           is_citable: form.isCitable,
-          metadata: filename ? { browser_filename: filename } : {},
+          metadata: {
+            ...(filename ? { browser_filename: filename } : {}),
+            ...(extraction
+              ? {
+                  ingestion_extraction: {
+                    status: extraction.status,
+                    summary: extraction.summary,
+                    key_indicators: extraction.key_indicators,
+                    citation_clues: extraction.citation_clues,
+                    follow_up_questions: extraction.follow_up_questions,
+                    model: extraction.model,
+                    diagnostics: extraction.diagnostics,
+                  },
+                }
+              : {}),
+          },
         }),
       });
       const payload = readPayload(await readJsonSafe(response));
@@ -492,6 +734,7 @@ export function ResearchSourceNotebook({
       setMessage(labels.saveSuccess);
       setForm(emptyForm);
       setFilename(null);
+      setExtraction(null);
       router.refresh();
     } catch {
       setMessage(labels.saveFailed);
@@ -503,6 +746,7 @@ export function ResearchSourceNotebook({
   function handleClear() {
     setForm(emptyForm);
     setFilename(null);
+    setExtraction(null);
     setMessage(null);
   }
 
@@ -736,6 +980,125 @@ export function ResearchSourceNotebook({
                   onChange={(event) => updateField("licenseNote", event.target.value)}
                 />
               </div>
+            </div>
+            <div className="border bg-muted/20 p-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">
+                      <Sparkles className="h-3 w-3" />
+                      {labels.ingestionTitle}
+                    </Badge>
+                    {extraction ? (
+                      <Badge variant={extraction.status === "ok" ? "secondary" : "outline"}>
+                        {extractionStatusLabel(extraction.status, labels)}
+                      </Badge>
+                    ) : null}
+                    {extraction ? (
+                      <Badge variant={extraction.model.used_llm ? "secondary" : "outline"}>
+                        {extraction.model.used_llm ? labels.extractionModelLlm : labels.extractionModelFallback}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{labels.ingestionDescription}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{labels.acceptedFormats}</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={handleExtract} disabled={isExtracting}>
+                    <Sparkles className={isExtracting ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
+                    {isExtracting ? labels.extracting : labels.extractAction}
+                  </Button>
+                  {extraction ? (
+                    <Button type="button" variant="outline" onClick={handleApplyExtraction}>
+                      {labels.applyExtraction}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              {extraction ? (
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">{labels.extractionSummaryTitle}</h4>
+                    <p className="rounded border bg-background p-3 text-sm text-muted-foreground">
+                      {extraction.summary || labels.unavailableShort}
+                    </p>
+                    {extraction.model.fallback_reason ? (
+                      <p className="text-xs text-muted-foreground">
+                        {labels.extractionFallbackReason.replace("{reason}", extraction.model.fallback_reason)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">{labels.extractionIndicatorsTitle}</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {extraction.key_indicators.length > 0 ? (
+                        extraction.key_indicators.map((indicator) => (
+                          <Badge key={`${indicator.label}-${indicator.code ?? ""}`} variant="outline">
+                            {indicator.code ? `${indicator.label} / ${indicator.code}` : indicator.label}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">{labels.unavailableShort}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">{labels.extractionCitationCluesTitle}</h4>
+                    {extraction.citation_clues.length > 0 ? (
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        {extraction.citation_clues.map((clue) => (
+                          <li key={`${clue.kind}-${clue.label}-${clue.value}`}>
+                            <span className="font-medium text-foreground">{clue.label}</span>: {clue.value}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{labels.unavailableShort}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">{labels.extractionFollowUpsTitle}</h4>
+                    {extraction.follow_up_questions.length > 0 ? (
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        {extraction.follow_up_questions.map((question) => (
+                          <li key={question}>{question}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{labels.unavailableShort}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2 lg:col-span-2">
+                    <h4 className="text-sm font-semibold">{labels.extractionSuggestedFieldsTitle}</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {(extraction.suggested_fields.tags ?? []).map((tag) => (
+                        <Badge key={`suggested-tag-${tag}`} variant="outline">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {(extraction.suggested_fields.target_indicator_codes ?? []).map((code) => (
+                        <Badge key={`suggested-code-${code}`} variant="outline">
+                          {code}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  {extraction.diagnostics.length > 0 ? (
+                    <div className="space-y-2 lg:col-span-2">
+                      <h4 className="text-sm font-semibold">{labels.extractionDiagnosticsTitle}</h4>
+                      <ul className="space-y-1 text-xs text-muted-foreground">
+                        {extraction.diagnostics.map((diagnostic) => (
+                          <li key={`${diagnostic.code ?? ""}-${diagnostic.message ?? ""}`}>
+                            {[diagnostic.code, diagnostic.message].filter(Boolean).join(": ")}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <p className="mt-3 text-xs text-muted-foreground">{labels.extractionBoundary}</p>
             </div>
             <div className="border bg-muted/20 p-3">
               <div className="flex flex-wrap items-center gap-2">
