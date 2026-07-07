@@ -14,6 +14,7 @@ type MarketAssistantCardProps = {
   provider?: string | null;
   start?: string | null;
   end?: string | null;
+  initialQuestion?: string | null;
 };
 
 const QUICK_PROMPT_IDS = ["trend", "risk", "data"] as const;
@@ -24,10 +25,14 @@ export function MarketAssistantCard({
   provider = null,
   start = null,
   end = null,
+  initialQuestion = null,
 }: MarketAssistantCardProps) {
   const t = useTranslations("MarketAssistant");
   const normalizedLocale = locale === "en" ? "en" : "zh";
-  const defaultQuestion = useMemo(() => t("defaultQuestion", { symbol }), [symbol, t]);
+  const defaultQuestion = useMemo(() => {
+    const trimmedInitialQuestion = initialQuestion?.trim();
+    return trimmedInitialQuestion ? trimmedInitialQuestion : t("defaultQuestion", { symbol });
+  }, [initialQuestion, symbol, t]);
   const [question, setQuestion] = useState(defaultQuestion);
   const [response, setResponse] = useState<MarketAssistantResponse | null>(null);
   const [error, setError] = useState<string | null>(null);

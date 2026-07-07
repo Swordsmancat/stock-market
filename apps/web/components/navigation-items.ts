@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Bell, FileSearch, Home, List, PieChart, Settings, TrendingUp } from "lucide-react";
+import { Activity, BarChart3, Bell, BrainCircuit, FileSearch, Home, List, PieChart, Settings, TrendingUp } from "lucide-react";
 
 export const NAVIGATION_ITEMS = [
   {
@@ -10,6 +10,11 @@ export const NAVIGATION_ITEMS = [
     titleKey: "instruments",
     href: "/instruments",
     icon: TrendingUp,
+  },
+  {
+    titleKey: "aiResearch",
+    href: "/ai-research",
+    icon: BrainCircuit,
   },
   {
     titleKey: "evidence",

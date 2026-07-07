@@ -31,6 +31,7 @@ export function Breadcrumbs() {
     if (index === 0) {
       const navigationKeyBySegment: Record<string, Parameters<typeof navigationTranslations>[0]> = {
         instruments: "instruments",
+        "ai-research": "aiResearch",
         watchlist: "watchlist",
         portfolios: "portfolios",
         reports: "reports",
