@@ -664,3 +664,36 @@ Implemented Evidence Center Source Ingestion Hub with browser text ingestion, LL
 ### Next Steps
 
 - None - task complete
+
+
+## Session 21: Saved research brief inbox
+
+**Date**: 2026-07-07
+**Task**: Saved research brief inbox
+**Branch**: `master`
+
+### Summary
+
+Implemented and documented the Evidence Center saved research brief inbox with persistent research_briefs storage, LLM generation with deterministic fallback, citation validation, API/web integration, tests, and backend spec updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `56098b2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

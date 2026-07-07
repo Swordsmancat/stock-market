@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
+- **Total Sessions**: 21
 - **Last Active**: 2026-07-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~666 | Active |
+| `journal-1.md` | ~699 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-07-07 | Saved research brief inbox | `56098b2` | `master` |
 | 20 | 2026-07-07 | Source ingestion extraction hub | `a28551a` | `master` |
 | 19 | 2026-07-07 | AI research follow-up queue | `20982a3` | `master` |
 | 18 | 2026-07-06 | Source notebook macro evidence workflow | `02e8626` | `master` |
