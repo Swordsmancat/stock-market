@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 22
+- **Total Sessions**: 23
 - **Last Active**: 2026-07-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~732 | Active |
+| `journal-1.md` | ~765 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 23 | 2026-07-07 | World Bank macro source adapter | `328ab36` | `master` |
 | 22 | 2026-07-07 | Simplify Evidence Center macro workflow | `c4ddfd3` | `master` |
 | 21 | 2026-07-07 | Saved research brief inbox | `56098b2` | `master` |
 | 20 | 2026-07-07 | Source ingestion extraction hub | `a28551a` | `master` |

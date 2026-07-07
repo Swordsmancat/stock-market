@@ -730,3 +730,36 @@ Fixed Evidence Center translation-template rendering, reordered the page around 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 23: World Bank macro source adapter
+
+**Date**: 2026-07-07
+**Task**: World Bank macro source adapter
+**Branch**: `master`
+
+### Summary
+
+Added World Bank Buffett Indicator refresh support with audited local market-indicator observations, source-readiness coverage, diagnostics, tests, and docs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `328ab36` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
