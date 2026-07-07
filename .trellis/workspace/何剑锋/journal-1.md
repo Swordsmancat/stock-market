@@ -598,3 +598,36 @@ Implemented source-readiness linkage, review completeness, citation metadata, Ev
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: AI research follow-up queue
+
+**Date**: 2026-07-07
+**Task**: AI research follow-up queue
+**Branch**: `master`
+
+### Summary
+
+Implemented deterministic Evidence Center research follow-up queue with backend derivation, dashboard payload, localized UI, docs, specs, and tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `20982a3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
