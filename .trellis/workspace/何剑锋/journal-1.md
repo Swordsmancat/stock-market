@@ -697,3 +697,36 @@ Implemented and documented the Evidence Center saved research brief inbox with p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: Simplify Evidence Center macro workflow
+
+**Date**: 2026-07-07
+**Task**: Simplify Evidence Center macro workflow
+**Branch**: `master`
+
+### Summary
+
+Fixed Evidence Center translation-template rendering, reordered the page around AI summaries, saved briefs, macro evidence, and source readiness, and moved manual seed/source notebook/follow-up tools into an advanced source-review section.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4ddfd3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
