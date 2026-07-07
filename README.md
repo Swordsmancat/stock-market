@@ -86,6 +86,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 - **Information source readiness**: explicit source registry for official macro candidates, valuation seed inputs, generated reports, stored news, future documents, and user-curated seed files, with official/legal collection links and citation boundaries
 - **Macro and valuation indicators**: curated Buffett Indicator, rates, inflation, and liquidity definitions with explicit audited-source/no-data states
 - **FRED macro adapter**: opt-in official FRED refresh path for US rates, yield spread, CPI YoY, and M2 YoY observations with source URL, series ID, retrieval time, and calculation metadata
+- **World Bank macro adapter**: opt-in public API refresh path for Buffett Indicator market-cap-to-GDP observations with GDP context, source URL, country/indicator IDs, retrieval time, and annual-data metadata
 - **Audited macro seed import**: JSON/CSV import path and dashboard seed templates for manually reviewed macro and valuation observations with required source and methodology metadata
 - **Hard-to-find source notebook**: Evidence Center workflow for reviewed links, browser-uploaded text excerpts, calculation notes, tags/symbols, and AI follow-up notes, with explicit draft vs AI-citable boundaries
 - **Source ingestion hub**: Evidence Center entry point that uses configured OpenAI-compatible extraction with deterministic fallback to turn pasted/browser-uploaded text into editable summaries, key indicator hints, citation clues, metadata suggestions, and follow-up research questions
@@ -106,7 +107,8 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 |---|---|---:|---|
 | P0 | Macro/valuation indicators + AI research brief | Implemented / citation-aware MVP | Dashboard overview now exposes a curated macro library covering Buffett Indicator, US yields/spread, CPI, US M2, and CN M2 definitions. Missing observations remain explicit `no_data`; the dashboard renders sections, citations, diagnostics, safety flags, and an additive citation-aware narrative. The narrative uses an OpenAI-compatible LLM only when configured and falls back deterministically if the model is unavailable, empty, failed, or cites an unknown ID. |
 | P0 | FRED official macro adapter | Implemented / opt-in refresh MVP | `scripts/refresh_fred_macro_indicators.py` can refresh audited FRED observations for DGS10, DGS2, T10Y2Y, CPIAUCSL-derived YoY, and M2SL-derived YoY when `FRED_API_KEY` is configured. Tests use mocked HTTP responses; no automatic scheduling or dashboard citation occurs until observations are stored locally. |
-| P1 | Information source readiness | Implemented / collection-guidance MVP | Dashboard overview now includes a source-readiness registry for FRED/PBOC-style macro candidates, Buffett manual seed inputs, generated reports, stored news, future filings/documents, and user seed files. It performs no live network fetches; it shows current local evidence, missing adapters/manual seeds, official/legal collection links, collection notes, citation boundaries, and next collection actions. |
+| P0 | World Bank Buffett Indicator adapter | Implemented / opt-in refresh MVP | `scripts/refresh_world_bank_macro_indicators.py` can refresh audited World Bank market-cap-to-GDP observations for China, Hong Kong, and the United States, with same-year GDP context when available. Tests use mocked HTTP responses; no automatic scheduling or dashboard citation occurs until observations are stored locally. |
+| P1 | Information source readiness | Implemented / collection-guidance MVP | Dashboard overview now includes a source-readiness registry for FRED/PBOC-style macro candidates, World Bank Buffett adapter coverage, Buffett manual seed inputs, generated reports, stored news, future filings/documents, and user seed files. It performs no live network fetches unless an explicit refresh script is run; it shows current local evidence, missing adapters/manual seeds, official/legal collection links, collection notes, citation boundaries, and next collection actions. |
 | P1 | Audited macro seed import | Implemented / template-assisted manual import MVP | Reviewed JSON/CSV seed files can import macro and valuation observations into `MarketIndicatorObservation`. Each row requires source and audit/method metadata; imports validate all rows before writing and do not fetch live data. The source-readiness panel now shows seed templates, placeholder JSON/CSV rows, review checklists, and the import command for FRED/PBOC/Buffett-style inputs. |
 | P1 | Hard-to-find source notebook | Implemented / reviewed-source MVP | `/evidence` now includes a persistent source notebook for user-reviewed links, excerpts, browser-uploaded text, calculation notes, tags/symbols, and AI follow-up notes. Draft notes remain collection records; only entries saved as `reviewed` and `AI-citable` produce `research_source_note:<id>` citations for the dashboard brief and market assistant. |
 | P1 | Source ingestion hub | Implemented / LLM extraction MVP | `/evidence` now includes a source-ingestion panel inside the Source Notebook workflow. It accepts pasted text or browser-readable `.txt` / `.md` / `.csv` / `.json` files, calls the configured OpenAI-compatible LLM when available, and falls back deterministically to suggest summaries, key indicators, citation clues, editable metadata, and follow-up questions. Suggestions remain collection notes until the user explicitly saves a reviewed/citable Source Notebook row. |
@@ -150,6 +152,20 @@ python scripts/refresh_fred_macro_indicators.py --series all --start 2025-01-01 
 The refresh path writes through the same audited `MarketIndicatorObservation` evidence layer. It skips FRED missing values such as `"."`, derives CPI/M2 YoY only when prior-year source observations exist, and stores source series IDs, FRED URLs, retrieval timestamps, and methodology/calculation metadata. Missing API keys produce a `WARN`; provider or validation failures produce `FAIL`.
 
 FRED source links and templates remain guidance only. AI summaries may cite FRED macro data only after this refresh stores validated local observations.
+
+## World Bank macro refresh
+
+Use the public World Bank API to refresh Buffett Indicator market-cap-to-GDP observations:
+
+```bash
+python scripts/refresh_world_bank_macro_indicators.py --target USA --dry-run
+python scripts/refresh_world_bank_macro_indicators.py --target all
+python scripts/refresh_world_bank_macro_indicators.py --target buffett_indicator_us --start-year 2020 --end-year 2024 --no-latest-only
+```
+
+The refresh path writes through the same audited `MarketIndicatorObservation` evidence layer. It stores the World Bank country code, indicator ID, source URL, retrieved timestamp, source observation date, methodology, and same-year GDP current-USD context when available.
+
+World Bank macro data is annual and often lagged. Missing current-year values are normal reporting lag, not a market signal. Source links and adapter diagnostics remain guidance only; AI summaries may cite World Bank Buffett Indicator values only after the refresh stores validated local observations.
 
 ## Source collection guidance
 

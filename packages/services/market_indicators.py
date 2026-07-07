@@ -13,6 +13,10 @@ from sqlalchemy.orm import Session
 from packages.domain.models import MarketIndicator, MarketIndicatorObservation
 from packages.providers.fred_provider import FRED_SERIES_URL_TEMPLATE, FredProvider
 from packages.providers.fred_provider import FredSeriesObservations
+from packages.providers.world_bank_provider import WORLD_BANK_INDICATOR_PAGE_URL_TEMPLATE
+from packages.providers.world_bank_provider import WorldBankIndicatorObservations
+from packages.providers.world_bank_provider import WorldBankProvider
+from packages.providers.world_bank_provider import WorldBankProviderError
 from packages.shared.config import settings
 
 
@@ -70,6 +74,26 @@ class FredMacroSeriesTarget:
 
 @dataclass(frozen=True)
 class FredMacroRefreshResult:
+    observations: int
+    fetched: int
+    skipped: int
+    dry_run: bool
+    codes: tuple[str, ...]
+    latest_as_of: str | None
+    diagnostics: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class WorldBankMacroTarget:
+    country_code: str
+    target_code: str
+    group: str
+    indicator_id: str
+    methodology: str
+
+
+@dataclass(frozen=True)
+class WorldBankMacroRefreshResult:
     observations: int
     fetched: int
     skipped: int
@@ -244,6 +268,42 @@ FRED_MACRO_SERIES: tuple[FredMacroSeriesTarget, ...] = (
         group="liquidity",
         handling=FRED_YOY_HANDLING,
         methodology="Year-over-year percent change derived from FRED M2SL money stock values.",
+    ),
+)
+
+WORLD_BANK_MARKET_CAP_GDP_INDICATOR = "CM.MKT.LCAP.GD.ZS"
+WORLD_BANK_GDP_CURRENT_USD_INDICATOR = "NY.GDP.MKTP.CD"
+WORLD_BANK_DEFAULT_RECENT_VALUES = 5
+WORLD_BANK_BUFFETT_TARGETS: tuple[WorldBankMacroTarget, ...] = (
+    WorldBankMacroTarget(
+        country_code="CHN",
+        target_code="buffett_indicator_cn",
+        group="buffett",
+        indicator_id=WORLD_BANK_MARKET_CAP_GDP_INDICATOR,
+        methodology=(
+            "World Bank CM.MKT.LCAP.GD.ZS: market capitalization of listed "
+            "domestic companies as percent of GDP."
+        ),
+    ),
+    WorldBankMacroTarget(
+        country_code="HKG",
+        target_code="buffett_indicator_hk",
+        group="buffett",
+        indicator_id=WORLD_BANK_MARKET_CAP_GDP_INDICATOR,
+        methodology=(
+            "World Bank CM.MKT.LCAP.GD.ZS: market capitalization of listed "
+            "domestic companies as percent of GDP."
+        ),
+    ),
+    WorldBankMacroTarget(
+        country_code="USA",
+        target_code="buffett_indicator_us",
+        group="buffett",
+        indicator_id=WORLD_BANK_MARKET_CAP_GDP_INDICATOR,
+        methodology=(
+            "World Bank CM.MKT.LCAP.GD.ZS: market capitalization of listed "
+            "domestic companies as percent of GDP."
+        ),
     ),
 )
 
@@ -692,10 +752,262 @@ def _validate_fred_observation_seeds(
     *,
     session: Session,
 ) -> None:
+    _validate_provider_observation_seeds(
+        seeds,
+        row_label_prefix="FRED observation",
+        session=session,
+    )
+
+
+def refresh_world_bank_macro_indicators(
+    *,
+    session: Session,
+    target_group: str = "all",
+    start_year: int | None = None,
+    end_year: int | None = None,
+    latest_only: bool = True,
+    dry_run: bool = False,
+    provider: WorldBankProvider | None = None,
+    retrieved_at: datetime | None = None,
+) -> WorldBankMacroRefreshResult:
+    targets = _select_world_bank_macro_targets(target_group)
+    world_bank_provider = provider or WorldBankProvider(
+        api_base_url=settings.world_bank_api_base_url,
+    )
+    retrieved_at_value = retrieved_at or datetime.now(timezone.utc)
+    most_recent_values = _world_bank_most_recent_values(
+        start_year=start_year,
+        end_year=end_year,
+        latest_only=latest_only,
+    )
+
+    ratio_payloads: dict[str, WorldBankIndicatorObservations] = {}
+    gdp_payloads: dict[str, WorldBankIndicatorObservations] = {}
+    diagnostics: list[str] = []
+    fetched_count = 0
+    skipped_count = 0
+    for target in targets:
+        ratio_payload = world_bank_provider.fetch_country_indicator_observations(
+            target.country_code,
+            target.indicator_id,
+            start_year=start_year,
+            end_year=end_year,
+            most_recent_values=most_recent_values,
+        )
+        ratio_payloads[target.target_code] = ratio_payload
+        fetched_count += len(ratio_payload.observations)
+        skipped_count += len(ratio_payload.skipped)
+        if ratio_payload.skipped:
+            diagnostics.append(
+                (
+                    f"World Bank {target.country_code} {target.indicator_id} skipped "
+                    f"{len(ratio_payload.skipped)} missing or invalid observations."
+                )
+            )
+
+        try:
+            gdp_payload = world_bank_provider.fetch_country_indicator_observations(
+                target.country_code,
+                WORLD_BANK_GDP_CURRENT_USD_INDICATOR,
+                start_year=start_year,
+                end_year=end_year,
+                most_recent_values=most_recent_values,
+            )
+        except WorldBankProviderError as error:
+            diagnostics.append(
+                (
+                    f"World Bank {target.country_code} "
+                    f"{WORLD_BANK_GDP_CURRENT_USD_INDICATOR} component fetch skipped: {error}"
+                )
+            )
+        else:
+            gdp_payloads[target.target_code] = gdp_payload
+            fetched_count += len(gdp_payload.observations)
+            skipped_count += len(gdp_payload.skipped)
+            if gdp_payload.skipped:
+                diagnostics.append(
+                    (
+                        f"World Bank {target.country_code} "
+                        f"{WORLD_BANK_GDP_CURRENT_USD_INDICATOR} skipped "
+                        f"{len(gdp_payload.skipped)} missing or invalid observations."
+                    )
+                )
+
+    seeds = _build_world_bank_observation_seeds(
+        targets=targets,
+        ratio_payloads=ratio_payloads,
+        gdp_payloads=gdp_payloads,
+        latest_only=latest_only,
+        retrieved_at=retrieved_at_value,
+    )
+
+    try:
+        seed_market_indicators(session=session, observations=(), commit=False)
+        _validate_world_bank_observation_seeds(seeds, session=session)
+        if dry_run:
+            session.rollback()
+        else:
+            for seed in seeds:
+                upsert_market_indicator_observation(seed, session=session, commit=False)
+            session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+    as_of_values = [seed.as_of for seed in seeds]
+    return WorldBankMacroRefreshResult(
+        observations=len(seeds),
+        fetched=fetched_count,
+        skipped=skipped_count,
+        dry_run=dry_run,
+        codes=tuple(sorted({seed.code for seed in seeds})),
+        latest_as_of=max(as_of_values).isoformat() if as_of_values else None,
+        diagnostics=tuple(diagnostics),
+    )
+
+
+def _select_world_bank_macro_targets(
+    target_group: str,
+) -> tuple[WorldBankMacroTarget, ...]:
+    normalized_group = target_group.strip().lower()
+    if normalized_group in {"all", "buffett", "valuation"}:
+        return WORLD_BANK_BUFFETT_TARGETS
+
+    targets = tuple(
+        target
+        for target in WORLD_BANK_BUFFETT_TARGETS
+        if target.group == normalized_group
+        or target.country_code.lower() == normalized_group
+        or target.target_code.lower() == normalized_group
+        or target.target_code.lower().endswith(f"_{normalized_group}")
+    )
+    if targets:
+        return targets
+
+    supported = sorted(
+        {
+            "all",
+            "buffett",
+            "valuation",
+            *(target.country_code.lower() for target in WORLD_BANK_BUFFETT_TARGETS),
+            *(target.target_code.lower() for target in WORLD_BANK_BUFFETT_TARGETS),
+        }
+    )
+    msg = (
+        f"Unsupported World Bank macro target {target_group!r}; use one of: "
+        f"{', '.join(supported)}"
+    )
+    raise ValueError(msg)
+
+
+def _world_bank_most_recent_values(
+    *,
+    start_year: int | None,
+    end_year: int | None,
+    latest_only: bool,
+) -> int | None:
+    if start_year is not None or end_year is not None:
+        return None
+    if latest_only:
+        return 1
+    return WORLD_BANK_DEFAULT_RECENT_VALUES
+
+
+def _build_world_bank_observation_seeds(
+    *,
+    targets: tuple[WorldBankMacroTarget, ...],
+    ratio_payloads: Mapping[str, WorldBankIndicatorObservations],
+    gdp_payloads: Mapping[str, WorldBankIndicatorObservations],
+    latest_only: bool,
+    retrieved_at: datetime,
+) -> list[MarketIndicatorObservationSeed]:
+    seeds: list[MarketIndicatorObservationSeed] = []
+    for target in targets:
+        ratio_payload = ratio_payloads[target.target_code]
+        observations = list(ratio_payload.observations)
+        if latest_only and observations:
+            observations = [max(observations, key=lambda observation: observation.as_of)]
+
+        gdp_payload = gdp_payloads.get(target.target_code)
+        gdp_by_year = (
+            {observation.as_of.year: observation for observation in gdp_payload.observations}
+            if gdp_payload is not None
+            else {}
+        )
+        for observation in observations:
+            gdp_observation = gdp_by_year.get(observation.as_of.year)
+            components: dict[str, Any] = {
+                "provider": "world_bank",
+                "source_name": "World Bank",
+                "country_code": target.country_code,
+                "country_name": observation.country_name,
+                "source_indicator_id": target.indicator_id,
+                "source_indicator_name": observation.indicator_name,
+                "source_url": WORLD_BANK_INDICATOR_PAGE_URL_TEMPLATE.format(
+                    indicator_id=target.indicator_id,
+                    country_code=target.country_code,
+                ),
+                "retrieved_at": retrieved_at.isoformat(),
+                "source_observation_date": observation.as_of.isoformat(),
+                "methodology": target.methodology,
+                "calculation": "World Bank reported market capitalization as percent of GDP.",
+                "raw_value": observation.raw_value,
+                "source_observation_dates": {
+                    "ratio": observation.as_of.isoformat(),
+                },
+            }
+            if gdp_observation is not None:
+                components.update(
+                    {
+                        "gdp_current_usd": str(gdp_observation.value),
+                        "gdp_source_indicator_id": WORLD_BANK_GDP_CURRENT_USD_INDICATOR,
+                        "gdp_source_indicator_name": gdp_observation.indicator_name,
+                        "gdp_source_url": WORLD_BANK_INDICATOR_PAGE_URL_TEMPLATE.format(
+                            indicator_id=WORLD_BANK_GDP_CURRENT_USD_INDICATOR,
+                            country_code=target.country_code,
+                        ),
+                        "source_observation_dates": {
+                            "ratio": observation.as_of.isoformat(),
+                            "gdp": gdp_observation.as_of.isoformat(),
+                        },
+                    }
+                )
+
+            seeds.append(
+                MarketIndicatorObservationSeed(
+                    code=target.target_code,
+                    as_of=observation.as_of,
+                    value=observation.value,
+                    source=f"World Bank {target.indicator_id} {target.country_code}",
+                    components=components,
+                )
+            )
+
+    return seeds
+
+
+def _validate_world_bank_observation_seeds(
+    seeds: list[MarketIndicatorObservationSeed],
+    *,
+    session: Session,
+) -> None:
+    _validate_provider_observation_seeds(
+        seeds,
+        row_label_prefix="World Bank observation",
+        session=session,
+    )
+
+
+def _validate_provider_observation_seeds(
+    seeds: list[MarketIndicatorObservationSeed],
+    *,
+    row_label_prefix: str,
+    session: Session,
+) -> None:
     errors: list[str] = []
     parsed_seeds: list[_ParsedMarketIndicatorObservationSeed] = []
     for index, seed in enumerate(seeds, start=1):
-        row_label = f"FRED observation {index}"
+        row_label = f"{row_label_prefix} {index}"
         _validate_audit_components(seed.components, row_label=row_label, errors=errors)
         parsed_seeds.append(
             _ParsedMarketIndicatorObservationSeed(row_label=row_label, seed=seed)

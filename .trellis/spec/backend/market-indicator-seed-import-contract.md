@@ -321,3 +321,102 @@ Stored FRED observations must include:
 - Bad: FRED `"."` is stored as `0`.
 - Bad: a FRED source-readiness link is cited before a local observation has been stored.
 - Bad: an exception message includes the configured API key.
+
+## Scenario: Official World Bank Buffett Indicator Refresh
+
+### 1. Scope / Trigger
+
+- Trigger: a maintainer explicitly runs `python scripts/refresh_world_bank_macro_indicators.py`.
+- Applies to `packages/providers/world_bank_provider.py`, `packages/services/market_indicators.py`, `packages/services/information_sources.py`, and `scripts/refresh_world_bank_macro_indicators.py`.
+- The feature is an opt-in official/public-source refresh path for personal research evidence. It is not an automatic live feed, scraper, trading signal, or background scheduler.
+
+### 2. Signatures
+
+- Provider:
+  - `WorldBankProvider.fetch_country_indicator_observations(country_code, indicator_id, start_year=None, end_year=None, most_recent_values=None, per_page=100)`
+- Service:
+  - `refresh_world_bank_macro_indicators(session, target_group="all", start_year=None, end_year=None, latest_only=True, dry_run=False, provider=None, retrieved_at=None)`
+- CLI:
+  - `python scripts/refresh_world_bank_macro_indicators.py --target USA --dry-run`
+  - `python scripts/refresh_world_bank_macro_indicators.py --target all`
+  - `python scripts/refresh_world_bank_macro_indicators.py --target buffett_indicator_us --start-year 2020 --end-year 2024 --no-latest-only`
+- Environment:
+  - `WORLD_BANK_API_BASE_URL`, defaulting to `https://api.worldbank.org/v2`.
+
+### 3. Contracts
+
+- Initial World Bank mappings:
+  - `USA` + `CM.MKT.LCAP.GD.ZS` -> `buffett_indicator_us`.
+  - `CHN` + `CM.MKT.LCAP.GD.ZS` -> `buffett_indicator_cn`.
+  - `HKG` + `CM.MKT.LCAP.GD.ZS` -> `buffett_indicator_hk`.
+- Optional same-year GDP context:
+  - `NY.GDP.MKTP.CD` is fetched for component metadata only; it is not a separate macro indicator in this slice.
+- World Bank year strings are stored as annual observation dates on December 31 of that year.
+- Missing/null/invalid World Bank values are skipped, never stored as zero.
+- Persistence must reuse `MarketIndicatorObservationSeed` and `upsert_market_indicator_observation(...)`.
+- Each stored observation must satisfy the same audit metadata contract as manual seed imports.
+- Source readiness may expose a World Bank adapter-backed Buffett source, but readiness IDs, links, templates, and diagnostics are not citations.
+
+### 4. Validation & Error Matrix
+
+| Condition | Behavior |
+|---|---|
+| World Bank response is not the expected `[metadata, rows]` list | Raise `WorldBankProviderError`; no writes. |
+| HTTP/network/provider exception | Raise sanitized `WorldBankProviderError`; do not expose raw tokens, full payload dumps, or stack traces. |
+| Row date is not a valid year | Skip row and count a diagnostic. |
+| Row value is null, blank, non-decimal, or non-finite | Skip row and count a diagnostic. |
+| No valid rows for a target | Return zero observations for that target with diagnostics; do not fabricate a value. |
+| GDP component fetch fails | Preserve the ratio observation when valid and add a sanitized diagnostic for missing GDP context. |
+| Unknown `target_group` | Raise `ValueError`; script prints `FAIL` and exits nonzero. |
+| `dry_run=true` | Fetch and validate, then roll back; no `MarketIndicatorObservation` rows remain. |
+| Validation fails after definitions are seeded | Roll back all observation writes. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `USA` stores a `buffett_indicator_us` observation from `CM.MKT.LCAP.GD.ZS`, with World Bank provider, country code, indicator ID, source URL, retrieved timestamp, methodology, and same-year GDP context.
+- Good: source readiness shows a distinct World Bank Buffett adapter item while keeping the manual Buffett seed item as fallback.
+- Base: GDP context is unavailable; the ratio observation can still be stored if it has valid source and methodology metadata.
+- Base: annual data is lagged; missing current-year values are diagnostics/source gaps, not market signals.
+- Bad: a World Bank collection link or source-readiness ID is copied into dashboard or assistant citations before a local observation exists.
+- Bad: `None` or missing values are stored as `0`.
+- Bad: World Bank annual data is described as real-time or low-latency market data.
+
+### 6. Tests Required
+
+- Provider tests assert successful parse, missing/null skip behavior, pagination, unexpected shape failure, and sanitized provider errors.
+- Service tests assert World Bank targets map to existing Buffett codes, dry-run writes nothing, skipped rows produce diagnostics, stored components satisfy source/method metadata, GDP context is included when available, and invalid target codes roll back.
+- Script tests assert dry-run output, `--no-latest-only`, bad year parsing, and provider failures.
+- Source-readiness tests assert the World Bank adapter item appears, remains guidance-only without observations, and becomes configured only from local observations.
+- Dashboard/API tests assert source gaps update additively and citation lists do not include readiness IDs or template IDs.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+upsert_market_indicator_observation(
+    MarketIndicatorObservationSeed(
+        code="buffett_indicator_us",
+        as_of=date(2024, 12, 31),
+        value=Decimal("0"),
+        source="World Bank",
+        components={"source_url": "https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS"},
+    ),
+    session=session,
+)
+```
+
+This stores a missing or placeholder value and lacks method metadata, so AI could cite a fabricated macro fact.
+
+#### Correct
+
+```python
+refresh_world_bank_macro_indicators(
+    session=session,
+    target_group="USA",
+    latest_only=True,
+    dry_run=False,
+)
+```
+
+The refresh path fetches official World Bank rows, skips missing values, preserves source and methodology metadata, validates indicator codes, and writes only audited observations.

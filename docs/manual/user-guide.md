@@ -19,6 +19,7 @@
 | P0 | 证据中心 | 已完成 | `/evidence` 提供专门的宏观/估值证据、信息源就绪度、seed 模板和 AI 摘要工作台，不再只依赖首页综合看板查找这些信息。 |
 | P0 | 宏观/估值指标与 AI 日摘要 | No-data-safe MVP | 首页已扩展巴菲特指标、美国长短债收益率/利差、CPI、M2 和中国 M2 等观察点，并展示确定性 AI-ready 日摘要、引用、诊断和数据缺口。 |
 | P0 | FRED 官方宏观刷新 | Opt-in adapter MVP | 配置 `FRED_API_KEY` 后，可用本地脚本刷新 DGS10、DGS2、T10Y2Y、CPIAUCSL 派生 YoY 和 M2SL 派生 YoY；成功入库后才成为 AI 可引用证据。 |
+| P0 | World Bank 巴菲特指标刷新 | Opt-in adapter MVP | 可用本地脚本刷新 World Bank 市值/GDP 年度观察值，覆盖中国、香港、美国巴菲特指标，并在可用时保存同年 GDP 上下文；成功入库后才成为 AI 可引用证据。 |
 | P1 | 可审计宏观 seed 导入 | Review + import MVP | `/evidence` 已支持粘贴 JSON/CSV 或通过浏览器选择本地 `.json`/`.csv` 文件，先预览校验和 insert/update 状态，再确认写入；CLI 文件导入仍可用于维护流程。 |
 | P1 | Hard-to-find source notebook | Reviewed-source MVP | `/evidence` 已支持保存用户复核过的链接、浏览器上传文本摘录、计算备注、标签/标的和 AI follow-up。草稿只作为收集记录；只有 `reviewed` 且明确允许 AI 引用的条目才会进入 dashboard brief 和 AI 助手的 citation 列表。 |
 | P1 | 已保存研究摘要收件箱 | LLM+fallback history MVP | `/evidence` 已支持把当前证据中心上下文生成并保存为可回看的研究摘要，包含 markdown 内容、允许引用、来源缺口、follow-up 上下文、诊断、模型元数据和安全边界。 |
@@ -204,6 +205,33 @@ python scripts/refresh_fred_macro_indicators.py --series all --start 2025-01-01 
 
 使用这些模板时，应先从官方或合法来源核对数据，再替换占位符，保留 source URL/series ID/source name 以及 methodology/calculation/notes/review_note。只有当你运行导入命令并通过校验后，观测值才会进入本地 evidence 层；模板本身、外部链接和未导入的行都不能被 AI 当作 citation。
 
+### World Bank 巴菲特指标刷新
+
+World Bank 刷新用于把巴菲特指标从“来源链接/手工 seed 指引”推进到本地可审计 observation。命令示例：
+
+```powershell
+python scripts/refresh_world_bank_macro_indicators.py --target USA --dry-run
+python scripts/refresh_world_bank_macro_indicators.py --target all
+python scripts/refresh_world_bank_macro_indicators.py --target buffett_indicator_us --start-year 2020 --end-year 2024 --no-latest-only
+```
+
+当前覆盖：
+
+- `USA` -> `buffett_indicator_us`。
+- `CHN` -> `buffett_indicator_cn`。
+- `HKG` -> `buffett_indicator_hk`。
+- 主指标使用 World Bank `CM.MKT.LCAP.GD.ZS`，即上市公司市值占 GDP 百分比。
+- 如果同年 `NY.GDP.MKTP.CD` 可用，会作为 GDP current USD 上下文保存到 components。
+
+刷新成功后，观测值会写入本地 `MarketIndicatorObservation`，并保留 World Bank 国家代码、指标 ID、source URL、retrieved_at、source observation date、methodology 和 GDP 组件信息。World Bank 宏观数据通常是年度且滞后的；当前年份缺失通常代表发布滞后，不应被理解成市场信号。
+
+使用边界：
+
+- 这是显式 opt-in 的维护命令，不是自动定时任务。
+- World Bank 链接、source readiness 和刷新 diagnostics 仍然不是 AI citation。
+- 只有成功写入本地、带 source/as-of/components 的观测值，才能被首页宏观指标、证据中心、已保存研究摘要和 AI 助手引用。
+- 如果 World Bank 某个地区/年份没有可用值，系统会跳过缺失值，不会写成 0。
+
 ### 信息源就绪度
 
 首页现在也会展示“信息源就绪度”。这个模块不是实时数据源，也不是数据授权系统；它是个人研究 cockpit 的缺口地图，用来说明哪些来源已经有本地证据、哪些还需要适配器、哪些需要人工 seed，哪些只是未来方向。
@@ -212,7 +240,7 @@ python scripts/refresh_fred_macro_indicators.py --series all --start 2025-01-01 
 
 - FRED 美国利率、通胀、流动性候选序列，例如 DGS10、DGS2、T10Y2Y、CPIAUCSL、M2SL。
 - PBOC / 中国 M2 这类需要人工复核或官方来源策略的宏观数据。
-- 巴菲特指标的人工估值组件，例如市值、GDP、公式和来源说明。
+- World Bank 巴菲特指标 adapter 状态，以及巴菲特指标的人工估值组件，例如市值、GDP、公式和来源说明。
 - 本地已生成报告和已存新闻文章。
 - SEC filings、公告、transcripts 等后续文档来源。
 - 用户人工整理的 seed files。
@@ -409,7 +437,7 @@ AI 市场助手当前能力：
 | Koyfin / MacroMicro | 宏观、估值、经济周期、市场图表和跨资产 dashboard | 已有专门证据中心、宏观/估值 definitions-first 指标、no-data-safe 展示、source readiness 和 seed 模板 | 还缺官方宏观 adapter、发布日历、跨指标图表和可复用宏观专题页。 |
 | TradingView / Yahoo Finance 类工具 | watchlist、图表、新闻、日历、筛选器和个人跟踪工作流 | 已有首页汇总、watchlist、K 线/指标、推荐线索、报告和 provider/degraded 状态 | 还缺 watchlist 事件监控、日/周 digest、保存的研究问题和更系统的提醒。 |
 | AlphaSense 类研究产品 | 对 filings、transcripts、新闻和研究资料做 AI 搜索、监控、摘要和引用 | 已有 citation-aware dashboard narrative、已保存研究摘要收件箱、AI 报告、个股 AI assistant 的引用校验，以及人工复核来源笔记本 | 还缺合法研究语料库、文档 ingest policy、全文 ingest、主题追踪和更细的摘要筛选。 |
-| FRED / World Bank / SEC EDGAR / Trading Economics | 官方或 API 化宏观、公司文档、经济日历和指标源 | 已有 FRED opt-in adapter、官方/合法来源链接、导入边界、manual seed import 和 source-to-seed 模板 | 还缺 source capability matrix、宏观发布日历、更多官方源和 license/freshness 运营记录。 |
+| FRED / World Bank / SEC EDGAR / Trading Economics | 官方或 API 化宏观、公司文档、经济日历和指标源 | 已有 FRED opt-in adapter、World Bank 巴菲特指标 opt-in adapter、官方/合法来源链接、导入边界、manual seed import 和 source-to-seed 模板 | 还缺 source capability matrix、宏观发布日历、更多官方源和 license/freshness 运营记录。 |
 
 因此，当前实现已经满足一个个人研究 cockpit 的 MVP：它能把市场、watchlist、报告、推荐、新闻、宏观指标、来源缺口和 AI 摘要放到同一工作台，并通过证据中心明确区分“可引用证据”和“还需要收集/复核的来源”。但它还不是完整的信息平台：数据源仍以人工 seed 和本地证据为主，官方宏观源、文档语料、日历、watchlist 级监控和历史化 AI digest 仍是后续重点。
 
@@ -422,7 +450,7 @@ AI 市场助手当前能力：
 
 ## 优先优化路线
 
-1. **P0 宏观发布日历与缺口追踪**：在 FRED opt-in adapter 的基础上，为 CPI、M2、利率、GDP/市值组件等核心指标建立 release calendar / freshness policy，让首页直接显示“下一次该更新什么、当前缺哪一项”。
+1. **P0 宏观发布日历与缺口追踪**：在 FRED 和 World Bank opt-in adapters 的基础上，为 CPI、M2、利率、GDP/市值组件等核心指标建立 release calendar / freshness policy，让首页直接显示“下一次该更新什么、当前缺哪一项”。
 2. **P1 source capability matrix**：记录每个宏观源的 adapter 状态、license/usage note、retrieved_at、失败诊断和人工复核要求。
 3. **P1 saved brief 增强**：已完成 Evidence Center 摘要保存 MVP；下一步可增加日/周分组、筛选、专题标签、导出和与 watchlist 事件的关联。
 4. **P1 watchlist 事件监控**：把 watchlist 价格异动、报告更新、新闻事件、宏观发布和 source readiness 变化汇总成个人研究 inbox。

@@ -131,12 +131,12 @@ def test_market_overview_payload_contains_followed_indices_and_valuation_section
         "report_citations": 0,
         "news_citations": 0,
         "research_source_note_citations": 0,
-        "information_source_gaps": 9,
+        "information_source_gaps": 10,
     }
 
     information_sources = payload["information_sources"]
     assert information_sources["status"] == "degraded"
-    assert information_sources["summary"]["needs_action"] == 8
+    assert information_sources["summary"]["needs_action"] == 9
     assert information_sources["items"][0]["id"] == "fred_us_rates"
 
 

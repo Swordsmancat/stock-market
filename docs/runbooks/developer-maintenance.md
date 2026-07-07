@@ -141,6 +141,30 @@ python scripts/refresh_fred_macro_indicators.py --series all --start 2025-01-01 
 - 入库仍走 `MarketIndicatorObservation`，components 必须保留 `source_series_id`、`source_url`、`retrieved_at`、`methodology` 或 `calculation`。
 - Source readiness 链接和 seed 模板不是 citation；dashboard/AI 只能引用成功入库的本地 observations。
 
+World Bank 巴菲特指标刷新聚焦检查：
+
+```bash
+python -m pytest tests/providers/test_world_bank_provider.py tests/services/test_market_indicators_world_bank_refresh.py tests/scripts/test_refresh_world_bank_macro_indicators.py tests/services/test_information_sources_service.py tests/services/test_market_dashboard_service.py tests/api/test_dashboard_api.py
+ruff check packages/providers/world_bank_provider.py packages/services/market_indicators.py packages/services/information_sources.py scripts/refresh_world_bank_macro_indicators.py tests/providers/test_world_bank_provider.py tests/services/test_market_indicators_world_bank_refresh.py tests/scripts/test_refresh_world_bank_macro_indicators.py
+```
+
+World Bank refresh 是显式 opt-in 的维护命令，不需要 API key。建议先用 `--dry-run` 验证年度 observation 和 diagnostics：
+
+```powershell
+python scripts/refresh_world_bank_macro_indicators.py --target USA --dry-run
+python scripts/refresh_world_bank_macro_indicators.py --target all
+python scripts/refresh_world_bank_macro_indicators.py --target buffett_indicator_us --start-year 2020 --end-year 2024 --no-latest-only
+```
+
+维护规则：
+
+- 主值来自 World Bank `CM.MKT.LCAP.GD.ZS`，含义是上市公司市值占 GDP 百分比；不要二次计算后覆盖该值，除非同时记录清楚计算方法和组件。
+- GDP context 来自 `NY.GDP.MKTP.CD`，只是 components 中的上下文，不是当前宏观指标库里的独立指标。
+- World Bank 年度数据通常滞后；当前年份缺失应以 diagnostics/source gap 表达，不要写成 0 或视为市场结论。
+- 入库仍走 `MarketIndicatorObservation`，components 必须保留 `provider=world_bank`、`country_code`、`source_indicator_id`、`source_url`、`retrieved_at` 和 `methodology` 或 `calculation`。
+- Source readiness、World Bank 链接、adapter ID 和 diagnostics 不是 citation；dashboard/AI 只能引用成功入库的本地 observations。
+- 测试必须 mock HTTP，不得默认访问真实 World Bank 网络。
+
 本地服务自检：
 
 ```bash

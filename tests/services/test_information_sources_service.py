@@ -39,12 +39,13 @@ def test_information_source_readiness_returns_no_data_registry():
 
     assert set(payload) == {"status", "summary", "groups", "items", "diagnostics"}
     assert statuses >= {"needs_adapter", "needs_manual_seed", "no_data", "future"}
-    assert payload["summary"]["total"] == 9
+    assert payload["summary"]["total"] == 10
     assert payload["summary"]["configured"] == 0
-    assert payload["summary"]["needs_action"] == 8
+    assert payload["summary"]["needs_action"] == 9
     assert payload["summary"]["future"] == 1
     assert items["fred_us_rates"]["coverage"] == ["DGS10", "DGS2", "T10Y2Y"]
     assert items["pboc_cn_m2_public_manual"]["status"] == "needs_manual_seed"
+    assert items["world_bank_buffett_indicator"]["status"] == "needs_adapter"
     assert items["generated_reports"]["status"] == "no_data"
     assert items["stored_news"]["status"] == "no_data"
     assert items["sec_filings_future_documents"]["status"] == "future"
@@ -224,6 +225,46 @@ def test_information_source_readiness_includes_buffett_collection_guidance():
     assert seed_template["citation_boundary"].startswith("This template is not evidence")
 
 
+def test_information_source_readiness_includes_world_bank_buffett_adapter_guidance():
+    session = make_session()
+
+    payload = get_information_source_readiness_payload(session=session)
+    world_bank = _item_by_id(payload)["world_bank_buffett_indicator"]
+
+    assert world_bank["status"] == "needs_adapter"
+    assert world_bank["authority"] == "World Bank public indicators API"
+    assert world_bank["collection_note"] == (
+        "Use the World Bank API adapter to fetch market capitalization as "
+        "percent of GDP and same-year GDP context for supported regions."
+    )
+    assert world_bank["citation_policy"] == (
+        "World Bank links and adapter diagnostics are guidance only; AI may "
+        "cite Buffett Indicator values after validated observations are "
+        "stored locally."
+    )
+    assert world_bank["coverage"] == [
+        "CM.MKT.LCAP.GD.ZS",
+        "NY.GDP.MKTP.CD",
+        "buffett_indicator_cn",
+        "buffett_indicator_hk",
+        "buffett_indicator_us",
+    ]
+    assert {
+        (str(link["label"]), str(link["url"]))
+        for link in world_bank["collection_links"]
+    } == {
+        (
+            "World Bank market cap / GDP",
+            "https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS",
+        ),
+        (
+            "World Bank GDP",
+            "https://data.worldbank.org/indicator/NY.GDP.MKTP.CD",
+        ),
+    }
+    assert world_bank["seed_template"] is None
+
+
 def test_information_source_readiness_includes_generic_user_seed_template():
     session = make_session()
 
@@ -340,3 +381,33 @@ def test_information_source_readiness_marks_macro_observation_source_configured(
     assert items["fred_us_inflation"]["status"] == "needs_adapter"
     assert items["pboc_cn_m2_public_manual"]["status"] == "needs_manual_seed"
     assert payload["summary"]["configured"] == 2
+
+
+def test_information_source_readiness_marks_world_bank_buffett_source_configured():
+    session = make_session()
+    seed_market_indicators(session=session)
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="buffett_indicator_us",
+            as_of=date(2024, 12, 31),
+            value=Decimal("194.250000"),
+            source="World Bank CM.MKT.LCAP.GD.ZS USA",
+            components={
+                "provider": "world_bank",
+                "source_name": "World Bank",
+                "country_code": "USA",
+                "source_indicator_id": "CM.MKT.LCAP.GD.ZS",
+                "source_url": "https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS",
+                "methodology": "World Bank market capitalization as percent of GDP.",
+            },
+        ),
+        session=session,
+    )
+
+    payload = get_information_source_readiness_payload(session=session)
+    items = _item_by_id(payload)
+
+    assert items["world_bank_buffett_indicator"]["status"] == "configured"
+    assert items["world_bank_buffett_indicator"]["evidence_count"] == 1
+    assert items["world_bank_buffett_indicator"]["latest_as_of"] == "2024-12-31"
+    assert items["buffett_manual_valuation_components"]["status"] == "configured"

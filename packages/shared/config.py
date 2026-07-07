@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     task_run_stale_minutes: int = 30
     fred_api_key: str | None = None
     fred_api_base_url: str = "https://api.stlouisfed.org/fred"
+    world_bank_api_base_url: str = "https://api.worldbank.org/v2"
 
     model_config = SettingsConfigDict(
         env_file=".env",

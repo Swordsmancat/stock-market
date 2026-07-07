@@ -561,6 +561,55 @@ INFORMATION_SOURCE_DEFINITIONS: tuple[SourceDefinition, ...] = (
         indicator_codes=PBOC_CN_M2_CODES,
     ),
     SourceDefinition(
+        id="world_bank_buffett_indicator",
+        label="World Bank Buffett Indicator adapter",
+        category="valuation",
+        authority="World Bank public indicators API",
+        default_status="needs_adapter",
+        freshness_policy=(
+            "Annual public macro series; refresh when World Bank publishes a "
+            "new latest available market-cap-to-GDP observation."
+        ),
+        ai_usage=(
+            "Can support Buffett Indicator valuation context after adapter "
+            "refresh stores audited local observations."
+        ),
+        next_action=(
+            "Run the World Bank macro refresh for Buffett Indicator regions "
+            "and review diagnostics for missing annual data."
+        ),
+        coverage=(
+            "CM.MKT.LCAP.GD.ZS",
+            "NY.GDP.MKTP.CD",
+            "buffett_indicator_cn",
+            "buffett_indicator_hk",
+            "buffett_indicator_us",
+        ),
+        collection_note=(
+            "Use the World Bank API adapter to fetch market capitalization as "
+            "percent of GDP and same-year GDP context for supported regions."
+        ),
+        citation_policy=(
+            "World Bank links and adapter diagnostics are guidance only; AI may "
+            "cite Buffett Indicator values after validated observations are "
+            "stored locally."
+        ),
+        collection_links=(
+            SourceCollectionLink(
+                label="World Bank market cap / GDP",
+                url="https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS",
+                source_type="public_dataset",
+            ),
+            SourceCollectionLink(
+                label="World Bank GDP",
+                url="https://data.worldbank.org/indicator/NY.GDP.MKTP.CD",
+                source_type="public_dataset",
+            ),
+        ),
+        evidence_kind="macro_observations",
+        indicator_codes=BUFFETT_INDICATOR_CODES,
+    ),
+    SourceDefinition(
         id="buffett_manual_valuation_components",
         label="Buffett Indicator manual valuation components",
         category="valuation",
