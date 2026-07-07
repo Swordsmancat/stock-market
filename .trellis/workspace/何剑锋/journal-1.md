@@ -896,3 +896,36 @@ Added dedicated AI Research Desk page with symbol selection, macro context, sour
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: Homepage AI research entry
+
+**Date**: 2026-07-07
+**Task**: Homepage AI research entry
+**Branch**: `master`
+
+### Summary
+
+Localized homepage recommendation shell text, added a visible AI Research entry from the homepage, documented serialized labels for server-rendered client components, and validated desktop/mobile browser smoke.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a8c5ed` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 27
+- **Total Sessions**: 28
 - **Last Active**: 2026-07-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~898 | Active |
+| `journal-1.md` | ~931 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 28 | 2026-07-07 | Homepage AI research entry | `6a8c5ed` | `master` |
 | 27 | 2026-07-07 | AI research desk | `8de428f`, `bd446ed` | `master` |
 | 26 | 2026-07-07 | Official macro refresh runbook and guidance UI | `cec304c` | `master` |
 | 25 | 2026-07-07 | Macro research cockpit favorites | `11a5920` | `master` |
