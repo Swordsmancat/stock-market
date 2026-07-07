@@ -796,3 +796,36 @@ Added validation-only China macro source capability matrix, opt-in shallow probe
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: Macro research cockpit favorites
+
+**Date**: 2026-07-07
+**Task**: Macro research cockpit favorites
+**Branch**: `master`
+
+### Summary
+
+Added homepage macro favorite indicators, settings-backed favorite codes, Macro Research wording, ticker overflow fixes, and validation coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `11a5920` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
