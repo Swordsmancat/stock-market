@@ -862,3 +862,37 @@ Added a manual official macro refresh runbook, linked it from the user guide, an
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: AI research desk
+
+**Date**: 2026-07-07
+**Task**: AI research desk
+**Branch**: `master`
+
+### Summary
+
+Added dedicated AI Research Desk page with symbol selection, macro context, source gaps, and assistant reuse.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8de428f` | (see git log) |
+| `bd446ed` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
