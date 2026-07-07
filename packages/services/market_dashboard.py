@@ -16,7 +16,11 @@ from packages.services.market_data import (
 from packages.services.market_indices import DEFAULT_MARKET_INDICES, MarketIndexDefinition, resolve_provider_symbol
 from packages.services.market_indicators import get_macro_indicator_payloads
 from packages.services.platform_settings import get_platform_settings
-from packages.services.research_source_notes import list_citable_research_source_note_citations
+from packages.services.research_follow_up_queue import build_research_follow_up_queue
+from packages.services.research_source_notes import (
+    list_citable_research_source_note_citations,
+    list_research_source_notes,
+)
 from packages.services.watchlists import get_active_watchlist_item_dicts
 from packages.shared.cache import cache_market_overview
 
@@ -885,6 +889,28 @@ def _build_dashboard_brief(
     return brief
 
 
+def _load_research_source_notes_for_follow_up(session: Session) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    try:
+        payload = list_research_source_notes(session=session, limit=50)
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return [], [
+            {
+                "source": "research_source_notes",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Source notebook entries could not be loaded for the research follow-up queue.",
+            }
+        ]
+
+    items = payload.get("items") if isinstance(payload, dict) else []
+    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else [], []
+
+
 @cache_market_overview(ttl=300)
 def get_market_overview_payload(
     *,
@@ -918,6 +944,13 @@ def get_market_overview_payload(
     )
     diagnostics = [*followed_diagnostics, *index_diagnostics]
     generated_at = datetime.now(timezone.utc).isoformat()
+    research_source_notes, follow_up_diagnostics = _load_research_source_notes_for_follow_up(session)
+    research_follow_up_queue = build_research_follow_up_queue(
+        notes=research_source_notes,
+        information_sources_payload=information_sources_payload,
+        generated_at=generated_at,
+        diagnostics=follow_up_diagnostics,
+    )
 
     return {
         "generated_at": generated_at,
@@ -932,6 +965,7 @@ def get_market_overview_payload(
         "macro_indicators": {"items": macro_indicator_items},
         "valuation_indicators": {"items": macro_indicator_items},
         "information_sources": information_sources_payload,
+        "research_follow_up_queue": research_follow_up_queue,
         "dashboard_brief": _build_dashboard_brief(
             generated_at=generated_at,
             followed_payload=followed_payload,

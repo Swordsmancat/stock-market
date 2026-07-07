@@ -123,6 +123,57 @@ export type InformationSourcesPayload = {
   diagnostics?: Array<Record<string, unknown>>;
 };
 
+export type ResearchFollowUpQueueItem = {
+  id: string;
+  kind: "source_review" | "seed_prep" | "ai_summary_question" | "source_gap" | "research_note" | string;
+  priority?: "high" | "medium" | "low" | string;
+  title?: string | null;
+  prompt?: string | null;
+  next_action?: string | null;
+  citation_policy?: "citable" | "collection_only" | "guidance_only" | string;
+  citation_id?: string | null;
+  note_id?: string | null;
+  note_title?: string | null;
+  source_name?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+  source_label?: string | null;
+  source_category?: string | null;
+  source_status?: string | null;
+  target_indicator_codes?: string[];
+  component_role?: string | null;
+  completeness_status?: string | null;
+  as_of?: string | null;
+  retrieved_at?: string | null;
+  linked_note_count?: number;
+  seed_ready_note_count?: number;
+  missing_review_checks?: string[];
+};
+
+export type ResearchFollowUpQueuePayload = {
+  status: "ok" | "degraded" | string;
+  generated_at: string;
+  summary?: {
+    total?: number;
+    returned?: number;
+    source_review?: number;
+    seed_prep?: number;
+    ai_summary_question?: number;
+    source_gap?: number;
+    research_note?: number;
+    citable?: number;
+    collection_only?: number;
+    guidance_only?: number;
+  };
+  items?: ResearchFollowUpQueueItem[];
+  diagnostics?: Array<Record<string, unknown>>;
+  safety?: {
+    not_investment_advice?: boolean;
+    citations_require_reviewed_citable_notes?: boolean;
+    no_automated_trading?: boolean;
+  };
+};
+
 export type MarketOverviewPayload = {
   generated_at: string;
   provider: string;
@@ -139,5 +190,6 @@ export type MarketOverviewPayload = {
   };
   dashboard_brief?: DashboardBriefPayload;
   information_sources?: InformationSourcesPayload;
+  research_follow_up_queue?: ResearchFollowUpQueuePayload;
   diagnostics?: Array<Record<string, unknown>>;
 };

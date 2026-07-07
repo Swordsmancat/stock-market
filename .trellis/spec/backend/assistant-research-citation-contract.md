@@ -277,6 +277,88 @@ diagnostics.append({
 })
 ```
 
+## Scenario: Research Follow-up Queue
+
+### 1. Scope / Trigger
+
+- Trigger: `GET /dashboard/market-overview` returns an additive `research_follow_up_queue` payload for the Evidence Center.
+- Scope: queue derivation in `packages/services/research_follow_up_queue.py`, dashboard aggregation in `packages/services/market_dashboard.py`, Evidence Center payload typing/rendering under `apps/web`, and focused service/API/page tests.
+- Non-goals: LLM execution of follow-up prompts, selected-item AI brief generation, persistent queue tables, alerts/scheduling, scraping/OCR/vector search/document corpus storage, production filings/transcripts ingestion, or trading recommendations.
+
+### 2. Signatures
+
+- Service helper: `build_research_follow_up_queue(*, notes, information_sources_payload, generated_at=None, limit=20, diagnostics=None)`
+- Dashboard API: `GET /dashboard/market-overview`
+- Additive response field: `research_follow_up_queue`
+- Queue item kind values: `source_review`, `seed_prep`, `ai_summary_question`, `source_gap`, `research_note`
+- Queue item citation policy values: `citable`, `collection_only`, `guidance_only`
+
+### 3. Contracts
+
+- Queue items are derived workflow actions, not evidence by default.
+- Source Notebook `ai_follow_up` creates `ai_summary_question` items but does not call an LLM.
+- A queue item may expose `citation_id="research_source_note:<id>"` only when the underlying Source Notebook row is already `reviewed`, `is_citable=true`, and has that existing citation ID.
+- Draft, archived, and non-citable Source Notebook rows may create collection/review tasks but must not expose citation IDs.
+- Source-readiness statuses `needs_adapter`, `needs_manual_seed`, `no_data`, and `future` may create `source_gap` actions.
+- Seed templates and manual-seed sources may create `seed_prep` actions.
+- Source-readiness links, seed templates, template rows, source IDs, and readiness gap IDs must remain `guidance_only` and must never appear in dashboard or assistant citation lists.
+- Queue summary counts should be based on all derived items; returned items may be capped by the service limit.
+
+### 4. Validation & Error Matrix
+
+- Source Notebook lookup fails -> queue returns `status="degraded"` with sanitized `SOURCE_UNAVAILABLE` diagnostics and no fabricated note items.
+- Empty notes and no source gaps -> queue returns an empty item list with safety flags intact.
+- Non-citable note has `ai_follow_up` -> queue item uses `citation_policy="collection_only"` and omits `citation_id`.
+- Reviewed/citable note has `ai_follow_up` -> queue item may include the existing `research_source_note:<id>` citation ID.
+- Source-readiness gap or seed template exists -> queue item uses `citation_policy="guidance_only"` and omits `citation_id`.
+- Unknown item kind or policy reaches frontend -> frontend may display the raw value, but must not infer citation permission from unknown values.
+
+### 5. Good/Base/Bad Cases
+
+- Good: a reviewed/citable Buffett component note with `ai_follow_up`, source linkage, target indicator code, component role, and complete checklist appears as an AI-summary question with `research_source_note:<id>`.
+- Good: a draft FRED-linked note with `ai_follow_up` appears as collection-only review work and has no citation ID.
+- Good: `fred_us_rates` with `needs_adapter` appears as a source-gap action that points to adapter/seed work without becoming evidence.
+- Base: seed-template readiness appears as seed-prep guidance even when no linked notes are ready.
+- Bad: `fred_us_rates`, `seed_template:fred_us_rates`, or a collection link appears as a citation ID.
+- Bad: queue rendering implies the LLM has already summarized or executed the follow-up item.
+- Bad: queue items produce buy/sell/hold, target price, position sizing, or execution instructions.
+
+### 6. Tests Required
+
+- Service tests assert queue derivation for citable notes, non-citable notes, source-review tasks, seed-prep tasks, source gaps, summary counts, and limit behavior.
+- Dashboard service/API tests assert `research_follow_up_queue` is additive on `GET /dashboard/market-overview`.
+- Citation-boundary tests assert draft/non-citable notes and source-readiness/seed-template items never expose citation IDs.
+- Frontend page tests assert localized queue labels, citation-policy rendering, metadata chips, and no-trading-advice safety wording.
+- Type-check should cover the shared `ResearchFollowUpQueuePayload` frontend contract.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+items.append({
+    "id": "source_gap:fred_us_rates",
+    "kind": "source_gap",
+    "citation_policy": "citable",
+    "citation_id": "fred_us_rates",
+})
+```
+
+This turns a source-readiness gap into evidence before a local observation or reviewed/citable note exists.
+
+#### Correct
+
+```python
+items.append({
+    "id": "source_gap:fred_us_rates",
+    "kind": "source_gap",
+    "citation_policy": "guidance_only",
+    "next_action": "Add an official-source adapter or reviewed seed import.",
+})
+```
+
+This keeps the queue item actionable while preserving the citation boundary.
+
 ## Scenario: Information Source Collection Guidance
 
 ### 1. Scope / Trigger

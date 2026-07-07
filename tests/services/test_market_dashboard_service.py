@@ -172,6 +172,7 @@ def test_market_overview_brief_includes_report_and_news_availability():
             source_url="https://example.com/aapl-valuation-source",
             symbols=["AAPL"],
             excerpt="Reviewed source excerpt for valuation context.",
+            ai_follow_up="Summarize how this source supports Buffett Indicator context.",
             review_status="reviewed",
             is_citable=True,
             source_id="buffett_manual_valuation_components",
@@ -190,6 +191,7 @@ def test_market_overview_brief_includes_report_and_news_availability():
             source_url="https://example.com/aapl-draft",
             symbols=["AAPL"],
             excerpt="Draft source excerpt.",
+            ai_follow_up="Check whether this draft source is useful later.",
             review_status="draft",
             is_citable=False,
         ),
@@ -237,6 +239,23 @@ def test_market_overview_brief_includes_report_and_news_availability():
     diagnostic_codes = {diagnostic["code"] for diagnostic in dashboard_brief["diagnostics"]}
     assert "GENERATED_REPORTS_NO_DATA" not in diagnostic_codes
     assert "NEWS_NO_DATA" not in diagnostic_codes
+
+    follow_up_queue = payload["research_follow_up_queue"]
+    follow_up_items = {item["id"]: item for item in follow_up_queue["items"]}
+    assert follow_up_queue["safety"]["not_investment_advice"] is True
+    assert follow_up_queue["summary"]["ai_summary_question"] == 2
+    assert follow_up_queue["summary"]["source_gap"] >= 1
+    assert (
+        follow_up_items[f"source_note_ai_follow_up:{source_note['id']}"]["citation_id"]
+        == source_note["citation_id"]
+    )
+    draft_follow_up = next(
+        item for item in follow_up_queue["items"] if item["id"].startswith("source_note_ai_follow_up:") and item["note_title"] == "Draft source note"
+    )
+    assert draft_follow_up["citation_policy"] == "collection_only"
+    assert "citation_id" not in draft_follow_up
+    source_gap_ids = {item.get("citation_id") for item in follow_up_queue["items"] if item["kind"] == "source_gap"}
+    assert source_gap_ids == {None}
 
 
 def test_market_overview_degrades_when_source_notebook_is_unavailable(monkeypatch):

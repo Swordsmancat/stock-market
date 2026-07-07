@@ -81,3 +81,12 @@ def test_dashboard_market_overview_api_returns_aggregated_payload(monkeypatch):
     assert payload["dashboard_brief"]["narrative"]["context"]["source_mix"][
         "information_source_gaps"
     ] == 9
+    follow_up_queue = payload["research_follow_up_queue"]
+    assert follow_up_queue["summary"]["source_gap"] == 9
+    assert follow_up_queue["summary"]["guidance_only"] >= 9
+    assert follow_up_queue["safety"]["citations_require_reviewed_citable_notes"] is True
+    assert {
+        item.get("citation_id")
+        for item in follow_up_queue["items"]
+        if item["kind"] in {"source_gap", "seed_prep"}
+    } == {None}

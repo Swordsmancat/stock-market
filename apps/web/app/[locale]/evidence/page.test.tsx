@@ -229,6 +229,81 @@ function createMarketOverviewPayload() {
       ],
       diagnostics: [],
     },
+    research_follow_up_queue: {
+      status: "ok",
+      generated_at: "2026-01-02T00:00:00+00:00",
+      summary: {
+        total: 3,
+        returned: 3,
+        source_review: 0,
+        seed_prep: 1,
+        ai_summary_question: 1,
+        source_gap: 1,
+        research_note: 0,
+        citable: 1,
+        collection_only: 0,
+        guidance_only: 2,
+      },
+      items: [
+        {
+          id: "source_note_ai_follow_up:note-1",
+          kind: "ai_summary_question",
+          priority: "high",
+          title: "AAPL valuation source note",
+          prompt: "Summarize whether this note is ready for a future Buffett Indicator AI summary.",
+          next_action: "Use this as a future AI-summary question after checking citation readiness.",
+          citation_policy: "citable",
+          citation_id: "research_source_note:note-1",
+          note_id: "note-1",
+          note_title: "AAPL valuation source note",
+          source_name: "Manual notebook",
+          source_type: "valuation_component",
+          source_id: "buffett_manual_valuation_components",
+          source_label: "Buffett Indicator manual valuation components",
+          source_category: "valuation",
+          source_status: "needs_manual_seed",
+          target_indicator_codes: ["buffett_indicator_cn"],
+          component_role: "market_cap",
+          completeness_status: "complete",
+          retrieved_at: "2026-01-02T00:00:00+00:00",
+        },
+        {
+          id: "source_seed_prep:buffett_manual_valuation_components",
+          kind: "seed_prep",
+          priority: "high",
+          title: "Buffett Indicator manual valuation components",
+          prompt: "Collect market-cap and GDP components from reviewed public sources.",
+          next_action: "Seed Buffett Indicator observations with source notes.",
+          citation_policy: "guidance_only",
+          source_id: "buffett_manual_valuation_components",
+          source_label: "Buffett Indicator manual valuation components",
+          source_category: "valuation",
+          source_status: "needs_manual_seed",
+          target_indicator_codes: ["buffett_indicator_cn"],
+          linked_note_count: 1,
+          seed_ready_note_count: 1,
+        },
+        {
+          id: "source_gap:fred_us_rates",
+          kind: "source_gap",
+          priority: "high",
+          title: "FRED US rates",
+          prompt: "Collect DGS10 observations from FRED before seeding rates data.",
+          next_action: "Add an official-source adapter or reviewed seed import.",
+          citation_policy: "guidance_only",
+          source_id: "fred_us_rates",
+          source_label: "FRED US rates",
+          source_category: "macro",
+          source_status: "needs_adapter",
+          target_indicator_codes: ["us_10y_yield"],
+        },
+      ],
+      safety: {
+        not_investment_advice: true,
+        citations_require_reviewed_citable_notes: true,
+        no_automated_trading: true,
+      },
+    },
   };
 }
 
@@ -243,6 +318,7 @@ function createResearchSourceNotesPayload() {
         source_url: "https://example.com/aapl-valuation-source",
         symbols: ["AAPL"],
         tags: ["valuation"],
+        ai_follow_up: "Summarize whether this note is ready for a future Buffett Indicator AI summary.",
         excerpt: "Reviewed source excerpt for AAPL valuation.",
         note: "Use this source for Buffett Indicator comparison.",
         review_status: "reviewed",
@@ -329,6 +405,17 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
   expect(screen.getByText("Linked notebook entries: 1")).toBeInTheDocument();
   expect(screen.getByText("Seed-review ready: 1")).toBeInTheDocument();
   expect(screen.getByText("Citation: research_source_note:note-1")).toBeInTheDocument();
+
+  expect(screen.getByText("Research follow-up queue")).toBeInTheDocument();
+  expect(screen.getByText("AI questions")).toBeInTheDocument();
+  expect(screen.getAllByText("Seed prep").length).toBeGreaterThan(0);
+  expect(screen.getByText("Source gaps")).toBeInTheDocument();
+  expect(screen.getByText("AI summary question")).toBeInTheDocument();
+  expect(screen.getAllByText("Guidance only").length).toBeGreaterThan(0);
+  expect(screen.getByText("Citable evidence")).toBeInTheDocument();
+  expect(screen.getAllByText(/research_source_note:note-1/).length).toBeGreaterThan(0);
+  expect(screen.getByText(/Summarize whether this note is ready/)).toBeInTheDocument();
+  expect(screen.getByText(/Queue items are research prompts and evidence-preparation tasks only/)).toBeInTheDocument();
 
   const fredLink = screen.getByRole("link", { name: /FRED DGS10/ });
   expect(fredLink).toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");

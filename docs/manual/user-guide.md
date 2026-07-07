@@ -43,6 +43,7 @@
 - 哪些指标仍然是 `needs_adapter`、`needs_manual_seed`、`no_data` 或 `future`，下一步应补适配器、人工 seed 还是等待未来文档能力。
 - 当前 AI 摘要使用了哪些本地 citation，哪些只是 source-readiness 缺口，模型是 LLM 生成还是 deterministic fallback。
 - 官方/合法来源链接、seed 模板、导入命令、复核清单和引用边界分别是什么。
+- 来源笔记本里的 AI follow-up、来源复核缺口、seed 准备动作和 source-readiness gap，下一步应该优先处理什么。
 
 页面顶部先展示 AI 证据摘要、引用计数、诊断和安全边界，再展示宏观/估值指标表。指标表会列出 code、名称、地区、分类、value、as-of、source、AI 可引用状态、source/method metadata 是否存在，以及 no-data 原因。缺失值显示为“暂无”/`N/A`，不会渲染成 0。
 
@@ -58,6 +59,8 @@
 - 只有保存为 `reviewed` 且勾选“允许 AI 引用”的条目，才会生成 `research_source_note:<id>` citation。
 - 系统不会抓取网页、不会存储二进制原始文件、不会默认构建 filings/transcripts/研报全文语料库。
 - 这些笔记会作为 dashboard brief 和 AI 市场助手的补充证据来源，但仍然必须遵守不提供买入/卖出/持有、目标价、仓位或交易执行建议的边界。
+
+来源笔记本下方会显示 deterministic research follow-up queue。这个队列从本地 payload 派生，不会自动调用 LLM；它会把 `ai_follow_up` prompt、未完成的来源复核、宏观/估值 seed 准备、`needs_adapter` / `needs_manual_seed` / `no_data` / `future` 等来源缺口整理成下一步研究动作。队列项分为可引用证据、仅收集和仅指引三类：只有已 `reviewed` 且允许 AI 引用的来源笔记才会显示 `research_source_note:<id>` citation；source-readiness 链接、seed 模板、草稿笔记和未导入 observation 都不会被当作 citation。
 
 证据中心的安全边界与首页一致：它用于信息汇总、缺口追踪和 AI 研究摘要，不输出买入、卖出、持有、目标价、仓位或执行建议。
 
@@ -412,7 +415,7 @@ AI 市场助手当前能力：
 2. **P1 source capability matrix**：记录每个宏观源的 adapter 状态、license/usage note、retrieved_at、失败诊断和人工复核要求。
 3. **P1 日/周 AI digest 历史**：把 dashboard brief 保存为可回看的日/周研究记录，包含 what changed、why it matters、what to watch next、citations、diagnostics 和 source gaps。
 4. **P1 watchlist 事件监控**：把 watchlist 价格异动、报告更新、新闻事件、宏观发布和 source readiness 变化汇总成个人研究 inbox。
-5. **P1 source notebook 到宏观证据工作流**：把已实现的来源笔记本进一步连接到 Buffett Indicator、FRED/PBOC 手工复核、source capability matrix 和 seed import 记录，让一个来源条目可以更自然地变成“收集 -> 复核 -> 入库 -> AI 可引用”的流程。
+5. **P1 source notebook 到宏观证据工作流**：继续增强已实现的来源笔记本、source-readiness linkage 和 research follow-up queue，让一个来源条目更自然地进入“收集 -> 复核 -> seed/import 准备 -> 入库 -> AI 可引用”的流程。
 6. **P2 文档/公告语料 ingest**：在合法来源和引用策略明确后，再接入 SEC filings、交易所公告、电话会 transcript 或用户上传文档；默认只保存 metadata/摘要/引用，不假设可随意抓取全文。
 7. **P2 研究级筛选与提醒**：围绕宏观阈值、watchlist 异动、报告更新和资料更新做提醒；推荐继续作为“研究线索生成器”，输出证据、历史样本和风险，而不是直接买卖建议。
 8. **P2 图表与个人工作区增强**：增加跨指标图表、参数持久化、轻量注释和 saved view；仍保持研究辅助定位，不把 terminal parity 作为近期目标。

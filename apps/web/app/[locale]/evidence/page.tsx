@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Database, ExternalLink, FileCheck2, FileWarning, SearchCheck, ShieldCheck } from "lucide-react";
+import { Database, ExternalLink, FileCheck2, FileWarning, ListChecks, SearchCheck, ShieldCheck } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -32,6 +32,8 @@ import {
   type InformationSourcesPayload,
   type MarketOverviewIndicatorItem,
   type MarketOverviewPayload,
+  type ResearchFollowUpQueueItem,
+  type ResearchFollowUpQueuePayload,
 } from "@/lib/market-overview-payload";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
 import { Link } from "@/src/i18n/routing";
@@ -309,6 +311,208 @@ function renderBriefSectionList(brief: DashboardBriefPayload) {
   ));
 }
 
+function followUpKindLabel(kind: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {
+  switch (kind) {
+    case "source_review":
+      return t("followUpKindSourceReview");
+    case "seed_prep":
+      return t("followUpKindSeedPrep");
+    case "ai_summary_question":
+      return t("followUpKindAiSummaryQuestion");
+    case "source_gap":
+      return t("followUpKindSourceGap");
+    case "research_note":
+      return t("followUpKindResearchNote");
+    default:
+      return kind ?? t("unavailableShort");
+  }
+}
+
+function followUpPolicyLabel(policy: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {
+  switch (policy) {
+    case "citable":
+      return t("followUpPolicyCitable");
+    case "collection_only":
+      return t("followUpPolicyCollectionOnly");
+    case "guidance_only":
+      return t("followUpPolicyGuidanceOnly");
+    default:
+      return policy ?? t("unavailableShort");
+  }
+}
+
+function followUpPriorityLabel(priority: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {
+  switch (priority) {
+    case "high":
+      return t("followUpPriorityHigh");
+    case "medium":
+      return t("followUpPriorityMedium");
+    case "low":
+      return t("followUpPriorityLow");
+    default:
+      return priority ?? t("unavailableShort");
+  }
+}
+
+function followUpPolicyBadgeVariant(policy: string | undefined): "secondary" | "outline" | "destructive" {
+  if (policy === "citable") {
+    return "secondary";
+  }
+  if (policy === "collection_only" || policy === "guidance_only") {
+    return "outline";
+  }
+  return "destructive";
+}
+
+function renderFollowUpMetadata(
+  item: ResearchFollowUpQueueItem,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+  locale: string,
+) {
+  const sourceLabel = item.source_label ?? item.source_name;
+  const dateLabel = item.as_of ?? item.retrieved_at;
+  return (
+    <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+      {sourceLabel ? (
+        <div>
+          <span className="font-medium text-foreground">{t("followUpSource")}</span> {sourceLabel}
+        </div>
+      ) : null}
+      {item.source_status ? (
+        <div>
+          <span className="font-medium text-foreground">{t("followUpSourceStatus")}</span> {item.source_status}
+        </div>
+      ) : null}
+      {item.component_role ? (
+        <div>
+          <span className="font-medium text-foreground">{t("followUpComponentRole")}</span> {item.component_role}
+        </div>
+      ) : null}
+      {item.completeness_status ? (
+        <div>
+          <span className="font-medium text-foreground">{t("followUpCompleteness")}</span>{" "}
+          {item.completeness_status}
+        </div>
+      ) : null}
+      {dateLabel ? (
+        <div>
+          <span className="font-medium text-foreground">{t("followUpDate")}</span>{" "}
+          {formatDate(dateLabel, locale, t("unavailableShort"))}
+        </div>
+      ) : null}
+      {typeof item.linked_note_count === "number" ? (
+        <div>
+          <span className="font-medium text-foreground">{t("followUpLinkedNotes")}</span> {item.linked_note_count}
+        </div>
+      ) : null}
+      {typeof item.seed_ready_note_count === "number" ? (
+        <div>
+          <span className="font-medium text-foreground">{t("followUpSeedReadyNotes")}</span>{" "}
+          {item.seed_ready_note_count}
+        </div>
+      ) : null}
+      {item.citation_id ? (
+        <div className="font-mono">
+          <span className="font-sans font-medium text-foreground">{t("followUpCitation")}</span> {item.citation_id}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function renderResearchFollowUpQueue(
+  queue: ResearchFollowUpQueuePayload | undefined,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+  locale: string,
+) {
+  const summary = queue?.summary ?? {};
+  const items = queue?.items ?? [];
+  return (
+    <Card className="border-primary/20">
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={queue?.status === "ok" ? "secondary" : "outline"}>
+            {queue?.status ?? t("unavailableShort")}
+          </Badge>
+          {queue?.generated_at ? (
+            <Badge variant="outline">
+              {t("followUpGenerated", {
+                date: formatDate(queue.generated_at, locale, t("unavailableShort")),
+              })}
+            </Badge>
+          ) : null}
+        </div>
+        <CardTitle className="flex items-center gap-2 text-xl">
+          <ListChecks className="h-5 w-5" />
+          {t("followUpTitle")}
+        </CardTitle>
+        <CardDescription>{t("followUpDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          {renderMetric(t("followUpTotal"), summary.total ?? 0, t("followUpTotalDesc"))}
+          {renderMetric(
+            t("followUpAiQuestions"),
+            summary.ai_summary_question ?? 0,
+            t("followUpAiQuestionsDesc"),
+          )}
+          {renderMetric(t("followUpSeedPrep"), summary.seed_prep ?? 0, t("followUpSeedPrepDesc"))}
+          {renderMetric(t("followUpSourceGaps"), summary.source_gap ?? 0, t("followUpSourceGapsDesc"))}
+        </div>
+
+        {items.length === 0 ? (
+          <EmptyState title={t("followUpNoItems")} description={t("followUpNoItemsDesc")} />
+        ) : (
+          <div className="grid gap-3 xl:grid-cols-2">
+            {items.map((item) => (
+              <article key={item.id} className="border bg-background p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{followUpKindLabel(item.kind, t)}</Badge>
+                      <Badge variant="outline">{followUpPriorityLabel(item.priority, t)}</Badge>
+                      <Badge variant={followUpPolicyBadgeVariant(item.citation_policy)}>
+                        {followUpPolicyLabel(item.citation_policy, t)}
+                      </Badge>
+                    </div>
+                    <h3 className="mt-2 font-semibold">{item.title ?? item.note_title ?? item.source_label}</h3>
+                  </div>
+                  <div className="font-mono text-xs text-muted-foreground">{item.id}</div>
+                </div>
+                {item.prompt ? (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{t("followUpPrompt")}</span> {item.prompt}
+                  </p>
+                ) : null}
+                {item.next_action ? (
+                  <p className="mt-2 text-sm">
+                    <span className="font-medium">{t("followUpNextAction")}</span> {item.next_action}
+                  </p>
+                ) : null}
+                {(item.target_indicator_codes ?? []).length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {item.target_indicator_codes?.map((code) => (
+                      <Badge key={`${item.id}-${code}`} variant="outline" className="text-[10px]">
+                        {code}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+                {renderFollowUpMetadata(item, t, locale)}
+              </article>
+            ))}
+          </div>
+        )}
+
+        <div className="border bg-muted/20 p-3 text-sm text-muted-foreground">
+          <div className="font-semibold text-foreground">{t("followUpSafetyTitle")}</div>
+          <p className="mt-1">{t("followUpSafetyDescription")}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function buildSeedImportLabels(t: Awaited<ReturnType<typeof getTranslations>>): EvidenceSeedImportReviewLabels {
   return {
     title: t("title"),
@@ -554,6 +758,8 @@ export default async function EvidenceCenterPage({
         sourceTargets={sourceTargetOptions}
         loadFailed={researchSourceNotesResult.status === "failed"}
       />
+
+      {renderResearchFollowUpQueue(payload.research_follow_up_queue, t, locale)}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <Card className="border-primary/20">
