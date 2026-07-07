@@ -407,7 +407,7 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
     }),
   );
 
-  expect(screen.getByRole("heading", { name: "Evidence Center" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Macro Research" })).toBeInTheDocument();
   expect(screen.getByText("Active provider: yfinance")).toBeInTheDocument();
   expect(screen.getAllByText(/US 10Y remains the cited macro datapoint/).length).toBeGreaterThan(0);
   expect(screen.getAllByText("Deterministic fallback").length).toBeGreaterThan(0);
@@ -497,7 +497,7 @@ it("renders a failed-load state when the market overview endpoint fails", async 
     }),
   );
 
-  expect(screen.getByText("Evidence Center is unavailable")).toBeInTheDocument();
-  expect(screen.getByText("Could not load the market overview evidence payload. Check the API service and provider settings.")).toBeInTheDocument();
+  expect(screen.getByText("Macro Research is unavailable")).toBeInTheDocument();
+  expect(screen.getByText("Could not load the market overview research payload. Check the API service and provider settings.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Provider settings" })).toHaveAttribute("href", "/settings");
 });

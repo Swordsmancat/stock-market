@@ -5,6 +5,17 @@ import { dirname, join } from "node:path";
 
 export type ColorScheme = "china" | "international";
 
+export const DEFAULT_FAVORITE_MACRO_INDICATOR_CODES = [
+  "buffett_indicator_us",
+  "buffett_indicator_cn",
+  "buffett_indicator_hk",
+  "us_10y_yield",
+  "us_10y_2y_spread",
+  "us_cpi_yoy",
+  "us_m2_yoy",
+  "cn_m2_yoy",
+] as const;
+
 export type PlatformSettings = {
   market_data_provider: string;
   llm_provider: string;
@@ -14,6 +25,7 @@ export type PlatformSettings = {
   tushare_token: string;
   tushare_http_url: string;
   color_scheme: ColorScheme;
+  favorite_macro_indicator_codes: string[];
   llm_api_key_configured: boolean;
   tushare_token_configured: boolean;
   market_data_provider_capabilities: MarketDataProviderCapability[];
@@ -43,6 +55,7 @@ const DEFAULTS: StoredPlatformSettings = {
   tushare_token: "",
   tushare_http_url: "",
   color_scheme: "china",
+  favorite_macro_indicator_codes: [...DEFAULT_FAVORITE_MACRO_INDICATOR_CODES],
 };
 
 const MARKET_DATA_PROVIDER_CAPABILITY_BASE: Record<
@@ -92,6 +105,27 @@ function normalizeColorScheme(value: unknown): ColorScheme {
   return value === "international" ? "international" : "china";
 }
 
+export function normalizeFavoriteMacroIndicatorCodes(value: unknown): string[] {
+  const rawCodes = Array.isArray(value)
+    ? value.map((item) => String(item))
+    : typeof value === "string"
+      ? value.replaceAll(",", "\n").split(/\r?\n/)
+      : [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const rawCode of rawCodes) {
+    const code = rawCode.trim();
+    if (!code || seen.has(code)) {
+      continue;
+    }
+    normalized.push(code);
+    seen.add(code);
+  }
+
+  return normalized;
+}
+
 function buildStoredPlatformSettings(stored: Partial<StoredPlatformSettings>): StoredPlatformSettings {
   return {
     market_data_provider: stored.market_data_provider ?? DEFAULTS.market_data_provider,
@@ -102,6 +136,10 @@ function buildStoredPlatformSettings(stored: Partial<StoredPlatformSettings>): S
     tushare_token: stored.tushare_token ?? DEFAULTS.tushare_token,
     tushare_http_url: stored.tushare_http_url ?? DEFAULTS.tushare_http_url,
     color_scheme: normalizeColorScheme(stored.color_scheme ?? DEFAULTS.color_scheme),
+    favorite_macro_indicator_codes:
+      stored.favorite_macro_indicator_codes === undefined
+        ? DEFAULTS.favorite_macro_indicator_codes
+        : normalizeFavoriteMacroIndicatorCodes(stored.favorite_macro_indicator_codes),
   };
 }
 
@@ -152,7 +190,11 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
   return toPublicPlatformSettings(await getStoredPlatformSettings());
 }
 
-export async function savePlatformSettings(updates: Partial<StoredPlatformSettings>): Promise<PlatformSettings> {
+type PlatformSettingsUpdate = Partial<Omit<StoredPlatformSettings, "favorite_macro_indicator_codes">> & {
+  favorite_macro_indicator_codes?: unknown;
+};
+
+export async function savePlatformSettings(updates: PlatformSettingsUpdate): Promise<PlatformSettings> {
   const current = await getStoredPlatformSettings();
   const next: StoredPlatformSettings = {
     market_data_provider: updates.market_data_provider ?? current.market_data_provider,
@@ -169,6 +211,10 @@ export async function savePlatformSettings(updates: Partial<StoredPlatformSettin
         : current.tushare_token,
     tushare_http_url: updates.tushare_http_url ?? current.tushare_http_url,
     color_scheme: normalizeColorScheme(updates.color_scheme ?? current.color_scheme),
+    favorite_macro_indicator_codes:
+      updates.favorite_macro_indicator_codes === undefined
+        ? current.favorite_macro_indicator_codes
+        : normalizeFavoriteMacroIndicatorCodes(updates.favorite_macro_indicator_codes),
   };
 
   const path = settingsPath();

@@ -21,7 +21,7 @@ import { EmptyState } from "@/components/empty-state";
 import { getDashboardDateRanges } from "@/lib/dates";
 import { withProviderQuery } from "@/lib/market-data";
 import { getMarketMovementTextClass } from "@/lib/market-color-classes";
-import { getPlatformSettings } from "@/lib/platform-settings-store";
+import { DEFAULT_FAVORITE_MACRO_INDICATOR_CODES, getPlatformSettings } from "@/lib/platform-settings-store";
 import { backendFetch } from "@/lib/backend-api";
 
 type Instrument = {
@@ -455,6 +455,13 @@ type DailyMovement = {
   percentChange: number | null;
 } | null;
 
+type DashboardFavoriteMacroIndicatorRow = {
+  code: string;
+  item: DashboardValuationIndicatorItem | null;
+};
+
+const FAVORITE_MACRO_INDICATOR_LIMIT = 8;
+
 function getSafeDashboardLocale(locale: string): string {
   try {
     const [supportedLocale] = Intl.DateTimeFormat.supportedLocalesOf([locale]);
@@ -794,6 +801,26 @@ function groupDashboardIndicatorItems(items: DashboardValuationIndicatorItem[]) 
   }));
 }
 
+function buildFavoriteMacroIndicatorRows(
+  items: DashboardValuationIndicatorItem[],
+  favoriteCodes: string[],
+): DashboardFavoriteMacroIndicatorRow[] {
+  const availableByCode = new Map(items.map((item) => [item.code, item]));
+  const requestedCodes =
+    favoriteCodes.length > 0 ? favoriteCodes : Array.from(DEFAULT_FAVORITE_MACRO_INDICATOR_CODES);
+  const requestedRows = requestedCodes
+    .slice(0, FAVORITE_MACRO_INDICATOR_LIMIT)
+    .map((code) => ({ code, item: availableByCode.get(code) ?? null }));
+
+  if (requestedRows.some((row) => row.item !== null) || items.length === 0) {
+    return requestedRows;
+  }
+
+  return items
+    .slice(0, FAVORITE_MACRO_INDICATOR_LIMIT)
+    .map((item) => ({ code: item.code, item }));
+}
+
 export default async function HomePage({
   params,
   searchParams = Promise.resolve({}),
@@ -920,6 +947,10 @@ export default async function HomePage({
   const marketOverviewValuationItems =
     marketOverviewPayload?.macro_indicators?.items ?? marketOverviewPayload?.valuation_indicators.items ?? [];
   const marketOverviewIndicatorGroups = groupDashboardIndicatorItems(marketOverviewValuationItems);
+  const favoriteMacroIndicatorRows = buildFavoriteMacroIndicatorRows(
+    marketOverviewValuationItems,
+    platformSettings.favorite_macro_indicator_codes,
+  );
   const dashboardBrief = marketOverviewPayload?.dashboard_brief ?? null;
   const informationSources = marketOverviewPayload?.information_sources ?? null;
   const sourceStatusLabels: Record<string, string> = {
@@ -1064,7 +1095,7 @@ export default async function HomePage({
   ];
 
   return (
-    <div className="space-y-0">
+    <div className="space-y-0 overflow-x-hidden">
       {tickerItems.length > 0 && <MarketTicker items={tickerItems} />}
       
       <div className="space-y-6 p-6">
@@ -1263,6 +1294,88 @@ export default async function HomePage({
                   </ul>
                 </div>
               ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {marketOverviewPayload ? (
+          <Card className="rounded-none border-x-0 border-cyan-200/70 dark:border-cyan-900/60">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="text-[10px]">
+                  {t("marketDashboardBadge")}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {t("sourceReadinessConfigured", {
+                    count: favoriteMacroIndicatorRows.filter((row) => row.item?.status === "ok").length,
+                  })}
+                </Badge>
+              </div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-lg">{t("favoriteMacroTitle")}</CardTitle>
+                  <CardDescription className="text-xs">{t("favoriteMacroDesc")}</CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/evidence">{t("favoriteMacroDetailLink")}</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/settings">{t("favoriteMacroSettingsLink")}</Link>
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {favoriteMacroIndicatorRows.map(({ code, item }) => {
+                  const isAvailable = item?.status === "ok";
+                  const displayName = item?.name ?? code;
+                  const sourceOrGap = item
+                    ? isAvailable
+                      ? t("favoriteMacroSource", { source: item.source ?? t("unavailableShort") })
+                      : t("favoriteMacroSourceGap", {
+                          reason: item.no_data_reason ?? t("indicatorNoData"),
+                        })
+                    : t("favoriteMacroSourceGap", { reason: t("favoriteMacroPayloadMissing") });
+                  return (
+                    <div key={code} className="rounded-none border bg-background p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">{displayName}</div>
+                          <div className="mt-1 text-[10px] text-muted-foreground">
+                            {t("favoriteMacroCode", { code })}
+                          </div>
+                        </div>
+                        <Badge variant={isAvailable ? "secondary" : "outline"} className="shrink-0 text-[10px]">
+                          {isAvailable ? t("available") : t("no_data")}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 font-mono text-2xl font-bold">
+                        {item ? formatValuationIndicatorValue(item, locale, t("unavailableShort")) : t("unavailableShort")}
+                      </div>
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        {t("valuationAsOf", {
+                          date: item ? formatDashboardDate(item.as_of, locale, t("unavailableShort")) : t("unavailableShort"),
+                        })}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {item?.region ? (
+                          <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                            {t("favoriteMacroRegion", { region: item.region })}
+                          </Badge>
+                        ) : null}
+                        {item?.category ? (
+                          <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                            {t("favoriteMacroCategory", { category: formatIndicatorCategoryLabel(item.category) })}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">{sourceOrGap}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         ) : null}

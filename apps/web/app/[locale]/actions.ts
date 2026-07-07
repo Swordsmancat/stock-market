@@ -226,6 +226,7 @@ export async function savePlatformSettingsAction(formData: FormData) {
       tushare_token: String(formData.get("tushare_token") ?? ""),
       tushare_http_url: String(formData.get("tushare_http_url") ?? ""),
       color_scheme: String(formData.get("color_scheme") ?? "china") === "international" ? "international" : "china",
+      favorite_macro_indicator_codes: String(formData.get("favorite_macro_indicator_codes") ?? ""),
     });
     revalidatePath(`/${locale}/settings`);
   } catch {

@@ -88,7 +88,7 @@ const tickerItems = [
 ];
 
 it("renders all ticker items by default", () => {
-  render(<MarketTicker items={tickerItems} />);
+  const { container } = render(<MarketTicker items={tickerItems} />);
 
   expect(screen.getByText("上证指数")).toBeInTheDocument();
   expect(screen.getByText("恒生指数")).toBeInTheDocument();
@@ -99,6 +99,8 @@ it("renders all ticker items by default", () => {
   expect(screen.getByLabelText(/上证指数.*provider: yfinance/)).toBeInTheDocument();
   expect(screen.getByText(/source: database/)).toBeInTheDocument();
   expect(screen.getByLabelText(/CSI 500.*provider returned no rows/)).toBeInTheDocument();
+  expect(container.querySelector(".grid.min-w-0")).not.toBeNull();
+  expect(container.querySelector(".overflow-hidden.px-4.py-2")).not.toBeNull();
 });
 
 it("filters ticker items by selected market", async () => {

@@ -207,7 +207,8 @@ export default async function SettingsPage({
                   <div className="flex items-center gap-2">
                     <span className="text-sm">{t("chinaConvention")}</span>
                     <span className="text-xs text-muted-foreground">
-                      (<span className="text-green-600 font-medium">绿涨</span> / <span className="text-red-600 font-medium">红跌</span>)
+                      (<span className="text-green-600 font-medium">{t("greenUp")}</span> /{" "}
+                      <span className="text-red-600 font-medium">{t("redDown")}</span>)
                     </span>
                   </div>
                 </label>
@@ -222,12 +223,34 @@ export default async function SettingsPage({
                   <div className="flex items-center gap-2">
                     <span className="text-sm">{t("internationalConvention")}</span>
                     <span className="text-xs text-muted-foreground">
-                      (<span className="text-red-600 font-medium">红涨</span> / <span className="text-green-600 font-medium">绿跌</span>)
+                      (<span className="text-red-600 font-medium">{t("redUp")}</span> /{" "}
+                      <span className="text-green-600 font-medium">{t("greenDown")}</span>)
                     </span>
                   </div>
                 </label>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("macroFavoritesTitle")}</CardTitle>
+            <CardDescription>{t("macroFavoritesDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <label className="text-sm font-medium" htmlFor="favorite_macro_indicator_codes">
+              {t("macroFavoritesLabel")}
+            </label>
+            <textarea
+              id="favorite_macro_indicator_codes"
+              name="favorite_macro_indicator_codes"
+              defaultValue={settings.favorite_macro_indicator_codes.join("\n")}
+              rows={8}
+              className="min-h-36 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">{t("macroFavoritesHint")}</p>
+            <p className="text-xs text-muted-foreground">{t("macroFavoritesDefault")}</p>
           </CardContent>
         </Card>
 

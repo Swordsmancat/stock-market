@@ -92,9 +92,9 @@ function MarketTickerComponent({ items, className }: MarketTickerProps) {
         className
       )}
     >
-      <div className="flex items-center gap-4 px-4 py-2">
+      <div className="flex items-center gap-4 overflow-hidden px-4 py-2">
         <Select value={selectedMarket} onValueChange={setSelectedMarket}>
-          <SelectTrigger className="w-32 h-7 bg-gray-900 border-gray-700 text-white text-xs">
+          <SelectTrigger className="h-7 w-32 shrink-0 bg-gray-900 border-gray-700 text-white text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-gray-900 border-gray-700">
@@ -110,8 +110,8 @@ function MarketTickerComponent({ items, className }: MarketTickerProps) {
           </SelectContent>
         </Select>
 
-        <div className="flex-1 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
-          <div className="flex gap-6 min-w-max">
+        <div className="min-w-0 flex-1">
+          <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             {filteredItems.map((item) => {
               const changeValue = item.change ?? 0;
               const changeColor = getTickerMovementColor(changeValue, getMovementColor);
@@ -130,15 +130,15 @@ function MarketTickerComponent({ items, className }: MarketTickerProps) {
               return (
                 <div
                   key={item.code}
-                  className="inline-flex items-center gap-2 font-mono text-sm whitespace-nowrap"
+                  className="inline-flex min-w-0 items-center gap-2 font-mono text-sm whitespace-nowrap"
                   title={trustTitle}
                   aria-label={`${item.name} ${trustTitle}`}
                 >
-                  <span className="text-gray-400 font-sans">{item.name}</span>
-                  <span className="font-bold">
+                  <span className="truncate text-gray-400 font-sans">{item.name}</span>
+                  <span className="shrink-0 font-bold">
                     {formatNumber(item.close, locale, "--")}
                   </span>
-                  <span className={cn(changeColor)}>
+                  <span className={cn("shrink-0", changeColor)}>
                     {formatChange(item.change, locale, "--")}{" "}
                     ({formatPercent(item.changePercent, locale, "--")})
                   </span>

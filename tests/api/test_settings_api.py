@@ -14,6 +14,10 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
     initial = client.get("/settings/platform")
     assert initial.status_code == 200
     assert initial.json()["market_data_provider"] == "yfinance"
+    assert initial.json()["favorite_macro_indicator_codes"][:2] == [
+        "buffett_indicator_us",
+        "buffett_indicator_cn",
+    ]
 
     updated = client.put(
         "/settings/platform",
@@ -21,6 +25,12 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
             "market_data_provider": "mock",
             "llm_provider": "openai",
             "llm_api_base": "https://example.com/v1",
+            "favorite_macro_indicator_codes": [
+                " buffett_indicator_cn ",
+                "us_10y_yield",
+                "",
+                "buffett_indicator_cn",
+            ],
         },
     )
     assert updated.status_code == 200
@@ -28,6 +38,10 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
     assert payload["market_data_provider"] == "mock"
     assert payload["llm_provider"] == "openai"
     assert payload["llm_api_base"] == "https://example.com/v1"
+    assert payload["favorite_macro_indicator_codes"] == [
+        "buffett_indicator_cn",
+        "us_10y_yield",
+    ]
 
 
 def test_platform_settings_public_response_masks_tushare_token(tmp_path, monkeypatch):

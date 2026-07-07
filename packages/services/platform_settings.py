@@ -6,6 +6,17 @@ from packages.shared.config import settings
 
 SETTINGS_PATH = Path(__file__).resolve().parents[2] / "data" / "platform_settings.json"
 
+DEFAULT_FAVORITE_MACRO_INDICATOR_CODES = [
+    "buffett_indicator_us",
+    "buffett_indicator_cn",
+    "buffett_indicator_hk",
+    "us_10y_yield",
+    "us_10y_2y_spread",
+    "us_cpi_yoy",
+    "us_m2_yoy",
+    "cn_m2_yoy",
+]
+
 DEFAULTS: dict[str, Any] = {
     "market_data_provider": settings.market_data_provider,
     "llm_provider": settings.llm_provider,
@@ -15,6 +26,7 @@ DEFAULTS: dict[str, Any] = {
     "tushare_token": "",
     "tushare_http_url": "",
     "color_scheme": "china",
+    "favorite_macro_indicator_codes": DEFAULT_FAVORITE_MACRO_INDICATOR_CODES,
 }
 
 
@@ -50,6 +62,25 @@ def _ensure_parent() -> None:
     SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
+def normalize_favorite_macro_indicator_codes(value: Any) -> list[str]:
+    if isinstance(value, list):
+        raw_codes = [str(item) for item in value]
+    elif isinstance(value, str):
+        raw_codes = value.replace(",", "\n").splitlines()
+    else:
+        raw_codes = []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_code in raw_codes:
+        code = raw_code.strip()
+        if not code or code in seen:
+            continue
+        normalized.append(code)
+        seen.add(code)
+    return normalized
+
+
 def get_platform_settings() -> dict[str, Any]:
     payload = dict(DEFAULTS)
     if SETTINGS_PATH.exists():
@@ -68,6 +99,9 @@ def get_platform_settings() -> dict[str, Any]:
         "tushare_token": str(payload.get("tushare_token", "") or ""),
         "tushare_http_url": str(payload.get("tushare_http_url", "") or ""),
         "color_scheme": str(payload.get("color_scheme", "china")),
+        "favorite_macro_indicator_codes": normalize_favorite_macro_indicator_codes(
+            payload.get("favorite_macro_indicator_codes", DEFAULT_FAVORITE_MACRO_INDICATOR_CODES)
+        ),
     }
 
 
@@ -141,6 +175,9 @@ def update_platform_settings(updates: dict[str, Any]) -> dict[str, Any]:
     current["tushare_token"] = str(current.get("tushare_token", "") or "")
     current["tushare_http_url"] = str(current.get("tushare_http_url", "") or "")
     current["color_scheme"] = str(current.get("color_scheme", "china"))
+    current["favorite_macro_indicator_codes"] = normalize_favorite_macro_indicator_codes(
+        current.get("favorite_macro_indicator_codes", DEFAULT_FAVORITE_MACRO_INDICATOR_CODES)
+    )
     _ensure_parent()
     SETTINGS_PATH.write_text(json.dumps(current, indent=2), encoding="utf-8")
     return get_platform_settings_public()

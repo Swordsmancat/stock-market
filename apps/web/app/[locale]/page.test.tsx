@@ -642,6 +642,15 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("What changed")).toBeInTheDocument();
   expect(screen.getByText(/US 10Y Treasury Yield: 4.25%/)).toBeInTheDocument();
   expect(screen.getByText("MACRO_INDICATOR_NO_DATA: Some macro indicators are configured but do not have audited observations yet.")).toBeInTheDocument();
+  expect(screen.getByText("Followed macro indicators")).toBeInTheDocument();
+  expect(screen.getByText("Your homepage watchlist for Buffett Indicator, rates, inflation, and liquidity context.")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open macro research" })).toHaveAttribute("href", "/evidence");
+  expect(screen.getByRole("link", { name: "Edit favorites" })).toHaveAttribute("href", "/settings");
+  expect(screen.getAllByText("Buffett Indicator - US").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Buffett Indicator - CN").length).toBeGreaterThan(0);
+  expect(screen.getByText("Code: buffett_indicator_us")).toBeInTheDocument();
+  expect(screen.getByText("Code: buffett_indicator_cn")).toBeInTheDocument();
+  expect(screen.getAllByText(/Source gap: No audited observation has been seeded for this indicator yet/).length).toBeGreaterThan(0);
   expect(screen.getByText("Information source readiness")).toBeInTheDocument();
   expect(screen.getByText("FRED US Treasury rates")).toBeInTheDocument();
   expect(screen.getByText("Needs adapter")).toBeInTheDocument();
@@ -686,7 +695,7 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("皮尔逊相关系数")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "导出对比报告" })).toBeInTheDocument();
   expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
-  expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
+  expect(screen.getAllByText("Buffett Indicator - CN").length).toBeGreaterThan(0);
   expect(screen.getAllByText("US 10Y Treasury Yield").length).toBeGreaterThan(0);
   expect(screen.getByText("Rates")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))

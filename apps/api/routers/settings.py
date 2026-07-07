@@ -13,6 +13,9 @@ class PlatformSettingsUpdate(BaseModel):
     llm_api_base: str | None = None
     akshare_enabled: bool | None = None
     tushare_token: str | None = None
+    tushare_http_url: str | None = None
+    color_scheme: str | None = None
+    favorite_macro_indicator_codes: list[str] | str | None = None
 
 
 @router.get("/platform")

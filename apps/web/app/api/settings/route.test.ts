@@ -27,6 +27,7 @@ it("returns persisted platform settings with route source metadata", async () =>
     tushare_token: "tushare-token",
     tushare_http_url: "https://tushare.example",
     color_scheme: "international",
+    favorite_macro_indicator_codes: ["buffett_indicator_us", "buffett_indicator_cn"],
     llm_api_key_configured: true,
   };
   getPlatformSettingsMock.mockResolvedValue(storedSettings);
@@ -53,6 +54,7 @@ it("saves platform settings and reports whether an LLM API key is configured", a
     tushare_token: "token-updated",
     tushare_http_url: "https://tushare.example",
     color_scheme: "china",
+    favorite_macro_indicator_codes: ["buffett_indicator_us", "us_10y_yield"],
   };
   savePlatformSettingsMock.mockResolvedValue(updatePayload);
 
@@ -87,6 +89,7 @@ it("marks saved settings as not configured when the stored LLM API key is blank"
     tushare_token: "",
     tushare_http_url: "",
     color_scheme: "international",
+    favorite_macro_indicator_codes: [],
   };
   savePlatformSettingsMock.mockResolvedValue(savedSettings);
 

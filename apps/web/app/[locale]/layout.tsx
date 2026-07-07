@@ -40,8 +40,8 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang={locale} className="overflow-x-hidden" suppressHydrationWarning>
+      <body className={`${inter.className} overflow-x-hidden`} suppressHydrationWarning>
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider
             attribute="class"
@@ -53,9 +53,9 @@ export default async function RootLayout({
               <ToastProvider />
               <div className="flex h-screen flex-col overflow-hidden">
                 <TopNavBar />
-                <div className="flex flex-1 overflow-hidden">
+                <div className="flex min-w-0 flex-1 overflow-hidden">
                   <SidebarNavigation />
-                  <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+                  <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
                     <Breadcrumbs />
                     <BackendStatusBanner />
                     {children}
