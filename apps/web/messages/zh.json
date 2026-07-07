@@ -218,7 +218,7 @@
   },
   "EvidenceCenter": {
     "title": "证据中心",
-    "description": "围绕本地已审计证据组织宏观、估值、信息源就绪度和 AI 摘要的个人研究工作台。",
+    "description": "面向在线/API 宏观与估值证据、来源缺口和 AI 摘要的个人研究工作台。",
     "badge": "宏观证据",
     "activeProvider": "当前数据源：{provider}",
     "generatedAt": "生成时间：{date}",
@@ -235,6 +235,9 @@
     "metricMissingDesc": "仍在等待复核观测值的指标。",
     "metricSourcesNeedAction": "待处理来源",
     "metricSourcesNeedActionDesc": "仍缺适配器、人工 seed 或本地证据的来源。",
+    "advancedToolsTitle": "高级来源复核工具",
+    "advancedToolsDescription": "当在线/API 数据不够用时，才需要使用的可选流程：人工 seed、稀有来源笔记和研究问题队列。",
+    "advancedToolsSummary": "展开手工来源复核工具",
     "followUpTitle": "研究 follow-up 队列",
     "followUpDescription": "从本地证据派生确定性的研究问题、来源复核任务、seed 准备动作和来源缺口。",
     "followUpGenerated": "队列生成时间：{date}",

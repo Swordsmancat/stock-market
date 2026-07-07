@@ -385,7 +385,7 @@ function createResearchBriefsPayload() {
   };
 }
 
-it("renders macro evidence, AI brief, source templates, and citation boundaries", async () => {
+it("renders macro evidence first, keeps advanced source tools reachable, and resolves template labels", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
     if (url.endsWith("/dashboard/market-overview?provider=yfinance")) {
@@ -414,6 +414,19 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
   expect(screen.getByText("Macro evidence: 1")).toBeInTheDocument();
   expect(screen.getByText("Source gaps: 2")).toBeInTheDocument();
   expect(screen.getByText("MACRO_INDICATOR_NO_DATA: Some macro indicators do not have audited observations yet.")).toBeInTheDocument();
+  expect(screen.queryByText("ResearchSourceNotebook.completenessSummary")).not.toBeInTheDocument();
+  expect(screen.getAllByText("7/7 checks").length).toBeGreaterThan(0);
+
+  const pageText = document.body.textContent ?? "";
+  expect(pageText.indexOf("AI evidence summary")).toBeLessThan(pageText.indexOf("Macro and valuation evidence"));
+  expect(pageText.indexOf("Saved research brief inbox")).toBeLessThan(pageText.indexOf("Macro and valuation evidence"));
+  expect(pageText.indexOf("Macro and valuation evidence")).toBeLessThan(
+    pageText.indexOf("Source readiness and collection workflow"),
+  );
+  expect(pageText.indexOf("Source readiness and collection workflow")).toBeLessThan(
+    pageText.indexOf("Advanced source review tools"),
+  );
+  expect(screen.getByText("Open manual source-review tools")).toBeInTheDocument();
 
   const ratesRow = screen
     .getAllByText("US 10Y Treasury Yield")
@@ -458,7 +471,7 @@ it("renders macro evidence, AI brief, source templates, and citation boundaries"
   expect(screen.getByText("Morning macro evidence")).toBeInTheDocument();
   expect(screen.getByText("research-brief-deterministic-fallback", { exact: false })).toBeInTheDocument();
 
-  const fredLink = screen.getByRole("link", { name: /FRED DGS10/ });
+  const fredLink = screen.getByRole("link", { name: /FRED DGS10/, hidden: true });
   expect(fredLink).toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");
   expect(fredLink).toHaveAttribute("target", "_blank");
   expect(fredLink).toHaveAttribute("rel", "noreferrer");

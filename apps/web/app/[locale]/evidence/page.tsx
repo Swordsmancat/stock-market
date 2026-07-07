@@ -547,7 +547,7 @@ function buildSeedImportLabels(t: Awaited<ReturnType<typeof getTranslations>>): 
     description: t("description"),
     fileLabel: t("fileLabel"),
     fileButton: t("fileButton"),
-    selectedFile: t("selectedFile"),
+    selectedFile: t("selectedFile", { name: "{name}" }),
     pasteLabel: t("pasteLabel"),
     pastePlaceholder: t("pastePlaceholder"),
     formatLabel: t("formatLabel"),
@@ -613,14 +613,14 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
     extractionStatusInvalid: t("extractionStatusInvalid"),
     extractionModelLlm: t("extractionModelLlm"),
     extractionModelFallback: t("extractionModelFallback"),
-    extractionFallbackReason: t("extractionFallbackReason"),
+    extractionFallbackReason: t("extractionFallbackReason", { reason: "{reason}" }),
     extractionSummaryTitle: t("extractionSummaryTitle"),
     extractionIndicatorsTitle: t("extractionIndicatorsTitle"),
     extractionCitationCluesTitle: t("extractionCitationCluesTitle"),
     extractionFollowUpsTitle: t("extractionFollowUpsTitle"),
     extractionSuggestedFieldsTitle: t("extractionSuggestedFieldsTitle"),
     extractionDiagnosticsTitle: t("extractionDiagnosticsTitle"),
-    selectedFile: t("selectedFile"),
+    selectedFile: t("selectedFile", { name: "{name}" }),
     fileLabel: t("fileLabel"),
     fileReadFailed: t("fileReadFailed"),
     titleLabel: t("titleLabel"),
@@ -683,13 +683,13 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
     citableOnlyLabel: t("citableOnlyLabel"),
     citableBadge: t("citableBadge"),
     collectionBadge: t("collectionBadge"),
-    citationId: t("citationId"),
+    citationId: t("citationId", { id: "{id}" }),
     sourceLink: t("sourceLink"),
-    linkedSourceBadge: t("linkedSourceBadge"),
-    targetIndicatorsBadge: t("targetIndicatorsBadge"),
-    componentRoleBadge: t("componentRoleBadge"),
+    linkedSourceBadge: t("linkedSourceBadge", { label: "{label}" }),
+    targetIndicatorsBadge: t("targetIndicatorsBadge", { code: "{code}" }),
+    componentRoleBadge: t("componentRoleBadge", { role: "{role}" }),
     reviewChecklistTitle: t("reviewChecklistTitle"),
-    completenessSummary: t("completenessSummary"),
+    completenessSummary: t("completenessSummary", { score: "{score}", total: "{total}" }),
     completenessComplete: t("completenessComplete"),
     completenessPartial: t("completenessPartial"),
     completenessMissing: t("completenessMissing"),
@@ -716,10 +716,10 @@ function buildResearchBriefInboxLabels(t: Awaited<ReturnType<typeof getTranslati
     loadFailedDescription: t("loadFailedDescription"),
     emptyTitle: t("emptyTitle"),
     emptyDescription: t("emptyDescription"),
-    createdAt: t("createdAt"),
+    createdAt: t("createdAt", { date: "{date}" }),
     modelGenerated: t("modelGenerated"),
     modelFallback: t("modelFallback"),
-    modelName: t("modelName"),
+    modelName: t("modelName", { name: "{name}" }),
     citationsCount: t("citationsCount"),
     sourceGapsCount: t("sourceGapsCount"),
     diagnosticsCount: t("diagnosticsCount"),
@@ -828,17 +828,6 @@ export default async function EvidenceCenterPage({
           t("metricSourcesNeedActionDesc"),
         )}
       </section>
-
-      <EvidenceSeedImportReview labels={buildSeedImportLabels(seedImportT)} />
-
-      <ResearchSourceNotebook
-        labels={buildNotebookLabels(notebookT)}
-        initialNotes={researchSourceNotesResult.items}
-        sourceTargets={sourceTargetOptions}
-        loadFailed={researchSourceNotesResult.status === "failed"}
-      />
-
-      {renderResearchFollowUpQueue(payload.research_follow_up_queue, t, locale)}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <Card className="border-primary/20">
@@ -1306,6 +1295,30 @@ export default async function EvidenceCenterPage({
           )}
         </CardContent>
       </Card>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xl font-semibold">{t("advancedToolsTitle")}</h2>
+          <p className="text-sm text-muted-foreground">{t("advancedToolsDescription")}</p>
+        </div>
+        <details className="border border-dashed bg-muted/10 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-foreground">
+            {t("advancedToolsSummary")}
+          </summary>
+          <div className="mt-4 space-y-4">
+            <EvidenceSeedImportReview labels={buildSeedImportLabels(seedImportT)} />
+
+            <ResearchSourceNotebook
+              labels={buildNotebookLabels(notebookT)}
+              initialNotes={researchSourceNotesResult.items}
+              sourceTargets={sourceTargetOptions}
+              loadFailed={researchSourceNotesResult.status === "failed"}
+            />
+
+            {renderResearchFollowUpQueue(payload.research_follow_up_queue, t, locale)}
+          </div>
+        </details>
+      </section>
 
       <Card className="border-primary/20">
         <CardHeader>

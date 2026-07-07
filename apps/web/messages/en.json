@@ -211,7 +211,7 @@
   },
   "EvidenceCenter": {
     "title": "Evidence Center",
-    "description": "Personal macro, valuation, source-readiness, and AI-summary workspace built around audited local evidence.",
+    "description": "Personal macro and valuation workspace for API-backed evidence, source gaps, and AI summaries.",
     "badge": "Macro evidence",
     "activeProvider": "Active provider: {provider}",
     "generatedAt": "Generated: {date}",
@@ -228,6 +228,9 @@
     "metricMissingDesc": "Indicators still waiting for reviewed observations.",
     "metricSourcesNeedAction": "Sources needing action",
     "metricSourcesNeedActionDesc": "Adapters, manual seeds, or local evidence still missing.",
+    "advancedToolsTitle": "Advanced source review tools",
+    "advancedToolsDescription": "Optional fallback workflows for manual seed imports, rare source notes, and research prompts when online/API data is not enough.",
+    "advancedToolsSummary": "Open manual source-review tools",
     "followUpTitle": "Research follow-up queue",
     "followUpDescription": "Deterministic research prompts, source-review tasks, seed-prep actions, and source gaps derived from local evidence.",
     "followUpGenerated": "Queue generated: {date}",

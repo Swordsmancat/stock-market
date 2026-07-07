@@ -50,3 +50,4 @@ The frontend uses server-rendered pages for data-heavy screens and small client 
 - Do not silently render an empty state when the backend request failed; use `ErrorState`.
 - Do not add user-visible hardcoded strings outside `apps/web/messages/*.json`.
 - Do not duplicate interaction logic when an existing component already covers the flow.
+- When a server page passes a translated template string to a client component that later performs manual `.replace("{name}", value)` formatting, do not call `t("key")` on a message containing placeholders. Pass placeholder literals through the translator, for example `t("selectedFile", { name: "{name}" })`, or the real `next-intl` runtime may render the raw namespace key such as `ResearchSourceNotebook.completenessSummary`.
