@@ -631,3 +631,36 @@ Implemented deterministic Evidence Center research follow-up queue with backend 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: Source ingestion extraction hub
+
+**Date**: 2026-07-07
+**Task**: Source ingestion extraction hub
+**Branch**: `master`
+
+### Summary
+
+Implemented Evidence Center Source Ingestion Hub with browser text ingestion, LLM-assisted extraction, deterministic fallback, editable Source Notebook suggestions, citation-boundary documentation, specs, and tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a28551a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
