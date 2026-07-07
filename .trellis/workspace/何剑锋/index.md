@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 23
+- **Total Sessions**: 24
 - **Last Active**: 2026-07-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~765 | Active |
+| `journal-1.md` | ~798 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 24 | 2026-07-07 | China macro source validation | `0496e7612145d57be9d4e7e53e92746937faec6c` | `master` |
 | 23 | 2026-07-07 | World Bank macro source adapter | `328ab36` | `master` |
 | 22 | 2026-07-07 | Simplify Evidence Center macro workflow | `c4ddfd3` | `master` |
 | 21 | 2026-07-07 | Saved research brief inbox | `56098b2` | `master` |

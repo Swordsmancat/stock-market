@@ -763,3 +763,36 @@ Added World Bank Buffett Indicator refresh support with audited local market-ind
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: China macro source validation
+
+**Date**: 2026-07-07
+**Task**: China macro source validation
+**Branch**: `master`
+
+### Summary
+
+Added validation-only China macro source capability matrix, opt-in shallow probe script, source-readiness payload integration, documentation, tests, and citation-boundary spec updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0496e7612145d57be9d4e7e53e92746937faec6c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
