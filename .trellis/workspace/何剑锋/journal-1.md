@@ -995,3 +995,36 @@ Added read-only official macro source status payload/API, Macro Research readine
 ### Next Steps
 
 - None - task complete
+
+
+## Session 31: AI macro stock research desk
+
+**Date**: 2026-07-08
+**Task**: AI macro stock research desk
+**Branch**: `master`
+
+### Summary
+
+Enhanced AI Research Desk with citable macro indicator evidence, official source readiness guidance, localized UI, tests, and citation contract updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b3bca66` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
