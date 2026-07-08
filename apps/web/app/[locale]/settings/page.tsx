@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { savePlatformSettingsAction } from "@/app/[locale]/actions";
 import { FlashBanner } from "@/components/flash-banner";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,21 +19,59 @@ export default async function SettingsPage({
   const { saved } = await searchParams;
   const settings = await getPlatformSettings();
   const t = await getTranslations("Settings");
+  const displayColorScheme =
+    settings.color_scheme === "international" ? t("internationalConvention") : t("chinaConvention");
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("description")}</p>
-      </div>
-
       {saved === "ok" ? <FlashBanner variant="success" message={t("saveSuccess")} /> : null}
       {saved === "error" ? <FlashBanner variant="error" message={t("saveFailed")} /> : null}
 
-      <form action={savePlatformSettingsAction} className="space-y-6">
+      <form action={savePlatformSettingsAction} className="space-y-4">
         <input type="hidden" name="locale" value={locale} />
 
-        <Card>
+        <FinancialPageHeader
+          title={t("title")}
+          description={t("description")}
+          badges={[
+            { label: t("displayPreferencesTitle"), variant: "secondary" },
+            { label: t("activeProvider") + `: ${settings.market_data_provider}` },
+          ]}
+          metrics={[
+            {
+              label: t("dataProviderTitle"),
+              value: settings.market_data_provider,
+              description: settings.market_data_provider_capabilities.find(
+                (capability) => capability.provider === settings.market_data_provider,
+              )?.configured
+                ? t("providerConfigured")
+                : t("providerNeedsSetup"),
+            },
+            {
+              label: t("colorSchemeLabel"),
+              value: displayColorScheme,
+              description: t("displayPreferencesTitle"),
+            },
+            {
+              label: t("llmProvider"),
+              value: settings.llm_provider,
+              description: settings.llm_api_key_configured ? t("providerConfigured") : t("providerNeedsSetup"),
+            },
+            {
+              label: t("macroFavoritesTitle"),
+              value: settings.favorite_macro_indicator_codes.length,
+              description: t("macroFavoritesLabel"),
+            },
+          ]}
+          actions={
+            <Button type="submit" size="sm">
+              {t("save")}
+            </Button>
+          }
+        />
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card className="rounded-md shadow-none">
           <CardHeader>
             <CardTitle>{t("dataProviderTitle")}</CardTitle>
             <CardDescription>{t("dataProviderDesc")}</CardDescription>
@@ -86,7 +125,7 @@ export default async function SettingsPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-md shadow-none">
           <CardHeader>
             <CardTitle>{t("akshareTitle")}</CardTitle>
             <CardDescription>{t("akshareDesc")}</CardDescription>
@@ -105,7 +144,7 @@ export default async function SettingsPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-md shadow-none">
           <CardHeader>
             <CardTitle>{t("tushareTitle")}</CardTitle>
             <CardDescription>{t("tushareDesc")}</CardDescription>
@@ -140,7 +179,7 @@ export default async function SettingsPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-md shadow-none">
           <CardHeader>
             <CardTitle>{t("llmTitle")}</CardTitle>
             <CardDescription>{t("llmDesc")}</CardDescription>
@@ -188,7 +227,7 @@ export default async function SettingsPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-md shadow-none">
           <CardHeader>
             <CardTitle>{t("displayPreferencesTitle")}</CardTitle>
           </CardHeader>
@@ -233,7 +272,7 @@ export default async function SettingsPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-md shadow-none xl:col-span-2">
           <CardHeader>
             <CardTitle>{t("macroFavoritesTitle")}</CardTitle>
             <CardDescription>{t("macroFavoritesDesc")}</CardDescription>
@@ -253,6 +292,7 @@ export default async function SettingsPage({
             <p className="text-xs text-muted-foreground">{t("macroFavoritesDefault")}</p>
           </CardContent>
         </Card>
+        </div>
 
         <Button type="submit">{t("save")}</Button>
       </form>

@@ -212,7 +212,7 @@ it("renders the enhanced client-side instrument detail view", async () => {
 
   await renderChineseInstrumentDetailPage();
 
-  expect(await screen.findByText("AAPL")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "AAPL" })).toBeInTheDocument();
   expect(screen.getByText("标的详情")).toBeInTheDocument();
   expect(screen.getByText("最新价")).toBeInTheDocument();
   expect(screen.getByText("涨跌额")).toBeInTheDocument();
@@ -221,7 +221,7 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getByText("+1.00")).toBeInTheDocument();
   expect(screen.getByText("+0.99%")).toBeInTheDocument();
   expect(screen.getByText("AI 市场助手")).toBeInTheDocument();
-  expect(screen.getByText("K线图")).toBeInTheDocument();
+  expect(screen.getAllByText("K线图").length).toBeGreaterThan(0);
   expect(screen.getByText("交互式价格走势图")).toBeInTheDocument();
   expect(screen.getByText("分时图")).toBeInTheDocument();
   expect(screen.getByText("展示可用的分钟价格、均价、昨收参考和成交量。")).toBeInTheDocument();
@@ -386,7 +386,7 @@ it("renders latest price even when the detail endpoint has no bars", async () =>
 
   await renderChineseInstrumentDetailPage();
 
-  expect(await screen.findByText("AAPL")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "AAPL" })).toBeInTheDocument();
   expect(screen.getByText("暂无K线数据")).toBeInTheDocument();
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");
   expect(screen.getByText("105.00")).toBeInTheDocument();

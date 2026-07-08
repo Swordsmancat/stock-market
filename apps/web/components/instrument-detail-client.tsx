@@ -10,8 +10,8 @@ import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-char
 import { IntradayPriceChart } from "@/components/intraday-price-chart";
 import { MarketAssistantCard } from "@/components/market-assistant-card";
 import { MarketDepthCard } from "@/components/market-depth-card";
-import { PriceChangeBadge } from "@/components/price-change-badge";
 import { DataTrustBadge } from "@/components/data-trust-badge";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { useMarketColorsContext } from "@/context/market-colors-context";
 import { createDataTrustSignal } from "@/lib/data-trust";
 import { decodeInstrumentSymbol, getInstrumentDisplayName } from "@/lib/instrument-display";
@@ -123,6 +123,8 @@ export function InstrumentDetailClient({
   const prevPrice = prevBar?.close || currentPrice;
   const change = currentPrice - prevPrice;
   const changePercent = prevPrice ? change / prevPrice : 0;
+  const formattedChange = `${change >= 0 ? "+" : ""}${change.toFixed(2)}`;
+  const formattedChangePercent = `${changePercent >= 0 ? "+" : ""}${(changePercent * 100).toFixed(2)}%`;
   const decodedSymbol = decodeInstrumentSymbol(symbol);
   const displayName = getInstrumentDisplayName(symbol, locale);
   const subtitle = displayName === decodedSymbol ? t("detailSubtitle") : `${decodedSymbol} · ${t("detailSubtitle")}`;
@@ -149,74 +151,62 @@ export function InstrumentDetailClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {t("back")}
-        </Button>
-      </div>
-
-      <div>
-        <h1 className="text-3xl font-bold">{displayName}</h1>
-        <p className="text-muted-foreground">{subtitle}</p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>{t("latestPriceCard")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{currentPrice.toFixed(2)}</div>
-            <div className="mt-3">
-              <DataTrustBadge signal={latestTrustSignal} mode="summary" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>{t("priceChange")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${getMovementColor(change)}`}>
-              {change >= 0 ? '+' : ''}{change.toFixed(2)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>{t("priceChangePercent")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PriceChangeBadge
-              percentChange={changePercent}
-              absoluteChange={change}
-              marketType="CN"
-              showArrow
-              className="text-lg"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      <MarketAssistantCard
-        symbol={assistantSymbol}
-        locale={locale}
-        provider={assistantProvider}
-        start={data.range?.start ?? null}
-        end={data.range?.end ?? null}
+      <FinancialPageHeader
+        title={displayName}
+        description={subtitle}
+        badges={[
+          { label: decodedSymbol, variant: "secondary" },
+          { label: `provider: ${assistantProvider ?? data.latest?.effective_provider ?? data.latest?.provider ?? "none"}` },
+          { label: `${data.range?.start ?? "-"} / ${data.range?.end ?? "-"}` },
+        ]}
+        metrics={[
+          {
+            label: t("latestPriceCard"),
+            value: currentPrice.toFixed(2),
+            description: <DataTrustBadge signal={latestTrustSignal} mode="summary" />,
+          },
+          {
+            label: t("priceChange"),
+            value: formattedChange,
+            className: getMovementColor(change),
+          },
+          {
+            label: t("priceChangePercent"),
+            value: formattedChangePercent,
+            className: getMovementColor(change),
+          },
+          {
+            label: t("klineTitle"),
+            value: chartBars.length,
+            description: <DataTrustBadge signal={barsTrustSignal} mode="summary" />,
+          },
+        ]}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+            {t("back")}
+          </Button>
+        }
       />
 
-      <MarketDepthCard marketDepth={data.market_depth ?? null} />
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.85fr)]">
+        <MarketAssistantCard
+          symbol={assistantSymbol}
+          locale={locale}
+          provider={assistantProvider}
+          start={data.range?.start ?? null}
+          end={data.range?.end ?? null}
+        />
 
-      <Card>
-        <CardHeader>
+        <MarketDepthCard marketDepth={data.market_depth ?? null} />
+      </div>
+
+      <Card className="rounded-md shadow-none">
+        <CardHeader className="border-b bg-muted/20 p-4">
           <CardTitle>{t("intradayTitle")}</CardTitle>
           <CardDescription>{t("intradayDescription")}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4">
           <IntradayPriceChart
             points={data.intraday?.items ?? []}
             previousClose={data.intraday?.previous_close ?? null}
@@ -234,12 +224,12 @@ export function InstrumentDetailClient({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-md shadow-none">
+        <CardHeader className="border-b bg-muted/20 p-4">
           <CardTitle>{t("klineTitle")}</CardTitle>
           <CardDescription>{t("interactiveKlineDescription")}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4">
           <div className="mb-4">
             <DataTrustBadge signal={barsTrustSignal} mode="summary" />
           </div>

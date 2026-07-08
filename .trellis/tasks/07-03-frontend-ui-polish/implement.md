@@ -277,6 +277,47 @@ The stderr output in `apps/web/app/api/hot-sectors/route.test.ts` remains the ex
 - Slice 4: polish instrument-detail hero and section hierarchy without changing chart/data contracts.
 - Slice 5: polish settings page grouping after the high-value dashboard/watchlist/detail surfaces are complete.
 
+## 2026-07-08 Core Page Refactor Slice
+
+### Completed in this slice
+
+- Continued the user's broad frontend rewrite/polish request inside the existing in-progress `07-03-frontend-ui-polish` task instead of creating a duplicate Trellis task.
+- Added `apps/web/components/financial-page-header.tsx`, a shared dense financial page header for title, status badges, KPI metrics, action buttons, and warning panels.
+- Reworked `apps/web/components/financial-dashboard-hero.tsx` into a compatibility export backed by the new shared header, removing the previous decorative gradient hero treatment from the homepage path.
+- Refactored `apps/web/app/[locale]/watchlist/page.tsx` to reuse the shared header and tightened the table row/card density.
+- Refactored `apps/web/components/instrument-detail-client.tsx` so latest price, movement, movement percent, provider/range, and chart data availability are presented in the same dense header strip; assistant/depth sections now sit in a tighter responsive grid.
+- Refactored `apps/web/app/[locale]/settings/page.tsx` into a console-style configuration page with a shared header summary and two-column settings card grid.
+- Updated `apps/web/app/[locale]/instruments/[symbol]/page.test.tsx` for the new header semantics where the symbol and K-line labels intentionally appear in more than one place.
+- Captured the shared header convention in `.trellis/spec/frontend/component-guidelines.md`.
+
+### Validation
+
+```powershell
+npx tsc -p apps/web/tsconfig.json --noEmit --ignoreDeprecations 6.0
+# passed
+
+npx vitest run "apps/web/app/[locale]/watchlist/page.test.tsx" "apps/web/app/[locale]/instruments/[symbol]/page.test.tsx" --reporter=dot
+# 2 test files passed, 7 tests passed
+
+npm run test:web -- --reporter=dot
+# 50 test files passed, 158 tests passed
+
+git diff --check
+# passed; CRLF conversion warnings only
+```
+
+Browser smoke on the already-running Next dev server at `http://127.0.0.1:3000` using system Chrome:
+
+- `/zh`, `/zh/watchlist`, `/zh/instruments/AAPL`, and `/zh/settings` returned 200 at desktop `1440x900` and mobile `390x844`.
+- All sampled routes rendered their expected heading, included the shared financial header, had no runtime-error text, and had no document/body horizontal overflow.
+- The only captured console errors were non-blocking 404 resource logs during initial desktop loads; the page routes themselves rendered successfully.
+
+### Remaining large-frontend-optimization slices
+
+- Slice 4 follow-up: continue deeper instrument-detail chart/workspace polish only if product scope expands beyond header/section hierarchy.
+- Slice 5 follow-up: continue provider capability grouping and setting-specific validation states if settings grows beyond current form controls.
+- Broader professional-terminal parity remains roadmap work in `07-03-professional-financial-dashboard`, not unbounded UI-polish scope.
+
 ## Phase 1: Foundation (Backend + Core Hooks)
 
 ### 1.1 Backend - Color Scheme Support

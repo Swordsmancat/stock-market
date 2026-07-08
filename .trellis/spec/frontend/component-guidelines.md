@@ -57,6 +57,29 @@ Do not pass functions such as `description: (count) => t("key", { count })` acro
 - Use layout utility classes directly in page/component JSX, following existing pages.
 - Keep class names readable and avoid extracting one-off class constants unless they are reused.
 
+### Convention: Dense Financial Page Headers
+
+**What**: For core finance pages that need page identity plus scan-first KPIs, use `FinancialPageHeader` from `apps/web/components/financial-page-header.tsx`.
+
+**Why**: Dashboard, watchlist, instrument detail, and settings pages should share the same compact terminal-style header instead of each page recreating a decorative hero or loose title block. This keeps financial UI dense, consistent, and testable.
+
+**Example**:
+
+```tsx
+<FinancialPageHeader
+  title={t("title")}
+  description={t("description")}
+  badges={[{ label: t("activeProvider", { provider }) }]}
+  metrics={[
+    { label: t("latestPriceCard"), value: currentPrice.toFixed(2) },
+    { label: t("priceChange"), value: formattedChange, className: getMovementColor(change) },
+  ]}
+  actions={<Button size="sm">{t("save")}</Button>}
+/>
+```
+
+If a badge intentionally repeats the title text, tests should target the semantic heading with `getByRole("heading", { name })` instead of assuming a unique text node.
+
 ---
 
 ## Accessibility
