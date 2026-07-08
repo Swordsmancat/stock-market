@@ -7,11 +7,17 @@ from packages.analytics.candlestick_patterns import detect_latest_candlestick_pa
 from packages.analytics.chip_distribution import calculate_latest_chip_distribution
 from packages.analytics.indicators import (
     calculate_atr,
+    calculate_bias,
     calculate_bollinger_bands,
+    calculate_cci,
     calculate_kdj,
     calculate_ma,
     calculate_macd,
+    calculate_mfi,
+    calculate_obv,
+    calculate_roc,
     calculate_rsi,
+    calculate_william_r,
 )
 from packages.domain.models import DailyBar, Instrument, TechnicalIndicator
 
@@ -22,6 +28,12 @@ DAILY_TECHNICAL_INDICATOR_CODES_TO_REFRESH = {
     "atr",
     "macd",
     "kdj",
+    "cci",
+    "obv",
+    "roc",
+    "bias",
+    "mfi",
+    "william_r",
     "candlestick_patterns",
     "chip_distribution",
 }
@@ -60,6 +72,13 @@ def _latest_rsi_value(close: pd.Series) -> float:
     if rsi_values.empty:
         return 100.0
     return float(rsi_values.iloc[-1])
+
+
+def _latest_series_value(series: pd.Series) -> float | None:
+    values = series.dropna()
+    if values.empty:
+        return None
+    return float(values.iloc[-1])
 
 
 def _latest_atr_value(high: pd.Series, low: pd.Series, close: pd.Series) -> float | None:
@@ -143,6 +162,12 @@ def calculate_and_store_daily_indicators(
     atr = _latest_atr_value(high, low, close)
     macd = _latest_macd_value(close)
     kdj = _latest_kdj_value(high, low, close)
+    cci = _latest_series_value(calculate_cci(high, low, close))
+    obv = _latest_series_value(calculate_obv(close, volume))
+    roc = _latest_series_value(calculate_roc(close))
+    bias = _latest_series_value(calculate_bias(close))
+    mfi = _latest_series_value(calculate_mfi(high, low, close, volume))
+    william_r = _latest_series_value(calculate_william_r(high, low, close))
     indicator_values = {
         "ma": {"params": {"window": ma_window}, "value": float(ma_values.iloc[-1])},
         "rsi": {"params": {"window": 14}, "value": _latest_rsi_value(close)},
@@ -163,6 +188,36 @@ def calculate_and_store_daily_indicators(
         indicator_values["kdj"] = {
             "params": {"window": 9, "k_smoothing": 3, "d_smoothing": 3},
             "value": kdj,
+        }
+    if cci is not None:
+        indicator_values["cci"] = {
+            "params": {"window": 20, "source": "myhhub/stock inspired indicator expansion"},
+            "value": cci,
+        }
+    if obv is not None:
+        indicator_values["obv"] = {
+            "params": {"source": "myhhub/stock inspired indicator expansion"},
+            "value": obv,
+        }
+    if roc is not None:
+        indicator_values["roc"] = {
+            "params": {"window": 12, "source": "myhhub/stock inspired indicator expansion"},
+            "value": roc,
+        }
+    if bias is not None:
+        indicator_values["bias"] = {
+            "params": {"window": 6, "source": "myhhub/stock inspired indicator expansion"},
+            "value": bias,
+        }
+    if mfi is not None:
+        indicator_values["mfi"] = {
+            "params": {"window": 14, "source": "myhhub/stock inspired indicator expansion"},
+            "value": mfi,
+        }
+    if william_r is not None:
+        indicator_values["william_r"] = {
+            "params": {"window": 14, "source": "myhhub/stock inspired indicator expansion"},
+            "value": william_r,
         }
     indicator_values["candlestick_patterns"] = {
         "params": {

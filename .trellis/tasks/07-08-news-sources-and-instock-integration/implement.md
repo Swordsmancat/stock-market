@@ -116,3 +116,12 @@ git diff --check
 - [x] Preserve existing numeric indicators, K-line pattern outputs, and stored technical-indicator citation boundary.
 - [x] Add focused analytics, service, and API tests.
 - [x] Add runbook/spec coverage for Apache-2.0 attribution, approximation limits, and no-trading rules.
+
+## InStock Expanded Technical Indicators Slice
+
+- [x] Add pure Python/pandas formulas for `cci`, `obv`, `roc`, `bias`, `mfi`, and `william_r`.
+- [x] Persist the expanded daily indicator set through the existing `TechnicalIndicator` table.
+- [x] Preserve existing numeric indicator, candlestick-pattern, and chip-distribution payload shapes.
+- [x] Keep all indicator values research-only and out of trading/order-intent boundaries.
+- [x] Add focused analytics, service, and API tests.
+- [x] Add runbook/spec coverage for no-TA-Lib/no-runtime-import/no-trading rules.

@@ -275,3 +275,19 @@ shape into the existing stored technical-indicator boundary:
   replacement, strategy execution, broker order intents, and any trading advice;
 - document `myhhub/stock` Apache-2.0 attribution and the no-trading/no-overclaim
   boundary.
+
+## Follow-Up Slice: Expanded Technical Indicators
+
+The next non-trading InStock slice broadens the stored daily indicator set with
+pure formulas from the broader InStock capability shape:
+
+- add no-dependency formulas for `cci`, `obv`, `roc`, `bias`, `mfi`, and
+  `william_r` under `packages/analytics/indicators.py`;
+- store latest values as ordinary `TechnicalIndicator` rows during
+  `/indicators/recalculate`;
+- omit formula values when the available OHLCV window is insufficient instead
+  of fabricating neutral values;
+- preserve existing numeric indicator payloads plus `candlestick_patterns` and
+  `chip_distribution`;
+- avoid TA-Lib, InStock runtime imports, scheduler replacement, strategy
+  execution, broker order intents, and any trading advice.

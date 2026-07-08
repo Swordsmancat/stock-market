@@ -71,7 +71,7 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     payload = get_stored_indicators_payload("AAPL", session=session)
 
     assert result["status"] == "calculated"
-    assert result["indicator_count"] == 8
+    assert result["indicator_count"] == 14
     assert payload["source"] == "database"
     assert payload["symbol"] == "AAPL"
     assert payload["as_of"] == "2026-01-20T00:00:00+00:00"
@@ -82,6 +82,12 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
         "atr",
         "macd",
         "kdj",
+        "cci",
+        "obv",
+        "roc",
+        "bias",
+        "mfi",
+        "william_r",
         "candlestick_patterns",
         "chip_distribution",
     }
@@ -97,6 +103,12 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     assert isinstance(payload["indicators"]["kdj"]["k"], float)
     assert isinstance(payload["indicators"]["kdj"]["d"], float)
     assert isinstance(payload["indicators"]["kdj"]["j"], float)
+    assert isinstance(payload["indicators"]["cci"], float)
+    assert isinstance(payload["indicators"]["obv"], float)
+    assert isinstance(payload["indicators"]["roc"], float)
+    assert isinstance(payload["indicators"]["bias"], float)
+    assert isinstance(payload["indicators"]["mfi"], float)
+    assert isinstance(payload["indicators"]["william_r"], float)
     candlestick_patterns = payload["indicators"]["candlestick_patterns"]
     assert candlestick_patterns["rule_set"] == "candlestick_patterns_v1"
     assert candlestick_patterns["integration_source"] == "instock_inspired_rules"

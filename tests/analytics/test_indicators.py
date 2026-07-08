@@ -5,11 +5,17 @@ from packages.analytics.candlestick_patterns import detect_latest_candlestick_pa
 from packages.analytics.chip_distribution import calculate_latest_chip_distribution
 from packages.analytics.indicators import (
     calculate_atr,
+    calculate_bias,
     calculate_bollinger_bands,
+    calculate_cci,
     calculate_kdj,
     calculate_ma,
     calculate_macd,
+    calculate_mfi,
+    calculate_obv,
+    calculate_roc,
     calculate_rsi,
+    calculate_william_r,
 )
 
 
@@ -23,6 +29,62 @@ def test_calculate_rsi_bounds_between_zero_and_one_hundred():
     series = pd.Series([1, 2, 3, 2, 4, 5, 4, 6, 7, 8, 7, 9, 10, 11, 12])
     result = calculate_rsi(series, window=14)
     assert 0 <= result.dropna().iloc[-1] <= 100
+
+
+def test_calculate_roc_returns_percentage_change():
+    close = pd.Series([10.0, 12.0, 15.0])
+
+    result = calculate_roc(close, window=1)
+
+    assert result.iloc[-1] == pytest.approx(25.0)
+
+
+def test_calculate_bias_returns_ma_deviation_percentage():
+    close = pd.Series([10.0, 12.0, 15.0])
+
+    result = calculate_bias(close, window=2)
+
+    assert result.iloc[-1] == pytest.approx(11.111111, rel=1e-6)
+
+
+def test_calculate_obv_accumulates_signed_volume():
+    close = pd.Series([10.0, 12.0, 11.0, 11.0, 13.0])
+    volume = pd.Series([100.0, 200.0, 300.0, 400.0, 500.0])
+
+    result = calculate_obv(close, volume)
+
+    assert result.tolist() == [0.0, 200.0, -100.0, -100.0, 400.0]
+
+
+def test_calculate_cci_returns_typical_price_deviation():
+    high = pd.Series([10.0, 11.0, 12.0])
+    low = pd.Series([8.0, 8.0, 9.0])
+    close = pd.Series([9.0, 10.0, 11.0])
+
+    result = calculate_cci(high, low, close, window=3)
+
+    assert result.iloc[-1] == pytest.approx(100.0)
+
+
+def test_calculate_william_r_returns_overbought_oversold_position():
+    high = pd.Series([10.0, 11.0, 12.0])
+    low = pd.Series([8.0, 8.0, 9.0])
+    close = pd.Series([9.0, 10.0, 11.0])
+
+    result = calculate_william_r(high, low, close, window=3)
+
+    assert result.iloc[-1] == pytest.approx(-25.0)
+
+
+def test_calculate_mfi_handles_one_sided_positive_flow():
+    high = pd.Series([10.0, 11.0, 12.0])
+    low = pd.Series([8.0, 8.0, 9.0])
+    close = pd.Series([9.0, 10.0, 11.0])
+    volume = pd.Series([100.0, 200.0, 300.0])
+
+    result = calculate_mfi(high, low, close, volume, window=3)
+
+    assert result.iloc[-1] == pytest.approx(100.0)
 
 
 def test_calculate_bollinger_bands_returns_upper_middle_and_lower():

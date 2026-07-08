@@ -7,6 +7,7 @@ runtime dependency.
 
 - Source reviewed: `myhhub/stock` at commit `b6e0ca2268cfbadd02f5ed052159c187b6670231`.
 - Upstream license: Apache-2.0.
+- Implemented feature: expanded no-dependency daily technical indicators.
 - Implemented feature: stored `candlestick_patterns` technical indicator.
 - Implemented feature: stored `chip_distribution` technical indicator, inspired
   by InStock's CYQ / chip-distribution capability.
@@ -21,13 +22,21 @@ runtime dependency.
   - `shooting_star`
   - `doji`
 - Strategy screening rule set: `instock_strategy_screening_v1`.
+- Expanded indicator codes:
+  - `cci`
+  - `obv`
+  - `roc`
+  - `bias`
+  - `mfi`
+  - `william_r`
 - First supported strategy codes:
   - `volume_price_breakout`
   - `turtle_breakout`
   - `ma_trend_up`
 
 The implementation is pure Python/pandas and does not install TA-Lib or import
-InStock's database, scheduler, proxy/cookie, Tornado UI, or trade modules.
+InStock's indicator runtime, database, scheduler, proxy/cookie, Tornado UI, or
+trade modules.
 
 The first CYQ slice uses local daily OHLCV bars only. Because this project does
 not yet store free-float shares or true turnover rate, `chip_distribution` is a
@@ -44,10 +53,11 @@ technical-indicator evidence after `/indicators/recalculate` writes a local
 buy/sell/hold language, target prices, position sizing, order intents, or broker
 execution.
 
-`chip_distribution` follows the same evidence boundary. It can be cited only as
-a stored local technical indicator and only with its approximation limitation.
-It must not be used to claim institution-grade cost concentration, predict
-support/resistance, or produce trading actions.
+Expanded technical indicators and `chip_distribution` follow the same evidence
+boundary. They can be cited only as stored local technical indicators and, for
+CYQ, only with its approximation limitation. They must not be used to claim
+institution-grade cost concentration, predict support/resistance, or produce
+trading actions.
 
 Live calculations, InStock feature lists, and source-readiness notes are not AI
 citations by themselves. The citation boundary remains stored local evidence,
@@ -63,6 +73,8 @@ source metadata.
 Future InStock-inspired slices should stay independently verifiable:
 
 - add more no-dependency pattern rules only with deterministic fixtures;
+- add more technical indicators only when formulas are pure, tested, and do not
+  require TA-Lib/runtime imports;
 - refine CYQ only after reviewed free-float/turnover data is available;
 - add strategy screening as explainable research signals, not orders;
 - use `GET /recommendations/evaluate` for current historical signal metrics;
@@ -135,6 +147,6 @@ Use focused checks after changing this slice:
 pytest tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/api/test_indicators_db_api.py
 pytest tests/api/test_recommendations_api.py tests/services/test_recommendation_signal_evaluation.py
 pytest tests/services/test_strategy_screening.py tests/api/test_strategy_screening_api.py
-python -m ruff check packages/analytics/candlestick_patterns.py packages/analytics/chip_distribution.py packages/services/indicators.py packages/services/strategy_screening.py apps/api/routers/strategy_screening.py tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/services/test_strategy_screening.py tests/api/test_indicators_db_api.py tests/api/test_strategy_screening_api.py
+python -m ruff check packages/analytics/indicators.py packages/analytics/candlestick_patterns.py packages/analytics/chip_distribution.py packages/services/indicators.py packages/services/strategy_screening.py apps/api/routers/strategy_screening.py tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/services/test_strategy_screening.py tests/api/test_indicators_db_api.py tests/api/test_strategy_screening_api.py
 git diff --check
 ```

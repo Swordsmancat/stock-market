@@ -47,7 +47,7 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
     assert recalculate_response.status_code == 200
     recalculate_payload = recalculate_response.json()
     assert recalculate_payload["status"] == "calculated"
-    assert recalculate_payload["indicator_count"] == 8
+    assert recalculate_payload["indicator_count"] == 14
 
     assert indicators_response.status_code == 200
     indicators_payload = indicators_response.json()
@@ -61,6 +61,12 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
         "atr",
         "macd",
         "kdj",
+        "cci",
+        "obv",
+        "roc",
+        "bias",
+        "mfi",
+        "william_r",
         "candlestick_patterns",
         "chip_distribution",
     }
@@ -80,6 +86,12 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
     assert isinstance(indicators_payload["indicators"]["kdj"]["k"], float)
     assert isinstance(indicators_payload["indicators"]["kdj"]["d"], float)
     assert isinstance(indicators_payload["indicators"]["kdj"]["j"], float)
+    assert isinstance(indicators_payload["indicators"]["cci"], float)
+    assert isinstance(indicators_payload["indicators"]["obv"], float)
+    assert isinstance(indicators_payload["indicators"]["roc"], float)
+    assert isinstance(indicators_payload["indicators"]["bias"], float)
+    assert isinstance(indicators_payload["indicators"]["mfi"], float)
+    assert isinstance(indicators_payload["indicators"]["william_r"], float)
     candlestick_patterns = indicators_payload["indicators"]["candlestick_patterns"]
     assert candlestick_patterns["rule_set"] == "candlestick_patterns_v1"
     assert candlestick_patterns["research_signal_only"] is True

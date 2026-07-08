@@ -1,5 +1,84 @@
 # InStock-Inspired Analysis Pattern Contract
 
+## Scenario: Stored Expanded Technical Indicator Set
+
+### 1. Scope / Trigger
+
+- Trigger: `calculate_and_store_daily_indicators(...)` stores additive
+  no-dependency technical indicators inspired by the broader `myhhub/stock`
+  indicator catalog.
+- Scope: pure formulas in `packages/analytics/indicators.py`, persisted
+  indicator assembly in `packages/services/indicators.py`, `/indicators/recalculate`,
+  `/indicators/{symbol}`, and stored technical indicator consumers.
+- Non-goals: TA-Lib installation, importing InStock indicator runtime modules,
+  replacing the market-data provider boundary, strategy execution, or automatic
+  trading.
+
+### 2. Signatures
+
+- Pure helpers:
+  - `calculate_cci(high, low, close, window=20) -> pd.Series`
+  - `calculate_obv(close, volume) -> pd.Series`
+  - `calculate_roc(close, window=12) -> pd.Series`
+  - `calculate_bias(close, window=6) -> pd.Series`
+  - `calculate_mfi(high, low, close, volume, window=14) -> pd.Series`
+  - `calculate_william_r(high, low, close, window=14) -> pd.Series`
+- Stored technical indicator codes:
+  - `cci`
+  - `obv`
+  - `roc`
+  - `bias`
+  - `mfi`
+  - `william_r`
+
+### 3. Contracts
+
+- Indicators must be calculated from existing local OHLCV bars with deterministic
+  pandas formulas.
+- The indicator expansion is additive. Existing `ma`, `rsi`, `bollinger`, `atr`,
+  `macd`, `kdj`, `candlestick_patterns`, and `chip_distribution` outputs must
+  keep their existing payload shapes.
+- Values are stored only when enough data exists for the formula. Missing values
+  should be omitted, not fabricated.
+- Stored `TechnicalIndicator` rows remain the citation boundary. Live formula
+  calculations or an upstream feature list are not assistant citations until
+  stored locally.
+- Technical indicator values must not emit buy/sell/hold actions, target prices,
+  position sizes, order intents, or execution instructions.
+
+### 4. Validation & Error Matrix
+
+- Insufficient bars for a formula -> omit that indicator while preserving other
+  valid indicators.
+- Flat price ranges -> formula-specific no-data/neutral handling is acceptable
+  only when deterministic and tested.
+- Missing or zero volume can prevent volume-based indicators such as OBV/MFI from
+  producing meaningful values; do not synthesize volume.
+- Existing indicator serializers must preserve numeric values as floats and
+  nested research payloads as JSON-compatible dict/list structures.
+
+### 5. Good/Base/Bad Cases
+
+- Good: `/indicators/{symbol}` includes `cci`, `obv`, `roc`, `bias`, `mfi`, and
+  `william_r` after recalculation over sufficient bars.
+- Good: a shorter history stores MA/RSI/K-line payloads while omitting indicators
+  whose windows are not ready.
+- Base: downstream reports may cite the stored technical-indicator row and list
+  the additional indicator codes.
+- Bad: a high MFI or low William %R becomes a direct buy/sell recommendation.
+- Bad: TA-Lib or InStock runtime modules are imported to calculate formulas in
+  this project.
+
+### 6. Tests Required
+
+- Analytics tests assert formula output for CCI, OBV, ROC, BIAS, MFI, and William %R.
+- Service tests assert the expanded indicator set is persisted without changing
+  previous payload shapes.
+- API tests assert `/indicators/recalculate` and `/indicators/{symbol}` expose
+  the additive indicator codes.
+- Focused validation should include indicator analytics/service/API tests, ruff
+  on touched Python files, and `git diff --check`.
+
 ## Scenario: Stored Chip Distribution Research Signal
 
 ### 1. Scope / Trigger
