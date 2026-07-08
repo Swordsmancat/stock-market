@@ -962,3 +962,36 @@ Added browser dry-run/write refresh for official FRED and World Bank macro indic
 ### Next Steps
 
 - None - task complete
+
+
+## Session 30: Official macro source status guidance
+
+**Date**: 2026-07-08
+**Task**: Official macro source status guidance
+**Branch**: `master`
+
+### Summary
+
+Added read-only official macro source status payload/API, Macro Research readiness panels, homepage missing macro guidance, tests, localization, and backend contract documentation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9da758a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
