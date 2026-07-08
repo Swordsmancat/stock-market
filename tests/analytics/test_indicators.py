@@ -1,6 +1,8 @@
 import pandas as pd
 import pytest
 
+from packages.analytics.candlestick_patterns import detect_latest_candlestick_patterns
+from packages.analytics.chip_distribution import calculate_latest_chip_distribution
 from packages.analytics.indicators import (
     calculate_atr,
     calculate_bollinger_bands,
@@ -9,7 +11,6 @@ from packages.analytics.indicators import (
     calculate_macd,
     calculate_rsi,
 )
-from packages.analytics.candlestick_patterns import detect_latest_candlestick_patterns
 
 
 def test_calculate_ma_returns_rolling_average():
@@ -144,3 +145,44 @@ def test_detect_latest_candlestick_patterns_handles_empty_series():
     assert result["status"] == "no_data"
     assert result["pattern_count"] == 0
     assert result["patterns"] == []
+
+
+def test_calculate_latest_chip_distribution_returns_research_payload():
+    result = calculate_latest_chip_distribution(
+        open_prices=pd.Series([10.0, 10.5, 11.0, 11.2]),
+        high_prices=pd.Series([11.0, 11.5, 12.0, 12.1]),
+        low_prices=pd.Series([9.5, 10.0, 10.8, 11.0]),
+        close_prices=pd.Series([10.8, 11.2, 11.5, 11.8]),
+        volumes=pd.Series([1000.0, 2000.0, 3000.0, 4000.0]),
+        bucket_count=12,
+    )
+
+    assert result["status"] == "evaluated"
+    assert result["rule_set"] == "chip_distribution_v1"
+    assert result["integration_source"] == "instock_inspired_cyq"
+    assert result["research_signal_only"] is True
+    assert result["approximation"] == "volume_weighted_without_float_shares"
+    assert result["evaluated_bars"] == 4
+    assert result["bucket_count"] == 12
+    assert result["benefit_ratio"] > 0
+    assert result["avg_cost"] >= result["price_min"]
+    assert result["avg_cost"] <= result["price_max"]
+    assert result["cost_ranges"]["70"]["low"] <= result["cost_ranges"]["70"]["high"]
+    assert result["cost_ranges"]["90"]["percent"] == 90
+    assert len(result["top_buckets"]) <= 5
+    assert len(result["buckets"]) == 12
+
+
+def test_calculate_latest_chip_distribution_handles_missing_volume():
+    result = calculate_latest_chip_distribution(
+        open_prices=pd.Series([10.0]),
+        high_prices=pd.Series([11.0]),
+        low_prices=pd.Series([9.0]),
+        close_prices=pd.Series([10.5]),
+        volumes=pd.Series([0.0]),
+    )
+
+    assert result["status"] == "no_data"
+    assert result["research_signal_only"] is True
+    assert result["avg_cost"] is None
+    assert result["buckets"] == []

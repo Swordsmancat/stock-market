@@ -47,7 +47,7 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
     assert recalculate_response.status_code == 200
     recalculate_payload = recalculate_response.json()
     assert recalculate_payload["status"] == "calculated"
-    assert recalculate_payload["indicator_count"] == 7
+    assert recalculate_payload["indicator_count"] == 8
 
     assert indicators_response.status_code == 200
     indicators_payload = indicators_response.json()
@@ -62,6 +62,7 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
         "macd",
         "kdj",
         "candlestick_patterns",
+        "chip_distribution",
     }
     assert indicators_payload["indicators"]["ma"] == 119.0
     assert indicators_payload["indicators"]["rsi"] == 100.0
@@ -84,3 +85,10 @@ def test_indicators_api_recalculates_and_reads_database_indicators():
     assert candlestick_patterns["research_signal_only"] is True
     assert candlestick_patterns["pattern_count"] == 0
     assert candlestick_patterns["patterns"] == []
+    chip_distribution = indicators_payload["indicators"]["chip_distribution"]
+    assert chip_distribution["rule_set"] == "chip_distribution_v1"
+    assert chip_distribution["research_signal_only"] is True
+    assert chip_distribution["approximation"] == "volume_weighted_without_float_shares"
+    assert chip_distribution["status"] == "evaluated"
+    assert chip_distribution["bucket_count"] == 60
+    assert chip_distribution["cost_ranges"]["90"]["percent"] == 90

@@ -71,7 +71,7 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     payload = get_stored_indicators_payload("AAPL", session=session)
 
     assert result["status"] == "calculated"
-    assert result["indicator_count"] == 7
+    assert result["indicator_count"] == 8
     assert payload["source"] == "database"
     assert payload["symbol"] == "AAPL"
     assert payload["as_of"] == "2026-01-20T00:00:00+00:00"
@@ -83,6 +83,7 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
         "macd",
         "kdj",
         "candlestick_patterns",
+        "chip_distribution",
     }
     assert payload["indicators"]["ma"] == 119.0
     assert payload["indicators"]["rsi"] == 100.0
@@ -102,6 +103,18 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     assert candlestick_patterns["research_signal_only"] is True
     assert candlestick_patterns["pattern_count"] == 0
     assert candlestick_patterns["patterns"] == []
+    chip_distribution = payload["indicators"]["chip_distribution"]
+    assert chip_distribution["rule_set"] == "chip_distribution_v1"
+    assert chip_distribution["integration_source"] == "instock_inspired_cyq"
+    assert chip_distribution["research_signal_only"] is True
+    assert chip_distribution["approximation"] == "volume_weighted_without_float_shares"
+    assert chip_distribution["status"] == "evaluated"
+    assert chip_distribution["evaluated_bars"] == 20
+    assert chip_distribution["bucket_count"] == 60
+    assert chip_distribution["benefit_ratio"] > 0
+    assert chip_distribution["avg_cost"] is not None
+    assert chip_distribution["cost_ranges"]["70"]["low"] <= chip_distribution["cost_ranges"]["70"]["high"]
+    assert len(chip_distribution["top_buckets"]) <= 5
 
 
 def test_stores_detected_candlestick_pattern_payload():

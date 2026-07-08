@@ -257,3 +257,21 @@ out of verified-news storage until a separate model exists:
   explicitly not citable today;
 - continue to require official APIs, licensed provider results, or user-reviewed
   notes for any future social sentiment adapter.
+
+## Follow-Up Slice: InStock-Inspired Chip Distribution
+
+The next non-trading InStock slice ports the CYQ/chip-distribution capability
+shape into the existing stored technical-indicator boundary:
+
+- add `packages/analytics/chip_distribution.py` as pure Python/pandas over local
+  daily OHLCV bars;
+- store results as a `TechnicalIndicator` with `indicator_code="chip_distribution"`;
+- return cost-range summaries, benefit ratio, top buckets, and explicit
+  limitations under `rule_set="chip_distribution_v1"`;
+- mark payloads `research_signal_only=true` and
+  `approximation="volume_weighted_without_float_shares"` because the current
+  database has volume but not reviewed free-float shares or true turnover;
+- avoid InStock runtime imports, JS UI, crawlers, MySQL/Tornado stack, scheduler
+  replacement, strategy execution, broker order intents, and any trading advice;
+- document `myhhub/stock` Apache-2.0 attribution and the no-trading/no-overclaim
+  boundary.

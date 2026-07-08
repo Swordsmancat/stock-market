@@ -4,6 +4,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from packages.analytics.candlestick_patterns import detect_latest_candlestick_patterns
+from packages.analytics.chip_distribution import calculate_latest_chip_distribution
 from packages.analytics.indicators import (
     calculate_atr,
     calculate_bollinger_bands,
@@ -22,6 +23,7 @@ DAILY_TECHNICAL_INDICATOR_CODES_TO_REFRESH = {
     "macd",
     "kdj",
     "candlestick_patterns",
+    "chip_distribution",
 }
 
 
@@ -130,6 +132,7 @@ def calculate_and_store_daily_indicators(
     close = pd.Series([float(bar.close) for bar in bars])
     high = pd.Series([float(bar.high) for bar in bars])
     low = pd.Series([float(bar.low) for bar in bars])
+    volume = pd.Series([float(bar.volume) for bar in bars])
     ma_values = calculate_ma(close, ma_window).dropna()
     if ma_values.empty:
         return {"symbol": symbol, "status": "insufficient_data", "indicator_count": 0}
@@ -168,6 +171,15 @@ def calculate_and_store_daily_indicators(
             "research_signal_only": True,
         },
         "value": detect_latest_candlestick_patterns(open_prices, high, low, close),
+    }
+    indicator_values["chip_distribution"] = {
+        "params": {
+            "rule_set": "chip_distribution_v1",
+            "source": "myhhub/stock inspired CYQ chip distribution slice",
+            "research_signal_only": True,
+            "approximation": "volume_weighted_without_float_shares",
+        },
+        "value": calculate_latest_chip_distribution(open_prices, high, low, close, volume),
     }
 
     session.query(TechnicalIndicator).filter(

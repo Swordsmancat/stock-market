@@ -1,5 +1,97 @@
 # InStock-Inspired Analysis Pattern Contract
 
+## Scenario: Stored Chip Distribution Research Signal
+
+### 1. Scope / Trigger
+
+- Trigger: `calculate_and_store_daily_indicators(...)` stores an additive
+  `chip_distribution` technical indicator inspired by the `myhhub/stock` CYQ
+  / chip-distribution capability.
+- Scope: pure analytics under `packages/analytics/chip_distribution.py`,
+  persisted indicator assembly in `packages/services/indicators.py`,
+  `/indicators/recalculate`, `/indicators/{symbol}`, and stored technical
+  indicator consumers.
+- Non-goals: importing InStock's K-line UI, using scraped chip-race endpoints,
+  adding free-float share crawlers, TA-Lib, MySQL/Tornado dependencies,
+  strategy execution, or automatic trading.
+
+### 2. Signatures
+
+- Pure helper:
+  `calculate_latest_chip_distribution(open_prices, high_prices, low_prices, close_prices, volumes, lookback_days=210, bucket_count=60) -> dict[str, object]`
+- Stored technical indicator row:
+  - `TechnicalIndicator.indicator_code = "chip_distribution"`
+  - `TechnicalIndicator.timeframe = "1d"`
+  - `TechnicalIndicator.as_of = latest daily bar at UTC midnight`
+  - `TechnicalIndicator.params.rule_set = "chip_distribution_v1"`
+  - `TechnicalIndicator.params.research_signal_only = true`
+  - `TechnicalIndicator.params.approximation = "volume_weighted_without_float_shares"`
+- Stored/API value shape includes:
+  - `rule_set = "chip_distribution_v1"`
+  - `integration_source = "instock_inspired_cyq"`
+  - `status`
+  - `research_signal_only`
+  - `approximation`
+  - `lookback_days`, `evaluated_bars`, `bucket_count`
+  - `benefit_ratio`
+  - `avg_cost` and `weighted_average_cost`
+  - `cost_ranges["70"]` and `cost_ranges["90"]`
+  - `top_buckets` and `buckets`
+  - `limitations`
+
+### 3. Contracts
+
+- The helper must remain pure Python/pandas over local daily OHLCV bars.
+- Because the project currently stores volume but not free-float shares or true
+  turnover rate, the first CYQ slice is a volume-normalized research
+  approximation. It must say so in both params and value payloads.
+- Payloads are research signals only. They must not emit buy/sell/hold actions,
+  target prices, position sizes, order intents, or execution instructions.
+- Stored `TechnicalIndicator` rows remain the citation boundary. A live
+  calculation, InStock README/source line, or source-readiness note is not an
+  assistant citation until stored locally.
+- The implementation may acknowledge `myhhub/stock` as an Apache-2.0
+  inspiration, but must not vendor the repository or import its runtime modules.
+
+### 4. Validation & Error Matrix
+
+- Empty OHLCV/volume series -> payload `status="no_data"`, empty buckets, and no
+  fabricated cost metrics.
+- Zero or missing volume for all rows -> payload `status="no_data"`.
+- Non-positive `lookback_days` -> payload `status="invalid_input"` and no cost
+  metrics.
+- Flat prices with positive volume may be represented as one bucket.
+- Existing numeric indicators and `candlestick_patterns` must remain additive
+  and unchanged except for the total refreshed indicator count.
+- Stored payloads must preserve nested dicts, lists, booleans, strings, and nulls
+  through `get_stored_indicators_payload(...)`.
+
+### 5. Good/Base/Bad Cases
+
+- Good: a stored `chip_distribution` payload includes 70% and 90% cost ranges,
+  benefit ratio, top buckets, explicit limitations, and
+  `research_signal_only=true`.
+- Good: no volume returns a no-data payload rather than a fake cost band.
+- Base: assistant/report consumers may cite the stored technical-indicator row
+  and describe it as a volume-normalized CYQ approximation.
+- Bad: the payload claims provider-grade chip concentration without reviewed
+  free-float/turnover inputs.
+- Bad: a low average cost becomes a buy recommendation or order intent.
+- Bad: InStock's JS/Python CYQ runtime, web UI, crawler, or database stack is
+  imported wholesale.
+
+### 6. Tests Required
+
+- Analytics tests assert evaluated and no-data CYQ payloads, approximation
+  metadata, cost ranges, bucket counts, and `research_signal_only=true`.
+- Service tests assert `calculate_and_store_daily_indicators(...)` writes
+  `chip_distribution` alongside existing indicators without changing previous
+  numeric values.
+- API tests assert `/indicators/recalculate` and `/indicators/{symbol}` expose
+  the additive nested payload and preserve old fields.
+- Focused validation should include indicator analytics/service/API tests, ruff
+  on touched Python files, and `git diff --check`.
+
 ## Scenario: Stored Candlestick Pattern Research Signal
 
 ### 1. Scope / Trigger

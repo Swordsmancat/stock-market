@@ -106,3 +106,13 @@ git diff --check
 - [x] Return `social_candidate_count` and `social_candidates_deferred` from `search-ingest`.
 - [x] Add source-readiness guidance for future social sentiment storage as non-citable today.
 - [x] Add focused service/source-readiness tests and backend spec/runbook coverage.
+
+## InStock Chip Distribution Slice
+
+- [x] Confirm InStock CYQ/chip distribution is a capability reference, not a runtime import target.
+- [x] Add pure Python/pandas latest-window chip distribution over local OHLCV bars.
+- [x] Persist `chip_distribution` through the existing `TechnicalIndicator` table.
+- [x] Mark the payload as a volume-normalized approximation because free-float/turnover inputs are not stored.
+- [x] Preserve existing numeric indicators, K-line pattern outputs, and stored technical-indicator citation boundary.
+- [x] Add focused analytics, service, and API tests.
+- [x] Add runbook/spec coverage for Apache-2.0 attribution, approximation limits, and no-trading rules.
