@@ -152,3 +152,11 @@ git diff --check
 - [x] Return `candidate_scope` in stock-selection payloads for auditability.
 - [x] Preserve stored evidence citations, `research_signal_only=true`, and the non-advice disclaimer.
 - [x] Add focused service/API/watchlist tests and backend spec/runbook coverage.
+
+## InStock Single-Symbol Stock / ETF Daily-Bar Job Slice
+
+- [x] Add `asset_type` to `POST /ingestion/symbol-daily-bars`, defaulting to `stock` and supporting `stock` / `etf`.
+- [x] Propagate `asset_type` through TaskRun input, task dispatch, Celery worker kwargs, worker result payload, serialized snapshot, and persisted `Instrument.asset_type`.
+- [x] Preserve targeted provider fetches by symbol/timeframe/date range without importing InStock schedulers, ETF crawlers, proxy/cookie workflows, or database runtime.
+- [x] Reject unsupported asset types before provider fetch and avoid fabricated rows when providers return no data.
+- [x] Add focused service/API/dispatch/worker tests and backend spec/runbook coverage.

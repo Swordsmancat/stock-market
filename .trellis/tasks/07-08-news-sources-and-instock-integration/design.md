@@ -342,3 +342,19 @@ project's local screener:
   and fundamentals;
 - avoid provider scans, watchlist mutation, persisted selection results,
   strategy execution, order intents, and buy/sell/hold language.
+
+## Follow-Up Slice: Single-Symbol Stock / ETF Daily-Bar Jobs
+
+The next data-job slice adapts InStock's daily stock/ETF job shape to this
+project's existing task-run and ingestion boundaries:
+
+- extend `POST /ingestion/symbol-daily-bars` with `asset_type`, defaulting to
+  `stock` and supporting `stock` / `etf`;
+- propagate `asset_type` through TaskRun input, task dispatch, Celery worker,
+  serialized snapshot, and persisted `Instrument.asset_type`;
+- keep provider calls targeted to the requested symbol/date range instead of
+  importing an ETF universe crawler or InStock scheduler;
+- preserve no-data diagnostics when a provider returns no bars and fail closed
+  before provider fetch for unsupported asset types;
+- avoid strategy execution, order intents, watchlist mutation, broker calls, and
+  buy/sell/hold language.

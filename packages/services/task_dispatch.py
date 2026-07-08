@@ -55,6 +55,7 @@ def _dispatch_symbol_daily_bars_ingestion(input_json: dict[str, Any], task_run_i
         provider=input_json.get("provider"),
         exchange=input_json.get("exchange"),
         timeframe=input_json.get("timeframe", "1d"),
+        asset_type=input_json.get("asset_type", "stock"),
         task_run_id=task_run_id,
     )
     return async_result.id

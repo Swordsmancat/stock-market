@@ -168,6 +168,14 @@ def _normalize_optional_exchange(exchange: str | None, market_code: str) -> str:
     return exchange.strip().upper()
 
 
+def _normalize_asset_type(asset_type: str | None) -> str:
+    normalized = (asset_type or "stock").strip().lower()
+    if normalized in {"stock", "etf"}:
+        return normalized
+    msg = f"Unsupported asset_type for symbol daily bars: {asset_type}"
+    raise ValueError(msg)
+
+
 def _get_market_currency(market_code: str) -> str:
     return MARKET_META.get(market_code, {"currency": "USD"})["currency"]
 
@@ -178,6 +186,7 @@ def _build_symbol_daily_bars_snapshot(
     market: str,
     exchange: str | None,
     timeframe: str,
+    asset_type: str,
     start: date,
     end: date,
     requested_provider: str | None,
@@ -199,7 +208,7 @@ def _build_symbol_daily_bars_snapshot(
                 "symbol": symbol,
                 "name": symbol,
                 "exchange": _normalize_optional_exchange(exchange, market),
-                "asset_type": "stock",
+                "asset_type": asset_type,
                 "currency": _get_market_currency(market),
                 "bars": serialized_bars,
             }
@@ -349,6 +358,7 @@ def ingest_symbol_daily_bars(
     provider_name: str | None = None,
     exchange: str | None = None,
     timeframe: str = "1d",
+    asset_type: str | None = "stock",
 ) -> dict[str, object]:
     normalized_symbol = symbol.strip().upper()
     normalized_market = market.strip().upper()
@@ -359,6 +369,7 @@ def ingest_symbol_daily_bars(
 
     requested_provider_name = _normalize_optional_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
+    normalized_asset_type = _normalize_asset_type(asset_type)
     provider = get_provider(effective_provider_name)
     bars = provider.fetch_bars(normalized_symbol, normalized_timeframe, start, end)
     snapshot = _build_symbol_daily_bars_snapshot(
@@ -366,6 +377,7 @@ def ingest_symbol_daily_bars(
         market=normalized_market,
         exchange=exchange,
         timeframe=normalized_timeframe,
+        asset_type=normalized_asset_type,
         start=start,
         end=end,
         requested_provider=requested_provider_name,

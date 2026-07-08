@@ -372,6 +372,51 @@ def test_symbol_daily_bar_ingestion_fetches_bars_without_instrument_universe(
     assert database_bar.close == Decimal("123.45")
 
 
+def test_symbol_daily_bar_ingestion_can_store_etf_asset_type(
+    monkeypatch,
+    sqlite_session: Session,
+):
+    provider = TargetedBarsProvider([_provider_bar("SPY", date(2026, 1, 5), Decimal("510.25"))])
+    monkeypatch.setattr(ingestion_service, "get_provider", lambda provider_name: provider)
+
+    result = ingest_symbol_daily_bars(
+        "spy",
+        "us",
+        date(2026, 1, 5),
+        date(2026, 1, 5),
+        session=sqlite_session,
+        provider_name="mock",
+        asset_type="ETF",
+    )
+
+    instrument = sqlite_session.query(Instrument).filter(Instrument.symbol == "SPY").one()
+    assert result["status"] == "ingested"
+    assert result["instruments"][0]["asset_type"] == "etf"
+    assert instrument.asset_type == "etf"
+
+
+def test_symbol_daily_bar_ingestion_rejects_unknown_asset_type(
+    monkeypatch,
+    sqlite_session: Session,
+):
+    provider = TargetedBarsProvider([_provider_bar("SPY", date(2026, 1, 5), Decimal("510.25"))])
+    monkeypatch.setattr(ingestion_service, "get_provider", lambda provider_name: provider)
+
+    with pytest.raises(ValueError, match="Unsupported asset_type"):
+        ingest_symbol_daily_bars(
+            "spy",
+            "us",
+            date(2026, 1, 5),
+            date(2026, 1, 5),
+            session=sqlite_session,
+            provider_name="mock",
+            asset_type="fund",
+        )
+
+    assert provider.fetch_bars_count == 0
+    assert sqlite_session.query(Instrument).count() == 0
+
+
 def test_symbol_daily_bar_ingestion_returns_no_data_without_daily_rows(
     monkeypatch,
     sqlite_session: Session,

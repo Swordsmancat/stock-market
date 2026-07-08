@@ -86,6 +86,7 @@ def dispatch_task_run_sync(
                 provider=input_json.get("provider"),
                 exchange=input_json.get("exchange"),
                 timeframe=input_json.get("timeframe", "1d"),
+                asset_type=input_json.get("asset_type", "stock"),
                 task_run_id=task_run_id,
             ),
         )

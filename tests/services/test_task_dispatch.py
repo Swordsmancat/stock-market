@@ -7,6 +7,7 @@ def test_is_dispatchable_task_supports_registered_tasks():
     assert is_dispatchable_task("reports.refresh_daily_watchlist_analysis") is True
     assert is_dispatchable_task("reports.refresh_daily_stock_analysis") is True
     assert is_dispatchable_task("ingestion.ingest_market_data") is True
+    assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars") is True
     assert is_dispatchable_task("alerts.evaluate_watchlist_alerts") is True
     assert is_dispatchable_task("unknown.task") is False
 
@@ -88,5 +89,40 @@ def test_dispatch_task_run_enqueues_market_ingestion(mock_task):
         start="2026-01-01",
         end="2026-01-02",
         provider="yfinance",
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.ingestion.ingest_symbol_daily_bars_task")
+def test_dispatch_task_run_enqueues_symbol_daily_bars_with_asset_type(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-symbol-bars"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.ingest_symbol_daily_bars",
+        {
+            "symbol": "SPY",
+            "market": "US",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "provider": "mock",
+            "exchange": "NYSE",
+            "timeframe": "1d",
+            "asset_type": "etf",
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-symbol-bars"
+    mock_task.delay.assert_called_once_with(
+        symbol="SPY",
+        market="US",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="mock",
+        exchange="NYSE",
+        timeframe="1d",
+        asset_type="etf",
         task_run_id="task-run-id",
     )

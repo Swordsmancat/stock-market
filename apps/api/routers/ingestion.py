@@ -48,6 +48,7 @@ def _enqueue_symbol_daily_bars_ingestion(
     end: date,
     exchange: str | None,
     timeframe: str,
+    asset_type: str,
     session: Session,
 ) -> dict[str, object]:
     task_input = {
@@ -56,6 +57,7 @@ def _enqueue_symbol_daily_bars_ingestion(
         "start": start.isoformat(),
         "end": end.isoformat(),
         "timeframe": timeframe.strip().lower(),
+        "asset_type": asset_type.strip().lower() or "stock",
     }
     normalized_provider = _normalize_optional_query_value(provider)
     normalized_exchange = _normalize_optional_query_value(exchange)
@@ -114,6 +116,7 @@ def ingest_symbol_daily_bars(
     end: date = Query(...),
     exchange: str | None = Query(default=None),
     timeframe: str = Query(default="1d"),
+    asset_type: str = Query(default="stock", description="Instrument asset type: stock or etf."),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return _enqueue_symbol_daily_bars_ingestion(
@@ -124,5 +127,6 @@ def ingest_symbol_daily_bars(
         end=end,
         exchange=exchange,
         timeframe=timeframe,
+        asset_type=asset_type,
         session=session,
     )

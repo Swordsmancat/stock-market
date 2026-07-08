@@ -17,6 +17,8 @@ runtime dependency.
   chip-distribution benefit ratio.
 - Implemented feature: watchlist-scoped composite stock selection over active
   default-watchlist entries.
+- Implemented feature: single-symbol daily-bar ingestion can persist stock or
+  ETF asset type.
 - Implemented feature: research-only `GET /strategies/screen` strategy screening API.
 - Implemented feature: research-only `GET /strategies/evaluate` strategy evaluation API.
 - Rule set: `candlestick_patterns_v1`.
@@ -113,6 +115,24 @@ This endpoint is not a production strategy tester. It does not model order
 fills, slippage, fees, tax, borrow constraints, portfolio constraints, or live
 execution.
 
+## Single-Symbol Stock / ETF Daily-Bar Ingestion
+
+`POST /ingestion/symbol-daily-bars` supports targeted daily-bar jobs for stock
+or ETF instruments:
+
+```text
+POST /ingestion/symbol-daily-bars?symbol=SPY&market=US&asset_type=etf&start=2026-01-01&end=2026-01-02&provider=mock
+```
+
+The supported `asset_type` values are `stock` and `etf`; omitting it preserves
+the previous stock default. The value is carried through TaskRun input, Celery
+dispatch, the worker result payload, serialized snapshot rows, and
+`Instrument.asset_type`.
+
+This is a targeted single-symbol ingestion path. It does not crawl an ETF
+universe, import InStock schedulers, use proxy/cookie workflows, or produce
+research/trading signals.
+
 ## Strategy Screening API
 
 `GET /strategies/screen` evaluates the latest daily OHLCV window against
@@ -197,8 +217,9 @@ Use focused checks after changing this slice:
 ```powershell
 pytest tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/api/test_indicators_db_api.py
 pytest tests/api/test_recommendations_api.py tests/services/test_recommendation_signal_evaluation.py
+pytest tests/services/test_ingestion_service.py tests/api/test_ingestion_api.py tests/services/test_task_dispatch.py tests/worker/test_tasks.py
 pytest tests/services/test_strategy_screening.py tests/api/test_strategy_screening_api.py
 pytest tests/services/test_stock_selection.py tests/api/test_stock_selection_api.py
-python -m ruff check packages/analytics/indicators.py packages/analytics/candlestick_patterns.py packages/analytics/chip_distribution.py packages/services/indicators.py packages/services/strategy_screening.py packages/services/stock_selection.py apps/api/routers/strategy_screening.py apps/api/routers/stock_selection.py tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/services/test_strategy_screening.py tests/services/test_stock_selection.py tests/api/test_indicators_db_api.py tests/api/test_strategy_screening_api.py tests/api/test_stock_selection_api.py
+python -m ruff check packages/analytics/indicators.py packages/analytics/candlestick_patterns.py packages/analytics/chip_distribution.py packages/services/indicators.py packages/services/ingestion.py packages/services/task_dispatch.py packages/services/strategy_screening.py packages/services/stock_selection.py apps/api/routers/ingestion.py apps/api/routers/strategy_screening.py apps/api/routers/stock_selection.py apps/worker/tasks/ingestion.py tests/analytics/test_indicators.py tests/helpers/celery_sync.py tests/services/test_indicator_persistence_service.py tests/services/test_ingestion_service.py tests/services/test_task_dispatch.py tests/services/test_strategy_screening.py tests/services/test_stock_selection.py tests/api/test_indicators_db_api.py tests/api/test_ingestion_api.py tests/api/test_strategy_screening_api.py tests/api/test_stock_selection_api.py tests/worker/test_tasks.py
 git diff --check
 ```

@@ -212,6 +212,7 @@ def test_ingest_symbol_daily_bars_task_records_succeeded_task_run(monkeypatch):
         start="2026-01-01",
         end="2026-01-02",
         provider="mock",
+        asset_type="etf",
     )
     latest_run = get_latest_task_run_payload(
         session=session,
@@ -221,9 +222,11 @@ def test_ingest_symbol_daily_bars_task_records_succeeded_task_run(monkeypatch):
     assert result["status"] == "ingested"
     assert result["symbol"] == "AAPL"
     assert result["market"] == "US"
+    assert result["asset_type"] == "etf"
     assert result["provider"] == "mock"
     assert result["bar_count"] == 2
     assert latest_run["status"] == "succeeded"
+    assert latest_run["input_json"]["asset_type"] == "etf"
     assert latest_run["result_json"] == result
 
 

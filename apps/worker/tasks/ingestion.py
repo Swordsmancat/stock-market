@@ -108,6 +108,7 @@ def ingest_symbol_daily_bars_task(
     provider: str | None = None,
     exchange: str | None = None,
     timeframe: str = "1d",
+    asset_type: str = "stock",
     task_run_id: str | None = None,
 ) -> dict[str, object]:
     end_date = date.fromisoformat(end) if end else date.today()
@@ -133,6 +134,7 @@ def ingest_symbol_daily_bars_task(
                 "provider": provider,
                 "exchange": exchange,
                 "timeframe": timeframe,
+                "asset_type": asset_type,
             },
             session=session,
         )
@@ -147,10 +149,12 @@ def ingest_symbol_daily_bars_task(
             provider_name=provider,
             exchange=exchange,
             timeframe=timeframe,
+            asset_type=asset_type,
         )
         result_payload = {
             "symbol": str(ingestion_result["symbol"]),
             "market": str(ingestion_result["market"]),
+            "asset_type": str(ingestion_result["instruments"][0]["asset_type"]),
             "instrument_count": int(ingestion_result["instrument_count"]),
             "bar_count": int(ingestion_result["bar_count"]),
             "status": str(ingestion_result["status"]),

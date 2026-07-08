@@ -97,6 +97,7 @@ def test_symbol_daily_bars_ingestion_dispatches_task_run_and_writes_database(mon
                 "provider": "mock",
                 "start": "2026-01-01",
                 "end": "2026-01-02",
+                "asset_type": "etf",
             },
         )
         bars_response = client.get(
@@ -119,11 +120,13 @@ def test_symbol_daily_bars_ingestion_dispatches_task_run_and_writes_database(mon
     assert task_run["status"] == "succeeded"
     assert task_run["input_json"]["symbol"] == "AAPL"
     assert task_run["input_json"]["market"] == "US"
+    assert task_run["input_json"]["asset_type"] == "etf"
 
     result = task_run["result_json"]
     assert result["status"] == "ingested"
     assert result["symbol"] == "AAPL"
     assert result["market"] == "US"
+    assert result["asset_type"] == "etf"
     assert result["provider"] == "mock"
     assert result["bar_count"] == 2
 
