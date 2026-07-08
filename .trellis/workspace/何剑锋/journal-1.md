@@ -929,3 +929,36 @@ Localized homepage recommendation shell text, added a visible AI Research entry 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 29: Official macro refresh controls
+
+**Date**: 2026-07-08
+**Task**: Official macro refresh controls
+**Branch**: `master`
+
+### Summary
+
+Added browser dry-run/write refresh for official FRED and World Bank macro indicators, with backend endpoints, Next proxies, localized Macro Research controls, tests, and desktop/mobile browser smoke validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a22cf7f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
