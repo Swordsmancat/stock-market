@@ -1,9 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-const { getPlatformSettingsMock, savePlatformSettingsMock } = vi.hoisted(() => ({
-  getPlatformSettingsMock: vi.fn(),
-  savePlatformSettingsMock: vi.fn(),
-}));
+const { getPlatformSettingsMock, savePlatformSettingsMock } = vi.hoisted(
+  () => ({
+    getPlatformSettingsMock: vi.fn(),
+    savePlatformSettingsMock: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/platform-settings-store", () => ({
   getPlatformSettings: getPlatformSettingsMock,
@@ -27,7 +29,17 @@ it("returns persisted platform settings with route source metadata", async () =>
     tushare_token: "tushare-token",
     tushare_http_url: "https://tushare.example",
     color_scheme: "international",
-    favorite_macro_indicator_codes: ["buffett_indicator_us", "buffett_indicator_cn"],
+    favorite_home_index_codes: ["us_sp_500", "cn_csi_300"],
+    home_index_display_fields: ["latest_close", "provider"],
+    favorite_macro_indicator_codes: [
+      "buffett_indicator_us",
+      "buffett_indicator_cn",
+    ],
+    news_search_provider_order: ["anspire", "serpapi_baidu"],
+    news_search_enabled_providers: ["anspire"],
+    news_search_provider_keys: { anspire: "anspire-secret" },
+    news_search_max_results: 10,
+    news_search_timeout_seconds: 8,
     llm_api_key_configured: true,
   };
   getPlatformSettingsMock.mockResolvedValue(storedSettings);
@@ -41,6 +53,8 @@ it("returns persisted platform settings with route source metadata", async () =>
     ...storedSettings,
     tushare_token: "",
     tushare_token_configured: true,
+    news_search_provider_keys: {},
+    news_search_provider_keys_configured: { anspire: true },
   });
 });
 
@@ -54,7 +68,17 @@ it("saves platform settings and reports whether an LLM API key is configured", a
     tushare_token: "token-updated",
     tushare_http_url: "https://tushare.example",
     color_scheme: "china",
+    favorite_home_index_codes: ["us_sp_500", "cn_csi_300"],
+    home_index_display_fields: ["latest_close", "percent_change", "provider"],
     favorite_macro_indicator_codes: ["buffett_indicator_us", "us_10y_yield"],
+    news_search_provider_order: ["anspire", "serpapi_baidu"],
+    news_search_enabled_providers: ["anspire", "serpapi_baidu"],
+    news_search_provider_keys: {
+      anspire: "anspire-updated",
+      serpapi_baidu: "serpapi-updated",
+    },
+    news_search_max_results: 12,
+    news_search_timeout_seconds: 6,
   };
   savePlatformSettingsMock.mockResolvedValue(updatePayload);
 
@@ -76,6 +100,11 @@ it("saves platform settings and reports whether an LLM API key is configured", a
     llm_api_key_configured: true,
     tushare_token: "",
     tushare_token_configured: true,
+    news_search_provider_keys: {},
+    news_search_provider_keys_configured: {
+      anspire: true,
+      serpapi_baidu: true,
+    },
   });
 });
 
@@ -89,7 +118,14 @@ it("marks saved settings as not configured when the stored LLM API key is blank"
     tushare_token: "",
     tushare_http_url: "",
     color_scheme: "international",
+    favorite_home_index_codes: [],
+    home_index_display_fields: [],
     favorite_macro_indicator_codes: [],
+    news_search_provider_order: [],
+    news_search_enabled_providers: [],
+    news_search_provider_keys: {},
+    news_search_max_results: 10,
+    news_search_timeout_seconds: 8,
   };
   savePlatformSettingsMock.mockResolvedValue(savedSettings);
 
@@ -111,5 +147,7 @@ it("marks saved settings as not configured when the stored LLM API key is blank"
     llm_api_key_configured: false,
     tushare_token: "",
     tushare_token_configured: false,
+    news_search_provider_keys: {},
+    news_search_provider_keys_configured: {},
   });
 });

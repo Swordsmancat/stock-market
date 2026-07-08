@@ -14,6 +14,8 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
     initial = client.get("/settings/platform")
     assert initial.status_code == 200
     assert initial.json()["market_data_provider"] == "yfinance"
+    assert initial.json()["news_search_enabled_providers"] == ["anspire", "serpapi_baidu"]
+    assert initial.json()["news_search_provider_keys"] == {}
     assert initial.json()["favorite_macro_indicator_codes"][:2] == [
         "buffett_indicator_us",
         "buffett_indicator_cn",
@@ -25,6 +27,14 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
             "market_data_provider": "mock",
             "llm_provider": "openai",
             "llm_api_base": "https://example.com/v1",
+            "news_search_provider_order": ["serpapi_baidu", "anspire"],
+            "news_search_enabled_providers": ["serpapi_baidu"],
+            "news_search_provider_keys": {
+                "anspire": "anspire-secret",
+                "serpapi_baidu": "serpapi-secret",
+            },
+            "news_search_max_results": 12,
+            "news_search_timeout_seconds": 6,
             "favorite_macro_indicator_codes": [
                 " buffett_indicator_cn ",
                 "us_10y_yield",
@@ -38,6 +48,17 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
     assert payload["market_data_provider"] == "mock"
     assert payload["llm_provider"] == "openai"
     assert payload["llm_api_base"] == "https://example.com/v1"
+    assert payload["news_search_provider_order"][:2] == ["serpapi_baidu", "anspire"]
+    assert payload["news_search_enabled_providers"] == ["serpapi_baidu"]
+    assert payload["news_search_provider_keys"] == {}
+    assert payload["news_search_provider_keys_configured"] == {
+        "anspire": True,
+        "serpapi_baidu": True,
+    }
+    assert payload["news_search_max_results"] == 12
+    assert payload["news_search_timeout_seconds"] == 6.0
+    assert "anspire-secret" not in str(payload)
+    assert "serpapi-secret" not in str(payload)
     assert payload["favorite_macro_indicator_codes"] == [
         "buffett_indicator_cn",
         "us_10y_yield",
@@ -75,3 +96,41 @@ def test_platform_settings_public_response_masks_tushare_token(tmp_path, monkeyp
     assert tushare_capability["configured"] is True
     assert tushare_capability["supports_daily_bars"] is True
     assert tushare_capability["supports_realtime_quotes"] is False
+
+
+def test_platform_settings_preserves_blank_news_provider_keys(tmp_path, monkeypatch):
+    settings_file = tmp_path / "platform_settings.json"
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+
+    client = TestClient(app)
+    first = client.put(
+        "/settings/platform",
+        json={
+            "news_search_provider_keys": {
+                "anspire": "first-anspire-key",
+                "serpapi_baidu": "first-serpapi-key",
+            },
+        },
+    )
+    second = client.put(
+        "/settings/platform",
+        json={
+            "news_search_provider_keys": {
+                "anspire": "",
+                "serpapi_baidu": "updated-serpapi-key",
+            },
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["news_search_provider_keys_configured"] == {
+        "anspire": True,
+        "serpapi_baidu": True,
+    }
+    raw_file = settings_file.read_text(encoding="utf-8")
+    assert "first-anspire-key" in raw_file
+    assert "updated-serpapi-key" in raw_file

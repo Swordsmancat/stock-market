@@ -4,9 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { backendFetch } from "@/lib/backend-api";
-import { getPlatformSettings, savePlatformSettings } from "@/lib/platform-settings-store";
+import {
+  getPlatformSettings,
+  savePlatformSettings,
+} from "@/lib/platform-settings-store";
 
-async function readJsonSafe(response: Response): Promise<Record<string, unknown>> {
+async function readJsonSafe(
+  response: Response,
+): Promise<Record<string, unknown>> {
   try {
     return (await response.json()) as Record<string, unknown>;
   } catch {
@@ -14,7 +19,10 @@ async function readJsonSafe(response: Response): Promise<Record<string, unknown>
   }
 }
 
-function readNestedString(payload: Record<string, unknown>, key: string): string | null {
+function readNestedString(
+  payload: Record<string, unknown>,
+  key: string,
+): string | null {
   const value = payload[key];
   return typeof value === "string" && value.trim() ? value : null;
 }
@@ -22,7 +30,10 @@ function readNestedString(payload: Record<string, unknown>, key: string): string
 function extractTaskRunId(payload: Record<string, unknown>): string | null {
   const taskRun = payload.task_run;
   if (taskRun && typeof taskRun === "object") {
-    const taskRunId = readNestedString(taskRun as Record<string, unknown>, "id");
+    const taskRunId = readNestedString(
+      taskRun as Record<string, unknown>,
+      "id",
+    );
     if (taskRunId !== null) {
       return taskRunId;
     }
@@ -32,17 +43,24 @@ function extractTaskRunId(payload: Record<string, unknown>): string | null {
 }
 
 function extractReportId(payload: Record<string, unknown>): string | null {
-  return readNestedString(payload, "id") ?? readNestedString(payload, "report_id");
+  return (
+    readNestedString(payload, "id") ?? readNestedString(payload, "report_id")
+  );
 }
 
-function extractActionErrorMessage(payload: Record<string, unknown>, fallback: string): string {
+function extractActionErrorMessage(
+  payload: Record<string, unknown>,
+  fallback: string,
+): string {
   const detail = payload.detail;
   if (typeof detail === "string" && detail.trim()) {
     return detail;
   }
   if (detail && typeof detail === "object") {
     const detailPayload = detail as Record<string, unknown>;
-    const detailReason = readNestedString(detailPayload, "no_data_reason") ?? readNestedString(detailPayload, "message");
+    const detailReason =
+      readNestedString(detailPayload, "no_data_reason") ??
+      readNestedString(detailPayload, "message");
     if (detailReason !== null) {
       return detailReason;
     }
@@ -67,19 +85,31 @@ export async function triggerIngestionAction(formData: FormData) {
   const start = String(formData.get("start") ?? "");
   const end = String(formData.get("end") ?? "");
   const settings = await getPlatformSettings();
-  const provider = String(formData.get("provider") ?? settings.market_data_provider);
+  const provider = String(
+    formData.get("provider") ?? settings.market_data_provider,
+  );
 
   const params = new URLSearchParams({ market, start, end, provider });
-  const response = await backendFetch(`/ingestion/snapshot?${params.toString()}`, {
-    method: "POST",
-  });
+  const response = await backendFetch(
+    `/ingestion/snapshot?${params.toString()}`,
+    {
+      method: "POST",
+    },
+  );
   const body = await readJsonSafe(response);
 
   if (!response.ok) {
-    flashRedirect(locale, { ingest: "error", msg: extractActionErrorMessage(body, "ingestion failed") });
+    flashRedirect(locale, {
+      ingest: "error",
+      msg: extractActionErrorMessage(body, "ingestion failed"),
+    });
   }
 
-  if (body.status === "dispatched" && body.task_run && typeof body.task_run === "object") {
+  if (
+    body.status === "dispatched" &&
+    body.task_run &&
+    typeof body.task_run === "object"
+  ) {
     const taskRun = body.task_run as Record<string, unknown>;
     const result = (taskRun.result_json ?? {}) as Record<string, unknown>;
     const redirectParams: Record<string, string> = {
@@ -110,7 +140,9 @@ export async function refreshAnalysisAction(formData: FormData) {
   const maWindow = String(formData.get("ma_window") ?? "3");
   const returnTo = String(formData.get("return_to") ?? "").trim();
   const settings = await getPlatformSettings();
-  const provider = String(formData.get("provider") ?? settings.market_data_provider);
+  const provider = String(
+    formData.get("provider") ?? settings.market_data_provider,
+  );
 
   const redirectWithFlash = (params: Record<string, string>) => {
     if (returnTo) {
@@ -128,26 +160,40 @@ export async function refreshAnalysisAction(formData: FormData) {
     provider,
   });
 
-  let response = await backendFetch(`/analysis/refresh?${params.toString()}`, { method: "POST" });
+  let response = await backendFetch(`/analysis/refresh?${params.toString()}`, {
+    method: "POST",
+  });
   if (response.status === 404) {
-    response = await backendFetch(`/analysis/refresh-sync?${params.toString()}`, { method: "POST" });
+    response = await backendFetch(
+      `/analysis/refresh-sync?${params.toString()}`,
+      { method: "POST" },
+    );
   }
 
   if (response.status === 404) {
     const ingestParams = new URLSearchParams({ market, start, end, provider });
-    const ingestResponse = await backendFetch(`/ingestion/snapshot?${ingestParams.toString()}`, {
-      method: "POST",
-    });
+    const ingestResponse = await backendFetch(
+      `/ingestion/snapshot?${ingestParams.toString()}`,
+      {
+        method: "POST",
+      },
+    );
     const ingestBody = await readJsonSafe(ingestResponse);
     if (!ingestResponse.ok) {
-      redirectWithFlash({ analysis: "error", msg: extractActionErrorMessage(ingestBody, "ingestion failed") });
+      redirectWithFlash({
+        analysis: "error",
+        msg: extractActionErrorMessage(ingestBody, "ingestion failed"),
+      });
     }
     const reportResponse = await backendFetch(
       `/reports/${encodeURIComponent(symbol)}/stock?start=${start}&end=${end}`,
     );
     if (!reportResponse.ok) {
       const reportBody = await readJsonSafe(reportResponse);
-      redirectWithFlash({ analysis: "error", msg: extractActionErrorMessage(reportBody, "report failed") });
+      redirectWithFlash({
+        analysis: "error",
+        msg: extractActionErrorMessage(reportBody, "report failed"),
+      });
     }
     const redirectParams: Record<string, string> = { analysis: "ok", symbol };
     const taskRunId = extractTaskRunId(ingestBody);
@@ -159,10 +205,17 @@ export async function refreshAnalysisAction(formData: FormData) {
 
   const body = await readJsonSafe(response);
   if (!response.ok) {
-    redirectWithFlash({ analysis: "error", msg: extractActionErrorMessage(body, "refresh failed") });
+    redirectWithFlash({
+      analysis: "error",
+      msg: extractActionErrorMessage(body, "refresh failed"),
+    });
   }
 
-  if (body.status === "dispatched" && body.task_run && typeof body.task_run === "object") {
+  if (
+    body.status === "dispatched" &&
+    body.task_run &&
+    typeof body.task_run === "object"
+  ) {
     const taskRun = body.task_run as Record<string, unknown>;
     if (taskRun.status === "failed") {
       redirectWithFlash({
@@ -175,7 +228,10 @@ export async function refreshAnalysisAction(formData: FormData) {
   if (returnTo) {
     revalidatePath(returnTo);
   }
-  const redirectParams: Record<string, string> = { analysis: "ok", symbol: String(body.symbol ?? symbol) };
+  const redirectParams: Record<string, string> = {
+    analysis: "ok",
+    symbol: String(body.symbol ?? symbol),
+  };
   const taskRunId = extractTaskRunId(body);
   if (taskRunId !== null) {
     redirectParams.task_run_id = taskRunId;
@@ -185,10 +241,15 @@ export async function refreshAnalysisAction(formData: FormData) {
 
 export async function generateDailyReportAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
-  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
+  const symbol = String(formData.get("symbol") ?? "")
+    .trim()
+    .toUpperCase();
   const start = String(formData.get("start") ?? "");
   const end = String(formData.get("end") ?? "");
-  const returnTo = String(formData.get("return_to") ?? `/${locale}/instruments/${encodeURIComponent(symbol)}`);
+  const returnTo = String(
+    formData.get("return_to") ??
+      `/${locale}/instruments/${encodeURIComponent(symbol)}`,
+  );
 
   const params = new URLSearchParams({ start, end });
   const response = await backendFetch(
@@ -199,7 +260,10 @@ export async function generateDailyReportAction(formData: FormData) {
 
   revalidatePath(returnTo);
   if (!response.ok) {
-    pageRedirect(returnTo, { report: "error", msg: extractActionErrorMessage(body, "report failed") });
+    pageRedirect(returnTo, {
+      report: "error",
+      msg: extractActionErrorMessage(body, "report failed"),
+    });
   }
 
   const redirectParams: Record<string, string> = { report: "ok" };
@@ -218,15 +282,48 @@ export async function savePlatformSettingsAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
   try {
     await savePlatformSettings({
-      market_data_provider: String(formData.get("market_data_provider") ?? "yfinance"),
+      market_data_provider: String(
+        formData.get("market_data_provider") ?? "yfinance",
+      ),
       llm_provider: String(formData.get("llm_provider") ?? "mock"),
       llm_api_key: String(formData.get("llm_api_key") ?? ""),
-      llm_api_base: String(formData.get("llm_api_base") ?? "https://api.openai.com/v1"),
+      llm_api_base: String(
+        formData.get("llm_api_base") ?? "https://api.openai.com/v1",
+      ),
       akshare_enabled: formData.get("akshare_enabled") === "on",
       tushare_token: String(formData.get("tushare_token") ?? ""),
       tushare_http_url: String(formData.get("tushare_http_url") ?? ""),
-      color_scheme: String(formData.get("color_scheme") ?? "china") === "international" ? "international" : "china",
-      favorite_macro_indicator_codes: String(formData.get("favorite_macro_indicator_codes") ?? ""),
+      color_scheme:
+        String(formData.get("color_scheme") ?? "china") === "international"
+          ? "international"
+          : "china",
+      favorite_home_index_codes: String(
+        formData.get("favorite_home_index_codes") ?? "",
+      ),
+      home_index_display_fields: formData
+        .getAll("home_index_display_fields")
+        .map((value) => String(value)),
+      favorite_macro_indicator_codes: String(
+        formData.get("favorite_macro_indicator_codes") ?? "",
+      ),
+      news_search_provider_order: String(
+        formData.get("news_search_provider_order") ?? "",
+      ),
+      news_search_enabled_providers: formData
+        .getAll("news_search_enabled_providers")
+        .map((value) => String(value)),
+      news_search_provider_keys: {
+        anspire: String(formData.get("news_search_key_anspire") ?? ""),
+        serpapi_baidu: String(
+          formData.get("news_search_key_serpapi_baidu") ?? "",
+        ),
+      },
+      news_search_max_results: String(
+        formData.get("news_search_max_results") ?? "",
+      ),
+      news_search_timeout_seconds: String(
+        formData.get("news_search_timeout_seconds") ?? "",
+      ),
     });
     revalidatePath(`/${locale}/settings`);
   } catch {
@@ -248,14 +345,21 @@ export async function searchInstrumentAction(formData: FormData) {
 
 export async function addWatchlistItemAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
-  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
-  const market = String(formData.get("market") ?? "").trim().toUpperCase();
+  const symbol = String(formData.get("symbol") ?? "")
+    .trim()
+    .toUpperCase();
+  const market = String(formData.get("market") ?? "")
+    .trim()
+    .toUpperCase();
   const name = String(formData.get("name") ?? "").trim();
   const priceAbove = String(formData.get("price_above") ?? "").trim();
   const rsiBelow = String(formData.get("rsi_below") ?? "").trim();
 
   if (!symbol || !market) {
-    pageRedirect(`/${locale}/watchlist`, { op: "error", reason: "missing_fields" });
+    pageRedirect(`/${locale}/watchlist`, {
+      op: "error",
+      reason: "missing_fields",
+    });
   }
 
   const alertRules: Record<string, number> = {};
@@ -289,10 +393,15 @@ export async function removeWatchlistItemAction(formData: FormData) {
   const symbol = String(formData.get("symbol") ?? "");
   const market = String(formData.get("market") ?? "");
   const params = new URLSearchParams({ symbol, market });
-  const response = await backendFetch(`/watchlist/items?${params.toString()}`, { method: "DELETE" });
+  const response = await backendFetch(`/watchlist/items?${params.toString()}`, {
+    method: "DELETE",
+  });
   revalidatePath(`/${locale}/watchlist`);
   if (!response.ok) {
-    pageRedirect(`/${locale}/watchlist`, { op: "error", reason: `http_${response.status}` });
+    pageRedirect(`/${locale}/watchlist`, {
+      op: "error",
+      reason: `http_${response.status}`,
+    });
   }
   pageRedirect(`/${locale}/watchlist`, { op: "removed" });
 }
@@ -315,7 +424,10 @@ export async function updateWatchlistAlertsAction(formData: FormData) {
   });
   revalidatePath(`/${locale}/watchlist`);
   if (!response.ok) {
-    pageRedirect(`/${locale}/watchlist`, { op: "error", reason: `http_${response.status}` });
+    pageRedirect(`/${locale}/watchlist`, {
+      op: "error",
+      reason: `http_${response.status}`,
+    });
   }
   pageRedirect(`/${locale}/watchlist`, { op: "alerts_updated" });
 }
@@ -323,10 +435,15 @@ export async function updateWatchlistAlertsAction(formData: FormData) {
 export async function createPortfolioAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
   const name = String(formData.get("name") ?? "").trim();
-  const baseCurrency = String(formData.get("base_currency") ?? "USD").trim().toUpperCase();
+  const baseCurrency = String(formData.get("base_currency") ?? "USD")
+    .trim()
+    .toUpperCase();
 
   if (!name) {
-    pageRedirect(`/${locale}/portfolios`, { op: "error", reason: "missing_name" });
+    pageRedirect(`/${locale}/portfolios`, {
+      op: "error",
+      reason: "missing_name",
+    });
   }
 
   const response = await backendFetch("/portfolios", {
@@ -337,12 +454,18 @@ export async function createPortfolioAction(formData: FormData) {
 
   revalidatePath(`/${locale}/portfolios`);
   if (!response.ok) {
-    pageRedirect(`/${locale}/portfolios`, { op: "error", reason: `http_${response.status}` });
+    pageRedirect(`/${locale}/portfolios`, {
+      op: "error",
+      reason: `http_${response.status}`,
+    });
   }
 
   const created = (await readJsonSafe(response)) as { id?: string };
   if (created.id) {
-    pageRedirect(`/${locale}/portfolios`, { portfolio: created.id, op: "created" });
+    pageRedirect(`/${locale}/portfolios`, {
+      portfolio: created.id,
+      op: "created",
+    });
   }
   pageRedirect(`/${locale}/portfolios`, { op: "created" });
 }
@@ -350,14 +473,28 @@ export async function createPortfolioAction(formData: FormData) {
 export async function addPortfolioPositionAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
   const portfolioId = String(formData.get("portfolio_id") ?? "");
-  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
-  const market = String(formData.get("market") ?? "").trim().toUpperCase();
+  const symbol = String(formData.get("symbol") ?? "")
+    .trim()
+    .toUpperCase();
+  const market = String(formData.get("market") ?? "")
+    .trim()
+    .toUpperCase();
   const name = String(formData.get("name") ?? "").trim();
   const quantity = Number(formData.get("quantity"));
   const avgCost = Number(formData.get("avg_cost"));
 
-  if (!portfolioId || !symbol || !market || !Number.isFinite(quantity) || !Number.isFinite(avgCost)) {
-    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: "missing_fields" });
+  if (
+    !portfolioId ||
+    !symbol ||
+    !market ||
+    !Number.isFinite(quantity) ||
+    !Number.isFinite(avgCost)
+  ) {
+    pageRedirect(`/${locale}/portfolios`, {
+      portfolio: portfolioId,
+      op: "error",
+      reason: "missing_fields",
+    });
   }
 
   const response = await backendFetch(`/portfolios/${portfolioId}/positions`, {
@@ -374,9 +511,16 @@ export async function addPortfolioPositionAction(formData: FormData) {
 
   revalidatePath(`/${locale}/portfolios`);
   if (!response.ok) {
-    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: `http_${response.status}` });
+    pageRedirect(`/${locale}/portfolios`, {
+      portfolio: portfolioId,
+      op: "error",
+      reason: `http_${response.status}`,
+    });
   }
-  pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "position_added" });
+  pageRedirect(`/${locale}/portfolios`, {
+    portfolio: portfolioId,
+    op: "position_added",
+  });
 }
 
 export async function removePortfolioPositionAction(formData: FormData) {
@@ -385,15 +529,25 @@ export async function removePortfolioPositionAction(formData: FormData) {
   const symbol = String(formData.get("symbol") ?? "");
   const market = String(formData.get("market") ?? "");
   const params = new URLSearchParams({ symbol, market });
-  const response = await backendFetch(`/portfolios/${portfolioId}/positions?${params.toString()}`, {
-    method: "DELETE",
-  });
+  const response = await backendFetch(
+    `/portfolios/${portfolioId}/positions?${params.toString()}`,
+    {
+      method: "DELETE",
+    },
+  );
 
   revalidatePath(`/${locale}/portfolios`);
   if (!response.ok) {
-    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: `http_${response.status}` });
+    pageRedirect(`/${locale}/portfolios`, {
+      portfolio: portfolioId,
+      op: "error",
+      reason: `http_${response.status}`,
+    });
   }
-  pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "position_removed" });
+  pageRedirect(`/${locale}/portfolios`, {
+    portfolio: portfolioId,
+    op: "position_removed",
+  });
 }
 
 export async function renamePortfolioAction(formData: FormData) {
@@ -402,7 +556,11 @@ export async function renamePortfolioAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
 
   if (!portfolioId || !name) {
-    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: "missing_name" });
+    pageRedirect(`/${locale}/portfolios`, {
+      portfolio: portfolioId,
+      op: "error",
+      reason: "missing_name",
+    });
   }
 
   const response = await backendFetch(`/portfolios/${portfolioId}`, {
@@ -413,40 +571,66 @@ export async function renamePortfolioAction(formData: FormData) {
 
   revalidatePath(`/${locale}/portfolios`);
   if (!response.ok) {
-    pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "error", reason: `http_${response.status}` });
+    pageRedirect(`/${locale}/portfolios`, {
+      portfolio: portfolioId,
+      op: "error",
+      reason: `http_${response.status}`,
+    });
   }
-  pageRedirect(`/${locale}/portfolios`, { portfolio: portfolioId, op: "renamed" });
+  pageRedirect(`/${locale}/portfolios`, {
+    portfolio: portfolioId,
+    op: "renamed",
+  });
 }
 
 export async function deletePortfolioAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
   const portfolioId = String(formData.get("portfolio_id") ?? "");
-  const response = await backendFetch(`/portfolios/${portfolioId}`, { method: "DELETE" });
+  const response = await backendFetch(`/portfolios/${portfolioId}`, {
+    method: "DELETE",
+  });
 
   revalidatePath(`/${locale}/portfolios`);
   if (!response.ok) {
-    pageRedirect(`/${locale}/portfolios`, { op: "error", reason: `http_${response.status}` });
+    pageRedirect(`/${locale}/portfolios`, {
+      op: "error",
+      reason: `http_${response.status}`,
+    });
   }
   pageRedirect(`/${locale}/portfolios`, { portfolio: "demo", op: "deleted" });
 }
 
 export async function addInstrumentToWatchlistAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
-  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
-  const market = String(formData.get("market") ?? "").trim().toUpperCase();
+  const symbol = String(formData.get("symbol") ?? "")
+    .trim()
+    .toUpperCase();
+  const market = String(formData.get("market") ?? "")
+    .trim()
+    .toUpperCase();
   const name = String(formData.get("name") ?? "").trim();
-  const returnTo = String(formData.get("return_to") ?? `/${locale}/instruments/${symbol}`);
+  const returnTo = String(
+    formData.get("return_to") ?? `/${locale}/instruments/${symbol}`,
+  );
 
   const response = await backendFetch("/watchlist/items", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ symbol, market, name: name || null, alert_rules: {} }),
+    body: JSON.stringify({
+      symbol,
+      market,
+      name: name || null,
+      alert_rules: {},
+    }),
   });
 
   revalidatePath(returnTo);
   if (!response.ok) {
     const body = await readJsonSafe(response);
-    pageRedirect(returnTo, { watchlist: "error", reason: String(body.detail ?? `http_${response.status}`) });
+    pageRedirect(returnTo, {
+      watchlist: "error",
+      reason: String(body.detail ?? `http_${response.status}`),
+    });
   }
   pageRedirect(returnTo, { watchlist: "added" });
 }

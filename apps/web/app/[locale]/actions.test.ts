@@ -1,11 +1,17 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-const { backendFetchMock, redirectMock, revalidatePathMock } = vi.hoisted(() => ({
+const {
+  backendFetchMock,
+  redirectMock,
+  revalidatePathMock,
+  savePlatformSettingsMock,
+} = vi.hoisted(() => ({
   backendFetchMock: vi.fn(),
   redirectMock: vi.fn((targetPath: string) => {
     throw new Error(`NEXT_REDIRECT:${targetPath}`);
   }),
   revalidatePathMock: vi.fn(),
+  savePlatformSettingsMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -27,13 +33,17 @@ vi.mock("@/lib/platform-settings-store", () => ({
       llm_provider: "mock",
       llm_api_key: "",
       llm_api_base: "https://api.openai.com/v1",
+      favorite_home_index_codes: ["us_sp_500", "cn_csi_300"],
+      home_index_display_fields: ["latest_close", "percent_change"],
+      favorite_macro_indicator_codes: ["buffett_indicator_us"],
     }),
-  savePlatformSettings: vi.fn(),
+  savePlatformSettings: savePlatformSettingsMock,
 }));
 
 import {
   generateDailyReportAction,
   refreshAnalysisAction,
+  savePlatformSettingsAction,
   triggerIngestionAction,
   updateWatchlistAlertsAction,
 } from "./actions";
@@ -41,6 +51,41 @@ import {
 afterEach(() => {
   vi.clearAllMocks();
 });
+
+function buildSettingsFormData(
+  overrides: Record<string, string | string[]> = {},
+) {
+  const formData = new FormData();
+  const defaults: Record<string, string | string[]> = {
+    locale: "en",
+    market_data_provider: "yfinance",
+    llm_provider: "mock",
+    llm_api_key: "",
+    llm_api_base: "https://api.openai.com/v1",
+    tushare_token: "",
+    tushare_http_url: "",
+    color_scheme: "china",
+    favorite_home_index_codes: "cn_csi_300\nus_sp_500\ncn_csi_300",
+    home_index_display_fields: ["latest_close", "provider"],
+    favorite_macro_indicator_codes: "buffett_indicator_us\nus_10y_yield",
+    news_search_provider_order: "anspire\nserpapi_baidu\nmock",
+    news_search_enabled_providers: ["anspire", "serpapi_baidu"],
+    news_search_key_anspire: "anspire-key",
+    news_search_key_serpapi_baidu: "serpapi-key",
+    news_search_max_results: "12",
+    news_search_timeout_seconds: "6",
+  };
+  for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        formData.append(key, item);
+      }
+    } else {
+      formData.set(key, value);
+    }
+  }
+  return formData;
+}
 
 function buildWatchlistAlertFormData(overrides: Record<string, string> = {}) {
   const formData = new FormData();
@@ -91,7 +136,9 @@ it("redirects ingestion success with the created task run id", async () => {
     ),
   );
 
-  await expect(triggerIngestionAction(buildMarketDataFormData())).rejects.toThrow(
+  await expect(
+    triggerIngestionAction(buildMarketDataFormData()),
+  ).rejects.toThrow(
     "NEXT_REDIRECT:/en?ingest=ok&bars=0&market=US&task_run_id=task-ingest-123",
   );
 });
@@ -110,7 +157,9 @@ it("redirects analysis success with the created task run id", async () => {
     ),
   );
 
-  await expect(refreshAnalysisAction(buildMarketDataFormData())).rejects.toThrow(
+  await expect(
+    refreshAnalysisAction(buildMarketDataFormData()),
+  ).rejects.toThrow(
     "NEXT_REDIRECT:/en?analysis=ok&symbol=AAPL&task_run_id=task-analysis-123",
   );
 });
@@ -128,7 +177,9 @@ it("redirects generated report success with report and task run links", async ()
   );
 
   await expect(
-    generateDailyReportAction(buildMarketDataFormData({ return_to: "/en/instruments/AAPL" })),
+    generateDailyReportAction(
+      buildMarketDataFormData({ return_to: "/en/instruments/AAPL" }),
+    ),
   ).rejects.toThrow(
     "NEXT_REDIRECT:/en/instruments/AAPL?report=ok&report_id=report-123&task_run_id=task-report-123",
   );
@@ -140,7 +191,8 @@ it("redirects generated report failures with actionable backend detail", async (
     new Response(
       JSON.stringify({
         detail: {
-          no_data_reason: "No daily bars were available for the requested symbol/date range.",
+          no_data_reason:
+            "No daily bars were available for the requested symbol/date range.",
         },
       }),
       { status: 422 },
@@ -148,18 +200,49 @@ it("redirects generated report failures with actionable backend detail", async (
   );
 
   await expect(
-    generateDailyReportAction(buildMarketDataFormData({ return_to: "/en/instruments/AAPL" })),
+    generateDailyReportAction(
+      buildMarketDataFormData({ return_to: "/en/instruments/AAPL" }),
+    ),
   ).rejects.toThrow(
     "NEXT_REDIRECT:/en/instruments/AAPL?report=error&msg=No+daily+bars+were+available+for+the+requested+symbol%2Fdate+range.",
   );
 });
 
-it("submits an empty alert_rules object when existing watchlist rules are cleared", async () => {
-  backendFetchMock.mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+it("saves homepage index preferences through platform settings", async () => {
+  savePlatformSettingsMock.mockResolvedValue({});
 
-  await expect(updateWatchlistAlertsAction(buildWatchlistAlertFormData())).rejects.toThrow(
-    "NEXT_REDIRECT:/en/watchlist?op=alerts_updated",
+  await expect(
+    savePlatformSettingsAction(buildSettingsFormData()),
+  ).rejects.toThrow("NEXT_REDIRECT:/en/settings?saved=ok");
+
+  expect(savePlatformSettingsMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      market_data_provider: "yfinance",
+      color_scheme: "china",
+      favorite_home_index_codes: "cn_csi_300\nus_sp_500\ncn_csi_300",
+      home_index_display_fields: ["latest_close", "provider"],
+      favorite_macro_indicator_codes: "buffett_indicator_us\nus_10y_yield",
+      news_search_provider_order: "anspire\nserpapi_baidu\nmock",
+      news_search_enabled_providers: ["anspire", "serpapi_baidu"],
+      news_search_provider_keys: {
+        anspire: "anspire-key",
+        serpapi_baidu: "serpapi-key",
+      },
+      news_search_max_results: "12",
+      news_search_timeout_seconds: "6",
+    }),
   );
+  expect(revalidatePathMock).toHaveBeenCalledWith("/en/settings");
+});
+
+it("submits an empty alert_rules object when existing watchlist rules are cleared", async () => {
+  backendFetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+  );
+
+  await expect(
+    updateWatchlistAlertsAction(buildWatchlistAlertFormData()),
+  ).rejects.toThrow("NEXT_REDIRECT:/en/watchlist?op=alerts_updated");
 
   expect(backendFetchMock).toHaveBeenCalledWith(
     "/watchlist/items",
