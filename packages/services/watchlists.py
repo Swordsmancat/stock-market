@@ -92,6 +92,18 @@ def get_active_watchlist_item_dicts(session: Session) -> list[dict[str, object]]
     return [_serialize_item(item) for item in _active_items(watchlist, session)]
 
 
+def get_active_watchlist_scope(session: Session) -> list[dict[str, str]]:
+    watchlist = _get_or_create_default_watchlist(session)
+    _seed_default_items_if_empty(watchlist, session)
+    return [
+        {
+            "symbol": item.symbol,
+            "market": item.market,
+        }
+        for item in _active_items(watchlist, session)
+    ]
+
+
 def get_default_watchlist_payload(session: Session) -> dict[str, object]:
     watchlist = _get_or_create_default_watchlist(session)
     _seed_default_items_if_empty(watchlist, session)

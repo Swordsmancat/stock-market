@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 import packages.domain.models  # noqa: F401
 from packages.domain.models import DailyBar, FundamentalSnapshot, Instrument, Market, TechnicalIndicator
 from packages.services.stock_selection import screen_local_stock_selection
+from packages.services.watchlists import upsert_watchlist_item
 from packages.shared.database import Base
 
 
@@ -305,6 +306,29 @@ def test_stock_selection_reports_missing_technical_evidence_without_fabricating_
             },
         }
     ]
+
+
+def test_stock_selection_can_scope_candidates_to_active_watchlist_items():
+    session = make_session()
+    seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0)
+    seed_instrument(session, "MSFT", close=112.0, ma=100.0, rsi=56.0)
+    upsert_watchlist_item("AAPL", "US", session=session, name="Apple Inc.")
+
+    payload = screen_local_stock_selection(
+        session=session,
+        watchlist_only=True,
+        min_rsi=40.0,
+        max_rsi=70.0,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["candidate_scope"] == {
+        "symbols": [],
+        "market": None,
+        "watchlist_only": True,
+    }
+    assert payload["count"] == 1
+    assert payload["items"][0]["symbol"] == "AAPL"
 
 
 def test_stock_selection_requires_at_least_one_criterion():

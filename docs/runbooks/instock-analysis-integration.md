@@ -15,6 +15,8 @@ runtime dependency.
 - Implemented feature: composite stock selection over additional stored
   technical evidence: candlestick pattern codes, MFI, William %R, and
   chip-distribution benefit ratio.
+- Implemented feature: watchlist-scoped composite stock selection over active
+  default-watchlist entries.
 - Implemented feature: research-only `GET /strategies/screen` strategy screening API.
 - Implemented feature: research-only `GET /strategies/evaluate` strategy evaluation API.
 - Rule set: `candlestick_patterns_v1`.
@@ -138,7 +140,7 @@ These are not executable orders, backtest results, or validated trading strategi
 fundamental and technical criteria:
 
 ```text
-GET /stock-selection/screen?symbols=AAPL,MSFT&max_pe_ratio=30&min_revenue_growth=0.1&min_rsi=40&max_rsi=70&require_price_above_ma=true&required_pattern_codes=hammer&min_mfi=50&min_chip_benefit_ratio=0.6
+GET /stock-selection/screen?symbols=AAPL,MSFT&watchlist_only=true&max_pe_ratio=30&min_revenue_growth=0.1&min_rsi=40&max_rsi=70&require_price_above_ma=true&required_pattern_codes=hammer&min_mfi=50&min_chip_benefit_ratio=0.6
 ```
 
 The first criteria are:
@@ -156,6 +158,8 @@ The first criteria are:
 - `max_william_r`
 - `min_chip_benefit_ratio`
 - `max_chip_benefit_ratio`
+- `watchlist_only` to limit candidate instruments to active default-watchlist
+  entries before criteria evaluation
 
 At least one criterion is required. Missing local bars, fundamentals, or
 technical indicators produce diagnostics and no fabricated match. Nested
@@ -163,6 +167,10 @@ criteria read only stored `candlestick_patterns.patterns[]` and
 `chip_distribution.benefit_ratio` payloads. Returned `evidence_citations` point
 to stored rows used in the screen, while the selection result itself remains a
 research-only analysis payload.
+
+`watchlist_only` is a candidate-scope flag, not evidence. It reads active
+watchlist `symbol`/`market` pairs without provider-backed watchlist enrichment
+and still requires the ordinary stored evidence rows before a symbol can match.
 
 ## Strategy Evaluation API
 

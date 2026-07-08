@@ -168,6 +168,7 @@ def test_stock_selection_api_screens_local_composite_criteria():
                 "min_william_r": -50,
                 "max_william_r": -10,
                 "min_chip_benefit_ratio": 0.6,
+                "watchlist_only": True,
             },
         )
     finally:
@@ -177,6 +178,7 @@ def test_stock_selection_api_screens_local_composite_criteria():
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["research_signal_only"] is True
+    assert payload["candidate_scope"]["watchlist_only"] is True
     assert payload["count"] == 1
     assert payload["items"][0]["symbol"] == "AAPL"
     assert payload["items"][0]["research_signal_only"] is True

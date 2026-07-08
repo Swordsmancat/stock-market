@@ -35,6 +35,8 @@
   - `max_william_r`
   - `min_chip_benefit_ratio`
   - `max_chip_benefit_ratio`
+  - `watchlist_only`: when `true`, candidate instruments are limited to active
+    entries from the default watchlist before criteria evaluation.
   - `limit`, bounded to `1..100`.
 - Service entry:
   `screen_local_stock_selection(..., session, symbols=None, market=None, ...)`
@@ -50,11 +52,16 @@
 - Technical criteria may inspect stored scalar indicators (`rsi`, `mfi`,
   `william_r`) and reviewed nested indicator payloads
   (`candlestick_patterns.patterns[]`, `chip_distribution.benefit_ratio`).
+- `watchlist_only` is a candidate-scope control, not a selection criterion and
+  not citable evidence. It must read only active default-watchlist
+  `symbol`/`market` pairs without triggering provider enrichment.
 - At least one selection criterion is required. Empty criteria returns HTTP 400
   at the API boundary and an `invalid_request` service payload.
 - Missing local evidence must produce diagnostics and no fabricated match.
 - Matching items may expose evidence citation IDs for the stored rows used:
   `bars_1d:*`, `technical_indicators:*`, and `fundamental_metrics:*`.
+- Payloads include `candidate_scope` with normalized `symbols`, optional
+  `market`, and `watchlist_only` so callers can audit the scanned universe.
 - The stock-selection result itself is a research analysis payload, not a stored
   assistant citation row and not a trading signal.
 - Payloads must include `research_signal_only=true` and the disclaimer:
@@ -76,6 +83,8 @@
   `SELECTION_RULE_NOT_MATCHED` with `missing_value`, no match.
 - No stored daily bar -> diagnostic `MISSING_DAILY_BAR`, no match.
 - A criterion fails -> diagnostic `SELECTION_RULE_NOT_MATCHED`, no match.
+- `watchlist_only=true` with an empty active watchlist -> no candidates and an
+  empty successful result unless no criteria were supplied.
 - Matching item -> include stored evidence citations and matched rule details.
 
 ### 5. Good/Base/Bad Cases
@@ -90,7 +99,12 @@
   fake valuation metric.
 - Base: scanning by `market=US` without `symbols` uses stored active instruments
   only and does not fetch provider data.
+- Base: `watchlist_only=true` narrows the scan to stored active watchlist
+  entries but still requires ordinary stored market/fundamental/technical rows
+  before a symbol can match.
 - Bad: the endpoint calls a live provider for every listed symbol.
+- Bad: watchlist enrichment runs provider-backed price lookups before candidate
+  scoping.
 - Bad: a selected symbol is described as a buy recommendation, target allocation,
   or executable order.
 - Bad: InStock's web/database/strategy/trading runtime is imported.
@@ -99,9 +113,10 @@
 
 - Service tests assert matching across fundamental and technical criteria,
   duplicate symbol normalization, evidence citations, failed criteria diagnostics,
-  missing fundamentals diagnostics, and no-criteria validation.
+  missing fundamentals diagnostics, watchlist-only candidate scoping, and
+  no-criteria validation.
 - API tests assert route registration, query parsing, HTTP 400 for no criteria,
-  and `research_signal_only=true`.
+  `candidate_scope.watchlist_only`, and `research_signal_only=true`.
 - Focused validation should include:
   `pytest tests/services/test_stock_selection.py tests/api/test_stock_selection_api.py`,
   ruff on touched stock-selection files, full backend pytest, and

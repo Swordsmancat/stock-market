@@ -30,6 +30,10 @@ def screen_stock_selection(
     max_william_r: float | None = Query(default=None, ge=-100, le=0),
     min_chip_benefit_ratio: float | None = Query(default=None, ge=0, le=1),
     max_chip_benefit_ratio: float | None = Query(default=None, ge=0, le=1),
+    watchlist_only: bool = Query(
+        default=False,
+        description="When true, scan only active instruments in the default watchlist.",
+    ),
     limit: int = Query(default=20, ge=1, le=100),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
@@ -50,6 +54,7 @@ def screen_stock_selection(
         max_william_r=max_william_r,
         min_chip_benefit_ratio=min_chip_benefit_ratio,
         max_chip_benefit_ratio=max_chip_benefit_ratio,
+        watchlist_only=watchlist_only,
         limit=limit,
     )
     if payload["status"] == "invalid_request":

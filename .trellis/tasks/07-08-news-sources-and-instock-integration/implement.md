@@ -143,3 +143,12 @@ git diff --check
 - [x] Return missing nested indicator payloads as diagnostics, not fabricated neutral values.
 - [x] Keep the response research-only with stored evidence citations and the non-advice disclaimer.
 - [x] Add focused service/API tests and backend spec/runbook coverage.
+
+## InStock Watchlist-Scoped Composite Stock Selection Slice
+
+- [x] Add a local-only active watchlist scope helper that returns `symbol`/`market` pairs without provider-backed enrichment.
+- [x] Add `watchlist_only` to `screen_local_stock_selection` and `GET /stock-selection/screen`.
+- [x] Intersect watchlist scope with optional symbols/market filters before criteria evaluation.
+- [x] Return `candidate_scope` in stock-selection payloads for auditability.
+- [x] Preserve stored evidence citations, `research_signal_only=true`, and the non-advice disclaimer.
+- [x] Add focused service/API/watchlist tests and backend spec/runbook coverage.

@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from packages.domain.models import DailyBar, FundamentalSnapshot, Instrument, Market, TechnicalIndicator
+from packages.services.watchlists import get_active_watchlist_scope
 
 
 RULE_SET_ID = "instock_composite_selection_v1"
@@ -29,6 +31,7 @@ def screen_local_stock_selection(
     max_william_r: float | None = None,
     min_chip_benefit_ratio: float | None = None,
     max_chip_benefit_ratio: float | None = None,
+    watchlist_only: bool = False,
     limit: int = 20,
 ) -> dict[str, object]:
     criteria = _criteria_payload(
@@ -51,6 +54,11 @@ def screen_local_stock_selection(
             "status": "invalid_request",
             "rule_set": RULE_SET_ID,
             "research_signal_only": True,
+            "candidate_scope": _candidate_scope_payload(
+                symbols=symbols,
+                market=market,
+                watchlist_only=watchlist_only,
+            ),
             "criteria": criteria,
             "count": 0,
             "items": [],
@@ -67,6 +75,7 @@ def screen_local_stock_selection(
         session=session,
         symbols=symbols,
         market=market,
+        watchlist_only=watchlist_only,
         limit=MAX_SCREENING_SYMBOLS,
     )
     diagnostics: list[dict[str, object]] = []
@@ -91,6 +100,11 @@ def screen_local_stock_selection(
         "status": "ok",
         "rule_set": RULE_SET_ID,
         "research_signal_only": True,
+        "candidate_scope": _candidate_scope_payload(
+            symbols=symbols,
+            market=market,
+            watchlist_only=watchlist_only,
+        ),
         "criteria": criteria,
         "count": len(ranked_items),
         "items": ranked_items,
@@ -149,6 +163,7 @@ def _candidate_instruments(
     session: Session,
     symbols: list[str] | None,
     market: str | None,
+    watchlist_only: bool,
     limit: int,
 ) -> list[Instrument]:
     query = session.query(Instrument).outerjoin(Market, Instrument.market_id == Market.id)
@@ -161,6 +176,16 @@ def _candidate_instruments(
     normalized_market = _normalize_optional_text(market)
     if normalized_market:
         query = query.filter(Market.code == normalized_market)
+
+    if watchlist_only:
+        watchlist_entries = get_active_watchlist_scope(session)
+        if not watchlist_entries:
+            return []
+        pair_filters = [
+            and_(Instrument.symbol == entry["symbol"], Market.code == entry["market"])
+            for entry in watchlist_entries
+        ]
+        query = query.filter(or_(*pair_filters))
 
     return query.order_by(Instrument.symbol).limit(limit).all()
 
@@ -569,6 +594,19 @@ def _evidence_citations(
 
 def _active_criteria_count(criteria: dict[str, object]) -> int:
     return sum(1 for value in criteria.values() if _criteria_value_is_active(value))
+
+
+def _candidate_scope_payload(
+    *,
+    symbols: list[str] | None,
+    market: str | None,
+    watchlist_only: bool,
+) -> dict[str, object]:
+    return {
+        "symbols": _normalize_symbols(symbols),
+        "market": _normalize_optional_text(market),
+        "watchlist_only": watchlist_only,
+    }
 
 
 def _normalize_symbols(symbols: list[str] | None) -> list[str]:

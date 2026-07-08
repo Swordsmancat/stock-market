@@ -327,3 +327,18 @@ changing its evidence boundary:
   non-advice disclaimer;
 - avoid live provider scans, persistence of selection results, strategy
   execution, order intents, and buy/sell/hold language.
+
+## Follow-Up Slice: Watchlist-Scoped Composite Stock Selection
+
+The next watchlist/follow slice adapts InStock's watchlist workflow into this
+project's local screener:
+
+- add a `watchlist_only` candidate-scope flag to `GET /stock-selection/screen`;
+- read active default-watchlist `symbol`/`market` pairs without invoking
+  provider-backed watchlist enrichment;
+- intersect watchlist scope with optional `symbols` and `market` filters;
+- return a `candidate_scope` object so callers can audit the scanned universe;
+- keep selection evidence limited to stored daily bars, technical indicators,
+  and fundamentals;
+- avoid provider scans, watchlist mutation, persisted selection results,
+  strategy execution, order intents, and buy/sell/hold language.
