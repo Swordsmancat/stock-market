@@ -186,3 +186,20 @@ stack:
 
 The first supported pattern codes are `bullish_engulfing`, `bearish_engulfing`,
 `hammer`, `shooting_star`, and `doji`.
+
+## Follow-Up Slice: Recommendation Signal Evaluation API
+
+The repository already has a deterministic service-level historical signal
+evaluator for `breakout`, `volume_anomaly`, `oversold_rebound`, and
+`strong_momentum`. The follow-up API slice exposes it without changing the
+storage model:
+
+- add `GET /recommendations/evaluate` as a thin router wrapper;
+- fetch daily bars through the existing market-data provider boundary;
+- support comma-separated signal types and forward windows;
+- optionally fetch benchmark bars for benchmark-relative return;
+- return sample size, snapshots, per-window metrics, diagnostics, provider
+  metadata, and `research_signal_only`;
+- keep `/recommendations` as unbacktested research candidates, not actions;
+- avoid persistence, scheduler, transaction-cost modeling, portfolio simulation,
+  or order intent generation in this slice.

@@ -70,3 +70,12 @@ git diff --check
 - [x] Add focused analytics, service, and API tests.
 - [x] Add runbook/spec coverage for Apache-2.0 attribution, payload shape, and no-trading rules.
 - [x] Run final focused checks and diff whitespace checks before commit.
+
+## Recommendation Signal Evaluation API Slice
+
+- [x] Reuse the existing deterministic `evaluate_recommendation_signals` service instead of copying InStock backtest modules.
+- [x] Add `GET /recommendations/evaluate` with symbol/date/provider/signal/window/benchmark query parameters.
+- [x] Preserve the research-only disclaimer and add `research_signal_only=true`.
+- [x] Keep provider failures sanitized and avoid database writes.
+- [x] Add API tests for successful metrics and invalid forward-window validation.
+- [x] Add code-spec/runbook coverage for the public API contract and no-trading boundary.

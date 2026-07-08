@@ -59,6 +59,21 @@ def build_breakout_bars() -> list[dict[str, object]]:
     return stable_bars + breakout_bars
 
 
+def append_forward_bars(bars: list[dict[str, object]], closes: list[float]) -> list[dict[str, object]]:
+    result = list(bars)
+    start_date = date.fromisoformat(str(result[0]["timestamp"]))
+    start_index = len(result)
+    for offset, close in enumerate(closes):
+        result.append(
+            {
+                "timestamp": (start_date + timedelta(days=start_index + offset)).isoformat(),
+                "close": close,
+                "volume": 1_000.0,
+            }
+        )
+    return result
+
+
 def build_oversold_rebound_bars() -> list[dict[str, object]]:
     start_date = date(2026, 1, 1)
     stable_bars = [
@@ -82,6 +97,10 @@ def build_oversold_rebound_bars() -> list[dict[str, object]]:
         for day_index, close in enumerate(oversold_closes)
     ]
     return stable_bars + oversold_bars
+
+
+def build_breakout_evaluation_bars() -> list[dict[str, object]]:
+    return append_forward_bars(build_breakout_bars(), [112.0, 114.0, 116.0, 118.0, 120.0])
 
 
 def get_recommendations_with_bars(monkeypatch, bars: list[dict[str, object]]):
@@ -235,3 +254,95 @@ def test_get_recommendations_reports_provider_failures(monkeypatch):
             "provider": "mock",
         }
     ]
+
+
+def test_evaluate_recommendations_returns_research_metrics(monkeypatch):
+    service_calls: list[dict[str, object]] = []
+
+    def fake_get_bars_payload(
+        symbol,
+        timeframe,
+        start,
+        end,
+        session=None,
+        provider_name=None,
+    ):
+        service_calls.append(
+            {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "start": start,
+                "end": end,
+                "provider_name": provider_name,
+            }
+        )
+        return {
+            "items": build_breakout_evaluation_bars(),
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": provider_name,
+            "effective_provider": "mock",
+        }
+
+    monkeypatch.setattr(
+        recommendations_router.market_data_service,
+        "get_bars_payload",
+        fake_get_bars_payload,
+    )
+
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/recommendations/evaluate",
+            params={
+                "symbol": "aapl",
+                "start": "2026-01-01",
+                "end": "2026-02-15",
+                "signal_types": "breakout",
+                "forward_windows": "1,5",
+                "provider": "mock",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["symbol"] == "AAPL"
+    assert payload["status"] == "ok"
+    assert payload["research_signal_only"] is True
+    assert payload["disclaimer"] == "Historical signal evaluation is a research aid only and is not investment advice."
+    assert payload["source"] == "mock"
+    assert payload["effective_provider"] == "mock"
+    assert payload["benchmark_symbol"] is None
+    assert payload["metrics"]["breakout"]["windows"]["1"]["hit_rate"] == 1.0
+    assert service_calls == [
+        {
+            "symbol": "AAPL",
+            "timeframe": "1d",
+            "start": date(2026, 1, 1),
+            "end": date(2026, 2, 15),
+            "provider_name": "mock",
+        }
+    ]
+
+
+def test_evaluate_recommendations_rejects_invalid_forward_windows():
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/recommendations/evaluate",
+            params={
+                "symbol": "AAPL",
+                "start": "2026-01-01",
+                "end": "2026-02-15",
+                "forward_windows": "1,bad",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "forward_windows must be comma-separated integers"
