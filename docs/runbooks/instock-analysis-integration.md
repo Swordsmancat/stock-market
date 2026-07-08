@@ -8,6 +8,7 @@ runtime dependency.
 - Source reviewed: `myhhub/stock` at commit `b6e0ca2268cfbadd02f5ed052159c187b6670231`.
 - Upstream license: Apache-2.0.
 - Implemented feature: stored `candlestick_patterns` technical indicator.
+- Implemented feature: research-only `GET /strategies/screen` strategy screening API.
 - Rule set: `candlestick_patterns_v1`.
 - First supported pattern codes:
   - `bullish_engulfing`
@@ -15,6 +16,11 @@ runtime dependency.
   - `hammer`
   - `shooting_star`
   - `doji`
+- Strategy screening rule set: `instock_strategy_screening_v1`.
+- First supported strategy codes:
+  - `volume_price_breakout`
+  - `turtle_breakout`
+  - `ma_trend_up`
 
 The implementation is pure Python/pandas and does not install TA-Lib or import
 InStock's database, scheduler, proxy/cookie, Tornado UI, or trade modules.
@@ -30,6 +36,11 @@ execution.
 Live calculations, InStock feature lists, and source-readiness notes are not AI
 citations by themselves. The citation boundary remains stored local evidence,
 such as `technical_indicators:{symbol}:{as_of}`.
+
+`GET /strategies/screen` results are research analysis payloads only. They are
+not currently stored citation rows and must not be cited by the assistant as
+verified evidence unless a future slice adds reviewed persistence with stable
+source metadata.
 
 ## Extension Notes
 
@@ -60,6 +71,27 @@ This endpoint is not a production strategy tester. It does not model order
 fills, slippage, fees, tax, borrow constraints, portfolio constraints, or live
 execution.
 
+## Strategy Screening API
+
+`GET /strategies/screen` evaluates the latest daily OHLCV window against
+deterministic InStock-inspired screening rules:
+
+```text
+GET /strategies/screen?symbols=AAPL,MSFT&strategies=turtle_breakout,ma_trend_up&start=2026-01-01&end=2026-03-31&provider=mock
+```
+
+The API returns flattened `items[]`, per-symbol payloads, provider metadata,
+sanitized diagnostics, `research_signal_only=true`, and the disclaimer:
+`Strategy screening signals are research aids only and are not investment advice.`
+
+The first rules are adapted from InStock's strategy module shapes:
+
+- `volume_price_breakout`: latest bar rises on high relative volume and sufficient traded amount.
+- `turtle_breakout`: latest close sets a new high within the lookback window.
+- `ma_trend_up`: 30-day moving average rises across 30/20/10/latest checkpoints.
+
+These are not executable orders, backtest results, or validated trading strategies.
+
 ## Validation
 
 Use focused checks after changing this slice:
@@ -67,6 +99,7 @@ Use focused checks after changing this slice:
 ```powershell
 pytest tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/api/test_indicators_db_api.py
 pytest tests/api/test_recommendations_api.py tests/services/test_recommendation_signal_evaluation.py
-python -m ruff check packages/analytics/candlestick_patterns.py packages/services/indicators.py tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/api/test_indicators_db_api.py
+pytest tests/services/test_strategy_screening.py tests/api/test_strategy_screening_api.py
+python -m ruff check packages/analytics/candlestick_patterns.py packages/services/indicators.py packages/services/strategy_screening.py apps/api/routers/strategy_screening.py tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/services/test_strategy_screening.py tests/api/test_indicators_db_api.py tests/api/test_strategy_screening_api.py
 git diff --check
 ```

@@ -79,3 +79,12 @@ git diff --check
 - [x] Keep provider failures sanitized and avoid database writes.
 - [x] Add API tests for successful metrics and invalid forward-window validation.
 - [x] Add code-spec/runbook coverage for the public API contract and no-trading boundary.
+
+## InStock Strategy Screening API Slice
+
+- [x] Add pure Python InStock-inspired strategy screening rules without importing TA-Lib or InStock runtime modules.
+- [x] Support `volume_price_breakout`, `turtle_breakout`, and `ma_trend_up` as research-only signals.
+- [x] Add `GET /strategies/screen` with multi-symbol, strategy-filter, date-window, provider, and limit query parameters.
+- [x] Preserve sanitized provider diagnostics and partial success across symbols.
+- [x] Keep results non-persistent and explicitly out of assistant citation/trading boundaries.
+- [x] Add focused service/API tests and backend spec/runbook coverage.

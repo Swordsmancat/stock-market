@@ -203,3 +203,21 @@ storage model:
 - keep `/recommendations` as unbacktested research candidates, not actions;
 - avoid persistence, scheduler, transaction-cost modeling, portfolio simulation,
   or order intent generation in this slice.
+
+## Follow-Up Slice: InStock-Inspired Strategy Screening API
+
+The next non-trading InStock slice ports selected screening rule shapes into a
+pure Python service and thin API:
+
+- add `packages/services/strategy_screening.py` with deterministic latest-window
+  screening over normalized OHLCV bars;
+- support `volume_price_breakout`, `turtle_breakout`, and `ma_trend_up`, inspired
+  by InStock's `enter`, `turtle_trade`, and `keep_increasing` strategy modules;
+- add `GET /strategies/screen` for multi-symbol screening through the existing
+  market-data provider boundary;
+- return rule metadata, source/provider metadata, per-symbol diagnostics,
+  `research_signal_only=true`, and a non-advice disclaimer;
+- do not persist matches or treat them as assistant-citable evidence until a
+  future reviewed storage/citation path exists;
+- avoid InStock runtime imports, TA-Lib, scheduler replacement, database schema
+  copying, strategy execution, and broker order intents.
