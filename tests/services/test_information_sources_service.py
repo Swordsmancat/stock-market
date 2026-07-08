@@ -46,15 +46,16 @@ def test_information_source_readiness_returns_no_data_registry():
         "source_capabilities",
     }
     assert statuses >= {"needs_adapter", "needs_manual_seed", "no_data", "future"}
-    assert payload["summary"]["total"] == 10
+    assert payload["summary"]["total"] == 11
     assert payload["summary"]["configured"] == 0
     assert payload["summary"]["needs_action"] == 9
-    assert payload["summary"]["future"] == 1
+    assert payload["summary"]["future"] == 2
     assert items["fred_us_rates"]["coverage"] == ["DGS10", "DGS2", "T10Y2Y"]
     assert items["pboc_cn_m2_public_manual"]["status"] == "needs_manual_seed"
     assert items["world_bank_buffett_indicator"]["status"] == "needs_adapter"
     assert items["generated_reports"]["status"] == "no_data"
     assert items["stored_news"]["status"] == "no_data"
+    assert items["social_sentiment_future"]["status"] == "future"
     assert items["sec_filings_future_documents"]["status"] == "future"
     assert all(
         required_key in item
@@ -82,6 +83,7 @@ def test_information_source_readiness_returns_no_data_registry():
         "valuation",
         "reports",
         "news",
+        "sentiment",
         "documents",
         "manual_seed",
     }
@@ -322,6 +324,26 @@ def test_information_source_readiness_keeps_future_documents_not_citeable():
             "official_search",
         ),
     }
+
+
+def test_information_source_readiness_keeps_social_sentiment_separate_from_news():
+    session = make_session()
+
+    payload = get_information_source_readiness_payload(session=session)
+    social_sentiment = _item_by_id(payload)["social_sentiment_future"]
+
+    assert social_sentiment["status"] == "future"
+    assert social_sentiment["category"] == "sentiment"
+    assert social_sentiment["coverage"] == [
+        "public_opinion",
+        "social_results",
+        "sentiment_signal_candidates",
+    ]
+    assert social_sentiment["citation_policy"] == (
+        "Social sentiment is lower-strength context, not verified news; it is "
+        "not AI-citable until reviewed local evidence storage exists."
+    )
+    assert "official APIs" in social_sentiment["collection_note"]
 
 
 def test_information_source_readiness_marks_report_and_news_sources_configured():

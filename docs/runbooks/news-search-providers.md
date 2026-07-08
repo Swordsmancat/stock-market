@@ -71,6 +71,27 @@ stored locally with URL, source/publisher, and publication or retrieval timestam
 
 The MVP reuses `NewsArticle` and `SentimentSignal`; no schema migration is required for this slice.
 
+## Social Sentiment Boundary
+
+Provider result families such as SerpAPI Baidu `social_results` remain visible as live search
+candidates, but they are not verified news. Candidate payloads include an `evidence_boundary`
+object:
+
+- `is_live_search_candidate=true`
+- `is_ai_citable=false`
+- `can_persist_as_news=false` for `social` and `public_opinion`
+- `evidence_strength=low_social_signal` for social/public-opinion candidates
+
+`POST /news/search-ingest` defers social/public-opinion candidates from `NewsArticle` and
+`SentimentSignal` persistence and reports:
+
+- `social_candidate_count`
+- `social_candidates_deferred`
+
+Future social sentiment storage must use official APIs, licensed provider result families, or
+user-reviewed notes. Until that separate model exists, social sentiment is lower-strength context
+and not AI-citable market fact.
+
 ## Quota And Tests
 
 Automated tests inject fake adapters or fake HTTP getters. They must not call paid providers or consume quota.

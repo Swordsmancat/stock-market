@@ -230,3 +230,73 @@ def test_search_and_ingest_news_candidates_dedupes_and_stores_sentiment():
     assert payload["summary"]["article_count"] == 1
     assert payload["items"][0]["source"] == "Example Finance"
     assert payload["items"][0]["sentiment"] == "positive"
+
+
+def test_search_ingest_defers_social_candidates_from_stored_news():
+    session = make_session()
+    retrieved_at = datetime(2026, 7, 8, 10, 0, tzinfo=timezone.utc)
+    news_candidate = NewsSearchCandidate(
+        symbol="AAPL",
+        query="AAPL financial news",
+        title="Apple profit grows",
+        url="https://example.com/apple-profit",
+        source="Example Finance",
+        summary="Apple reports strong profit growth.",
+        published_at=None,
+        retrieved_at=retrieved_at,
+        provider="serpapi_baidu",
+        result_kind="news",
+    )
+    social_candidate = NewsSearchCandidate(
+        symbol="AAPL",
+        query="AAPL financial news",
+        title="Apple mentioned heavily on social media",
+        url="https://example.com/apple-social",
+        source="Example Social",
+        summary="Social posts discuss Apple momentum.",
+        published_at=None,
+        retrieved_at=retrieved_at,
+        provider="serpapi_baidu",
+        result_kind="social",
+    )
+
+    class MixedAdapter:
+        provider = "serpapi_baidu"
+
+        def search(self, **kwargs):
+            return [news_candidate, social_candidate]
+
+    result = search_and_ingest_news_candidates(
+        "AAPL",
+        session=session,
+        settings_payload={
+            "news_search_provider_order": ["serpapi_baidu"],
+            "news_search_enabled_providers": ["serpapi_baidu"],
+            "news_search_provider_keys": {"serpapi_baidu": "secret"},
+            "news_search_max_results": 5,
+            "news_search_timeout_seconds": 3,
+        },
+        adapters={"serpapi_baidu": MixedAdapter()},
+    )
+    payload = get_news_sentiment_payload("AAPL", session=session)
+    social_payload = next(
+        candidate for candidate in result["candidates"] if candidate["result_kind"] == "social"
+    )
+
+    assert result["article_count"] == 1
+    assert result["sentiment_count"] == 1
+    assert result["social_candidate_count"] == 1
+    assert result["social_candidates_deferred"] is True
+    assert result["safety"]["social_sentiment_separated"] is True
+    assert payload["summary"]["article_count"] == 1
+    assert payload["items"][0]["title"] == "Apple profit grows"
+    assert social_payload["evidence_boundary"] == {
+        "is_live_search_candidate": True,
+        "is_ai_citable": False,
+        "can_persist_as_news": False,
+        "evidence_strength": "low_social_signal",
+        "citation_policy": (
+            "Social/public-opinion candidates require separate review and are not "
+            "stored as NewsArticle evidence in this slice."
+        ),
+    }

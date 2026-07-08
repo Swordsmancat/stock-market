@@ -23,6 +23,8 @@ from packages.services.platform_settings import get_platform_settings
 
 ANSPIRE_SEARCH_ENDPOINT = "https://plugin.anspire.cn/api/ntsearch/search"
 SERPAPI_BAIDU_SEARCH_ENDPOINT = "https://serpapi.com/search.json"
+PERSISTABLE_NEWS_RESULT_KINDS = {"news", "web"}
+SOCIAL_SENTIMENT_RESULT_KINDS = {"public_opinion", "social"}
 HttpGetter = Callable[..., object]
 
 
@@ -101,6 +103,7 @@ class NewsSearchCandidate:
             "region": self.region,
             "score": self.score,
             "result_kind": self.result_kind,
+            "evidence_boundary": _candidate_evidence_boundary(self.result_kind),
             "diagnostics": [
                 diagnostic.to_payload() for diagnostic in self.diagnostics
             ],
@@ -385,6 +388,8 @@ def search_news_candidates(
         "safety": {
             "search_results_are_collection_candidates": True,
             "stored_news_only_is_citable": True,
+            "social_sentiment_separated": True,
+            "social_results_require_review": True,
             "no_fabricated_news": True,
         },
     }
@@ -410,12 +415,17 @@ def search_and_ingest_news_candidates(
         for candidate_payload in payload["candidates"]
         if isinstance(candidate_payload, dict)
     ]
+    social_candidate_count = sum(
+        1 for candidate in candidates if _is_social_sentiment_candidate(candidate)
+    )
     article_count, sentiment_count = persist_news_search_candidates(candidates, session=session)
     return {
         **payload,
         "status": "ingested" if article_count > 0 else payload["status"],
         "article_count": article_count,
         "sentiment_count": sentiment_count,
+        "social_candidate_count": social_candidate_count,
+        "social_candidates_deferred": social_candidate_count > 0,
     }
 
 
@@ -427,6 +437,9 @@ def persist_news_search_candidates(
     article_count = 0
     sentiment_count = 0
     for candidate in _dedupe_candidates(candidates):
+        if not _is_persistable_news_candidate(candidate):
+            continue
+
         dedupe_hash = make_dedupe_hash(candidate.title, candidate.url)
         existing = (
             session.query(NewsArticle)
@@ -629,6 +642,33 @@ def _candidate_from_payload(payload: dict[str, object]) -> NewsSearchCandidate:
         score=_parse_score(payload.get("score")),
         result_kind=str(payload.get("result_kind") or "news"),
     )
+
+
+def _candidate_evidence_boundary(result_kind: str) -> dict[str, object]:
+    normalized_result_kind = result_kind.strip().lower()
+    is_social_candidate = normalized_result_kind in SOCIAL_SENTIMENT_RESULT_KINDS
+    return {
+        "is_live_search_candidate": True,
+        "is_ai_citable": False,
+        "can_persist_as_news": normalized_result_kind in PERSISTABLE_NEWS_RESULT_KINDS,
+        "evidence_strength": "low_social_signal"
+        if is_social_candidate
+        else "collection_candidate",
+        "citation_policy": (
+            "Social/public-opinion candidates require separate review and are not "
+            "stored as NewsArticle evidence in this slice."
+            if is_social_candidate
+            else "Live search candidates become citable only after reviewed local storage."
+        ),
+    }
+
+
+def _is_persistable_news_candidate(candidate: NewsSearchCandidate) -> bool:
+    return candidate.result_kind.strip().lower() in PERSISTABLE_NEWS_RESULT_KINDS
+
+
+def _is_social_sentiment_candidate(candidate: NewsSearchCandidate) -> bool:
+    return candidate.result_kind.strip().lower() in SOCIAL_SENTIMENT_RESULT_KINDS
 
 
 def _dedupe_candidates(candidates: list[NewsSearchCandidate]) -> list[NewsSearchCandidate]:

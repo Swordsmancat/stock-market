@@ -97,3 +97,12 @@ git diff --check
 - [x] Preserve the research-only disclaimer and add `research_signal_only=true`.
 - [x] Keep provider failures sanitized and avoid database writes, persistence, order intents, or transaction-cost assumptions.
 - [x] Add focused service/API tests and backend spec/runbook coverage.
+
+## Social Sentiment Evidence Boundary Slice
+
+- [x] Add candidate-level `evidence_boundary` payloads for live news/search candidates.
+- [x] Classify `social` and `public_opinion` result kinds as low-strength social signals.
+- [x] Defer social/public-opinion candidates from `NewsArticle` and `SentimentSignal` persistence during `search-ingest`.
+- [x] Return `social_candidate_count` and `social_candidates_deferred` from `search-ingest`.
+- [x] Add source-readiness guidance for future social sentiment storage as non-citable today.
+- [x] Add focused service/source-readiness tests and backend spec/runbook coverage.

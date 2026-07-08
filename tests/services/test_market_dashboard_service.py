@@ -128,11 +128,11 @@ def test_market_overview_payload_contains_followed_indices_and_valuation_section
     assert "not investment advice" in narrative["answer_markdown"]
     assert narrative["context"]["source_mix"] == {
         "macro_citations": 0,
-        "report_citations": 0,
-        "news_citations": 0,
-        "research_source_note_citations": 0,
-        "information_source_gaps": 10,
-    }
+            "report_citations": 0,
+            "news_citations": 0,
+            "research_source_note_citations": 0,
+            "information_source_gaps": 11,
+        }
 
     information_sources = payload["information_sources"]
     assert information_sources["status"] == "degraded"

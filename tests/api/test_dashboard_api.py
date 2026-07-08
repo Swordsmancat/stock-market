@@ -52,7 +52,7 @@ def test_dashboard_market_overview_api_returns_aggregated_payload(monkeypatch):
     assert len(payload["macro_indicators"]["items"]) == 9
     assert payload["valuation_indicators"]["items"][0]["code"] == "buffett_indicator_cn"
     assert payload["information_sources"]["status"] == "degraded"
-    assert payload["information_sources"]["summary"]["total"] == 10
+    assert payload["information_sources"]["summary"]["total"] == 11
     first_source = payload["information_sources"]["items"][0]
     assert first_source["id"] == "fred_us_rates"
     assert first_source["collection_note"].startswith("Collect DGS10")
@@ -80,9 +80,9 @@ def test_dashboard_market_overview_api_returns_aggregated_payload(monkeypatch):
     assert payload["dashboard_brief"]["narrative"]["model"]["used_llm"] is False
     assert payload["dashboard_brief"]["narrative"]["context"]["source_mix"][
         "information_source_gaps"
-    ] == 10
+    ] == 11
     follow_up_queue = payload["research_follow_up_queue"]
-    assert follow_up_queue["summary"]["source_gap"] == 10
+    assert follow_up_queue["summary"]["source_gap"] == 11
     assert follow_up_queue["summary"]["guidance_only"] >= 9
     assert follow_up_queue["safety"]["citations_require_reviewed_citable_notes"] is True
     assert {

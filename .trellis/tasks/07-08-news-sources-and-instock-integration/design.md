@@ -240,3 +240,20 @@ matches and reports bounded outcome diagnostics:
   lifecycle, persistence, or scheduler;
 - map provider failures to HTTP 502 for the single-symbol evaluation endpoint
   while preserving partial-success diagnostics for multi-symbol `/strategies/screen`.
+
+## Follow-Up Slice: Social Sentiment Evidence Boundary
+
+The news/search provider MVP already normalizes provider result families such as
+SerpAPI `social_results`. The social sentiment boundary keeps those candidates
+out of verified-news storage until a separate model exists:
+
+- mark every live search candidate as non-citable collection input through an
+  `evidence_boundary` payload;
+- classify `social` and `public_opinion` result kinds as `low_social_signal`;
+- keep low-strength social candidates visible in search responses but defer them
+  from `NewsArticle` / `SentimentSignal` persistence during `search-ingest`;
+- return `social_candidate_count` and `social_candidates_deferred` from ingest;
+- add a source-readiness row for future social sentiment/public-opinion storage,
+  explicitly not citable today;
+- continue to require official APIs, licensed provider results, or user-reviewed
+  notes for any future social sentiment adapter.

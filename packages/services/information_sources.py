@@ -172,6 +172,7 @@ CATEGORY_LABELS = {
     "valuation": "Valuation sources",
     "reports": "Generated reports",
     "news": "Stored news",
+    "sentiment": "Social sentiment",
     "documents": "Documents",
     "manual_seed": "Manual seed files",
 }
@@ -711,6 +712,34 @@ INFORMATION_SOURCE_DEFINITIONS: tuple[SourceDefinition, ...] = (
             "and publication metadata."
         ),
         evidence_kind="news_articles",
+    ),
+    SourceDefinition(
+        id="social_sentiment_future",
+        label="Social sentiment and public opinion",
+        category="sentiment",
+        authority="Official social APIs, licensed public-opinion providers, or reviewed notes",
+        default_status="future",
+        freshness_policy=(
+            "Future low-strength signal family; do not treat live social/search "
+            "candidates as verified news or market facts."
+        ),
+        ai_usage=(
+            "Not citeable today from this registry. Social sentiment can support "
+            "research context only after a reviewed, separate evidence model exists."
+        ),
+        next_action=(
+            "Design a separate social-sentiment adapter/storage path using official "
+            "APIs, licensed provider results, or user-reviewed notes."
+        ),
+        coverage=("public_opinion", "social_results", "sentiment_signal_candidates"),
+        collection_note=(
+            "Collect social/public-opinion signals only through official APIs, "
+            "licensed search-provider result families, or user-reviewed notes."
+        ),
+        citation_policy=(
+            "Social sentiment is lower-strength context, not verified news; it is "
+            "not AI-citable until reviewed local evidence storage exists."
+        ),
     ),
     SourceDefinition(
         id="sec_filings_future_documents",
