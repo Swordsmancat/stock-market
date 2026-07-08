@@ -9,6 +9,7 @@ runtime dependency.
 - Upstream license: Apache-2.0.
 - Implemented feature: stored `candlestick_patterns` technical indicator.
 - Implemented feature: research-only `GET /strategies/screen` strategy screening API.
+- Implemented feature: research-only `GET /strategies/evaluate` strategy evaluation API.
 - Rule set: `candlestick_patterns_v1`.
 - First supported pattern codes:
   - `bullish_engulfing`
@@ -91,6 +92,24 @@ The first rules are adapted from InStock's strategy module shapes:
 - `ma_trend_up`: 30-day moving average rises across 30/20/10/latest checkpoints.
 
 These are not executable orders, backtest results, or validated trading strategies.
+
+## Strategy Evaluation API
+
+`GET /strategies/evaluate` scans historical bars for the same strategy screening
+rules and reports bounded forward-return diagnostics:
+
+```text
+GET /strategies/evaluate?symbol=AAPL&start=2026-01-01&end=2026-03-31&strategies=volume_price_breakout&forward_windows=1,5&benchmark_symbol=SPY&provider=mock
+```
+
+It returns snapshots, per-window sample size, hit rate, average/median forward
+return, max drawdown after signal, optional benchmark-relative return, provider
+metadata, sanitized diagnostics, `research_signal_only=true`, and the same
+non-advice disclaimer.
+
+This endpoint is not a production backtest. It does not model fills, slippage,
+fees, tax, borrow constraints, portfolio sizing, survivorship assumptions,
+parameter optimization, scheduler execution, or broker orders.
 
 ## Validation
 

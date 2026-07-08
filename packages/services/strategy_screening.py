@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from statistics import median
 from typing import Any
 
 RULE_SET_ID = "instock_strategy_screening_v1"
@@ -14,6 +15,7 @@ DEFAULT_STRATEGY_CODES = (
     "turtle_breakout",
     "ma_trend_up",
 )
+DEFAULT_EVALUATION_WINDOWS = (1, 5, 20)
 
 STRATEGY_METADATA = {
     "volume_price_breakout": {
@@ -161,6 +163,115 @@ def screen_latest_instock_strategies(
     }
 
 
+def evaluate_instock_strategy_signals(
+    symbol: str,
+    bars: list[dict[str, Any]],
+    strategy_codes: list[str] | None = None,
+    forward_windows: list[int] | None = None,
+    benchmark_bars: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Evaluate historical strategy-screening snapshots against forward returns."""
+    normalized_symbol = symbol.strip().upper()
+    requested_strategy_codes, strategy_diagnostics = _normalize_strategy_codes(strategy_codes)
+    requested_forward_windows, window_diagnostics = _normalize_forward_windows(forward_windows)
+    diagnostics: list[dict[str, Any]] = [*strategy_diagnostics, *window_diagnostics]
+    normalized_bars = normalize_strategy_bars(bars)
+    normalized_benchmark_bars = (
+        normalize_strategy_bars(benchmark_bars) if benchmark_bars is not None else None
+    )
+    min_required_bars = min(int(STRATEGY_METADATA[code]["min_bars"]) for code in requested_strategy_codes)
+
+    if len(normalized_bars) < min_required_bars:
+        return {
+            "symbol": normalized_symbol,
+            "status": "no_data",
+            "rule_set": RULE_SET_ID,
+            "integration_source": INTEGRATION_SOURCE,
+            "research_signal_only": True,
+            "evaluated_bars": len(normalized_bars),
+            "sample_size": 0,
+            "strategy_codes": requested_strategy_codes,
+            "forward_windows": requested_forward_windows,
+            "metrics": {},
+            "snapshots": [],
+            "diagnostics": [
+                *diagnostics,
+                {
+                    "code": "NOT_ENOUGH_HISTORICAL_BARS",
+                    "required_bars": min_required_bars,
+                    "available_bars": len(normalized_bars),
+                    "message": "Not enough valid OHLC bars were available to evaluate strategy signals.",
+                },
+            ],
+            "disclaimer": DISCLAIMER,
+        }
+
+    snapshots = _scan_strategy_snapshots(
+        normalized_symbol,
+        normalized_bars,
+        requested_strategy_codes,
+    )
+    if not snapshots:
+        return {
+            "symbol": normalized_symbol,
+            "status": "no_signals",
+            "rule_set": RULE_SET_ID,
+            "integration_source": INTEGRATION_SOURCE,
+            "research_signal_only": True,
+            "evaluated_bars": len(normalized_bars),
+            "sample_size": 0,
+            "strategy_codes": requested_strategy_codes,
+            "forward_windows": requested_forward_windows,
+            "metrics": {},
+            "snapshots": [],
+            "diagnostics": [
+                *diagnostics,
+                {
+                    "code": "NO_STRATEGY_SNAPSHOTS",
+                    "message": "No historical strategy-screening snapshots matched the requested strategy codes.",
+                },
+            ],
+            "disclaimer": DISCLAIMER,
+        }
+
+    metrics_by_strategy_code = {
+        strategy_code: _evaluate_strategy_snapshots(
+            bars=normalized_bars,
+            snapshots=[
+                snapshot for snapshot in snapshots if snapshot["strategy_code"] == strategy_code
+            ],
+            forward_windows=requested_forward_windows,
+            benchmark_bars=normalized_benchmark_bars,
+        )
+        for strategy_code in requested_strategy_codes
+    }
+    diagnostics.extend(_collect_metric_diagnostics(metrics_by_strategy_code))
+    if normalized_benchmark_bars is None:
+        diagnostics.append(
+            {
+                "code": "BENCHMARK_UNAVAILABLE",
+                "message": "No benchmark bars were supplied; benchmark-relative returns are omitted.",
+            }
+        )
+
+    return {
+        "symbol": normalized_symbol,
+        "status": "ok",
+        "rule_set": RULE_SET_ID,
+        "integration_source": INTEGRATION_SOURCE,
+        "research_signal_only": True,
+        "evaluated_at": _utc_timestamp(),
+        "evaluated_bars": len(normalized_bars),
+        "sample_size": len(snapshots),
+        "strategy_codes": requested_strategy_codes,
+        "forward_windows": requested_forward_windows,
+        "metrics": metrics_by_strategy_code,
+        "snapshots": snapshots,
+        "diagnostics": diagnostics,
+        "disclaimer": DISCLAIMER,
+    }
+
+
 def _normalize_strategy_codes(strategy_codes: list[str] | None) -> tuple[list[str], list[dict[str, Any]]]:
     if not strategy_codes:
         return list(DEFAULT_STRATEGY_CODES), []
@@ -186,6 +297,27 @@ def _normalize_strategy_codes(strategy_codes: list[str] | None) -> tuple[list[st
     return normalized_codes or list(DEFAULT_STRATEGY_CODES), diagnostics
 
 
+def _normalize_forward_windows(
+    forward_windows: list[int] | None,
+) -> tuple[list[int], list[dict[str, Any]]]:
+    diagnostics: list[dict[str, Any]] = []
+    raw_windows = forward_windows or list(DEFAULT_EVALUATION_WINDOWS)
+    normalized_windows: list[int] = []
+    for window in raw_windows:
+        if not isinstance(window, int) or window <= 0:
+            diagnostics.append(
+                {
+                    "code": "INVALID_FORWARD_WINDOW",
+                    "window": window,
+                    "message": "Forward return windows must be positive integers.",
+                }
+            )
+            continue
+        if window not in normalized_windows:
+            normalized_windows.append(window)
+    return normalized_windows or list(DEFAULT_EVALUATION_WINDOWS), diagnostics
+
+
 def _evaluate_strategy(
     symbol: str,
     bars: list[dict[str, Any]],
@@ -198,6 +330,159 @@ def _evaluate_strategy(
     if strategy_code == "ma_trend_up":
         return _detect_ma_trend_up(symbol, bars)
     return None
+
+
+def _scan_strategy_snapshots(
+    symbol: str,
+    bars: list[dict[str, Any]],
+    strategy_codes: list[str],
+) -> list[dict[str, Any]]:
+    snapshots: list[dict[str, Any]] = []
+    min_required_bars = min(int(STRATEGY_METADATA[code]["min_bars"]) for code in strategy_codes)
+    for bar_index in range(min_required_bars - 1, len(bars)):
+        historical_slice = bars[: bar_index + 1]
+        for strategy_code in strategy_codes:
+            if len(historical_slice) < int(STRATEGY_METADATA[strategy_code]["min_bars"]):
+                continue
+            match = _evaluate_strategy(symbol, historical_slice, strategy_code)
+            if match is None:
+                continue
+
+            latest_bar = historical_slice[-1]
+            snapshots.append(
+                {
+                    "symbol": symbol,
+                    "strategy_code": strategy_code,
+                    "signal_date": latest_bar.get("timestamp"),
+                    "bar_index": bar_index,
+                    "entry_price": latest_bar.get("close"),
+                    "confidence": match.get("confidence"),
+                    "reason": match.get("reason"),
+                    "source_window": len(historical_slice),
+                    "data_points_used": len(historical_slice),
+                    "research_signal_only": True,
+                }
+            )
+    return snapshots
+
+
+def _evaluate_strategy_snapshots(
+    *,
+    bars: list[dict[str, Any]],
+    snapshots: list[dict[str, Any]],
+    forward_windows: list[int],
+    benchmark_bars: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    window_metrics: dict[str, dict[str, Any]] = {}
+    for window in forward_windows:
+        evaluated_returns: list[float] = []
+        evaluated_drawdowns: list[float] = []
+        benchmark_relative_returns: list[float] = []
+        skipped_count = 0
+
+        for snapshot in snapshots:
+            bar_index = int(snapshot["bar_index"])
+            entry_price = _read_float(snapshot.get("entry_price"))
+            future_index = bar_index + window
+            if entry_price is None or entry_price == 0 or future_index >= len(bars):
+                skipped_count += 1
+                continue
+
+            exit_price = _read_float(bars[future_index].get("close"))
+            if exit_price is None:
+                skipped_count += 1
+                continue
+
+            forward_return = ((exit_price - entry_price) / entry_price) * 100
+            evaluated_returns.append(forward_return)
+            evaluated_drawdowns.append(
+                _calculate_max_drawdown_after_signal(bars, bar_index, window, entry_price)
+            )
+            benchmark_return = _calculate_benchmark_return(benchmark_bars, bar_index, window)
+            if benchmark_return is not None:
+                benchmark_relative_returns.append(forward_return - benchmark_return)
+
+        window_metrics[str(window)] = {
+            "sample_size": len(evaluated_returns),
+            "skipped_count": skipped_count,
+            "hit_rate": _calculate_hit_rate(evaluated_returns),
+            "average_forward_return": _average(evaluated_returns),
+            "median_forward_return": median(evaluated_returns) if evaluated_returns else None,
+            "max_drawdown_after_signal": min(evaluated_drawdowns) if evaluated_drawdowns else None,
+            "benchmark_relative_return": _average(benchmark_relative_returns),
+        }
+
+    return {
+        "sample_size": len(snapshots),
+        "windows": window_metrics,
+    }
+
+
+def _calculate_max_drawdown_after_signal(
+    bars: list[dict[str, Any]],
+    bar_index: int,
+    window: int,
+    entry_price: float,
+) -> float:
+    future_bars = bars[bar_index + 1 : bar_index + window + 1]
+    if not future_bars:
+        return 0.0
+    lowest_price = min(
+        _read_float(bar.get("low")) or _read_float(bar.get("close")) or entry_price
+        for bar in future_bars
+    )
+    return ((lowest_price - entry_price) / entry_price) * 100
+
+
+def _calculate_benchmark_return(
+    benchmark_bars: list[dict[str, Any]] | None,
+    bar_index: int,
+    window: int,
+) -> float | None:
+    if benchmark_bars is None or bar_index + window >= len(benchmark_bars):
+        return None
+    benchmark_entry = _read_float(benchmark_bars[bar_index].get("close"))
+    benchmark_exit = _read_float(benchmark_bars[bar_index + window].get("close"))
+    if benchmark_entry is None or benchmark_entry == 0 or benchmark_exit is None:
+        return None
+    return ((benchmark_exit - benchmark_entry) / benchmark_entry) * 100
+
+
+def _calculate_hit_rate(values: list[float]) -> float | None:
+    if not values:
+        return None
+    positive_count = sum(1 for value in values if value > 0)
+    return positive_count / len(values)
+
+
+def _average(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _collect_metric_diagnostics(metrics_by_strategy_code: dict[str, Any]) -> list[dict[str, Any]]:
+    diagnostics: list[dict[str, Any]] = []
+    for strategy_code, strategy_metrics in metrics_by_strategy_code.items():
+        if strategy_metrics["sample_size"] == 0:
+            diagnostics.append(
+                {
+                    "code": "NO_STRATEGY_SNAPSHOTS_FOR_CODE",
+                    "strategy_code": strategy_code,
+                    "message": "No snapshots were available for this strategy code.",
+                }
+            )
+        for window, window_metrics in strategy_metrics["windows"].items():
+            if window_metrics["sample_size"] == 0 and strategy_metrics["sample_size"] > 0:
+                diagnostics.append(
+                    {
+                        "code": "INSUFFICIENT_POST_SIGNAL_BARS",
+                        "strategy_code": strategy_code,
+                        "window": int(window),
+                        "message": "Signals exist, but there are not enough post-signal bars for this forward window.",
+                    }
+                )
+    return diagnostics
 
 
 def _detect_volume_price_breakout(symbol: str, bars: list[dict[str, Any]]) -> dict[str, Any] | None:

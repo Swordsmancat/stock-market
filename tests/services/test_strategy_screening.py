@@ -1,6 +1,9 @@
 from datetime import date, timedelta
 
-from packages.services.strategy_screening import screen_latest_instock_strategies
+from packages.services.strategy_screening import (
+    evaluate_instock_strategy_signals,
+    screen_latest_instock_strategies,
+)
 
 
 def build_bar(
@@ -111,3 +114,90 @@ def test_reports_no_data_without_fabricated_matches():
     assert payload["match_count"] == 0
     assert payload["matches"] == []
     assert payload["diagnostics"][0]["code"] == "NO_BARS"
+
+
+def build_volume_price_breakout_evaluation_bars() -> list[dict[str, object]]:
+    bars = [build_bar(day_index, 100.0, volume=1_000_000.0) for day_index in range(5)]
+    bars.append(
+        build_bar(
+            5,
+            105.0,
+            open_price=101.0,
+            volume=3_000_000.0,
+            amount=315_000_000.0,
+        )
+    )
+    bars.append(build_bar(6, 108.0, volume=1_000_000.0))
+    bars.append(build_bar(7, 104.0, volume=1_000_000.0))
+    return bars
+
+
+def test_evaluates_strategy_signals_with_forward_metrics():
+    payload = evaluate_instock_strategy_signals(
+        "aapl",
+        build_volume_price_breakout_evaluation_bars(),
+        strategy_codes=["volume_price_breakout"],
+        forward_windows=[1, 2],
+    )
+
+    assert payload["symbol"] == "AAPL"
+    assert payload["status"] == "ok"
+    assert payload["research_signal_only"] is True
+    assert payload["sample_size"] == 1
+    assert payload["snapshots"][0]["strategy_code"] == "volume_price_breakout"
+    assert payload["snapshots"][0]["research_signal_only"] is True
+    window_1 = payload["metrics"]["volume_price_breakout"]["windows"]["1"]
+    assert window_1["sample_size"] == 1
+    assert window_1["hit_rate"] == 1.0
+    assert window_1["average_forward_return"] > 0
+    assert window_1["max_drawdown_after_signal"] is not None
+    assert any(diagnostic["code"] == "BENCHMARK_UNAVAILABLE" for diagnostic in payload["diagnostics"])
+
+
+def test_evaluates_strategy_signals_with_benchmark_relative_return():
+    bars = build_volume_price_breakout_evaluation_bars()
+    benchmark_bars = [build_bar(day_index, 100.0 + day_index * 0.1) for day_index in range(len(bars))]
+
+    payload = evaluate_instock_strategy_signals(
+        "AAPL",
+        bars,
+        strategy_codes=["volume_price_breakout"],
+        forward_windows=[1],
+        benchmark_bars=benchmark_bars,
+    )
+
+    window_1 = payload["metrics"]["volume_price_breakout"]["windows"]["1"]
+    assert window_1["benchmark_relative_return"] is not None
+    assert not any(diagnostic["code"] == "BENCHMARK_UNAVAILABLE" for diagnostic in payload["diagnostics"])
+
+
+def test_evaluates_strategy_signals_reports_insufficient_history_and_bad_windows():
+    payload = evaluate_instock_strategy_signals(
+        "AAPL",
+        [build_bar(day_index, 100.0) for day_index in range(5)],
+        strategy_codes=["unknown", "turtle_breakout"],
+        forward_windows=[1, -2],
+    )
+
+    assert payload["status"] == "no_data"
+    assert payload["sample_size"] == 0
+    assert payload["metrics"] == {}
+    diagnostic_codes = {diagnostic["code"] for diagnostic in payload["diagnostics"]}
+    assert "UNKNOWN_STRATEGY_CODE" in diagnostic_codes
+    assert "INVALID_FORWARD_WINDOW" in diagnostic_codes
+    assert "NOT_ENOUGH_HISTORICAL_BARS" in diagnostic_codes
+
+
+def test_evaluates_strategy_signals_reports_no_signals_for_flat_history():
+    payload = evaluate_instock_strategy_signals(
+        "AAPL",
+        [build_bar(day_index, 100.0) for day_index in range(80)],
+        strategy_codes=["turtle_breakout"],
+        forward_windows=[1],
+    )
+
+    assert payload["status"] == "no_signals"
+    assert payload["sample_size"] == 0
+    assert payload["snapshots"] == []
+    assert payload["metrics"] == {}
+    assert payload["diagnostics"][0]["code"] == "NO_STRATEGY_SNAPSHOTS"

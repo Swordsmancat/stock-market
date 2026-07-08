@@ -88,3 +88,12 @@ git diff --check
 - [x] Preserve sanitized provider diagnostics and partial success across symbols.
 - [x] Keep results non-persistent and explicitly out of assistant citation/trading boundaries.
 - [x] Add focused service/API tests and backend spec/runbook coverage.
+
+## InStock Strategy Evaluation API Slice
+
+- [x] Reuse the strategy screening rules to scan historical strategy snapshots.
+- [x] Add `evaluate_instock_strategy_signals` with sample size, forward-return, hit-rate, drawdown, benchmark-relative, and diagnostics payloads.
+- [x] Add `GET /strategies/evaluate` with symbol/date/provider/strategy/window/benchmark query parameters.
+- [x] Preserve the research-only disclaimer and add `research_signal_only=true`.
+- [x] Keep provider failures sanitized and avoid database writes, persistence, order intents, or transaction-cost assumptions.
+- [x] Add focused service/API tests and backend spec/runbook coverage.

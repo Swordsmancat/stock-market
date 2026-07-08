@@ -221,3 +221,22 @@ pure Python service and thin API:
   future reviewed storage/citation path exists;
 - avoid InStock runtime imports, TA-Lib, scheduler replacement, database schema
   copying, strategy execution, and broker order intents.
+
+## Follow-Up Slice: InStock-Inspired Strategy Evaluation API
+
+The companion evaluation slice scans historical bars for the same strategy rule
+matches and reports bounded outcome diagnostics:
+
+- add `evaluate_instock_strategy_signals(...)` to reuse the strategy screening
+  rule implementation instead of duplicating rule logic;
+- add `GET /strategies/evaluate` for one symbol, start/end date, strategy filter,
+  forward windows, optional benchmark symbol, and provider;
+- return snapshots, per-window sample size, hit rate, average/median forward
+  return, max drawdown after signal, benchmark-relative return when available,
+  provider metadata, diagnostics, `research_signal_only=true`, and the existing
+  non-advice disclaimer;
+- keep this as historical diagnostics only, not a production backtest: no fill
+  prices, fees, slippage, portfolio simulation, parameter optimization, order
+  lifecycle, persistence, or scheduler;
+- map provider failures to HTTP 502 for the single-symbol evaluation endpoint
+  while preserving partial-success diagnostics for multi-symbol `/strategies/screen`.
