@@ -1061,3 +1061,38 @@ Unified core web pages around a dense financial page header, tightened watchlist
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: News providers and InStock analysis slices
+
+**Date**: 2026-07-08
+**Task**: News providers and InStock analysis slices
+**Branch**: `master`
+
+### Summary
+
+Committed configurable Anspire/SerpAPI news search providers, added stored candlestick-pattern research signals, and exposed historical recommendation signal evaluation API with diagnostics and no-trading boundaries.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `11b69aa` | (see git log) |
+| `25ec818` | (see git log) |
+| `661f6a9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
