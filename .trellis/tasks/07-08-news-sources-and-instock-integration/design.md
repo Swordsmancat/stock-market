@@ -2,7 +2,7 @@
 
 ## Scope
 
-This design covers the first implementation slice:
+This design initially covered the first implementation slice:
 
 - news/search provider registry;
 - platform settings for provider enablement, priority, and secrets;
@@ -11,7 +11,9 @@ This design covers the first implementation slice:
 - ingestion into the existing stored-news path where safe;
 - degraded/fallback diagnostics.
 
-Automatic trading and non-trading InStock analysis modules remain in the parent PRD but are not part of this implementation slice.
+Automatic trading remains outside this implementation work. After the news/search
+provider MVP was committed, the next non-trading InStock slice adds stored
+candlestick-pattern research signals.
 
 ## Architecture And Boundaries
 
@@ -169,3 +171,18 @@ The provider registry can remain harmless if adapters are disabled. Rollback can
 - new adapters.
 
 Stored unknown fields in `platform_settings.json` should be ignored by readers after rollback.
+
+## Follow-Up Slice: InStock-Inspired Candlestick Patterns
+
+The first non-trading InStock slice ports the capability shape, not the runtime
+stack:
+
+- add pure Python/pandas K-line pattern rules under `packages/analytics/`;
+- store results as a `TechnicalIndicator` with `indicator_code="candlestick_patterns"`;
+- keep output under the existing stored technical-indicator citation boundary;
+- make the payload explicitly `research_signal_only`;
+- avoid TA-Lib, MySQL, Tornado, proxy/cookie crawling, scheduler replacement, and trading modules;
+- document `myhhub/stock` Apache-2.0 attribution and the no-trading boundary.
+
+The first supported pattern codes are `bullish_engulfing`, `bearish_engulfing`,
+`hammer`, `shooting_star`, and `doji`.

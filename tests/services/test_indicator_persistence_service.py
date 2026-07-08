@@ -1,10 +1,12 @@
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
+from packages.domain.models import DailyBar, Instrument, Market
 from packages.services.indicators import (
     calculate_and_store_daily_indicators,
     get_stored_indicators_payload,
@@ -23,6 +25,38 @@ def make_session():
     return sessionmaker(bind=engine)()
 
 
+def seed_daily_bars(
+    session,
+    symbol: str,
+    rows: list[tuple[date, float, float, float, float]],
+) -> None:
+    market = Market(code="US", name="US Stock", timezone="America/New_York", currency="USD")
+    session.add(market)
+    session.flush()
+    instrument = Instrument(
+        symbol=symbol,
+        name=symbol,
+        market=market,
+        asset_type="stock",
+        currency="USD",
+    )
+    session.add(instrument)
+    session.flush()
+    for trade_date, open_price, high, low, close in rows:
+        session.add(
+            DailyBar(
+                instrument_id=instrument.id,
+                trade_date=trade_date,
+                open=Decimal(str(open_price)),
+                high=Decimal(str(high)),
+                low=Decimal(str(low)),
+                close=Decimal(str(close)),
+                volume=Decimal("1000"),
+            )
+        )
+    session.commit()
+
+
 def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     session = make_session()
     ingest_mock_market_snapshot("US", date(2026, 1, 1), date(2026, 1, 20), session=session)
@@ -37,11 +71,19 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     payload = get_stored_indicators_payload("AAPL", session=session)
 
     assert result["status"] == "calculated"
-    assert result["indicator_count"] == 6
+    assert result["indicator_count"] == 7
     assert payload["source"] == "database"
     assert payload["symbol"] == "AAPL"
     assert payload["as_of"] == "2026-01-20T00:00:00+00:00"
-    assert set(payload["indicators"]) == {"ma", "rsi", "bollinger", "atr", "macd", "kdj"}
+    assert set(payload["indicators"]) == {
+        "ma",
+        "rsi",
+        "bollinger",
+        "atr",
+        "macd",
+        "kdj",
+        "candlestick_patterns",
+    }
     assert payload["indicators"]["ma"] == 119.0
     assert payload["indicators"]["rsi"] == 100.0
     assert payload["indicators"]["bollinger"] == {"upper": 121.0, "middle": 119.0, "lower": 117.0}
@@ -54,3 +96,44 @@ def test_calculates_and_stores_daily_indicators_from_ingested_bars():
     assert isinstance(payload["indicators"]["kdj"]["k"], float)
     assert isinstance(payload["indicators"]["kdj"]["d"], float)
     assert isinstance(payload["indicators"]["kdj"]["j"], float)
+    candlestick_patterns = payload["indicators"]["candlestick_patterns"]
+    assert candlestick_patterns["rule_set"] == "candlestick_patterns_v1"
+    assert candlestick_patterns["integration_source"] == "instock_inspired_rules"
+    assert candlestick_patterns["research_signal_only"] is True
+    assert candlestick_patterns["pattern_count"] == 0
+    assert candlestick_patterns["patterns"] == []
+
+
+def test_stores_detected_candlestick_pattern_payload():
+    session = make_session()
+    seed_daily_bars(
+        session,
+        "PATTERN",
+        [
+            (date(2026, 1, 1), 9.0, 9.4, 8.8, 9.2),
+            (date(2026, 1, 2), 10.0, 10.2, 8.8, 9.0),
+            (date(2026, 1, 3), 8.8, 10.8, 8.7, 10.4),
+        ],
+    )
+
+    result = calculate_and_store_daily_indicators(
+        "PATTERN",
+        date(2026, 1, 1),
+        date(2026, 1, 3),
+        session=session,
+        ma_window=2,
+    )
+    payload = get_stored_indicators_payload("PATTERN", session=session)
+
+    assert result["status"] == "calculated"
+    candlestick_patterns = payload["indicators"]["candlestick_patterns"]
+    assert candlestick_patterns["pattern_count"] == 1
+    assert candlestick_patterns["patterns"] == [
+        {
+            "code": "bullish_engulfing",
+            "label": "Bullish engulfing",
+            "market_bias": "bullish",
+            "lookback_bars": 2,
+            "rule_set": "candlestick_patterns_v1",
+        }
+    ]

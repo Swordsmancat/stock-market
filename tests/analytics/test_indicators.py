@@ -9,6 +9,7 @@ from packages.analytics.indicators import (
     calculate_macd,
     calculate_rsi,
 )
+from packages.analytics.candlestick_patterns import detect_latest_candlestick_patterns
 
 
 def test_calculate_ma_returns_rolling_average():
@@ -77,3 +78,69 @@ def test_calculate_kdj_handles_flat_price_ranges():
     assert latest["k"] == pytest.approx(50.0)
     assert latest["d"] == pytest.approx(50.0)
     assert latest["j"] == pytest.approx(50.0)
+
+
+def test_detect_latest_candlestick_patterns_detects_bullish_engulfing():
+    result = detect_latest_candlestick_patterns(
+        open_prices=pd.Series([10.0, 8.8]),
+        high_prices=pd.Series([10.2, 10.8]),
+        low_prices=pd.Series([8.8, 8.7]),
+        close_prices=pd.Series([9.0, 10.4]),
+    )
+
+    assert result["status"] == "evaluated"
+    assert result["research_signal_only"] is True
+    assert result["pattern_count"] == 1
+    assert result["patterns"][0]["code"] == "bullish_engulfing"
+    assert result["patterns"][0]["market_bias"] == "bullish"
+
+
+def test_detect_latest_candlestick_patterns_detects_bearish_engulfing():
+    result = detect_latest_candlestick_patterns(
+        open_prices=pd.Series([9.0, 10.4]),
+        high_prices=pd.Series([10.2, 10.6]),
+        low_prices=pd.Series([8.8, 8.6]),
+        close_prices=pd.Series([10.0, 8.8]),
+    )
+
+    assert result["pattern_count"] == 1
+    assert result["patterns"][0]["code"] == "bearish_engulfing"
+    assert result["patterns"][0]["market_bias"] == "bearish"
+
+
+def test_detect_latest_candlestick_patterns_detects_single_bar_shapes():
+    doji = detect_latest_candlestick_patterns(
+        open_prices=pd.Series([10.0]),
+        high_prices=pd.Series([11.0]),
+        low_prices=pd.Series([9.0]),
+        close_prices=pd.Series([10.05]),
+    )
+    hammer = detect_latest_candlestick_patterns(
+        open_prices=pd.Series([10.2]),
+        high_prices=pd.Series([10.5]),
+        low_prices=pd.Series([9.0]),
+        close_prices=pd.Series([10.4]),
+    )
+    shooting_star = detect_latest_candlestick_patterns(
+        open_prices=pd.Series([10.2]),
+        high_prices=pd.Series([11.6]),
+        low_prices=pd.Series([10.0]),
+        close_prices=pd.Series([10.4]),
+    )
+
+    assert [pattern["code"] for pattern in doji["patterns"]] == ["doji"]
+    assert [pattern["code"] for pattern in hammer["patterns"]] == ["hammer"]
+    assert [pattern["code"] for pattern in shooting_star["patterns"]] == ["shooting_star"]
+
+
+def test_detect_latest_candlestick_patterns_handles_empty_series():
+    result = detect_latest_candlestick_patterns(
+        open_prices=pd.Series(dtype="float64"),
+        high_prices=pd.Series(dtype="float64"),
+        low_prices=pd.Series(dtype="float64"),
+        close_prices=pd.Series(dtype="float64"),
+    )
+
+    assert result["status"] == "no_data"
+    assert result["pattern_count"] == 0
+    assert result["patterns"] == []

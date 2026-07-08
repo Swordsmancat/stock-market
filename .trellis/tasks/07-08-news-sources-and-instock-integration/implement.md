@@ -60,3 +60,13 @@ git diff --check
 2. InStock technical indicators or K-line pattern recognition.
 3. InStock strategy screening and backtest validation.
 4. Automatic trading safety foundation, paper-trading first.
+
+## InStock K-Line Pattern Slice
+
+- [x] Confirm InStock pattern recognition is TA-Lib/job-stack based and should not be imported wholesale.
+- [x] Add pure Python/pandas latest-candle pattern detection for a small deterministic MVP.
+- [x] Persist `candlestick_patterns` through the existing `TechnicalIndicator` table.
+- [x] Preserve existing numeric indicator outputs and stored technical-indicator citation boundary.
+- [x] Add focused analytics, service, and API tests.
+- [x] Add runbook/spec coverage for Apache-2.0 attribution, payload shape, and no-trading rules.
+- [x] Run final focused checks and diff whitespace checks before commit.

@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timezone
 import pandas as pd
 from sqlalchemy.orm import Session
 
+from packages.analytics.candlestick_patterns import detect_latest_candlestick_patterns
 from packages.analytics.indicators import (
     calculate_atr,
     calculate_bollinger_bands,
@@ -20,6 +21,7 @@ DAILY_TECHNICAL_INDICATOR_CODES_TO_REFRESH = {
     "atr",
     "macd",
     "kdj",
+    "candlestick_patterns",
 }
 
 
@@ -103,8 +105,12 @@ def _latest_kdj_value(high: pd.Series, low: pd.Series, close: pd.Series) -> dict
 
 
 def _serialize_indicator_value(value: object) -> object:
+    if isinstance(value, list):
+        return [_serialize_indicator_value(item) for item in value]
     if isinstance(value, dict):
-        return {key: float(item) for key, item in value.items()}
+        return {key: _serialize_indicator_value(item) for key, item in value.items()}
+    if isinstance(value, str | bool) or value is None:
+        return value
     return float(value)
 
 
@@ -120,6 +126,7 @@ def calculate_and_store_daily_indicators(
         return {"symbol": symbol, "status": "no_data", "indicator_count": 0}
 
     instrument = _instrument_for_symbol(symbol, session)
+    open_prices = pd.Series([float(bar.open) for bar in bars])
     close = pd.Series([float(bar.close) for bar in bars])
     high = pd.Series([float(bar.high) for bar in bars])
     low = pd.Series([float(bar.low) for bar in bars])
@@ -154,6 +161,14 @@ def calculate_and_store_daily_indicators(
             "params": {"window": 9, "k_smoothing": 3, "d_smoothing": 3},
             "value": kdj,
         }
+    indicator_values["candlestick_patterns"] = {
+        "params": {
+            "rule_set": "candlestick_patterns_v1",
+            "source": "myhhub/stock inspired K-line pattern slice",
+            "research_signal_only": True,
+        },
+        "value": detect_latest_candlestick_patterns(open_prices, high, low, close),
+    }
 
     session.query(TechnicalIndicator).filter(
         TechnicalIndicator.instrument_id == instrument.id,
