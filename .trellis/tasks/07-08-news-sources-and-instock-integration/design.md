@@ -309,3 +309,21 @@ capability shape into a local evidence screener:
 - do not fetch live providers, persist selection results, import InStock's
   MySQL/Tornado/web/trading runtime, generate order intents, or emit buy/sell
   advice.
+
+## Follow-Up Slice: Composite Stock Selection Technical Evidence Criteria
+
+The next incremental stock-selection slice broadens the local screener without
+changing its evidence boundary:
+
+- add criteria for stored candlestick pattern codes, MFI, William %R, and
+  chip-distribution benefit ratio;
+- read only the latest stored `TechnicalIndicator` payloads already produced by
+  the previous non-trading InStock slices;
+- expose query parameters through the existing `GET /stock-selection/screen`
+  route instead of creating a second screener;
+- keep missing nested payloads diagnostic-only through
+  `SELECTION_RULE_NOT_MATCHED` and `missing_value` or `missing_pattern_codes`;
+- preserve stored-row evidence citations, `research_signal_only=true`, and the
+  non-advice disclaimer;
+- avoid live provider scans, persistence of selection results, strategy
+  execution, order intents, and buy/sell/hold language.

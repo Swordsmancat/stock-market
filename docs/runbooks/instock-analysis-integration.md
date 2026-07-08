@@ -12,6 +12,9 @@ runtime dependency.
 - Implemented feature: stored `chip_distribution` technical indicator, inspired
   by InStock's CYQ / chip-distribution capability.
 - Implemented feature: research-only local composite stock selection API.
+- Implemented feature: composite stock selection over additional stored
+  technical evidence: candlestick pattern codes, MFI, William %R, and
+  chip-distribution benefit ratio.
 - Implemented feature: research-only `GET /strategies/screen` strategy screening API.
 - Implemented feature: research-only `GET /strategies/evaluate` strategy evaluation API.
 - Rule set: `candlestick_patterns_v1`.
@@ -135,7 +138,7 @@ These are not executable orders, backtest results, or validated trading strategi
 fundamental and technical criteria:
 
 ```text
-GET /stock-selection/screen?symbols=AAPL,MSFT&max_pe_ratio=30&min_revenue_growth=0.1&min_rsi=40&max_rsi=70&require_price_above_ma=true
+GET /stock-selection/screen?symbols=AAPL,MSFT&max_pe_ratio=30&min_revenue_growth=0.1&min_rsi=40&max_rsi=70&require_price_above_ma=true&required_pattern_codes=hammer&min_mfi=50&min_chip_benefit_ratio=0.6
 ```
 
 The first criteria are:
@@ -146,11 +149,20 @@ The first criteria are:
 - `min_rsi`
 - `max_rsi`
 - `require_price_above_ma`
+- `required_pattern_codes`
+- `min_mfi`
+- `max_mfi`
+- `min_william_r`
+- `max_william_r`
+- `min_chip_benefit_ratio`
+- `max_chip_benefit_ratio`
 
 At least one criterion is required. Missing local bars, fundamentals, or
-technical indicators produce diagnostics and no fabricated match. Returned
-`evidence_citations` point to stored rows used in the screen, while the
-selection result itself remains a research-only analysis payload.
+technical indicators produce diagnostics and no fabricated match. Nested
+criteria read only stored `candlestick_patterns.patterns[]` and
+`chip_distribution.benefit_ratio` payloads. Returned `evidence_citations` point
+to stored rows used in the screen, while the selection result itself remains a
+research-only analysis payload.
 
 ## Strategy Evaluation API
 

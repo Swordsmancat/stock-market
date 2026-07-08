@@ -28,6 +28,10 @@ def seed_instrument(
     close: float,
     ma: float,
     rsi: float,
+    mfi: float | None = 55.0,
+    william_r: float | None = -30.0,
+    pattern_codes: list[str] | None = None,
+    chip_benefit_ratio: float | None = 0.65,
     pe_ratio: float = 25.0,
     revenue_growth: float = 0.12,
     net_margin: float = 0.24,
@@ -57,26 +61,79 @@ def seed_instrument(
             volume=Decimal("1000000"),
         )
     )
-    session.add(
+    indicator_as_of = datetime(2026, 1, 20, tzinfo=timezone.utc)
+    indicator_rows = [
         TechnicalIndicator(
             instrument_id=instrument.id,
             timeframe="1d",
-            as_of=datetime(2026, 1, 20, tzinfo=timezone.utc),
+            as_of=indicator_as_of,
             indicator_code="ma",
             params={"window": 20},
             value_json={"value": ma},
-        )
-    )
-    session.add(
+        ),
         TechnicalIndicator(
             instrument_id=instrument.id,
             timeframe="1d",
-            as_of=datetime(2026, 1, 20, tzinfo=timezone.utc),
+            as_of=indicator_as_of,
             indicator_code="rsi",
             params={"window": 14},
             value_json={"value": rsi},
+        ),
+        TechnicalIndicator(
+            instrument_id=instrument.id,
+            timeframe="1d",
+            as_of=indicator_as_of,
+            indicator_code="candlestick_patterns",
+            params={"rule_set": "candlestick_patterns_v1", "research_signal_only": True},
+            value_json={"value": _candlestick_payload(pattern_codes or [])},
+        ),
+    ]
+    if mfi is not None:
+        indicator_rows.append(
+            TechnicalIndicator(
+                instrument_id=instrument.id,
+                timeframe="1d",
+                as_of=indicator_as_of,
+                indicator_code="mfi",
+                params={"window": 14},
+                value_json={"value": mfi},
+            )
         )
-    )
+    if william_r is not None:
+        indicator_rows.append(
+            TechnicalIndicator(
+                instrument_id=instrument.id,
+                timeframe="1d",
+                as_of=indicator_as_of,
+                indicator_code="william_r",
+                params={"window": 14},
+                value_json={"value": william_r},
+            )
+        )
+    if chip_benefit_ratio is not None:
+        indicator_rows.append(
+            TechnicalIndicator(
+                instrument_id=instrument.id,
+                timeframe="1d",
+                as_of=indicator_as_of,
+                indicator_code="chip_distribution",
+                params={
+                    "rule_set": "chip_distribution_v1",
+                    "research_signal_only": True,
+                    "approximation": "volume_weighted_without_float_shares",
+                },
+                value_json={
+                    "value": {
+                        "rule_set": "chip_distribution_v1",
+                        "research_signal_only": True,
+                        "approximation": "volume_weighted_without_float_shares",
+                        "status": "evaluated",
+                        "benefit_ratio": chip_benefit_ratio,
+                    }
+                },
+            )
+        )
+    session.add_all(indicator_rows)
     session.add(
         FundamentalSnapshot(
             symbol=symbol,
@@ -90,6 +147,26 @@ def seed_instrument(
         )
     )
     session.commit()
+
+
+def _candlestick_payload(pattern_codes: list[str]) -> dict[str, object]:
+    return {
+        "rule_set": "candlestick_patterns_v1",
+        "integration_source": "instock_inspired_rules",
+        "status": "evaluated",
+        "research_signal_only": True,
+        "pattern_count": len(pattern_codes),
+        "patterns": [
+            {
+                "code": pattern_code,
+                "label": pattern_code.replace("_", " ").title(),
+                "market_bias": "neutral",
+                "lookback_bars": 1,
+                "rule_set": "candlestick_patterns_v1",
+            }
+            for pattern_code in pattern_codes
+        ],
+    }
 
 
 def test_stock_selection_matches_local_fundamental_and_technical_criteria():
@@ -135,6 +212,99 @@ def test_stock_selection_matches_local_fundamental_and_technical_criteria():
         diagnostic["symbol"] == "MSFT" and diagnostic["rule"] == "max_pe_ratio"
         for diagnostic in payload["diagnostics"]
     )
+
+
+def test_stock_selection_matches_stored_technical_evidence_criteria():
+    session = make_session()
+    seed_instrument(
+        session,
+        "AAPL",
+        close=110.0,
+        ma=100.0,
+        rsi=55.0,
+        mfi=62.0,
+        william_r=-24.0,
+        pattern_codes=["hammer", "doji"],
+        chip_benefit_ratio=0.72,
+    )
+    seed_instrument(
+        session,
+        "MSFT",
+        close=108.0,
+        ma=100.0,
+        rsi=57.0,
+        mfi=82.0,
+        william_r=-7.0,
+        pattern_codes=["doji"],
+        chip_benefit_ratio=0.42,
+    )
+
+    payload = screen_local_stock_selection(
+        session=session,
+        symbols=["AAPL", "MSFT"],
+        required_pattern_codes=["HAMMER", "hammer"],
+        min_mfi=50.0,
+        max_mfi=70.0,
+        min_william_r=-50.0,
+        max_william_r=-10.0,
+        min_chip_benefit_ratio=0.60,
+        max_chip_benefit_ratio=0.80,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["criteria"]["required_pattern_codes"] == ["hammer"]
+    assert payload["count"] == 1
+    item = payload["items"][0]
+    assert item["symbol"] == "AAPL"
+    assert item["score"] == 1.0
+    assert item["technical_indicators"]["mfi"] == 62.0
+    assert item["technical_indicators"]["william_r"] == -24.0
+    assert item["technical_indicators"]["chip_distribution"]["benefit_ratio"] == 0.72
+    assert item["technical_indicators"]["candlestick_patterns"]["patterns"][0]["code"] == "hammer"
+    assert {rule["code"] for rule in item["matched_rules"]} == {
+        "required_pattern_codes",
+        "min_mfi",
+        "max_mfi",
+        "min_william_r",
+        "max_william_r",
+        "min_chip_benefit_ratio",
+        "max_chip_benefit_ratio",
+    }
+    assert any(
+        diagnostic["symbol"] == "MSFT"
+        and diagnostic["rule"] == "required_pattern_codes"
+        and diagnostic["details"]["missing_pattern_codes"] == ["hammer"]
+        for diagnostic in payload["diagnostics"]
+    )
+
+
+def test_stock_selection_reports_missing_technical_evidence_without_fabricating_match():
+    session = make_session()
+    seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0, mfi=None)
+
+    payload = screen_local_stock_selection(
+        session=session,
+        symbols=["AAPL"],
+        min_mfi=50.0,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["items"] == []
+    assert payload["diagnostics"] == [
+        {
+            "symbol": "AAPL",
+            "code": "SELECTION_RULE_NOT_MATCHED",
+            "rule": "min_mfi",
+            "message": "A requested stock-selection criterion was not matched.",
+            "details": {
+                "code": "min_mfi",
+                "field": "mfi",
+                "status": "missing_value",
+                "actual": None,
+                "threshold": 50.0,
+            },
+        }
+    ]
 
 
 def test_stock_selection_requires_at_least_one_criterion():

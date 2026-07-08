@@ -22,6 +22,13 @@ def screen_local_stock_selection(
     min_rsi: float | None = None,
     max_rsi: float | None = None,
     require_price_above_ma: bool = False,
+    required_pattern_codes: list[str] | None = None,
+    min_mfi: float | None = None,
+    max_mfi: float | None = None,
+    min_william_r: float | None = None,
+    max_william_r: float | None = None,
+    min_chip_benefit_ratio: float | None = None,
+    max_chip_benefit_ratio: float | None = None,
     limit: int = 20,
 ) -> dict[str, object]:
     criteria = _criteria_payload(
@@ -31,6 +38,13 @@ def screen_local_stock_selection(
         min_rsi=min_rsi,
         max_rsi=max_rsi,
         require_price_above_ma=require_price_above_ma,
+        required_pattern_codes=required_pattern_codes,
+        min_mfi=min_mfi,
+        max_mfi=max_mfi,
+        min_william_r=min_william_r,
+        max_william_r=max_william_r,
+        min_chip_benefit_ratio=min_chip_benefit_ratio,
+        max_chip_benefit_ratio=max_chip_benefit_ratio,
     )
     if not _has_active_criteria(criteria):
         return {
@@ -93,6 +107,13 @@ def _criteria_payload(
     min_rsi: float | None,
     max_rsi: float | None,
     require_price_above_ma: bool,
+    required_pattern_codes: list[str] | None,
+    min_mfi: float | None,
+    max_mfi: float | None,
+    min_william_r: float | None,
+    max_william_r: float | None,
+    min_chip_benefit_ratio: float | None,
+    max_chip_benefit_ratio: float | None,
 ) -> dict[str, object]:
     return {
         "max_pe_ratio": max_pe_ratio,
@@ -101,11 +122,26 @@ def _criteria_payload(
         "min_rsi": min_rsi,
         "max_rsi": max_rsi,
         "require_price_above_ma": require_price_above_ma,
+        "required_pattern_codes": _normalize_pattern_codes(required_pattern_codes),
+        "min_mfi": min_mfi,
+        "max_mfi": max_mfi,
+        "min_william_r": min_william_r,
+        "max_william_r": max_william_r,
+        "min_chip_benefit_ratio": min_chip_benefit_ratio,
+        "max_chip_benefit_ratio": max_chip_benefit_ratio,
     }
 
 
 def _has_active_criteria(criteria: dict[str, object]) -> bool:
-    return any(value is not None and value is not False for value in criteria.values())
+    return any(_criteria_value_is_active(value) for value in criteria.values())
+
+
+def _criteria_value_is_active(value: object) -> bool:
+    if value is None or value is False:
+        return False
+    if isinstance(value, list | tuple | set | dict):
+        return bool(value)
+    return True
 
 
 def _candidate_instruments(
@@ -263,6 +299,38 @@ def _evaluate_technical_rules(
     checks = [
         _min_rule("min_rsi", "rsi", _numeric_value(values.get("rsi")), criteria["min_rsi"]),
         _max_rule("max_rsi", "rsi", _numeric_value(values.get("rsi")), criteria["max_rsi"]),
+        _pattern_rule(
+            "required_pattern_codes",
+            "candlestick_patterns.patterns",
+            values.get("candlestick_patterns"),
+            criteria["required_pattern_codes"],
+        ),
+        _min_rule("min_mfi", "mfi", _numeric_value(values.get("mfi")), criteria["min_mfi"]),
+        _max_rule("max_mfi", "mfi", _numeric_value(values.get("mfi")), criteria["max_mfi"]),
+        _min_rule(
+            "min_william_r",
+            "william_r",
+            _numeric_value(values.get("william_r")),
+            criteria["min_william_r"],
+        ),
+        _max_rule(
+            "max_william_r",
+            "william_r",
+            _numeric_value(values.get("william_r")),
+            criteria["max_william_r"],
+        ),
+        _min_rule(
+            "min_chip_benefit_ratio",
+            "chip_distribution.benefit_ratio",
+            _nested_numeric_value(values.get("chip_distribution"), "benefit_ratio"),
+            criteria["min_chip_benefit_ratio"],
+        ),
+        _max_rule(
+            "max_chip_benefit_ratio",
+            "chip_distribution.benefit_ratio",
+            _nested_numeric_value(values.get("chip_distribution"), "benefit_ratio"),
+            criteria["max_chip_benefit_ratio"],
+        ),
     ]
     if criteria["require_price_above_ma"]:
         checks.append(
@@ -358,6 +426,36 @@ def _max_rule(
     }
 
 
+def _pattern_rule(
+    code: str,
+    field: str,
+    payload: object,
+    required_codes: object,
+) -> dict[str, object] | None:
+    if not isinstance(required_codes, list) or not required_codes:
+        return None
+
+    actual_codes = _candlestick_pattern_codes(payload)
+    if actual_codes is None:
+        return {
+            "code": code,
+            "field": field,
+            "status": "missing_value",
+            "actual": None,
+            "threshold": required_codes,
+        }
+
+    missing_codes = [pattern_code for pattern_code in required_codes if pattern_code not in actual_codes]
+    return {
+        "code": code,
+        "field": field,
+        "status": "matched" if not missing_codes else "not_matched",
+        "actual": sorted(actual_codes),
+        "threshold": required_codes,
+        "missing_pattern_codes": missing_codes,
+    }
+
+
 def _boolean_rule(
     code: str,
     field: str,
@@ -411,7 +509,7 @@ def _latest_indicator_payload(instrument: Instrument, *, session: Session) -> di
     return {
         "as_of": _isoformat_utc(latest.as_of),
         "values": {
-            row.indicator_code: row.value_json["value"]
+            row.indicator_code: _serialize_indicator_value(row.value_json["value"])
             for row in rows
             if isinstance(row.value_json, dict) and "value" in row.value_json
         },
@@ -470,7 +568,7 @@ def _evidence_citations(
 
 
 def _active_criteria_count(criteria: dict[str, object]) -> int:
-    return sum(1 for value in criteria.values() if value is not None and value is not False)
+    return sum(1 for value in criteria.values() if _criteria_value_is_active(value))
 
 
 def _normalize_symbols(symbols: list[str] | None) -> list[str]:
@@ -482,6 +580,18 @@ def _normalize_symbols(symbols: list[str] | None) -> list[str]:
             continue
         normalized.append(normalized_symbol)
         seen.add(normalized_symbol)
+    return normalized
+
+
+def _normalize_pattern_codes(pattern_codes: list[str] | None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for pattern_code in pattern_codes or []:
+        normalized_code = pattern_code.strip().lower()
+        if not normalized_code or normalized_code in seen:
+            continue
+        normalized.append(normalized_code)
+        seen.add(normalized_code)
     return normalized
 
 
@@ -500,6 +610,40 @@ def _numeric_value(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     return None
+
+
+def _nested_numeric_value(payload: object, key: str) -> float | None:
+    if not isinstance(payload, dict):
+        return None
+    return _numeric_value(payload.get(key))
+
+
+def _candlestick_pattern_codes(payload: object) -> set[str] | None:
+    if not isinstance(payload, dict):
+        return None
+
+    patterns = payload.get("patterns")
+    if not isinstance(patterns, list):
+        return None
+
+    codes: set[str] = set()
+    for pattern in patterns:
+        if not isinstance(pattern, dict):
+            continue
+        code = pattern.get("code")
+        if isinstance(code, str) and code.strip():
+            codes.add(code.strip().lower())
+    return codes
+
+
+def _serialize_indicator_value(value: object) -> object:
+    if isinstance(value, list):
+        return [_serialize_indicator_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _serialize_indicator_value(item) for key, item in value.items()}
+    if isinstance(value, str | bool) or value is None:
+        return value
+    return _numeric_value(value)
 
 
 def _isoformat_utc(value: datetime) -> str:

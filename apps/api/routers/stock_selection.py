@@ -20,6 +20,16 @@ def screen_stock_selection(
     min_rsi: float | None = Query(default=None, ge=0, le=100),
     max_rsi: float | None = Query(default=None, ge=0, le=100),
     require_price_above_ma: bool = Query(default=False),
+    required_pattern_codes: str | None = Query(
+        default=None,
+        description="Optional comma-separated candlestick pattern codes that must be present.",
+    ),
+    min_mfi: float | None = Query(default=None, ge=0, le=100),
+    max_mfi: float | None = Query(default=None, ge=0, le=100),
+    min_william_r: float | None = Query(default=None, ge=-100, le=0),
+    max_william_r: float | None = Query(default=None, ge=-100, le=0),
+    min_chip_benefit_ratio: float | None = Query(default=None, ge=0, le=1),
+    max_chip_benefit_ratio: float | None = Query(default=None, ge=0, le=1),
     limit: int = Query(default=20, ge=1, le=100),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
@@ -33,6 +43,13 @@ def screen_stock_selection(
         min_rsi=min_rsi,
         max_rsi=max_rsi,
         require_price_above_ma=require_price_above_ma,
+        required_pattern_codes=_parse_csv(required_pattern_codes),
+        min_mfi=min_mfi,
+        max_mfi=max_mfi,
+        min_william_r=min_william_r,
+        max_william_r=max_william_r,
+        min_chip_benefit_ratio=min_chip_benefit_ratio,
+        max_chip_benefit_ratio=max_chip_benefit_ratio,
         limit=limit,
     )
     if payload["status"] == "invalid_request":
@@ -41,6 +58,10 @@ def screen_stock_selection(
 
 
 def _parse_symbols(value: str | None) -> list[str] | None:
+    return _parse_csv(value)
+
+
+def _parse_csv(value: str | None) -> list[str] | None:
     if value is None:
         return None
-    return [symbol.strip() for symbol in value.split(",") if symbol.strip()]
+    return [item.strip() for item in value.split(",") if item.strip()]

@@ -64,6 +64,67 @@ def seed_selection_fixture(session) -> None:
                 params={"window": 14},
                 value_json={"value": 55.0},
             ),
+            TechnicalIndicator(
+                instrument_id=instrument.id,
+                timeframe="1d",
+                as_of=datetime(2026, 1, 20, tzinfo=timezone.utc),
+                indicator_code="mfi",
+                params={"window": 14},
+                value_json={"value": 62.0},
+            ),
+            TechnicalIndicator(
+                instrument_id=instrument.id,
+                timeframe="1d",
+                as_of=datetime(2026, 1, 20, tzinfo=timezone.utc),
+                indicator_code="william_r",
+                params={"window": 14},
+                value_json={"value": -24.0},
+            ),
+            TechnicalIndicator(
+                instrument_id=instrument.id,
+                timeframe="1d",
+                as_of=datetime(2026, 1, 20, tzinfo=timezone.utc),
+                indicator_code="candlestick_patterns",
+                params={"rule_set": "candlestick_patterns_v1", "research_signal_only": True},
+                value_json={
+                    "value": {
+                        "rule_set": "candlestick_patterns_v1",
+                        "integration_source": "instock_inspired_rules",
+                        "status": "evaluated",
+                        "research_signal_only": True,
+                        "pattern_count": 1,
+                        "patterns": [
+                            {
+                                "code": "hammer",
+                                "label": "Hammer",
+                                "market_bias": "bullish",
+                                "lookback_bars": 1,
+                                "rule_set": "candlestick_patterns_v1",
+                            }
+                        ],
+                    }
+                },
+            ),
+            TechnicalIndicator(
+                instrument_id=instrument.id,
+                timeframe="1d",
+                as_of=datetime(2026, 1, 20, tzinfo=timezone.utc),
+                indicator_code="chip_distribution",
+                params={
+                    "rule_set": "chip_distribution_v1",
+                    "research_signal_only": True,
+                    "approximation": "volume_weighted_without_float_shares",
+                },
+                value_json={
+                    "value": {
+                        "rule_set": "chip_distribution_v1",
+                        "research_signal_only": True,
+                        "approximation": "volume_weighted_without_float_shares",
+                        "status": "evaluated",
+                        "benefit_ratio": 0.72,
+                    }
+                },
+            ),
         ]
     )
     session.add(
@@ -101,6 +162,12 @@ def test_stock_selection_api_screens_local_composite_criteria():
                 "min_rsi": 40,
                 "max_rsi": 70,
                 "require_price_above_ma": True,
+                "required_pattern_codes": "hammer",
+                "min_mfi": 50,
+                "max_mfi": 70,
+                "min_william_r": -50,
+                "max_william_r": -10,
+                "min_chip_benefit_ratio": 0.6,
             },
         )
     finally:
@@ -113,6 +180,17 @@ def test_stock_selection_api_screens_local_composite_criteria():
     assert payload["count"] == 1
     assert payload["items"][0]["symbol"] == "AAPL"
     assert payload["items"][0]["research_signal_only"] is True
+    assert payload["items"][0]["technical_indicators"]["mfi"] == 62.0
+    assert payload["items"][0]["technical_indicators"]["william_r"] == -24.0
+    assert payload["items"][0]["technical_indicators"]["chip_distribution"]["benefit_ratio"] == 0.72
+    assert {rule["code"] for rule in payload["items"][0]["matched_rules"]} >= {
+        "required_pattern_codes",
+        "min_mfi",
+        "max_mfi",
+        "min_william_r",
+        "max_william_r",
+        "min_chip_benefit_ratio",
+    }
     assert "buy" not in payload["disclaimer"].lower()
     assert payload["items"][0]["evidence_citations"] == [
         "bars_1d:AAPL:2026-01-20",

@@ -134,3 +134,12 @@ git diff --check
 - [x] Return matched rule details, diagnostics, stored evidence citations, `research_signal_only=true`, and a non-advice disclaimer.
 - [x] Avoid live provider scans, persistence of selection results, InStock runtime imports, order intents, and buy/sell advice.
 - [x] Add focused service/API tests and backend spec/runbook coverage.
+
+## InStock Composite Stock Selection Technical Evidence Criteria Slice
+
+- [x] Extend `screen_local_stock_selection` with stored technical-evidence criteria for candlestick pattern codes, MFI, William %R, and chip-distribution benefit ratio.
+- [x] Add `GET /stock-selection/screen` query parameters for `required_pattern_codes`, MFI range, William %R range, and chip benefit-ratio range.
+- [x] Preserve local-only evidence reads from latest stored `TechnicalIndicator` rows and avoid live provider scans.
+- [x] Return missing nested indicator payloads as diagnostics, not fabricated neutral values.
+- [x] Keep the response research-only with stored evidence citations and the non-advice disclaimer.
+- [x] Add focused service/API tests and backend spec/runbook coverage.

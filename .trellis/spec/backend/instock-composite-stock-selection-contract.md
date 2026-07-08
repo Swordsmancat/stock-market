@@ -27,6 +27,14 @@
   - `min_rsi`
   - `max_rsi`
   - `require_price_above_ma`
+  - `required_pattern_codes`: comma-separated candlestick pattern codes stored
+    under `candlestick_patterns.patterns[]`.
+  - `min_mfi`
+  - `max_mfi`
+  - `min_william_r`
+  - `max_william_r`
+  - `min_chip_benefit_ratio`
+  - `max_chip_benefit_ratio`
   - `limit`, bounded to `1..100`.
 - Service entry:
   `screen_local_stock_selection(..., session, symbols=None, market=None, ...)`
@@ -39,6 +47,9 @@
   - latest stored `DailyBar`;
   - latest stored `TechnicalIndicator` values;
   - latest stored `FundamentalSnapshot`.
+- Technical criteria may inspect stored scalar indicators (`rsi`, `mfi`,
+  `william_r`) and reviewed nested indicator payloads
+  (`candlestick_patterns.patterns[]`, `chip_distribution.benefit_ratio`).
 - At least one selection criterion is required. Empty criteria returns HTTP 400
   at the API boundary and an `invalid_request` service payload.
 - Missing local evidence must produce diagnostics and no fabricated match.
@@ -59,6 +70,10 @@
   `MISSING_FUNDAMENTALS`, no match.
 - Technical criterion requested but required indicator is missing -> diagnostic
   with `SELECTION_RULE_NOT_MATCHED` and `missing_value`, no match.
+- Required candlestick pattern code not present -> diagnostic
+  `SELECTION_RULE_NOT_MATCHED` with `missing_pattern_codes`, no match.
+- Missing nested chip-distribution payload or `benefit_ratio` -> diagnostic
+  `SELECTION_RULE_NOT_MATCHED` with `missing_value`, no match.
 - No stored daily bar -> diagnostic `MISSING_DAILY_BAR`, no match.
 - A criterion fails -> diagnostic `SELECTION_RULE_NOT_MATCHED`, no match.
 - Matching item -> include stored evidence citations and matched rule details.
@@ -68,6 +83,9 @@
 - Good: `/stock-selection/screen?symbols=AAPL&max_pe_ratio=30&min_rsi=40&max_rsi=70`
   returns AAPL when stored fundamentals and technical indicators satisfy all
   criteria.
+- Good: `/stock-selection/screen?symbols=AAPL&required_pattern_codes=hammer&min_mfi=50&max_william_r=-10&min_chip_benefit_ratio=0.6`
+  returns AAPL only when those stored technical-indicator payloads are present
+  and satisfy the thresholds.
 - Good: a symbol without fundamentals is skipped with diagnostics instead of a
   fake valuation metric.
 - Base: scanning by `market=US` without `symbols` uses stored active instruments
