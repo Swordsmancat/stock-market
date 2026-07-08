@@ -23,6 +23,10 @@ import { withProviderQuery } from "@/lib/market-data";
 import { getMarketMovementTextClass } from "@/lib/market-color-classes";
 import { DEFAULT_FAVORITE_MACRO_INDICATOR_CODES, getPlatformSettings } from "@/lib/platform-settings-store";
 import { backendFetch } from "@/lib/backend-api";
+import type {
+  OfficialMacroSourceStatusPayload,
+  OfficialMacroSourceStatusProvider,
+} from "@/lib/market-overview-payload";
 
 type Instrument = {
   symbol: string;
@@ -434,6 +438,18 @@ const DASHBOARD_HEALTH_SAMPLE_LIMIT = 25;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const FALLBACK_DASHBOARD_LOCALE = "en-US";
 const OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS = 5000;
+const FRED_OFFICIAL_MACRO_CODES = new Set([
+  "us_10y_yield",
+  "us_2y_yield",
+  "us_10y_2y_spread",
+  "us_cpi_yoy",
+  "us_m2_yoy",
+]);
+const WORLD_BANK_BUFFETT_CODES = new Set([
+  "buffett_indicator_us",
+  "buffett_indicator_cn",
+  "buffett_indicator_hk",
+]);
 
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
@@ -821,6 +837,13 @@ function buildFavoriteMacroIndicatorRows(
     .map((item) => ({ code: item.code, item }));
 }
 
+function getOfficialMacroProviderStatus(
+  payload: OfficialMacroSourceStatusPayload | null,
+  provider: "fred" | "world_bank",
+): OfficialMacroSourceStatusProvider | null {
+  return payload?.providers.find((item) => item.provider === provider) ?? null;
+}
+
 export default async function HomePage({
   params,
   searchParams = Promise.resolve({}),
@@ -873,6 +896,7 @@ export default async function HomePage({
     watchlistPayload,
     alertTriggersPayload,
     marketOverviewResult,
+    officialMacroSourceStatusPayload,
   ] =
     await Promise.all([
       fetchOptionalJson<LatestBarPayload>(
@@ -921,6 +945,10 @@ export default async function HomePage({
       fetchOptionalJson<WatchlistPayload>("/watchlist", { items: [] }),
       fetchOptionalJson<AlertTriggersPayload>("/alerts/triggers/recent?limit=5", { items: [] }),
       fetchMarketOverviewResult(provider),
+      fetchOptionalJson<OfficialMacroSourceStatusPayload | null>(
+        "/market-indicators/official-sources/status",
+        null,
+      ),
     ]);
 
   const latestClose =
@@ -951,6 +979,24 @@ export default async function HomePage({
     marketOverviewValuationItems,
     platformSettings.favorite_macro_indicator_codes,
   );
+  const fredOfficialSourceStatus = getOfficialMacroProviderStatus(officialMacroSourceStatusPayload, "fred");
+  const getFavoriteMacroNextAction = (code: string, item: DashboardValuationIndicatorItem | null): string | null => {
+    if (item?.status === "ok") {
+      return null;
+    }
+    if (FRED_OFFICIAL_MACRO_CODES.has(code)) {
+      return fredOfficialSourceStatus?.configured === false
+        ? t("favoriteMacroGuidanceFredConfigure")
+        : t("favoriteMacroGuidanceFredRefresh");
+    }
+    if (WORLD_BANK_BUFFETT_CODES.has(code)) {
+      return t("favoriteMacroGuidanceWorldBankRefresh");
+    }
+    if (code === "cn_m2_yoy") {
+      return t("favoriteMacroGuidanceManualChina");
+    }
+    return t("favoriteMacroGuidanceMacroResearch");
+  };
   const dashboardBrief = marketOverviewPayload?.dashboard_brief ?? null;
   const informationSources = marketOverviewPayload?.information_sources ?? null;
   const sourceStatusLabels: Record<string, string> = {
@@ -1345,6 +1391,7 @@ export default async function HomePage({
                           reason: item.no_data_reason ?? t("indicatorNoData"),
                         })
                     : t("favoriteMacroSourceGap", { reason: t("favoriteMacroPayloadMissing") });
+                  const nextAction = getFavoriteMacroNextAction(code, item);
                   return (
                     <div key={code} className="rounded-none border bg-background p-3">
                       <div className="flex items-start justify-between gap-2">
@@ -1379,6 +1426,12 @@ export default async function HomePage({
                         ) : null}
                       </div>
                       <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">{sourceOrGap}</p>
+                      {nextAction ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          <span className="font-semibold text-foreground">{t("favoriteMacroNextAction")}</span>{" "}
+                          {nextAction}
+                        </p>
+                      ) : null}
                     </div>
                   );
                 })}

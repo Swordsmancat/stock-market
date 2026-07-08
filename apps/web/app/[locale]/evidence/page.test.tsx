@@ -350,6 +350,63 @@ function createResearchSourceNotesPayload() {
   };
 }
 
+function createOfficialMacroSourceStatusPayload() {
+  return {
+    status: "needs_configuration",
+    generated_at: "2026-01-02T00:00:00+00:00",
+    citation_policy:
+      "Source status, configuration, links, and refresh diagnostics are guidance only.",
+    providers: [
+      {
+        provider: "fred",
+        label: "FRED US macro",
+        status: "needs_configuration",
+        configured: false,
+        can_refresh_from_browser: false,
+        credential_required: true,
+        credential_configured: false,
+        credential_label: "FRED_API_KEY",
+        base_url: "https://api.stlouisfed.org/fred",
+        source_url: "https://fred.stlouisfed.org/",
+        source_frequency: "daily_or_monthly",
+        freshness_policy:
+          "Treasury rates and spreads are daily business-day series; CPI and M2 YoY are monthly/source-release dependent.",
+        indicator_codes: ["us_10y_yield", "us_2y_yield", "us_10y_2y_spread", "us_cpi_yoy", "us_m2_yoy"],
+        evidence_count: 1,
+        latest_as_of: "2026-01-02",
+        missing_indicator_codes: ["us_2y_yield", "us_10y_2y_spread", "us_cpi_yoy", "us_m2_yoy"],
+        recommended_next_action: "Set FRED_API_KEY, then run a dry-run refresh from Macro Research.",
+        citation_policy:
+          "Source status, configuration, links, and refresh diagnostics are guidance only.",
+        collection_links: [],
+      },
+      {
+        provider: "world_bank",
+        label: "World Bank Buffett Indicator",
+        status: "degraded",
+        configured: true,
+        can_refresh_from_browser: true,
+        credential_required: false,
+        credential_configured: true,
+        credential_label: null,
+        base_url: "https://api.worldbank.org/v2",
+        source_url: "https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS",
+        source_frequency: "annual_lagged",
+        freshness_policy:
+          "World Bank market capitalization as percent of GDP is annual and lagged.",
+        indicator_codes: ["buffett_indicator_cn", "buffett_indicator_hk", "buffett_indicator_us"],
+        evidence_count: 0,
+        latest_as_of: null,
+        missing_indicator_codes: ["buffett_indicator_cn", "buffett_indicator_hk", "buffett_indicator_us"],
+        recommended_next_action: "Run World Bank dry-run, then write refresh.",
+        citation_policy:
+          "Source status, configuration, links, and refresh diagnostics are guidance only.",
+        collection_links: [],
+      },
+    ],
+  };
+}
+
 function createResearchBriefsPayload() {
   return {
     items: [
@@ -391,6 +448,9 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
     if (url.endsWith("/dashboard/market-overview?provider=yfinance")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
     }
+    if (url.endsWith("/market-indicators/official-sources/status")) {
+      return Promise.resolve(new Response(JSON.stringify(createOfficialMacroSourceStatusPayload())));
+    }
     if (url.endsWith("/research-source-notes?limit=50")) {
       return Promise.resolve(new Response(JSON.stringify(createResearchSourceNotesPayload())));
     }
@@ -419,6 +479,15 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   expect(screen.queryByText("No web refresh action")).not.toBeInTheDocument();
   expect(screen.getByText("FRED US macro")).toBeInTheDocument();
   expect(screen.getByText("World Bank Buffett Indicator")).toBeInTheDocument();
+  expect(screen.getByText("Needs configuration")).toBeInTheDocument();
+  expect(screen.getByText("Browser refresh blocked")).toBeInTheDocument();
+  expect(screen.getByText("FRED_API_KEY is missing.")).toBeInTheDocument();
+  expect(screen.getByText("Stored observations: 1")).toBeInTheDocument();
+  expect(screen.getByText(/Missing: us_2y_yield, us_10y_2y_spread/)).toBeInTheDocument();
+  expect(screen.getByText("No secret required.")).toBeInTheDocument();
+  expect(screen.getByText("Browser refresh ready")).toBeInTheDocument();
+  expect(screen.getByText(/Annual lagged World Bank context/)).toBeInTheDocument();
+  expect(screen.getAllByText(/Status rows, links, and diagnostics are guidance only/).length).toBeGreaterThan(0);
   expect(screen.getAllByRole("button", { name: "Run dry-run" })).toHaveLength(2);
   expect(screen.getAllByRole("button", { name: "Write observations" })).toHaveLength(2);
   expect(screen.getAllByText(/Write refresh stores audited local observations/)).toHaveLength(2);

@@ -13,6 +13,7 @@ from packages.services.market_indicators import (
     MarketIndicatorSeedImportError,
     MarketIndicatorSeedOverwriteRequiredError,
     WorldBankMacroRefreshResult,
+    get_official_macro_source_status_payload,
     import_market_indicator_observation_seed_content,
     preview_market_indicator_observation_seed_content,
     refresh_fred_macro_indicators,
@@ -171,6 +172,13 @@ def refresh_fred_official_macro_indicators(
         result=result,
         cache=_cache_payload(should_clear=not result.dry_run and result.observations > 0),
     )
+
+
+@router.get("/official-sources/status")
+def get_official_macro_source_status(
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return get_official_macro_source_status_payload(session=session)
 
 
 @router.post("/official-refresh/world-bank")

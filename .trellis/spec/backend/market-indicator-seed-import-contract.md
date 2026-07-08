@@ -383,6 +383,122 @@ payload["information_sources"]["source_capabilities"] = get_china_macro_source_c
 
 The matrix is additive decision metadata. It can guide the next adapter task, but AI may cite China macro values only after a follow-up adapter or audited seed import stores local `MarketIndicatorObservation` rows.
 
+## Scenario: Official Macro Source Status Projection
+
+### 1. Scope / Trigger
+
+- Trigger: displaying official macro source configuration, browser-refresh readiness, local observation coverage, and homepage missing-favorite guidance.
+- Applies to `packages/services/market_indicators.py`, `apps/api/routers/market_indicators.py`, and server-rendered frontend consumers of `/market-indicators/official-sources/status`.
+- The projection is personal research workflow guidance. It is not refresh-run history, a scheduler, a trading signal, or a new AI citation source.
+
+### 2. Signatures
+
+- Service projection:
+  - `get_official_macro_source_status_payload(session: Session) -> dict[str, object]`
+- FastAPI endpoint:
+  - `GET /market-indicators/official-sources/status`
+- Relevant environment-backed settings:
+  - `FRED_API_KEY`
+  - `FRED_API_BASE_URL`
+  - `WORLD_BANK_API_BASE_URL`
+
+### 3. Contracts
+
+The response must include:
+
+- top-level `status`, `generated_at`, `providers`, and `citation_policy`.
+- one provider row for `fred`.
+- one provider row for `world_bank`.
+
+Provider rows must serialize:
+
+- `provider`
+- `label`
+- `status`: `ok`, `degraded`, `needs_configuration`, or a future additive status.
+- `configured`
+- `can_refresh_from_browser`
+- `credential_required`
+- `credential_configured`
+- `credential_label`
+- `base_url`
+- `source_url`
+- `source_frequency`
+- `freshness_policy`
+- `indicator_codes`
+- `evidence_count`
+- `latest_as_of`
+- `missing_indicator_codes`
+- `recommended_next_action`
+- `citation_policy`
+- `collection_links`
+
+FRED covers:
+
+- `us_10y_yield`
+- `us_2y_yield`
+- `us_10y_2y_spread`
+- `us_cpi_yoy`
+- `us_m2_yoy`
+
+World Bank covers:
+
+- `buffett_indicator_cn`
+- `buffett_indicator_hk`
+- `buffett_indicator_us`
+
+FRED status must report whether `FRED_API_KEY` is configured without exposing the key. World Bank status must report `credential_required=false` and annual/lagged semantics.
+
+### 4. Validation & Error Matrix
+
+| Condition | Behavior |
+|---|---|
+| `FRED_API_KEY` missing or blank | FRED provider `status=needs_configuration`, `configured=false`, `can_refresh_from_browser=false`; no network call. |
+| FRED key configured but some covered indicators lack local observations | FRED provider `status=degraded`; list missing indicator codes. |
+| All FRED covered indicators have local observations and key is configured | FRED provider `status=ok`. |
+| World Bank covered indicators missing local observations | World Bank provider `status=degraded`; list missing Buffett regions. |
+| All World Bank covered indicators have local observations | World Bank provider `status=ok`. |
+| Local observations exist but the official provider is not configured | Evidence count/latest date still reflect local observations, but browser refresh remains blocked. |
+| Any secret value is present in settings | Response must include only configured booleans and labels, never the secret value. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: FRED key is missing and one old `us_10y_yield` observation exists; status still blocks browser refresh while showing the local evidence count and latest date.
+- Good: World Bank has no secret requirement and explains annual lag for Buffett Indicator context.
+- Base: no observations exist; both providers return missing code lists and no fabricated values.
+- Bad: status rows, collection links, base URLs, or dry-run diagnostics are added to dashboard or assistant citations.
+- Bad: a missing FRED key hides already stored local observations.
+- Bad: the status endpoint stores refresh attempts or mutates indicator observations.
+
+### 6. Tests Required
+
+- Service tests assert FRED configured/unconfigured states, World Bank no-secret state, evidence counts, latest as-of dates, missing code lists, and no secret leakage.
+- API tests assert `GET /market-indicators/official-sources/status` returns the projection through the session dependency.
+- Frontend tests assert Macro Research renders provider readiness beside refresh controls and homepage missing favorite cards show source-specific next actions.
+- Dashboard/assistant tests must continue to assert source readiness/status rows are not AI citations.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+return {
+    "provider": "fred",
+    "api_key": settings.fred_api_key,
+    "last_refresh_status": "failed",
+    "citation_id": "source_status:fred",
+}
+```
+
+This leaks a secret, invents durable refresh history, and makes guidance look citeable.
+
+#### Correct
+
+```python
+payload = get_official_macro_source_status_payload(session=session)
+```
+
+The projection is read-only, exposes safe configuration booleans, derives freshness from stored observations, and keeps status guidance outside AI citations.
+
 ## Scenario: Official FRED Macro Observation Refresh
 
 ### 1. Scope / Trigger

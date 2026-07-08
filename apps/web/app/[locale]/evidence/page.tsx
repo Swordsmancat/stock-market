@@ -52,6 +52,8 @@ import {
   type InformationSourcesPayload,
   type MarketOverviewIndicatorItem,
   type MarketOverviewPayload,
+  type OfficialMacroSourceStatusPayload,
+  type OfficialMacroSourceStatusProvider,
   type ResearchFollowUpQueueItem,
   type ResearchFollowUpQueuePayload,
 } from "@/lib/market-overview-payload";
@@ -74,6 +76,10 @@ type ResearchSourceNotesLoadResult =
 type ResearchBriefsLoadResult =
   | { status: "loaded"; items: ResearchBriefPayload[] }
   | { status: "failed"; items: [] };
+
+type OfficialMacroSourceStatusLoadResult =
+  | { status: "loaded"; payload: OfficialMacroSourceStatusPayload }
+  | { status: "failed"; payload: null };
 
 type IndicatorEvidenceState =
   | "ai_citable"
@@ -116,6 +122,24 @@ async function fetchMarketOverview(provider: string): Promise<MarketOverviewLoad
     };
   } catch {
     return { status: "failed" };
+  }
+}
+
+async function fetchOfficialMacroSourceStatus(): Promise<OfficialMacroSourceStatusLoadResult> {
+  try {
+    const response = await backendFetch("/market-indicators/official-sources/status", {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      return { status: "failed", payload: null };
+    }
+
+    return {
+      status: "loaded",
+      payload: (await response.json()) as OfficialMacroSourceStatusPayload,
+    };
+  } catch {
+    return { status: "failed", payload: null };
   }
 }
 
@@ -361,10 +385,156 @@ function badgeVariantForStatus(status: string): "secondary" | "outline" | "destr
   if (status === "ok" || status === "configured" || status === "ai_citable") {
     return "secondary";
   }
-  if (status === "no_local_evidence" || status === "no_data") {
+  if (status === "needs_configuration" || status === "no_local_evidence" || status === "no_data") {
     return "destructive";
   }
   return "outline";
+}
+
+function getOfficialMacroProviderStatus(
+  payload: OfficialMacroSourceStatusPayload | null,
+  provider: "fred" | "world_bank",
+): OfficialMacroSourceStatusProvider | null {
+  return payload?.providers.find((item) => item.provider === provider) ?? null;
+}
+
+function officialSourceStatusLabel(
+  status: string,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
+  const labels: Record<string, string> = {
+    ok: t("officialSourceStatusOk"),
+    degraded: t("officialSourceStatusDegraded"),
+    needs_configuration: t("officialSourceStatusNeedsConfiguration"),
+    manual_or_future: t("officialSourceStatusManualOrFuture"),
+  };
+  return labels[status] ?? status;
+}
+
+function officialSourceRefreshLabel(
+  sourceStatus: OfficialMacroSourceStatusProvider,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
+  return sourceStatus.can_refresh_from_browser
+    ? t("officialSourceBrowserReady")
+    : t("officialSourceBrowserBlocked");
+}
+
+function officialSourceCredentialLabel(
+  sourceStatus: OfficialMacroSourceStatusProvider,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
+  if (!sourceStatus.credential_required) {
+    return t("officialSourceCredentialNotRequired");
+  }
+
+  const credential = sourceStatus.credential_label ?? t("unavailableShort");
+  return sourceStatus.credential_configured
+    ? t("officialSourceCredentialConfigured", { credential })
+    : t("officialSourceCredentialMissing", { credential });
+}
+
+function officialSourceFreshnessPolicy(
+  sourceStatus: OfficialMacroSourceStatusProvider,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
+  return sourceStatus.provider === "world_bank"
+    ? t("officialSourceWorldBankFreshnessPolicy")
+    : t("officialSourceFredFreshnessPolicy");
+}
+
+function officialSourceNextAction(
+  sourceStatus: OfficialMacroSourceStatusProvider,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
+  const missingCount = sourceStatus.missing_indicator_codes?.length ?? 0;
+  if (sourceStatus.provider === "fred") {
+    return sourceStatus.configured
+      ? missingCount > 0
+        ? t("officialSourceFredRunRefresh")
+        : t("officialSourceFredUpToDate")
+      : t("officialSourceFredConfigure");
+  }
+
+  return missingCount > 0
+    ? t("officialSourceWorldBankRunRefresh")
+    : t("officialSourceWorldBankUpToDate");
+}
+
+function renderOfficialSourceStatusPanel(
+  sourceStatus: OfficialMacroSourceStatusProvider | null,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+  locale: string,
+) {
+  if (sourceStatus === null) {
+    return (
+      <div className="mt-4 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+        {t("officialSourceStatusUnavailable")}
+      </div>
+    );
+  }
+
+  const missingCodes = sourceStatus.missing_indicator_codes ?? [];
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid gap-2 text-xs md:grid-cols-2">
+        <div className="border bg-muted/20 p-2">
+          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceReadiness")}</div>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <Badge variant={badgeVariantForStatus(sourceStatus.status)}>
+              {officialSourceStatusLabel(sourceStatus.status, t)}
+            </Badge>
+            <Badge variant={sourceStatus.can_refresh_from_browser ? "secondary" : "outline"}>
+              {officialSourceRefreshLabel(sourceStatus, t)}
+            </Badge>
+          </div>
+        </div>
+        <div className="border bg-muted/20 p-2">
+          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceCredential")}</div>
+          <p className="mt-1">{officialSourceCredentialLabel(sourceStatus, t)}</p>
+          {sourceStatus.base_url ? (
+            <p className="mt-1 break-all text-muted-foreground">
+              {t("officialSourceBaseUrl", { url: sourceStatus.base_url })}
+            </p>
+          ) : null}
+        </div>
+        <div className="border bg-muted/20 p-2">
+          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceEvidence")}</div>
+          <p className="mt-1">
+            {t("officialSourceEvidenceCount", { count: sourceStatus.evidence_count })}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {t("officialSourceLatest", {
+              date: formatDate(sourceStatus.latest_as_of, locale, t("unavailableShort")),
+            })}
+          </p>
+        </div>
+        <div className="border bg-muted/20 p-2">
+          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceCoverage")}</div>
+          <p className="mt-1 break-words font-mono">{sourceStatus.indicator_codes.join(", ")}</p>
+          {missingCodes.length > 0 ? (
+            <p className="mt-1 break-words text-muted-foreground">
+              {t("officialSourceMissingCodes", { codes: missingCodes.join(", ") })}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="border bg-muted/20 p-3 text-xs text-muted-foreground">
+        <p>
+          <span className="font-semibold text-foreground">{t("officialSourceNextAction")}</span>{" "}
+          {officialSourceNextAction(sourceStatus, t)}
+        </p>
+        <p className="mt-1">
+          <span className="font-semibold text-foreground">{t("officialSourceFreshness")}</span>{" "}
+          {officialSourceFreshnessPolicy(sourceStatus, t)}
+        </p>
+        <p className="mt-1">
+          <span className="font-semibold text-foreground">{t("officialSourceCitationBoundary")}</span>{" "}
+          {t("officialSourceCitationPolicy")}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function renderMetric(label: string, value: string | number, description: string) {
@@ -404,6 +574,7 @@ function renderOfficialRefreshPanel({
   sourceItems,
   sourceStatusLabels,
   unavailableLabel,
+  statusPanel,
   actions,
 }: {
   title: string;
@@ -419,6 +590,7 @@ function renderOfficialRefreshPanel({
   sourceItems: InformationSourceItem[];
   sourceStatusLabels: Record<string, string>;
   unavailableLabel: string;
+  statusPanel?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
@@ -430,6 +602,7 @@ function renderOfficialRefreshPanel({
         </div>
         <Badge variant={coverage.missingCount === 0 ? "secondary" : "outline"}>{coverageLabel}</Badge>
       </div>
+      {statusPanel}
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
         <div className="border bg-muted/20 p-2">
           <div className="text-xs font-semibold uppercase text-muted-foreground">{commandLabel}</div>
@@ -458,6 +631,7 @@ function renderOfficialRefreshPanel({
 function renderOfficialRefreshGuidance(
   indicators: MarketOverviewIndicatorItem[],
   informationSources: InformationSourcesPayload | null,
+  officialSourceStatus: OfficialMacroSourceStatusPayload | null,
   t: Awaited<ReturnType<typeof getTranslations>>,
   locale: string,
   sourceStatusLabels: Record<string, string>,
@@ -467,6 +641,8 @@ function renderOfficialRefreshGuidance(
   const worldBankCoverage = getRefreshCoverage(indicators, WORLD_BANK_BUFFETT_REFRESH_CODES);
   const fredSources = getSourcesByIds(informationSources, FRED_OFFICIAL_SOURCE_IDS);
   const worldBankSources = getSourcesByIds(informationSources, WORLD_BANK_OFFICIAL_SOURCE_IDS);
+  const fredSourceStatus = getOfficialMacroProviderStatus(officialSourceStatus, "fred");
+  const worldBankSourceStatus = getOfficialMacroProviderStatus(officialSourceStatus, "world_bank");
   const actionLabels = buildOfficialMacroRefreshLabels(t);
 
   return (
@@ -503,6 +679,7 @@ function renderOfficialRefreshGuidance(
             sourceItems: fredSources,
             sourceStatusLabels,
             unavailableLabel,
+            statusPanel: renderOfficialSourceStatusPanel(fredSourceStatus, t, locale),
             actions: (
               <OfficialMacroRefreshActions
                 endpoint="/api/market-indicators/official-refresh/fred"
@@ -530,6 +707,7 @@ function renderOfficialRefreshGuidance(
             sourceItems: worldBankSources,
             sourceStatusLabels,
             unavailableLabel,
+            statusPanel: renderOfficialSourceStatusPanel(worldBankSourceStatus, t, locale),
             actions: (
               <OfficialMacroRefreshActions
                 endpoint="/api/market-indicators/official-refresh/world-bank"
@@ -985,8 +1163,9 @@ export default async function EvidenceCenterPage({
   ]);
   const locale = getSafeLocale(requestedLocale);
   const provider = query.provider?.trim() || platformSettings.market_data_provider;
-  const [marketOverviewResult, researchSourceNotesResult, researchBriefsResult] = await Promise.all([
+  const [marketOverviewResult, officialSourceStatusResult, researchSourceNotesResult, researchBriefsResult] = await Promise.all([
     fetchMarketOverview(provider),
+    fetchOfficialMacroSourceStatus(),
     fetchResearchSourceNotes(),
     fetchResearchBriefs(),
   ]);
@@ -1012,6 +1191,8 @@ export default async function EvidenceCenterPage({
   const indicators = getIndicatorItems(payload);
   const dashboardBrief = payload.dashboard_brief ?? null;
   const informationSources = payload.information_sources ?? null;
+  const officialSourceStatus =
+    officialSourceStatusResult.status === "loaded" ? officialSourceStatusResult.payload : null;
   const sourceGroups = getSourceGroups(informationSources);
   const sourceTargetOptions = buildNotebookSourceTargets(informationSources);
   const citableIndicatorCount = countCitableIndicators(indicators);
@@ -1067,7 +1248,14 @@ export default async function EvidenceCenterPage({
         )}
       </section>
 
-      {renderOfficialRefreshGuidance(indicators, informationSources, t, locale, sourceStatusLabels)}
+      {renderOfficialRefreshGuidance(
+        indicators,
+        informationSources,
+        officialSourceStatus,
+        t,
+        locale,
+        sourceStatusLabels,
+      )}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <Card className="border-primary/20">

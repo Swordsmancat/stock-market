@@ -308,6 +308,47 @@ function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", marke
   };
 }
 
+function createOfficialMacroSourceStatusPayload() {
+  return {
+    status: "needs_configuration",
+    generated_at: "2026-01-02T00:00:00+00:00",
+    providers: [
+      {
+        provider: "fred",
+        label: "FRED US macro",
+        status: "needs_configuration",
+        configured: false,
+        can_refresh_from_browser: false,
+        credential_required: true,
+        credential_configured: false,
+        credential_label: "FRED_API_KEY",
+        base_url: "https://api.stlouisfed.org/fred",
+        source_frequency: "daily_or_monthly",
+        indicator_codes: ["us_10y_yield", "us_2y_yield", "us_10y_2y_spread", "us_cpi_yoy", "us_m2_yoy"],
+        evidence_count: 1,
+        latest_as_of: "2026-01-02",
+        missing_indicator_codes: ["us_2y_yield", "us_10y_2y_spread", "us_cpi_yoy", "us_m2_yoy"],
+      },
+      {
+        provider: "world_bank",
+        label: "World Bank Buffett Indicator",
+        status: "degraded",
+        configured: true,
+        can_refresh_from_browser: true,
+        credential_required: false,
+        credential_configured: true,
+        credential_label: null,
+        base_url: "https://api.worldbank.org/v2",
+        source_frequency: "annual_lagged",
+        indicator_codes: ["buffett_indicator_us", "buffett_indicator_cn", "buffett_indicator_hk"],
+        evidence_count: 0,
+        latest_as_of: null,
+        missing_indicator_codes: ["buffett_indicator_us", "buffett_indicator_cn", "buffett_indicator_hk"],
+      },
+    ],
+  };
+}
+
 it("renders stock analysis dashboard data from backend APIs", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
@@ -563,6 +604,9 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     if (url.includes("/dashboard/market-overview")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
     }
+    if (url.includes("/market-indicators/official-sources/status")) {
+      return Promise.resolve(new Response(JSON.stringify(createOfficialMacroSourceStatusPayload())));
+    }
     if (url.includes("/api/ingestion/snapshot")) {
       return Promise.resolve(
         new Response(
@@ -653,6 +697,10 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getByText("Code: buffett_indicator_us")).toBeInTheDocument();
   expect(screen.getByText("Code: buffett_indicator_cn")).toBeInTheDocument();
   expect(screen.getAllByText(/Source gap: No audited observation has been seeded for this indicator yet/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Next:").length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Configure FRED_API_KEY/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/World Bank refresh; values are annual and lagged/).length).toBeGreaterThan(0);
+  expect(screen.getByText(/Use Macro Research for reviewed manual seed/)).toBeInTheDocument();
   expect(screen.getByText("Information source readiness")).toBeInTheDocument();
   expect(screen.getByText("FRED US Treasury rates")).toBeInTheDocument();
   expect(screen.getByText("Needs adapter")).toBeInTheDocument();

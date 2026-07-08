@@ -132,6 +132,39 @@ export type InformationSourcesPayload = {
   };
 };
 
+export type OfficialMacroSourceStatusProvider = {
+  provider: "fred" | "world_bank" | string;
+  label: string;
+  status: "ok" | "degraded" | "needs_configuration" | "manual_or_future" | string;
+  configured: boolean;
+  can_refresh_from_browser?: boolean;
+  credential_required: boolean;
+  credential_configured?: boolean;
+  credential_label?: string | null;
+  base_url?: string | null;
+  source_url?: string | null;
+  source_frequency?: string | null;
+  freshness_policy?: string | null;
+  indicator_codes: string[];
+  evidence_count: number;
+  latest_as_of?: string | null;
+  missing_indicator_codes?: string[];
+  recommended_next_action?: string | null;
+  citation_policy?: string | null;
+  collection_links?: Array<{
+    label: string;
+    url: string;
+  }>;
+  browser_refresh_note?: string | null;
+};
+
+export type OfficialMacroSourceStatusPayload = {
+  status: "ok" | "degraded" | "needs_configuration" | string;
+  generated_at: string;
+  providers: OfficialMacroSourceStatusProvider[];
+  citation_policy?: string | null;
+};
+
 export type ResearchFollowUpQueueItem = {
   id: string;
   kind: "source_review" | "seed_prep" | "ai_summary_question" | "source_gap" | "research_note" | string;

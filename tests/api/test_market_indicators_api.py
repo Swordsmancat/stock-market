@@ -171,6 +171,45 @@ def test_market_indicator_seed_import_api_requires_overwrite_acknowledgement(mon
     assert get_latest_market_indicator_payload("us_10y_yield", session=session)["value"] == 4.31
 
 
+def test_official_macro_source_status_api_returns_readiness_without_secret(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr("packages.services.market_indicators.settings.fred_api_key", "SECRET_FRED_TOKEN")
+    seed_market_indicators(session=session)
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="us_10y_yield",
+            as_of=date(2026, 7, 3),
+            value=Decimal("4.250000"),
+            source="Audited seed: FRED DGS10",
+            components={
+                "source_series_id": "DGS10",
+                "source_url": "https://fred.stlouisfed.org/series/DGS10",
+                "methodology": "Daily 10-year Treasury constant maturity rate.",
+            },
+        ),
+        session=session,
+    )
+
+    client = with_test_client(session)
+    try:
+        response = client.get("/market-indicators/official-sources/status")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    providers = {provider["provider"]: provider for provider in payload["providers"]}
+    assert "SECRET_FRED_TOKEN" not in json.dumps(payload)
+    assert payload["status"] == "degraded"
+    assert providers["fred"]["configured"] is True
+    assert providers["fred"]["credential_label"] == "FRED_API_KEY"
+    assert providers["fred"]["evidence_count"] == 1
+    assert providers["fred"]["latest_as_of"] == "2026-07-03"
+    assert providers["world_bank"]["credential_required"] is False
+    assert providers["world_bank"]["configured"] is True
+    assert providers["world_bank"]["source_frequency"] == "annual_lagged"
+
+
 def test_fred_official_refresh_api_dry_run_forwards_without_clearing_cache(monkeypatch):
     session = make_session()
     calls = {}

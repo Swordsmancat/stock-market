@@ -307,6 +307,20 @@ WORLD_BANK_BUFFETT_TARGETS: tuple[WorldBankMacroTarget, ...] = (
     ),
 )
 
+FRED_OFFICIAL_MACRO_INDICATOR_CODES = tuple(target.target_code for target in FRED_MACRO_SERIES)
+WORLD_BANK_BUFFETT_INDICATOR_CODES = tuple(target.target_code for target in WORLD_BANK_BUFFETT_TARGETS)
+OFFICIAL_MACRO_SOURCE_CITATION_POLICY = (
+    "Source status, configuration, links, and refresh diagnostics are guidance only; "
+    "AI summaries may cite macro values only after validated observations are stored locally."
+)
+OFFICIAL_MACRO_SOURCE_BROWSER_REFRESH = "Browser dry-run and write refresh are available from Macro Research."
+FRED_OFFICIAL_MACRO_FRESHNESS_POLICY = (
+    "Treasury rates and spreads are daily business-day series; CPI and M2 YoY are monthly/source-release dependent."
+)
+WORLD_BANK_BUFFETT_FRESHNESS_POLICY = (
+    "World Bank market capitalization as percent of GDP is annual and lagged; do not infer current-year values."
+)
+
 
 def parse_market_indicator_observation_seed_file(
     path: str | Path,
@@ -1699,3 +1713,160 @@ def get_buffett_indicator_payloads(session: Session) -> list[dict[str, object]]:
 def get_macro_indicator_payloads(session: Session) -> list[dict[str, object]]:
     seed_market_indicators(session=session)
     return [get_latest_market_indicator_payload(code, session=session) for code in MACRO_INDICATOR_CODES]
+
+
+def _observation_evidence_summary(
+    *,
+    indicator_codes: tuple[str, ...],
+    session: Session,
+) -> dict[str, object]:
+    rows = (
+        session.query(MarketIndicator.code, MarketIndicatorObservation.as_of)
+        .join(MarketIndicatorObservation, MarketIndicatorObservation.indicator_id == MarketIndicator.id)
+        .filter(MarketIndicator.code.in_(indicator_codes))
+        .all()
+    )
+    observed_codes = {str(code) for code, _as_of in rows}
+    latest_as_of = max((as_of for _code, as_of in rows), default=None)
+
+    return {
+        "evidence_count": len(rows),
+        "latest_as_of": latest_as_of.isoformat() if latest_as_of is not None else None,
+        "missing_indicator_codes": [
+            code for code in indicator_codes if code not in observed_codes
+        ],
+    }
+
+
+def _official_provider_status(
+    *,
+    configured: bool,
+    missing_indicator_codes: list[str],
+) -> str:
+    if not configured:
+        return "needs_configuration"
+    if missing_indicator_codes:
+        return "degraded"
+    return "ok"
+
+
+def _official_macro_source_overall_status(providers: list[dict[str, object]]) -> str:
+    statuses = {str(provider["status"]) for provider in providers}
+    if "needs_configuration" in statuses:
+        return "needs_configuration"
+    if statuses == {"ok"}:
+        return "ok"
+    return "degraded"
+
+
+def _fred_collection_links() -> list[dict[str, str]]:
+    return [
+        {
+            "label": f"FRED {target.series_id}",
+            "url": FRED_SERIES_URL_TEMPLATE.format(series_id=target.series_id),
+        }
+        for target in FRED_MACRO_SERIES
+    ]
+
+
+def _world_bank_collection_links() -> list[dict[str, str]]:
+    return [
+        {
+            "label": f"World Bank {target.country_code} {target.indicator_id}",
+            "url": WORLD_BANK_INDICATOR_PAGE_URL_TEMPLATE.format(
+                indicator_id=target.indicator_id,
+                country_code=target.country_code,
+            ),
+        }
+        for target in WORLD_BANK_BUFFETT_TARGETS
+    ]
+
+
+def get_official_macro_source_status_payload(session: Session) -> dict[str, object]:
+    """Return non-citable readiness guidance for official macro refresh sources."""
+    fred_evidence = _observation_evidence_summary(
+        indicator_codes=FRED_OFFICIAL_MACRO_INDICATOR_CODES,
+        session=session,
+    )
+    world_bank_evidence = _observation_evidence_summary(
+        indicator_codes=WORLD_BANK_BUFFETT_INDICATOR_CODES,
+        session=session,
+    )
+    fred_missing_codes = list(fred_evidence["missing_indicator_codes"])
+    world_bank_missing_codes = list(world_bank_evidence["missing_indicator_codes"])
+    fred_key_configured = bool((settings.fred_api_key or "").strip())
+
+    fred_status = _official_provider_status(
+        configured=fred_key_configured,
+        missing_indicator_codes=fred_missing_codes,
+    )
+    world_bank_status = _official_provider_status(
+        configured=True,
+        missing_indicator_codes=world_bank_missing_codes,
+    )
+
+    providers: list[dict[str, object]] = [
+        {
+            "provider": "fred",
+            "label": "FRED US macro",
+            "status": fred_status,
+            "configured": fred_key_configured,
+            "can_refresh_from_browser": fred_key_configured,
+            "credential_required": True,
+            "credential_configured": fred_key_configured,
+            "credential_label": "FRED_API_KEY",
+            "base_url": settings.fred_api_base_url,
+            "source_url": "https://fred.stlouisfed.org/",
+            "source_frequency": "daily_or_monthly",
+            "freshness_policy": FRED_OFFICIAL_MACRO_FRESHNESS_POLICY,
+            "indicator_codes": list(FRED_OFFICIAL_MACRO_INDICATOR_CODES),
+            "evidence_count": fred_evidence["evidence_count"],
+            "latest_as_of": fred_evidence["latest_as_of"],
+            "missing_indicator_codes": fred_missing_codes,
+            "recommended_next_action": (
+                "Set FRED_API_KEY, then run a dry-run refresh from Macro Research."
+                if not fred_key_configured
+                else (
+                    "Run FRED dry-run, then write refresh to store validated local observations."
+                    if fred_missing_codes
+                    else "Local FRED observations exist for all covered indicators; refresh after source releases."
+                )
+            ),
+            "citation_policy": OFFICIAL_MACRO_SOURCE_CITATION_POLICY,
+            "collection_links": _fred_collection_links(),
+            "browser_refresh_note": OFFICIAL_MACRO_SOURCE_BROWSER_REFRESH,
+        },
+        {
+            "provider": "world_bank",
+            "label": "World Bank Buffett Indicator",
+            "status": world_bank_status,
+            "configured": True,
+            "can_refresh_from_browser": True,
+            "credential_required": False,
+            "credential_configured": True,
+            "credential_label": None,
+            "base_url": settings.world_bank_api_base_url,
+            "source_url": "https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS",
+            "source_frequency": "annual_lagged",
+            "freshness_policy": WORLD_BANK_BUFFETT_FRESHNESS_POLICY,
+            "indicator_codes": list(WORLD_BANK_BUFFETT_INDICATOR_CODES),
+            "evidence_count": world_bank_evidence["evidence_count"],
+            "latest_as_of": world_bank_evidence["latest_as_of"],
+            "missing_indicator_codes": world_bank_missing_codes,
+            "recommended_next_action": (
+                "Run World Bank dry-run, then write refresh for missing Buffett Indicator regions."
+                if world_bank_missing_codes
+                else "Local World Bank observations exist for all covered Buffett Indicator regions."
+            ),
+            "citation_policy": OFFICIAL_MACRO_SOURCE_CITATION_POLICY,
+            "collection_links": _world_bank_collection_links(),
+            "browser_refresh_note": OFFICIAL_MACRO_SOURCE_BROWSER_REFRESH,
+        },
+    ]
+
+    return {
+        "status": _official_macro_source_overall_status(providers),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "providers": providers,
+        "citation_policy": OFFICIAL_MACRO_SOURCE_CITATION_POLICY,
+    }

@@ -17,6 +17,7 @@ from packages.services.market_indicators import (
     MarketIndicatorSeedOverwriteRequiredError,
     get_latest_market_indicator_payload,
     get_macro_indicator_payloads,
+    get_official_macro_source_status_payload,
     import_market_indicator_observation_seed_content,
     import_market_indicator_observation_seed_file,
     parse_market_indicator_observation_seed_content,
@@ -139,6 +140,91 @@ def test_get_macro_indicator_payloads_includes_audited_observation_metadata():
     assert payload_by_code["us_10y_yield"]["value"] == 4.25
     assert payload_by_code["us_10y_yield"]["source"] == "Audited seed: FRED DGS10"
     assert payload_by_code["us_10y_yield"]["components"]["source_series_id"] == "DGS10"
+
+
+def test_official_macro_source_status_reports_configuration_without_secret(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr("packages.services.market_indicators.settings.fred_api_key", "SECRET_FRED_TOKEN")
+
+    payload = get_official_macro_source_status_payload(session=session)
+    providers = {provider["provider"]: provider for provider in payload["providers"]}
+
+    assert payload["status"] == "degraded"
+    assert "SECRET_FRED_TOKEN" not in json.dumps(payload)
+    assert providers["fred"]["status"] == "degraded"
+    assert providers["fred"]["configured"] is True
+    assert providers["fred"]["credential_required"] is True
+    assert providers["fred"]["credential_configured"] is True
+    assert providers["fred"]["credential_label"] == "FRED_API_KEY"
+    assert providers["fred"]["indicator_codes"] == [
+        "us_10y_yield",
+        "us_2y_yield",
+        "us_10y_2y_spread",
+        "us_cpi_yoy",
+        "us_m2_yoy",
+    ]
+    assert providers["fred"]["evidence_count"] == 0
+    assert providers["fred"]["latest_as_of"] is None
+    assert providers["fred"]["missing_indicator_codes"] == providers["fred"]["indicator_codes"]
+    assert providers["world_bank"]["status"] == "degraded"
+    assert providers["world_bank"]["configured"] is True
+    assert providers["world_bank"]["credential_required"] is False
+    assert providers["world_bank"]["credential_configured"] is True
+    assert providers["world_bank"]["source_frequency"] == "annual_lagged"
+    assert "annual and lagged" in providers["world_bank"]["freshness_policy"]
+
+
+def test_official_macro_source_status_uses_local_observations_and_fred_blocker(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr("packages.services.market_indicators.settings.fred_api_key", "")
+    seed_market_indicators(session=session)
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="us_10y_yield",
+            as_of=date(2026, 7, 3),
+            value=Decimal("4.250000"),
+            source="Audited seed: FRED DGS10",
+            components={
+                "source_series_id": "DGS10",
+                "source_url": "https://fred.stlouisfed.org/series/DGS10",
+                "methodology": "Daily 10-year Treasury constant maturity rate.",
+            },
+        ),
+        session=session,
+    )
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="buffett_indicator_us",
+            as_of=date(2024, 12, 31),
+            value=Decimal("194.250000"),
+            source="World Bank CM.MKT.LCAP.GD.ZS USA",
+            components={
+                "provider": "world_bank",
+                "source_name": "World Bank",
+                "country_code": "USA",
+                "source_indicator_id": "CM.MKT.LCAP.GD.ZS",
+                "source_url": "https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS",
+                "methodology": "World Bank market capitalization as percent of GDP.",
+            },
+        ),
+        session=session,
+    )
+
+    payload = get_official_macro_source_status_payload(session=session)
+    providers = {provider["provider"]: provider for provider in payload["providers"]}
+
+    assert payload["status"] == "needs_configuration"
+    assert providers["fred"]["status"] == "needs_configuration"
+    assert providers["fred"]["configured"] is False
+    assert providers["fred"]["can_refresh_from_browser"] is False
+    assert providers["fred"]["evidence_count"] == 1
+    assert providers["fred"]["latest_as_of"] == "2026-07-03"
+    assert "us_10y_yield" not in providers["fred"]["missing_indicator_codes"]
+    assert "FRED_API_KEY" in providers["fred"]["recommended_next_action"]
+    assert providers["world_bank"]["status"] == "degraded"
+    assert providers["world_bank"]["evidence_count"] == 1
+    assert providers["world_bank"]["latest_as_of"] == "2024-12-31"
+    assert "buffett_indicator_us" not in providers["world_bank"]["missing_indicator_codes"]
 
 
 def test_import_market_indicator_observation_seed_file_accepts_json(tmp_path):
