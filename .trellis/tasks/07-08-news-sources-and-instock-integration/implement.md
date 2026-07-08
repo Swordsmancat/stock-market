@@ -125,3 +125,12 @@ git diff --check
 - [x] Keep all indicator values research-only and out of trading/order-intent boundaries.
 - [x] Add focused analytics, service, and API tests.
 - [x] Add runbook/spec coverage for no-TA-Lib/no-runtime-import/no-trading rules.
+
+## InStock Composite Stock Selection Slice
+
+- [x] Add a local evidence screener over stored instruments, daily bars, technical indicators, and fundamentals.
+- [x] Support first composite criteria: max PE, revenue growth, net margin, RSI range, and close above MA.
+- [x] Add `GET /stock-selection/screen` as a thin route over the service boundary.
+- [x] Return matched rule details, diagnostics, stored evidence citations, `research_signal_only=true`, and a non-advice disclaimer.
+- [x] Avoid live provider scans, persistence of selection results, InStock runtime imports, order intents, and buy/sell advice.
+- [x] Add focused service/API tests and backend spec/runbook coverage.

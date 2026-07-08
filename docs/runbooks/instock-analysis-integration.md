@@ -11,10 +11,12 @@ runtime dependency.
 - Implemented feature: stored `candlestick_patterns` technical indicator.
 - Implemented feature: stored `chip_distribution` technical indicator, inspired
   by InStock's CYQ / chip-distribution capability.
+- Implemented feature: research-only local composite stock selection API.
 - Implemented feature: research-only `GET /strategies/screen` strategy screening API.
 - Implemented feature: research-only `GET /strategies/evaluate` strategy evaluation API.
 - Rule set: `candlestick_patterns_v1`.
 - CYQ rule set: `chip_distribution_v1`.
+- Composite stock selection rule set: `instock_composite_selection_v1`.
 - First supported pattern codes:
   - `bullish_engulfing`
   - `bearish_engulfing`
@@ -58,6 +60,12 @@ boundary. They can be cited only as stored local technical indicators and, for
 CYQ, only with its approximation limitation. They must not be used to claim
 institution-grade cost concentration, predict support/resistance, or produce
 trading actions.
+
+`GET /stock-selection/screen` is a local evidence screener. It reads stored
+`Instrument`, `DailyBar`, `TechnicalIndicator`, and `FundamentalSnapshot` rows,
+then returns matched criteria and stored evidence citation IDs. The screener
+does not fetch live providers, does not persist selection results, and does not
+turn a match into a buy/sell/hold recommendation.
 
 Live calculations, InStock feature lists, and source-readiness notes are not AI
 citations by themselves. The citation boundary remains stored local evidence,
@@ -121,6 +129,29 @@ The first rules are adapted from InStock's strategy module shapes:
 
 These are not executable orders, backtest results, or validated trading strategies.
 
+## Composite Stock Selection API
+
+`GET /stock-selection/screen` screens local stored instruments against
+fundamental and technical criteria:
+
+```text
+GET /stock-selection/screen?symbols=AAPL,MSFT&max_pe_ratio=30&min_revenue_growth=0.1&min_rsi=40&max_rsi=70&require_price_above_ma=true
+```
+
+The first criteria are:
+
+- `max_pe_ratio`
+- `min_revenue_growth`
+- `min_net_margin`
+- `min_rsi`
+- `max_rsi`
+- `require_price_above_ma`
+
+At least one criterion is required. Missing local bars, fundamentals, or
+technical indicators produce diagnostics and no fabricated match. Returned
+`evidence_citations` point to stored rows used in the screen, while the
+selection result itself remains a research-only analysis payload.
+
 ## Strategy Evaluation API
 
 `GET /strategies/evaluate` scans historical bars for the same strategy screening
@@ -147,6 +178,7 @@ Use focused checks after changing this slice:
 pytest tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/api/test_indicators_db_api.py
 pytest tests/api/test_recommendations_api.py tests/services/test_recommendation_signal_evaluation.py
 pytest tests/services/test_strategy_screening.py tests/api/test_strategy_screening_api.py
-python -m ruff check packages/analytics/indicators.py packages/analytics/candlestick_patterns.py packages/analytics/chip_distribution.py packages/services/indicators.py packages/services/strategy_screening.py apps/api/routers/strategy_screening.py tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/services/test_strategy_screening.py tests/api/test_indicators_db_api.py tests/api/test_strategy_screening_api.py
+pytest tests/services/test_stock_selection.py tests/api/test_stock_selection_api.py
+python -m ruff check packages/analytics/indicators.py packages/analytics/candlestick_patterns.py packages/analytics/chip_distribution.py packages/services/indicators.py packages/services/strategy_screening.py packages/services/stock_selection.py apps/api/routers/strategy_screening.py apps/api/routers/stock_selection.py tests/analytics/test_indicators.py tests/services/test_indicator_persistence_service.py tests/services/test_strategy_screening.py tests/services/test_stock_selection.py tests/api/test_indicators_db_api.py tests/api/test_strategy_screening_api.py tests/api/test_stock_selection_api.py
 git diff --check
 ```

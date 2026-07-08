@@ -291,3 +291,21 @@ pure formulas from the broader InStock capability shape:
   `chip_distribution`;
 - avoid TA-Lib, InStock runtime imports, scheduler replacement, strategy
   execution, broker order intents, and any trading advice.
+
+## Follow-Up Slice: Composite Stock Selection
+
+The next non-trading InStock slice ports the "comprehensive stock selection"
+capability shape into a local evidence screener:
+
+- add `packages/services/stock_selection.py` to screen stored active instruments
+  against local fundamental and technical criteria;
+- add `GET /stock-selection/screen` as a thin FastAPI route;
+- use only stored `Instrument`, latest `DailyBar`, latest `TechnicalIndicator`,
+  and latest `FundamentalSnapshot` rows in the MVP;
+- support first criteria `max_pe_ratio`, `min_revenue_growth`, `min_net_margin`,
+  `min_rsi`, `max_rsi`, and `require_price_above_ma`;
+- return matched rule details, diagnostics, stored evidence citation IDs,
+  `research_signal_only=true`, and a non-advice disclaimer;
+- do not fetch live providers, persist selection results, import InStock's
+  MySQL/Tornado/web/trading runtime, generate order intents, or emit buy/sell
+  advice.
