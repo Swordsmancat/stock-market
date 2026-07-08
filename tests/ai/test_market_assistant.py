@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -12,6 +13,11 @@ from packages.ai.market_assistant import (
     build_deterministic_market_answer,
 )
 from packages.services import market_assistant as market_assistant_service
+from packages.services.market_indicators import (
+    MarketIndicatorObservationSeed,
+    seed_market_indicators,
+    upsert_market_indicator_observation,
+)
 from packages.services.research_source_notes import ResearchSourceNoteInput, create_research_source_note
 from packages.shared.database import Base
 
@@ -146,8 +152,114 @@ def test_market_assistant_prompt_requires_known_inline_citation_ids():
     prompt = build_market_assistant_prompt(context)
 
     assert "bars_1d:AAPL:2026-01-03" in prompt
+    assert "Macro context:" in prompt
     assert "Use inline citation IDs in square brackets" in prompt
     assert "use only citation IDs listed above" in prompt
+
+
+def test_market_assistant_includes_citable_macro_indicator_observations(monkeypatch):
+    session = make_session()
+    seed_market_indicators(session=session)
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="buffett_indicator_us",
+            as_of=date(2026, 1, 2),
+            value=Decimal("188.5"),
+            source="Audited seed: World Bank market cap and GDP",
+            components={
+                "source_url": "https://data.worldbank.org/indicator/CM.MKT.LCAP.GD.ZS",
+                "calculation": "Market capitalization divided by GDP.",
+                "review_note": "Reviewed for assistant macro context.",
+            },
+        ),
+        session=session,
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "AAPL",
+            "timeframe": "1d",
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "items": [
+                {"timestamp": "2026-01-01", "close": 100.0},
+                {"timestamp": "2026-01-03", "close": 105.0},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {
+            "llm_provider": "mock",
+            "llm_api_key": "",
+            "llm_api_base": "",
+            "favorite_macro_indicator_codes": ["buffett_indicator_us", "us_10y_yield"],
+        },
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="AAPL",
+        question="Summarize macro context.",
+        locale="en",
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 3),
+        provider_name="mock",
+        session=session,
+    )
+
+    citations_by_id = {citation["id"]: citation for citation in payload["citations"]}
+    macro_citation = citations_by_id["market_indicator:buffett_indicator_us:2026-01-02"]
+    assert macro_citation["source"] == "market_indicators"
+    assert macro_citation["source_type"] == "macro_indicator"
+    assert macro_citation["metadata"]["code"] == "buffett_indicator_us"
+    assert macro_citation["metadata"]["components"]["calculation"] == "Market capitalization divided by GDP."
+    assert "Buffett Indicator - United States=188.5%" in payload["context"]["macro_summary"]
+    assert "Buffett Indicator - United States=188.5%" in payload["answer_markdown"]
+    assert any(diagnostic.get("code") == "MACRO_INDICATOR_NO_DATA" for diagnostic in payload["diagnostics"])
+
+
+def test_market_assistant_reports_missing_macro_observations_without_citations(monkeypatch):
+    session = make_session()
+    seed_market_indicators(session=session)
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "AAPL",
+            "timeframe": "1d",
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "items": [
+                {"timestamp": "2026-01-01", "close": 100.0},
+                {"timestamp": "2026-01-03", "close": 105.0},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="AAPL",
+        question="Summarize macro context.",
+        locale="en",
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 3),
+        provider_name="mock",
+        session=session,
+    )
+
+    assert payload["context"]["macro_summary"] == "No stored macro indicator observations are available."
+    assert not any(citation.get("id", "").startswith("market_indicator:") for citation in payload["citations"])
+    assert any(diagnostic.get("code") == "MACRO_INDICATOR_NO_DATA" for diagnostic in payload["diagnostics"])
 
 
 def test_market_assistant_generates_research_evidence_citations_for_available_sources(monkeypatch):
@@ -441,6 +553,53 @@ def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):
     assert payload["model"]["used_llm"] is False
     assert payload["model"]["fallback_reason"] == "LLM citation validation failed: unknown citation id."
     assert any(diagnostic.get("code") == "CITATION_UNKNOWN_ID" for diagnostic in payload["diagnostics"])
+
+
+def test_market_assistant_detects_unknown_macro_indicator_llm_citation_ids(monkeypatch):
+    class HallucinatingProvider:
+        def generate(self, prompt: str) -> str:
+            return "### Summary\nUnsupported macro claim [market_indicator:buffett_indicator_us:2026-01-02]."
+
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "AAPL",
+            "timeframe": "1d",
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "items": [
+                {"timestamp": "2026-01-01", "close": 100.0},
+                {"timestamp": "2026-01-03", "close": 105.0},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "openai", "llm_api_key": "configured", "llm_api_base": ""},
+    )
+    monkeypatch.setattr(market_assistant_service, "get_llm_provider", lambda: HallucinatingProvider())
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="AAPL",
+        question="What changed recently?",
+        locale="en",
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 3),
+        provider_name="mock",
+        session=None,
+    )
+
+    assert payload["status"] == "degraded"
+    assert payload["model"]["used_llm"] is False
+    assert payload["model"]["fallback_reason"] == "LLM citation validation failed: unknown citation id."
+    citation_diagnostic = next(
+        diagnostic for diagnostic in payload["diagnostics"] if diagnostic.get("code") == "CITATION_UNKNOWN_ID"
+    )
+    assert citation_diagnostic["details"]["unknown_ids"] == ["market_indicator:buffett_indicator_us:2026-01-02"]
 
 
 def test_market_assistant_returns_no_data_without_llm(monkeypatch):

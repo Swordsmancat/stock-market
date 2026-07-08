@@ -63,6 +63,28 @@ export type AiResearchDiagnostic = {
   message?: string | null;
 };
 
+export type AiResearchOfficialSourceProvider = {
+  provider: string;
+  label: string;
+  status?: string | null;
+  configured?: boolean | null;
+  can_refresh_from_browser?: boolean | null;
+  credential_required?: boolean | null;
+  evidence_count?: number | null;
+  latest_as_of?: string | null;
+  source_frequency?: string | null;
+  indicator_codes?: string[] | null;
+  missing_indicator_codes?: string[] | null;
+  recommended_next_action?: string | null;
+  citation_policy?: string | null;
+};
+
+export type AiResearchOfficialSourceStatus = {
+  status?: string | null;
+  citation_policy?: string | null;
+  providers?: AiResearchOfficialSourceProvider[];
+};
+
 type AiResearchDeskProps = {
   locale: string;
   provider: string;
@@ -73,6 +95,7 @@ type AiResearchDeskProps = {
   recommendationStatus?: string | null;
   recommendationDiagnostics: AiResearchDiagnostic[];
   macroIndicators: AiResearchMacroIndicator[];
+  officialSourceStatus?: AiResearchOfficialSourceStatus | null;
   overviewDiagnostics: AiResearchDiagnostic[];
 };
 
@@ -99,6 +122,7 @@ export function AiResearchDesk({
   recommendationStatus = null,
   recommendationDiagnostics,
   macroIndicators,
+  officialSourceStatus = null,
   overviewDiagnostics,
 }: AiResearchDeskProps) {
   const t = useTranslations("AiResearchDesk");
@@ -118,6 +142,7 @@ export function AiResearchDesk({
     ? activeSymbol
     : selectedSymbols[0] ?? "";
   const prioritizedMacroIndicators = useMemo(() => prioritizeMacroIndicators(macroIndicators), [macroIndicators]);
+  const officialSourceProviders = officialSourceStatus?.providers ?? [];
   const sourceGaps = useMemo(
     () => buildSourceGaps(prioritizedMacroIndicators, overviewDiagnostics, recommendationDiagnostics),
     [overviewDiagnostics, prioritizedMacroIndicators, recommendationDiagnostics],
@@ -130,6 +155,12 @@ export function AiResearchDesk({
         symbol: activeSelectedSymbol,
         signal: activeSignal?.title ?? t("noActiveSignal"),
         macro: buildMacroQuestionContext(prioritizedMacroIndicators, t("macroUnavailable")),
+        sources: buildOfficialSourceQuestionContext(
+          officialSourceProviders,
+          t("sourceStatusNoAction"),
+          t("sourceStatusQuestionNoMissing"),
+          t("sourceStatusQuestionReview"),
+        ),
       })
     : "";
 
@@ -327,6 +358,10 @@ export function AiResearchDesk({
                 onActivateSymbol={setActiveSymbol}
               />
               <MacroContextPanel macroIndicators={prioritizedMacroIndicators.slice(0, DISPLAY_MACRO_LIMIT)} />
+              <OfficialSourceStatusPanel
+                providers={officialSourceProviders}
+                citationPolicy={officialSourceStatus?.citation_policy ?? null}
+              />
               <SourceGapPanel sourceGaps={sourceGaps.slice(0, DISPLAY_GAP_LIMIT)} />
             </div>
           </div>
@@ -527,6 +562,74 @@ function MacroContextPanel({ macroIndicators }: { macroIndicators: AiResearchMac
   );
 }
 
+function OfficialSourceStatusPanel({
+  providers,
+  citationPolicy,
+}: {
+  providers: AiResearchOfficialSourceProvider[];
+  citationPolicy?: string | null;
+}) {
+  const t = useTranslations("AiResearchDesk");
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("sourceStatusTitle")}</CardTitle>
+        <CardDescription>{t("sourceStatusDesc")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {providers.length > 0 ? (
+          <div className="space-y-2">
+            {providers.map((provider) => (
+              <div key={provider.provider} className="rounded-md border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{provider.label}</div>
+                    <div className="font-mono text-xs text-muted-foreground">{provider.provider}</div>
+                  </div>
+                  <Badge variant={provider.status === "ok" ? "secondary" : "outline"}>
+                    {formatSourceStatus(provider.status, t("unavailable"))}
+                  </Badge>
+                </div>
+                <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                  <div>
+                    {t("sourceStatusEvidence", {
+                      count: provider.evidence_count ?? 0,
+                    })}
+                  </div>
+                  <div>{t("sourceStatusLatest", { date: provider.latest_as_of ?? t("unavailable") })}</div>
+                  <div>
+                    {t("sourceStatusMissing", {
+                      codes: formatCodeList(provider.missing_indicator_codes, t("unavailable")),
+                    })}
+                  </div>
+                  <div>
+                    {provider.can_refresh_from_browser
+                      ? t("sourceStatusRefreshReady")
+                      : t("sourceStatusRefreshBlocked")}
+                  </div>
+                </div>
+                {provider.recommended_next_action ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t("sourceStatusNextAction", { action: provider.recommended_next_action })}
+                  </p>
+                ) : null}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t("sourceStatusCitationPolicy", {
+                    policy: provider.citation_policy ?? citationPolicy ?? t("unavailable"),
+                  })}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("sourceStatusUnavailable")}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SourceGapPanel({ sourceGaps }: { sourceGaps: AiResearchDiagnostic[] }) {
   const t = useTranslations("AiResearchDesk");
 
@@ -660,6 +763,23 @@ function buildMacroQuestionContext(indicators: AiResearchMacroIndicator[], fallb
   return contexts.length > 0 ? contexts.join("; ") : fallback;
 }
 
+function buildOfficialSourceQuestionContext(
+  providers: AiResearchOfficialSourceProvider[],
+  fallback: string,
+  noMissingCodesLabel: string,
+  reviewSourceStatusLabel: string,
+): string {
+  const contexts = providers
+    .filter((provider) => provider.status !== "ok" || (provider.missing_indicator_codes?.length ?? 0) > 0)
+    .slice(0, 2)
+    .map((provider) => {
+      const missingCodes = formatCodeList(provider.missing_indicator_codes, noMissingCodesLabel);
+      const action = provider.recommended_next_action ?? provider.status ?? reviewSourceStatusLabel;
+      return `${provider.label}: ${missingCodes}; ${action}`;
+    });
+  return contexts.length > 0 ? contexts.join("; ") : fallback;
+}
+
 function isMacroIndicatorCitable(indicator: AiResearchMacroIndicator): boolean {
   return indicator.value !== null && indicator.value !== undefined && Boolean(indicator.as_of) && Boolean(indicator.source);
 }
@@ -670,6 +790,17 @@ function formatMacroValue(indicator: AiResearchMacroIndicator, unavailableLabel:
   }
   const formattedValue = indicator.value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return indicator.unit ? `${formattedValue}${indicator.unit === "percent" ? "%" : ` ${indicator.unit}`}` : formattedValue;
+}
+
+function formatSourceStatus(status: string | null | undefined, unavailableLabel: string): string {
+  if (!status) {
+    return unavailableLabel;
+  }
+  return status.replaceAll("_", " ");
+}
+
+function formatCodeList(codes: string[] | null | undefined, fallback: string): string {
+  return codes && codes.length > 0 ? codes.join(", ") : fallback;
 }
 
 function formatSignalType(

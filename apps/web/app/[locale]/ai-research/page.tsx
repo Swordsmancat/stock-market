@@ -3,6 +3,7 @@ import {
   type AiResearchDiagnostic,
   type AiResearchFollowedItem,
   type AiResearchMacroIndicator,
+  type AiResearchOfficialSourceStatus,
   type AiResearchRecommendation,
   type AiResearchWatchlistItem,
 } from "@/components/ai-research-desk";
@@ -38,6 +39,8 @@ type RecommendationsPayload = {
   items?: AiResearchRecommendation[];
 };
 
+type OfficialSourceStatusPayload = AiResearchOfficialSourceStatus;
+
 type OptionalLoadResult<T> =
   | { status: "loaded"; payload: T }
   | { status: "failed" };
@@ -54,9 +57,10 @@ export default async function AiResearchPage({
   const settings = await getPlatformSettings();
   const provider = settings.market_data_provider;
 
-  const [watchlistResult, marketOverviewResult] = await Promise.all([
+  const [watchlistResult, marketOverviewResult, officialSourceStatusResult] = await Promise.all([
     fetchOptionalJson<WatchlistPayload>("/watchlist"),
     fetchOptionalJson<MarketOverviewPayload>(withProviderQuery("/dashboard/market-overview", provider)),
+    fetchOptionalJson<OfficialSourceStatusPayload>("/market-indicators/official-sources/status"),
   ]);
 
   const watchlistItems = watchlistResult.status === "loaded" ? watchlistResult.payload.items ?? [] : [];
@@ -83,6 +87,9 @@ export default async function AiResearchPage({
       recommendationStatus={recommendationsPayload?.status ?? null}
       recommendationDiagnostics={recommendationsPayload?.diagnostics ?? []}
       macroIndicators={getMacroIndicators(marketOverviewPayload)}
+      officialSourceStatus={
+        officialSourceStatusResult.status === "loaded" ? officialSourceStatusResult.payload : null
+      }
       overviewDiagnostics={[
         ...(marketOverviewResult.status === "failed"
           ? [

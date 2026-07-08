@@ -23,9 +23,10 @@
 
 - Daily bars remain the core evidence gate. If required market data is unavailable, the assistant must return `no_data` / degraded-safe output and avoid LLM generation.
 - Existing top-level response fields and old minimal citation payloads must remain backward compatible.
-- Evidence may come from existing platform sources only: daily bars, stored technical indicators, fundamentals snapshots, news / sentiment payloads, generated reports, and reviewed/citable research source notebook entries.
+- Evidence may come from existing platform sources only: daily bars, stored technical indicators, stored macro / valuation indicator observations, fundamentals snapshots, news / sentiment payloads, generated reports, and reviewed/citable research source notebook entries.
 - Missing optional sources must produce diagnostics, not fabricated evidence or fake citations.
-- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, or `research_source_note:{id}`.
+- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `market_indicator:{code}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, or `research_source_note:{id}`.
+- `market_indicator:*` citations are allowed only for stored local macro / valuation observations with value, as-of date, and source metadata. Official source status rows, collection links, seed templates, and missing indicator rows remain guidance or diagnostics only.
 - LLM prompts must list available citation IDs and instruct the model to use only those IDs.
 - LLM output citation IDs must be validated against the payload citations. Unknown IDs must produce `CITATION_UNKNOWN_ID` diagnostics and should fall back to deterministic output when needed.
 - Diagnostics may include safe severity/code metadata, but must not include API keys, prompt internals, stack traces, raw provider secrets, or hidden chain-of-thought.
@@ -35,8 +36,10 @@
 
 - Core daily bars unavailable -> response does not call LLM; returns no-data/degraded diagnostics.
 - Optional indicators/fundamentals/news/reports missing -> non-blocking diagnostics such as `SOURCE_NO_DATA` or `SOURCE_OMITTED`.
+- Optional macro / valuation indicators missing -> non-blocking `MACRO_INDICATOR_NO_DATA` diagnostics; no `market_indicator:*` citation is emitted until a local observation exists.
 - Source service failure -> sanitized `SOURCE_UNAVAILABLE` diagnostics; no raw secret or stack trace.
 - Draft or non-citable research source notes -> remain collection records; they are not included in allowed assistant citation IDs.
+- Official source readiness/status rows -> remain maintenance guidance; they are not included in allowed assistant citation IDs.
 - LLM returns unknown inline citation ID -> `CITATION_UNKNOWN_ID` diagnostic and degraded/fallback output; unknown citation is not presented as valid.
 - User asks for direct trading instruction -> assistant refuses/reframes per safety policy.
 - Old frontend payload with only `id`, `label`, `source`, `url` citations -> still renders.
@@ -44,16 +47,18 @@
 
 ### 5. Good/Base/Bad Cases
 
-- Good: daily bars, indicators, fundamentals, news, a generated report, and reviewed/citable source notebook entries are available; response contains deterministic citation IDs, optional metadata/excerpts, compact diagnostics, and an answer using only known citation IDs.
+- Good: daily bars, technical indicators, stored macro observations, fundamentals, news, a generated report, and reviewed/citable source notebook entries are available; response contains deterministic citation IDs, optional metadata/excerpts, compact diagnostics, and an answer using only known citation IDs.
 - Base: only daily bars are available; answer remains traceable to bars and diagnostics state missing optional sources.
 - Bad: a missing filing/transcript is represented as a live citation. These sources are not production integrations in this slice.
+- Bad: `fred`, `world_bank`, source-readiness IDs, collection links, or seed-template IDs are cited instead of stored `market_indicator:{code}:{as_of}` observations.
 - Bad: an LLM-invented citation ID is rendered as if it existed in `citations`.
 - Bad: direct buy/sell/hold advice, target prices, or position sizing is emitted because citations exist.
 
 ### 6. Tests Required
 
-- Service/AI tests assert citations are generated for available bars, indicators, fundamentals, news, generated reports, and reviewed/citable research source notes.
+- Service/AI tests assert citations are generated for available bars, indicators, stored macro observations, fundamentals, news, generated reports, and reviewed/citable research source notes.
 - Service tests assert missing optional evidence produces diagnostics rather than fabricated citation items.
+- Service tests assert missing macro observations produce diagnostics rather than fabricated `market_indicator:*` citation items.
 - AI tests assert unknown LLM citation IDs are detected and handled with diagnostics/fallback behavior.
 - API tests assert backward compatibility and enriched optional fields.
 - Frontend route/card tests assert citation links, metadata, diagnostic severity/code, and legacy rendering.
@@ -85,6 +90,31 @@ diagnostics.append({
     "message": "Production filings retrieval is not configured for this assistant slice.",
 })
 ```
+
+#### Wrong
+
+```python
+citations.append({
+    "id": "source_status:fred",
+    "label": "FRED US macro source",
+    "source": "official_source_status",
+})
+```
+
+This turns refresh readiness into evidence before a validated local macro observation exists.
+
+#### Correct
+
+```python
+citations.append({
+    "id": f"market_indicator:{code}:{as_of}",
+    "label": indicator_name,
+    "source": "market_indicators",
+    "source_type": "macro_indicator",
+})
+```
+
+This cites the stored local observation. Missing official-source coverage should be reported as diagnostics or UI guidance, not as an assistant citation.
 
 ## Scenario: Reviewed Source Notebook Citations
 

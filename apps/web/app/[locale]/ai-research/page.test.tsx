@@ -174,6 +174,45 @@ function createMarketOverviewPayload() {
   };
 }
 
+function createOfficialSourceStatusPayload() {
+  return {
+    status: "degraded",
+    citation_policy: "Only stored local macro observations are AI citations.",
+    providers: [
+      {
+        provider: "fred",
+        label: "FRED US macro",
+        status: "needs_configuration",
+        configured: false,
+        can_refresh_from_browser: false,
+        credential_required: true,
+        evidence_count: 1,
+        latest_as_of: "2026-01-02",
+        source_frequency: "daily_or_monthly",
+        indicator_codes: ["us_10y_yield", "us_cpi_yoy"],
+        missing_indicator_codes: ["us_cpi_yoy"],
+        recommended_next_action: "Set FRED_API_KEY, then run a dry-run refresh from Macro Research.",
+        citation_policy: "Readiness guidance only; cite stored observations after import.",
+      },
+      {
+        provider: "world_bank",
+        label: "World Bank Buffett Indicator",
+        status: "degraded",
+        configured: true,
+        can_refresh_from_browser: true,
+        credential_required: false,
+        evidence_count: 0,
+        latest_as_of: null,
+        source_frequency: "annual_lagged",
+        indicator_codes: ["buffett_indicator_us", "buffett_indicator_cn", "buffett_indicator_hk"],
+        missing_indicator_codes: ["buffett_indicator_us", "buffett_indicator_cn", "buffett_indicator_hk"],
+        recommended_next_action: "Run World Bank dry-run, then write refresh for missing Buffett Indicator regions.",
+        citation_policy: "Readiness guidance only; cite stored observations after import.",
+      },
+    ],
+  };
+}
+
 async function renderAiResearchPage() {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
@@ -217,6 +256,9 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
     }
     if (url.endsWith("/dashboard/market-overview?provider=yfinance")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
+    }
+    if (url.endsWith("/market-indicators/official-sources/status")) {
+      return Promise.resolve(new Response(JSON.stringify(createOfficialSourceStatusPayload())));
     }
     if (url.includes("/recommendations?symbols=AAPL%2C0700&limit=6")) {
       return Promise.resolve(
@@ -263,6 +305,9 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   expect(screen.getByText("Buffett Indicator - US")).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
   expect(screen.getByText("Value: 188.5%")).toBeInTheDocument();
+  expect(screen.getByText("Official source readiness")).toBeInTheDocument();
+  expect(screen.getByText("World Bank Buffett Indicator")).toBeInTheDocument();
+  expect(screen.getByText("Next: Run World Bank dry-run, then write refresh for missing Buffett Indicator regions.")).toBeInTheDocument();
   expect(screen.getByText("No audited observation has been seeded for this indicator yet.")).toBeInTheDocument();
   expect(screen.getByText("Signals are deterministic research inputs only.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open watchlist" })).toHaveAttribute("href", "/watchlist");
@@ -284,6 +329,9 @@ it("adds a manual symbol and submits the active symbol through the existing mark
     }
     if (url.endsWith("/dashboard/market-overview?provider=yfinance")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
+    }
+    if (url.endsWith("/market-indicators/official-sources/status")) {
+      return Promise.resolve(new Response(JSON.stringify(createOfficialSourceStatusPayload())));
     }
     if (url.includes("/recommendations?")) {
       return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
@@ -311,7 +359,38 @@ it("adds a manual symbol and submits the active symbol through the existing mark
       provider: "yfinance",
     });
   });
+  expect(askMarketAssistantMock.mock.calls[0][0].question).toContain("FRED US macro");
   expect(await screen.findByText("Research-only answer with cited local evidence.")).toBeInTheDocument();
   expect(screen.getByText("Daily bars for AAPL as of 2026-01-02")).toBeInTheDocument();
   expect(screen.getByText("Research only. Not investment advice.")).toBeInTheDocument();
+});
+
+it("keeps the AI research desk usable when official source status is unavailable", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/watchlist")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            items: [{ symbol: "AAPL", name: "Apple Inc.", market: "US", is_active: true }],
+          }),
+        ),
+      );
+    }
+    if (url.endsWith("/dashboard/market-overview?provider=yfinance")) {
+      return Promise.resolve(new Response(JSON.stringify(createMarketOverviewPayload())));
+    }
+    if (url.endsWith("/market-indicators/official-sources/status")) {
+      return Promise.resolve(new Response("unavailable", { status: 503 }));
+    }
+    if (url.includes("/recommendations?")) {
+      return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  await renderAiResearchPage();
+
+  expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
+  expect(screen.getByText("Official source readiness could not be loaded.")).toBeInTheDocument();
 });

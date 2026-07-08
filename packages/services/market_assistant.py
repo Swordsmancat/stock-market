@@ -21,6 +21,7 @@ from packages.ai.market_assistant import (
 from packages.services.fundamentals import get_fundamental_payload
 from packages.services.indicators import get_stored_indicators_payload
 from packages.services.market_data import get_bars_payload
+from packages.services.market_indicators import get_macro_indicator_payloads
 from packages.services.news import get_news_sentiment_payload
 from packages.services.platform_settings import get_platform_settings
 from packages.services.research_source_notes import list_citable_research_source_note_citations
@@ -36,6 +37,7 @@ ASSISTANT_CITATION_ID_PREFIXES = (
     "technical_indicators:",
     "fundamental_metrics:",
     "fundamentals:",
+    "market_indicator:",
     "news:",
     "news_articles:",
     "generated_report:",
@@ -133,6 +135,7 @@ def answer_market_assistant_question(
     )
     research_evidence = list(price_context["evidence"])
     indicator_summary, indicator_evidence = _build_indicator_context(normalized_symbol, session, diagnostics)
+    macro_summary, macro_evidence = _build_macro_indicator_context(session, diagnostics)
     fundamental_summary, fundamental_evidence = _build_fundamental_context(
         normalized_symbol,
         effective_end,
@@ -154,6 +157,7 @@ def answer_market_assistant_question(
         diagnostics,
     )
     research_evidence.extend(indicator_evidence)
+    research_evidence.extend(macro_evidence)
     research_evidence.extend(fundamental_evidence)
     research_evidence.extend(news_evidence)
     research_evidence.extend(generated_report_evidence)
@@ -173,6 +177,7 @@ def answer_market_assistant_question(
         bar_count=price_context["bar_count"],
         price_summary=price_context["price_summary"],
         indicator_summary=indicator_summary,
+        macro_summary=macro_summary,
         fundamental_summary=fundamental_summary,
         news_summary=news_summary,
         research_summary=f"{generated_report_summary} {source_note_summary}",
@@ -361,6 +366,147 @@ def _build_indicator_context(
         )
     ]
     return summary, evidence
+
+
+def _build_macro_indicator_context(
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
+    if session is None:
+        diagnostics.append(
+            {
+                "source": "market_indicators",
+                "status": "no_data",
+                "severity": "info",
+                "code": "SOURCE_NO_DATA",
+                "message": "No database session is available for stored macro indicators.",
+            }
+        )
+        return "No stored macro indicator observations are available.", []
+
+    try:
+        indicator_items = get_macro_indicator_payloads(session=session)
+    except Exception:
+        _rollback_session_if_possible(session)
+        diagnostics.append(
+            {
+                "source": "market_indicators",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Stored macro indicators could not be loaded.",
+            }
+        )
+        return "Stored macro indicators could not be loaded.", []
+
+    prioritized_items = _prioritize_macro_indicator_items(indicator_items)
+    citable_items = [item for item in prioritized_items if _is_citable_macro_indicator_item(item)]
+    missing_codes = [
+        str(item.get("code"))
+        for item in prioritized_items
+        if item.get("code") and not _is_citable_macro_indicator_item(item)
+    ]
+    if missing_codes:
+        diagnostics.append(
+            {
+                "source": "market_indicators",
+                "status": "no_data",
+                "severity": "info",
+                "code": "MACRO_INDICATOR_NO_DATA",
+                "message": "Some macro indicators are configured but do not have audited observations yet.",
+                "details": {"missing_indicator_codes": missing_codes[:12], "count": len(missing_codes)},
+            }
+        )
+
+    if not citable_items:
+        return "No stored macro indicator observations are available.", []
+
+    evidence_items = [
+        _build_macro_indicator_evidence_item(item, item_index)
+        for item_index, item in enumerate(citable_items[:8])
+    ]
+    summary = "; ".join(evidence_item.summary for evidence_item in evidence_items[:6])
+    return summary, evidence_items
+
+
+def _prioritize_macro_indicator_items(indicator_items: list[dict[str, object]]) -> list[dict[str, object]]:
+    settings = get_platform_settings()
+    favorite_codes = settings.get("favorite_macro_indicator_codes")
+    favorite_order = (
+        {str(code): index for index, code in enumerate(favorite_codes)}
+        if isinstance(favorite_codes, list)
+        else {}
+    )
+
+    return sorted(
+        indicator_items,
+        key=lambda item: _macro_indicator_sort_key(item, favorite_order),
+    )
+
+
+def _macro_indicator_sort_key(item: dict[str, object], favorite_order: dict[str, int]) -> tuple[int, int, str]:
+    code = str(item.get("code") or "")
+    category = str(item.get("category") or "")
+    if code in favorite_order:
+        return (0, favorite_order[code], code)
+    if "buffett" in code:
+        return (1, 0, code)
+    category_order = {"rates": 2, "inflation": 3, "liquidity": 4, "valuation": 5}
+    return (category_order.get(category, 9), 0, code)
+
+
+def _is_citable_macro_indicator_item(item: dict[str, object]) -> bool:
+    return (
+        item.get("value") is not None
+        and bool(_stringify_optional(item.get("as_of")))
+        and bool(_stringify_optional(item.get("source")))
+    )
+
+
+def _build_macro_indicator_evidence_item(
+    item: dict[str, object],
+    item_index: int,
+) -> MarketAssistantResearchEvidence:
+    code = str(item.get("code") or "unknown_indicator")
+    name = str(item.get("name") or code)
+    as_of = _stringify_optional(item.get("as_of")) or "unknown"
+    provider_name = _stringify_optional(item.get("source"))
+    summary = f"{name}={_format_macro_indicator_value(item)} as of {as_of}."
+    citation = MarketAssistantCitation(
+        id=f"market_indicator:{code}:{as_of}",
+        label=name,
+        source="market_indicators",
+        source_type="macro_indicator",
+        as_of=as_of,
+        provider=provider_name,
+        excerpt=summary,
+        metadata={
+            "code": code,
+            "category": item.get("category"),
+            "region": item.get("region"),
+            "unit": item.get("unit"),
+            "components": item.get("components") if isinstance(item.get("components"), dict) else {},
+        },
+    )
+    return MarketAssistantResearchEvidence(
+        citation=citation,
+        summary=summary,
+        priority=25 + item_index,
+        source_type="macro_indicator",
+        title=name,
+        as_of=as_of,
+        provider=provider_name,
+        metadata=citation.metadata,
+    )
+
+
+def _format_macro_indicator_value(item: dict[str, object]) -> str:
+    value = item.get("value")
+    if value is None:
+        return "unavailable"
+    numeric_value = _safe_float(value)
+    formatted_value = f"{numeric_value:.4g}" if numeric_value is not None else str(value)
+    return f"{formatted_value}%" if item.get("unit") == "percent" else formatted_value
 
 
 def _build_fundamental_context(
@@ -577,6 +723,7 @@ def _build_response_payload(
             "bar_count": prompt_context.bar_count,
             "price_summary": prompt_context.price_summary,
             "indicator_summary": prompt_context.indicator_summary,
+            "macro_summary": prompt_context.macro_summary,
             "fundamental_summary": prompt_context.fundamental_summary,
             "news_summary": prompt_context.news_summary,
             "research_summary": prompt_context.research_summary,

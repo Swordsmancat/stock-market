@@ -55,6 +55,7 @@ export type MarketAssistantResponse = {
     bar_count: number;
     price_summary?: string;
     indicator_summary?: string;
+    macro_summary?: string;
     fundamental_summary?: string;
     news_summary?: string;
     research_summary?: string;

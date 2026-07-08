@@ -85,6 +85,7 @@ class MarketAssistantPromptContext:
     indicator_summary: str
     fundamental_summary: str
     news_summary: str
+    macro_summary: str = "No macro indicator context was loaded."
     research_summary: str = "No generated research reports were loaded."
     citations: list[MarketAssistantCitation] = field(default_factory=list)
     diagnostics: list[dict[str, object]] = field(default_factory=list)
@@ -128,6 +129,7 @@ def build_market_assistant_prompt(context: MarketAssistantPromptContext) -> str:
         f"Daily bar count: {context.bar_count}\n\n"
         f"Price context: {context.price_summary}\n"
         f"Technical indicators: {context.indicator_summary}\n"
+        f"Macro context: {context.macro_summary}\n"
         f"Fundamentals: {context.fundamental_summary}\n"
         f"News sentiment: {context.news_summary}\n"
         f"Research reports: {context.research_summary}\n"
@@ -172,6 +174,7 @@ def _build_chinese_deterministic_answer(context: MarketAssistantPromptContext) -
         "### 数据依据\n"
         f"- 行情：{context.price_summary}\n"
         f"- 技术面：{context.indicator_summary}\n"
+        f"- 宏观背景：{context.macro_summary}\n"
         f"- 基本面：{context.fundamental_summary}\n"
         f"- 消息面：{context.news_summary}\n"
         f"- 研究资料：{context.research_summary}\n"
@@ -212,6 +215,7 @@ def _build_english_deterministic_answer(context: MarketAssistantPromptContext) -
         "### Evidence\n"
         f"- Price: {context.price_summary}\n"
         f"- Technical indicators: {context.indicator_summary}\n"
+        f"- Macro context: {context.macro_summary}\n"
         f"- Fundamentals: {context.fundamental_summary}\n"
         f"- News: {context.news_summary}\n"
         f"- Research reports: {context.research_summary}\n"
