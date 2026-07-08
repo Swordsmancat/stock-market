@@ -1028,3 +1028,36 @@ Enhanced AI Research Desk with citable macro indicator evidence, official source
 ### Next Steps
 
 - None - task complete
+
+
+## Session 32: Frontend financial page header refactor
+
+**Date**: 2026-07-08
+**Task**: Frontend financial page header refactor
+**Branch**: `master`
+
+### Summary
+
+Unified core web pages around a dense financial page header, tightened watchlist/detail/settings layouts, updated frontend component guidance, and validated with TypeScript, Vitest, and browser smoke checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4112eb2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
