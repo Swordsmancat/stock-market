@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import type { ReactNode } from "react";
 import {
   Database,
   ExternalLink,
@@ -17,6 +18,10 @@ import {
   type EvidenceSeedImportReviewLabels,
 } from "@/components/evidence-seed-import-review";
 import { ErrorState } from "@/components/error-state";
+import {
+  OfficialMacroRefreshActions,
+  type OfficialMacroRefreshActionsLabels,
+} from "@/components/official-macro-refresh-actions";
 import {
   ResearchSourceNotebook,
   type ResearchSourceNotebookLabels,
@@ -399,6 +404,7 @@ function renderOfficialRefreshPanel({
   sourceItems,
   sourceStatusLabels,
   unavailableLabel,
+  actions,
 }: {
   title: string;
   description: string;
@@ -413,6 +419,7 @@ function renderOfficialRefreshPanel({
   sourceItems: InformationSourceItem[];
   sourceStatusLabels: Record<string, string>;
   unavailableLabel: string;
+  actions?: ReactNode;
 }) {
   return (
     <div className="border bg-background p-4">
@@ -433,6 +440,7 @@ function renderOfficialRefreshPanel({
           <code className="mt-1 block break-all font-mono text-xs">{dryRunCommand}</code>
         </div>
       </div>
+      {actions}
       <div className="mt-4 flex flex-wrap gap-2 text-xs">
         <Badge variant="outline">{latestLabel}</Badge>
         <Badge variant={coverage.missingCount > 0 ? "destructive" : "secondary"}>{missingLabel}</Badge>
@@ -459,13 +467,14 @@ function renderOfficialRefreshGuidance(
   const worldBankCoverage = getRefreshCoverage(indicators, WORLD_BANK_BUFFETT_REFRESH_CODES);
   const fredSources = getSourcesByIds(informationSources, FRED_OFFICIAL_SOURCE_IDS);
   const worldBankSources = getSourcesByIds(informationSources, WORLD_BANK_OFFICIAL_SOURCE_IDS);
+  const actionLabels = buildOfficialMacroRefreshLabels(t);
 
   return (
     <Card className="border-emerald-200/70 dark:border-emerald-900/60">
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{t("officialRefreshManualBadge")}</Badge>
-          <Badge variant="outline">{t("officialRefreshNoWebActionBadge")}</Badge>
+          <Badge variant="outline">{t("officialRefreshWebActionBadge")}</Badge>
         </div>
         <CardTitle className="flex items-center gap-2 text-xl">
           <RefreshCw className="h-5 w-5" />
@@ -494,6 +503,13 @@ function renderOfficialRefreshGuidance(
             sourceItems: fredSources,
             sourceStatusLabels,
             unavailableLabel,
+            actions: (
+              <OfficialMacroRefreshActions
+                endpoint="/api/market-indicators/official-refresh/fred"
+                defaultPayload={{ series: "all", latest_only: true }}
+                labels={actionLabels}
+              />
+            ),
           })}
           {renderOfficialRefreshPanel({
             title: t("officialRefreshWorldBankTitle"),
@@ -514,6 +530,13 @@ function renderOfficialRefreshGuidance(
             sourceItems: worldBankSources,
             sourceStatusLabels,
             unavailableLabel,
+            actions: (
+              <OfficialMacroRefreshActions
+                endpoint="/api/market-indicators/official-refresh/world-bank"
+                defaultPayload={{ target: "all", latest_only: true }}
+                labels={actionLabels}
+              />
+            ),
           })}
         </div>
         <div className="border bg-muted/20 p-3 text-sm text-muted-foreground">
@@ -528,6 +551,30 @@ function renderOfficialRefreshGuidance(
       </CardContent>
     </Card>
   );
+}
+
+function buildOfficialMacroRefreshLabels(
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): OfficialMacroRefreshActionsLabels {
+  return {
+    dryRunAction: t("officialRefreshDryRunAction"),
+    dryRunRunning: t("officialRefreshDryRunRunning"),
+    writeAction: t("officialRefreshWriteAction"),
+    writeRunning: t("officialRefreshWriteRunning"),
+    writeStoresObservation: t("officialRefreshWriteStoresObservation"),
+    resultDryRun: t("officialRefreshResultDryRun"),
+    resultWrite: t("officialRefreshResultWrite"),
+    resultObservations: t("officialRefreshResultObservations", { count: "{count}" }),
+    resultFetched: t("officialRefreshResultFetched", { count: "{count}" }),
+    resultSkipped: t("officialRefreshResultSkipped", { count: "{count}" }),
+    resultCodes: t("officialRefreshResultCodes", { codes: "{codes}" }),
+    resultLatestAsOf: t("officialRefreshResultLatestAsOf", { date: "{date}" }),
+    resultCacheCleared: t("officialRefreshResultCacheCleared", { count: "{count}" }),
+    diagnosticsTitle: t("officialRefreshDiagnosticsTitle"),
+    diagnosticsEmpty: t("officialRefreshDiagnosticsEmpty"),
+    failed: t("officialRefreshFailed"),
+    unavailableShort: t("unavailableShort"),
+  };
 }
 
 function followUpKindLabel(kind: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {

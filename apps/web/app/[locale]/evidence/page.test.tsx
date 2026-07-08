@@ -415,9 +415,13 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   expect(screen.getByText("Source gaps: 2")).toBeInTheDocument();
   expect(screen.getByText("Official macro refresh status")).toBeInTheDocument();
   expect(screen.getByText("Manual runbook")).toBeInTheDocument();
-  expect(screen.getByText("No web refresh action")).toBeInTheDocument();
+  expect(screen.getByText("Browser refresh enabled")).toBeInTheDocument();
+  expect(screen.queryByText("No web refresh action")).not.toBeInTheDocument();
   expect(screen.getByText("FRED US macro")).toBeInTheDocument();
   expect(screen.getByText("World Bank Buffett Indicator")).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Run dry-run" })).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: "Write observations" })).toHaveLength(2);
+  expect(screen.getAllByText(/Write refresh stores audited local observations/)).toHaveLength(2);
   expect(screen.getByText("1/5 local observations")).toBeInTheDocument();
   expect(screen.getByText("0/3 local observations")).toBeInTheDocument();
   expect(screen.getByText("python scripts/refresh_fred_macro_indicators.py --series all --latest-only")).toBeInTheDocument();
