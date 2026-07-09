@@ -1,0 +1,28 @@
+{
+  "id": "frontend-site-redesign",
+  "name": "frontend-site-redesign",
+  "title": "前端整站重新美化",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "何剑锋",
+  "assignee": "何剑锋",
+  "createdAt": "2026-07-08",
+  "completedAt": "2026-07-09",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-08-homepage-index-display-preferences"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
