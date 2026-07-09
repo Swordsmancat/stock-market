@@ -376,6 +376,22 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.getByText("SerpAPI Baidu")).toBeInTheDocument();
   expect(screen.getByText("Ready")).toBeInTheDocument();
   expect(screen.getByText("Needs key")).toBeInTheDocument();
+
+  const moreLinks = screen.getAllByRole("link", { name: "More" });
+  expect(moreLinks).toHaveLength(8);
+  expect(moreLinks.map((link) => link.getAttribute("href"))).toEqual(
+    expect.arrayContaining([
+      "/instruments",
+      "/evidence",
+      "/instruments/AAPL",
+      "/ai-research",
+      "/settings",
+    ]),
+  );
+  expect(screen.getByRole("link", { name: "Add custom indicator" })).toHaveAttribute(
+    "href",
+    "/settings#favorite_macro_indicator_codes",
+  );
   expect(screen.queryByText("Overview of your portfolio, market data, and automated analysis.")).not.toBeInTheDocument();
   expect(screen.queryByText("AI research brief")).not.toBeInTheDocument();
   expect(screen.queryByText("Narrative synthesis")).not.toBeInTheDocument();

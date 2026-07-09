@@ -1,6 +1,6 @@
 import { Link } from "@/src/i18n/routing";
 import type { ReactNode } from "react";
-import { Activity, Newspaper, Search, Settings2, ShieldCheck, CircleAlert, Plus, BarChart3, Gauge, LineChart } from "lucide-react";
+import { Activity, ArrowRight, Newspaper, Search, Settings2, ShieldCheck, CircleAlert, Plus, BarChart3, Gauge, LineChart } from "lucide-react";
 
 import { FlashBanner } from "@/components/flash-banner";
 import { FinancialDashboardHero } from "@/components/financial-dashboard-hero";
@@ -707,6 +707,30 @@ function MiniSparkline({
   );
 }
 
+function TerminalActionLink({
+  href,
+  label,
+  icon,
+}: {
+  href: string;
+  label: string;
+  icon?: ReactNode;
+}) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      asChild
+      className="border-border/80 bg-background/60 px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+    >
+      <Link href={href} className="gap-1.5">
+        <span>{label}</span>
+        {icon ?? <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
+      </Link>
+    </Button>
+  );
+}
+
 function TerminalPanel({
   title,
   description,
@@ -727,7 +751,7 @@ function TerminalPanel({
   titleId?: string;
 }) {
   return (
-    <Card className={`overflow-hidden rounded-md border border-border/80 bg-card/95 shadow-[0_0_0_1px_hsl(var(--primary)/0.04)] ${className}`}>
+    <Card className={`flex flex-col overflow-hidden rounded-md border border-border/80 bg-card/95 shadow-[0_0_0_1px_hsl(var(--primary)/0.04)] ${className}`}>
       <CardHeader className="!space-y-0 border-b border-border/70 bg-background/60 !px-3 !py-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -740,7 +764,7 @@ function TerminalPanel({
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
       </CardHeader>
-      <CardContent className={`p-0 ${contentClassName}`}>{children}</CardContent>
+      <CardContent className={`min-h-0 flex-1 p-0 ${contentClassName}`}>{children}</CardContent>
     </Card>
   );
 }
@@ -854,7 +878,8 @@ function HomepageMarketBand({
           </h1>
           <div className="mt-0.5 text-[10px] text-muted-foreground">{t("homeOverviewTitle")}</div>
         </div>
-        <div className="flex justify-start lg:justify-end">
+        <div className="flex flex-wrap justify-start gap-1.5 lg:justify-end">
+          <TerminalActionLink href="/instruments" label={t("terminalActionMore")} />
           <Button variant="outline" size="sm" asChild>
             <Link href="/settings" className="gap-2">
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -950,15 +975,26 @@ function MacroIndicatorsPanel({
       description={t("terminalMacroDesc")}
       titleId="terminal-macro-heading"
       icon={<Activity className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
-      className="xl:h-[15.5rem]"
+      className="h-[15.5rem]"
+      action={
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <TerminalActionLink
+            href="/settings#favorite_macro_indicator_codes"
+            label={t("terminalActionAddCustomIndicator")}
+            icon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+          />
+          <TerminalActionLink href="/evidence" label={t("terminalActionMore")} />
+        </div>
+      }
+      contentClassName="flex min-h-0 flex-col"
     >
-      <div className="grid grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground">
+      <div className="grid shrink-0 grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground">
         <span>{t("terminalIndicator")}</span>
         <span className="text-right">{t("terminalLatestValue")}</span>
         <span className="text-right">{t("terminalTrend")}</span>
         <span className="text-right">{t("terminalUpdated")}</span>
       </div>
-      <div className="divide-y divide-border/65 xl:max-h-[11.25rem] xl:overflow-hidden">
+      <div className="min-h-0 flex-1 divide-y divide-border/65 overflow-y-auto scrollbar-thin">
         {rows.map(({ code, item }) => {
           const isAvailable = item?.status === "ok";
           const displayName = item?.name ?? code;
@@ -1015,9 +1051,11 @@ function HotSectorTablePanel({
       description={t("terminalHotSectorsDesc")}
       titleId="terminal-hot-sectors-heading"
       icon={<BarChart3 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
-      className="xl:h-[15.5rem]"
+      className="h-[15.5rem]"
+      action={<TerminalActionLink href="/instruments" label={t("terminalActionMore")} />}
+      contentClassName="flex min-h-0 flex-col"
     >
-      <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.5rem_5rem_3.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground">
+      <div className="grid shrink-0 grid-cols-[2.25rem_minmax(0,1fr)_4.5rem_5rem_3.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground">
         <span>{t("terminalRank")}</span>
         <span>{t("terminalSector")}</span>
         <span className="text-right">{t("terminalChange")}</span>
@@ -1025,7 +1063,7 @@ function HotSectorTablePanel({
         <span className="text-right">{t("terminalAiHeat")}</span>
       </div>
       {sectors.length > 0 ? (
-        <div className="divide-y divide-border/65 xl:max-h-[11.25rem] xl:overflow-hidden">
+        <div className="min-h-0 flex-1 divide-y divide-border/65 overflow-y-auto scrollbar-thin">
           {sectors.map((sector, index) => {
             const change = resolveHotSectorChange(sector);
             const flowValue = resolveHotSectorFlowValue(sector);
@@ -1050,7 +1088,7 @@ function HotSectorTablePanel({
           })}
         </div>
       ) : (
-        <div className="p-4 text-sm text-muted-foreground">{t("hotSectorsEmptyLive")}</div>
+        <div className="flex min-h-0 flex-1 items-center p-4 text-sm text-muted-foreground">{t("hotSectorsEmptyLive")}</div>
       )}
     </TerminalPanel>
   );
@@ -1058,10 +1096,12 @@ function HotSectorTablePanel({
 
 function LatestNewsSentimentPanel({
   items,
+  moreHref,
   unavailableLabel,
   t,
 }: {
   items: NewsPayload["items"];
+  moreHref: string;
   unavailableLabel: string;
   t: (key: any, values?: Record<string, string | number>) => string;
 }) {
@@ -1072,10 +1112,12 @@ function LatestNewsSentimentPanel({
       description={t("terminalLatestNewsDesc")}
       titleId="terminal-latest-news-heading"
       icon={<Newspaper className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
-      className="xl:h-[15.5rem]"
+      className="h-[15.5rem]"
+      action={<TerminalActionLink href={moreHref} label={t("terminalActionMore")} />}
+      contentClassName="flex min-h-0 flex-col"
     >
       {newsRows.length > 0 ? (
-        <div className="divide-y divide-border/65 xl:max-h-[11.25rem] xl:overflow-hidden">
+        <div className="min-h-0 flex-1 divide-y divide-border/65 overflow-y-auto scrollbar-thin">
           {newsRows.map((item, index) => {
             const sentimentClassName =
               item.sentiment === "positive"
@@ -1100,7 +1142,7 @@ function LatestNewsSentimentPanel({
           })}
         </div>
       ) : (
-        <div className="p-4 text-sm text-muted-foreground">{t("noNews")}</div>
+        <div className="flex min-h-0 flex-1 items-center p-4 text-sm text-muted-foreground">{t("noNews")}</div>
       )}
     </TerminalPanel>
   );
@@ -1135,6 +1177,7 @@ function MarketOverviewChartPanel({
       titleId="terminal-market-overview-heading"
       icon={<LineChart className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
       className="xl:h-[14.25rem]"
+      action={<TerminalActionLink href="/instruments" label={t("terminalActionMore")} />}
       contentClassName="p-3"
     >
       {series.length > 0 ? (
@@ -1216,6 +1259,7 @@ function FundFlowPanel({
       titleId="terminal-fund-flow-heading"
       icon={<BarChart3 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
       className="xl:h-[14.25rem]"
+      action={<TerminalActionLink href="/instruments" label={t("terminalActionMore")} />}
       contentClassName="p-3"
     >
       {rows.length > 0 ? (
@@ -1319,6 +1363,7 @@ function AiSentimentPanel({
       titleId="terminal-ai-sentiment-heading"
       icon={<Gauge className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
       className="xl:h-[14.25rem]"
+      action={<TerminalActionLink href="/ai-research" label={t("terminalActionMore")} />}
       contentClassName="p-3"
     >
       <div className="grid gap-3 md:grid-cols-[10rem_minmax(0,1fr)] md:items-center">
@@ -1376,14 +1421,7 @@ function NewsProviderStatusStrip({
       description={t("newsProviderStripDesc")}
       titleId="terminal-news-provider-heading"
       icon={<Search className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
-      action={
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/settings" className="gap-2">
-            <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-            {t("providerSettings")}
-          </Link>
-        </Button>
-      }
+      action={<TerminalActionLink href="/settings" label={t("terminalActionMore")} icon={<Settings2 className="h-3.5 w-3.5" aria-hidden="true" />} />}
       contentClassName="p-2"
     >
       {providers.length > 0 ? (
@@ -1653,6 +1691,7 @@ export default async function HomePage({
           />
           <LatestNewsSentimentPanel
             items={newsItemsForHome}
+            moreHref={`/instruments/${primaryInstrument.symbol}`}
             unavailableLabel={t("unavailableShort")}
             t={t}
           />

@@ -38,6 +38,8 @@
     "homeMarketBandTitle": "A-share market",
     "homeMarketBandEdit": "Edit",
     "homeAddIndicator": "Add indicator",
+    "terminalActionMore": "More",
+    "terminalActionAddCustomIndicator": "Add custom indicator",
     "homeSelectedMarketGroup": "Selected indices",
     "homeAshareMarketGroup": "A-share market",
     "terminalMacroTitle": "Macro indicators",

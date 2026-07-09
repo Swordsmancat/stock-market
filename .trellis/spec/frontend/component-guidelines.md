@@ -106,6 +106,10 @@ Use page tests to assert both sides of the contract: the curated market sections
 
 **Citation boundary**: News search providers on the homepage are readiness/status signals only. Search results become citable evidence only after they are stored locally as `NewsArticle` rows or another approved local evidence record.
 
+**Module action contract**: Every visible homepage terminal module should expose a localized "More" link to the owning routed module. Use real `Link` navigation, not click handlers, and keep action text in `apps/web/messages/en.json` and `apps/web/messages/zh.json`. If a module has a second setup action, such as adding a macro indicator, render it next to "More" inside the existing panel action area.
+
+**Fixed panel layout contract**: Fixed-height homepage panels should keep the card as `flex flex-col`, the content area as `min-h-0 flex-1`, and the table/list body as `min-h-0 flex-1 overflow-y-auto`. Headers should be `shrink-0`; rows should truncate or line-clamp rather than resizing the panel. This keeps the dashboard stable at desktop and tall mobile visual-check sizes.
+
 **Example**:
 
 ```tsx
@@ -115,7 +119,7 @@ const newsSearchProviderCapabilities =
 <NewsProviderStrip providers={newsSearchProviderCapabilities} />
 ```
 
-Tests should assert that the provider strip renders at least one configured provider and one setup/degraded state when the fixture includes both.
+Tests should assert that the provider strip renders at least one configured provider and one setup/degraded state when the fixture includes both. Homepage tests should also assert the "More" hrefs and any setup action hrefs for modules that add them.
 
 ---
 
