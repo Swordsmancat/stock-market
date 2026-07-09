@@ -8,6 +8,7 @@ def test_is_dispatchable_task_supports_registered_tasks():
     assert is_dispatchable_task("reports.refresh_daily_stock_analysis") is True
     assert is_dispatchable_task("ingestion.ingest_market_data") is True
     assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars") is True
+    assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars_batch") is True
     assert is_dispatchable_task("alerts.evaluate_watchlist_alerts") is True
     assert is_dispatchable_task("unknown.task") is False
 
@@ -122,6 +123,41 @@ def test_dispatch_task_run_enqueues_symbol_daily_bars_with_asset_type(mock_task)
         end="2026-01-02",
         provider="mock",
         exchange="NYSE",
+        timeframe="1d",
+        asset_type="etf",
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.ingestion.ingest_symbol_daily_bars_batch_task")
+def test_dispatch_task_run_enqueues_symbol_daily_bars_batch(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-symbol-bars-batch"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.ingest_symbol_daily_bars_batch",
+        {
+            "symbols": ["AAPL", "MSFT"],
+            "market": "US",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "provider": "mock",
+            "exchange": "NASDAQ",
+            "timeframe": "1d",
+            "asset_type": "etf",
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-symbol-bars-batch"
+    mock_task.delay.assert_called_once_with(
+        symbols=["AAPL", "MSFT"],
+        market="US",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="mock",
+        exchange="NASDAQ",
         timeframe="1d",
         asset_type="etf",
         task_run_id="task-run-id",

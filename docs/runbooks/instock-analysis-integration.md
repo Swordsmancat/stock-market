@@ -19,6 +19,8 @@ runtime dependency.
   default-watchlist entries.
 - Implemented feature: single-symbol daily-bar ingestion can persist stock or
   ETF asset type.
+- Implemented feature: explicit-symbol batch daily-bar ingestion with partial
+  success diagnostics.
 - Implemented feature: research-only `GET /strategies/screen` strategy screening API.
 - Implemented feature: research-only `GET /strategies/evaluate` strategy evaluation API.
 - Rule set: `candlestick_patterns_v1`.
@@ -132,6 +134,28 @@ dispatch, the worker result payload, serialized snapshot rows, and
 This is a targeted single-symbol ingestion path. It does not crawl an ETF
 universe, import InStock schedulers, use proxy/cookie workflows, or produce
 research/trading signals.
+
+## Batch Symbol Daily-Bar Ingestion
+
+`POST /ingestion/symbol-daily-bars-batch` supports explicit comma-separated
+symbol batches for one market/date range:
+
+```text
+POST /ingestion/symbol-daily-bars-batch?symbols=SPY,QQQ&market=US&asset_type=etf&start=2026-01-01&end=2026-01-02&provider=mock
+```
+
+The API normalizes and dedupes symbols before writing TaskRun input. The worker
+reuses the single-symbol ingestion path for each symbol, so `asset_type`, daily
+bar storage, no-data handling, and quality diagnostics stay consistent.
+
+The result payload includes `symbol_count`, `succeeded_count`, `no_data_count`,
+`failed_count`, `total_bar_count`, per-symbol `items[]`, and sanitized
+`diagnostics[]`. One symbol failure produces a partial batch result instead of
+discarding already ingested symbols.
+
+This is still a targeted ingestion path. It does not scan a provider universe,
+import InStock schedulers, mutate watchlists, execute strategies, create order
+intents, call brokers, or emit buy/sell/hold guidance.
 
 ## Strategy Screening API
 

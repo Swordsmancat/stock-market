@@ -137,6 +137,91 @@ def test_symbol_daily_bars_ingestion_dispatches_task_run_and_writes_database(mon
     assert bars_payload["items"][-1]["close"] == 102.0
 
 
+def test_symbol_daily_bars_batch_ingestion_dispatches_task_run_and_writes_database(
+    monkeypatch,
+):
+    session = make_session()
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        lambda task_name, input_json, task_run_id: dispatch_task_run_sync(
+            task_name,
+            input_json,
+            task_run_id,
+            session,
+        ),
+    )
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        ingest_response = client.post(
+            "/ingestion/symbol-daily-bars-batch",
+            params={
+                "symbols": "aapl,msft,aapl",
+                "market": "us",
+                "provider": "mock",
+                "start": "2026-01-01",
+                "end": "2026-01-02",
+                "asset_type": "etf",
+            },
+        )
+        bars_response = client.get(
+            "/market-data/MSFT/bars",
+            params={
+                "timeframe": "1d",
+                "start": "2026-01-01",
+                "end": "2026-01-02",
+                "provider": "mock",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert ingest_response.status_code == 200
+    ingest_payload = ingest_response.json()
+    assert ingest_payload["status"] == "dispatched"
+    task_run = ingest_payload["task_run"]
+    assert task_run["task_name"] == "ingestion.ingest_symbol_daily_bars_batch"
+    assert task_run["status"] == "succeeded"
+    assert task_run["input_json"]["symbols"] == ["AAPL", "MSFT"]
+    assert task_run["input_json"]["asset_type"] == "etf"
+
+    result = task_run["result_json"]
+    assert result["status"] == "ingested"
+    assert result["symbols"] == ["AAPL", "MSFT"]
+    assert result["symbol_count"] == 2
+    assert result["succeeded_count"] == 2
+    assert result["total_bar_count"] == 4
+    assert result["asset_type"] == "etf"
+
+    assert bars_response.status_code == 200
+    bars_payload = bars_response.json()
+    assert bars_payload["source"] == "database"
+    assert len(bars_payload["items"]) == 2
+    assert bars_payload["items"][-1]["close"] == 102.0
+
+
+def test_symbol_daily_bars_batch_ingestion_rejects_empty_symbols():
+    client = TestClient(app)
+
+    response = client.post(
+        "/ingestion/symbol-daily-bars-batch",
+        params={
+            "symbols": " , ,, ",
+            "market": "us",
+            "provider": "mock",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "At least one symbol is required for batch daily bar ingestion."
+
+
 def test_legacy_mock_snapshot_endpoint_remains_compatible(monkeypatch):
     session = make_session()
     monkeypatch.setattr(

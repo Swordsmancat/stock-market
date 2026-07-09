@@ -12,6 +12,7 @@ from packages.services import market_data as market_data_service
 from packages.services import ingestion as ingestion_service
 from packages.shared.database import Base
 from packages.services.ingestion import ingest_market_snapshot, ingest_mock_market_snapshot
+from packages.services.ingestion import ingest_symbol_daily_bars_batch
 from packages.services.ingestion import ingest_symbol_daily_bars
 
 
@@ -100,6 +101,39 @@ class TargetedBarsProvider:
     ) -> list[ProviderBar]:
         self.fetch_bars_count += 1
         return self.bars
+
+
+class BatchBarsProvider:
+    def __init__(
+        self,
+        bars_by_symbol: dict[str, list[ProviderBar]],
+        failed_symbols: set[str] | None = None,
+    ) -> None:
+        self.bars_by_symbol = bars_by_symbol
+        self.failed_symbols = failed_symbols or set()
+        self.fetch_bars_symbols: list[str] = []
+        self.fetch_instruments_count = 0
+
+    def fetch_instruments(
+        self,
+        market: str,
+        exchange: str | None = None,
+    ) -> list[ProviderInstrument]:
+        self.fetch_instruments_count += 1
+        raise AssertionError("batch symbol ingestion must not fetch provider instruments")
+
+    def fetch_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: date,
+        end: date,
+    ) -> list[ProviderBar]:
+        self.fetch_bars_symbols.append(symbol)
+        if symbol in self.failed_symbols:
+            msg = f"provider error for {symbol}"
+            raise RuntimeError(msg)
+        return self.bars_by_symbol.get(symbol, [])
 
 
 def _provider_bar(symbol: str, timestamp: date, close_price: Decimal) -> ProviderBar:
@@ -438,6 +472,70 @@ def test_symbol_daily_bar_ingestion_returns_no_data_without_daily_rows(
     assert result["bar_count"] == 0
     assert result["no_data_reason"] == "Provider returned no daily bars for the requested symbol/date range."
     assert sqlite_session.query(DailyBar).count() == 0
+
+
+def test_symbol_daily_bar_batch_ingestion_dedupes_and_preserves_partial_results(
+    monkeypatch,
+    sqlite_session: Session,
+):
+    provider = BatchBarsProvider(
+        bars_by_symbol={"AAPL": [_provider_bar("AAPL", date(2026, 1, 5), Decimal("123.45"))]},
+        failed_symbols={"MSFT"},
+    )
+    monkeypatch.setattr(ingestion_service, "get_provider", lambda provider_name: provider)
+
+    result = ingest_symbol_daily_bars_batch(
+        "aapl, AAPL, msft, missing",
+        "us",
+        date(2026, 1, 5),
+        date(2026, 1, 5),
+        session=sqlite_session,
+        provider_name="mock",
+        asset_type="ETF",
+    )
+
+    assert provider.fetch_bars_symbols == ["AAPL", "MSFT", "MISSING"]
+    assert provider.fetch_instruments_count == 0
+    assert result["status"] == "partial"
+    assert result["symbols"] == ["AAPL", "MSFT", "MISSING"]
+    assert result["symbol_count"] == 3
+    assert result["succeeded_count"] == 1
+    assert result["failed_count"] == 1
+    assert result["no_data_count"] == 1
+    assert result["total_bar_count"] == 1
+    assert [item["status"] for item in result["items"]] == ["ingested", "failed", "no_data"]
+    assert result["diagnostics"] == [
+        {
+            "symbol": "MSFT",
+            "code": "SYMBOL_DAILY_BAR_INGESTION_FAILED",
+            "message": "provider error for MSFT",
+        }
+    ]
+
+    aapl = sqlite_session.query(Instrument).filter(Instrument.symbol == "AAPL").one()
+    assert aapl.asset_type == "etf"
+    assert sqlite_session.query(DailyBar).count() == 1
+
+
+def test_symbol_daily_bar_batch_ingestion_requires_symbols(
+    monkeypatch,
+    sqlite_session: Session,
+):
+    provider = BatchBarsProvider({})
+    monkeypatch.setattr(ingestion_service, "get_provider", lambda provider_name: provider)
+
+    with pytest.raises(ValueError, match="At least one symbol"):
+        ingest_symbol_daily_bars_batch(
+            " , ,, ",
+            "us",
+            date(2026, 1, 5),
+            date(2026, 1, 5),
+            session=sqlite_session,
+            provider_name="mock",
+        )
+
+    assert provider.fetch_bars_symbols == []
+    assert sqlite_session.query(Instrument).count() == 0
 
 
 def test_duplicate_serialized_bars_preserve_processed_count_and_last_write_wins(

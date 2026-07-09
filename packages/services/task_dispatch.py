@@ -61,6 +61,26 @@ def _dispatch_symbol_daily_bars_ingestion(input_json: dict[str, Any], task_run_i
     return async_result.id
 
 
+def _dispatch_symbol_daily_bars_batch_ingestion(
+    input_json: dict[str, Any],
+    task_run_id: str,
+) -> str:
+    from apps.worker.tasks.ingestion import ingest_symbol_daily_bars_batch_task
+
+    async_result = ingest_symbol_daily_bars_batch_task.delay(
+        symbols=input_json["symbols"],
+        market=input_json["market"],
+        start=input_json.get("start"),
+        end=input_json.get("end"),
+        provider=input_json.get("provider"),
+        exchange=input_json.get("exchange"),
+        timeframe=input_json.get("timeframe", "1d"),
+        asset_type=input_json.get("asset_type", "stock"),
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
 def _dispatch_alert_evaluation(input_json: dict[str, Any], task_run_id: str) -> str:
     from apps.worker.tasks.alerts import evaluate_watchlist_alerts
 
@@ -76,6 +96,7 @@ _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "reports.refresh_daily_stock_analysis": _dispatch_stock_analysis,
     "ingestion.ingest_market_data": _dispatch_market_ingestion,
     "ingestion.ingest_symbol_daily_bars": _dispatch_symbol_daily_bars_ingestion,
+    "ingestion.ingest_symbol_daily_bars_batch": _dispatch_symbol_daily_bars_batch_ingestion,
     "alerts.evaluate_watchlist_alerts": _dispatch_alert_evaluation,
 }
 

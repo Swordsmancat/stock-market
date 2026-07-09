@@ -230,6 +230,62 @@ def test_ingest_symbol_daily_bars_task_records_succeeded_task_run(monkeypatch):
     assert latest_run["result_json"] == result
 
 
+def test_ingest_symbol_daily_bars_batch_task_records_succeeded_task_run(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    result = ingestion_tasks.ingest_symbol_daily_bars_batch_task(
+        symbols=["aapl", "msft", "aapl"],
+        market="us",
+        start="2026-01-01",
+        end="2026-01-02",
+        provider="mock",
+        asset_type="etf",
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.ingest_symbol_daily_bars_batch",
+    )
+
+    assert result["status"] == "ingested"
+    assert result["symbols"] == ["AAPL", "MSFT"]
+    assert result["market"] == "US"
+    assert result["asset_type"] == "etf"
+    assert result["symbol_count"] == 2
+    assert result["succeeded_count"] == 2
+    assert result["total_bar_count"] == 4
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["input_json"]["symbols"] == ["AAPL", "MSFT"]
+    assert latest_run["input_json"]["asset_type"] == "etf"
+    assert latest_run["result_json"] == result
+
+
+def test_ingest_symbol_daily_bars_batch_task_records_failed_invalid_symbols(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    with pytest.raises(ValueError, match="At least one symbol"):
+        ingestion_tasks.ingest_symbol_daily_bars_batch_task(
+            symbols=" , ,, ",
+            market="us",
+            start="2026-01-01",
+            end="2026-01-02",
+            provider="mock",
+        )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.ingest_symbol_daily_bars_batch",
+    )
+
+    assert latest_run["status"] == "failed"
+    assert latest_run["input_json"]["symbols"] == []
+    assert latest_run["error_message"] == "At least one symbol is required for batch daily bar ingestion."
+
+
 def test_refresh_daily_stock_analysis_task_stores_latest_daily_report(monkeypatch):
     session = make_session()
     monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)

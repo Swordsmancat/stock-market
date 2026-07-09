@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -174,6 +175,24 @@ def _normalize_asset_type(asset_type: str | None) -> str:
         return normalized
     msg = f"Unsupported asset_type for symbol daily bars: {asset_type}"
     raise ValueError(msg)
+
+
+def normalize_symbol_list(symbols: str | Sequence[str]) -> list[str]:
+    raw_symbols = symbols.split(",") if isinstance(symbols, str) else symbols
+    normalized_symbols: list[str] = []
+    seen_symbols: set[str] = set()
+    for symbol in raw_symbols:
+        normalized_symbol = str(symbol).strip().upper()
+        if not normalized_symbol or normalized_symbol in seen_symbols:
+            continue
+        normalized_symbols.append(normalized_symbol)
+        seen_symbols.add(normalized_symbol)
+
+    if not normalized_symbols:
+        msg = "At least one symbol is required for batch daily bar ingestion."
+        raise ValueError(msg)
+
+    return normalized_symbols
 
 
 def _get_market_currency(market_code: str) -> str:
@@ -397,4 +416,138 @@ def ingest_symbol_daily_bars(
         "quality_diagnostics": _build_quality_diagnostics(snapshot),
         "status": "ingested" if bars else "no_data",
         "no_data_reason": no_data_reason,
+    }
+
+
+def _build_batch_status(
+    *,
+    symbol_count: int,
+    succeeded_count: int,
+    no_data_count: int,
+    failed_count: int,
+) -> str:
+    if succeeded_count == symbol_count:
+        return "ingested"
+    if failed_count == symbol_count:
+        return "failed"
+    if no_data_count == symbol_count:
+        return "no_data"
+    return "partial"
+
+
+def ingest_symbol_daily_bars_batch(
+    symbols: str | Sequence[str],
+    market: str,
+    start: date,
+    end: date,
+    session: Session | None = None,
+    provider_name: str | None = None,
+    exchange: str | None = None,
+    timeframe: str = "1d",
+    asset_type: str | None = "stock",
+) -> dict[str, object]:
+    normalized_symbols = normalize_symbol_list(symbols)
+    normalized_market = market.strip().upper()
+    normalized_timeframe = timeframe.strip().lower()
+    if normalized_timeframe != "1d":
+        msg = f"Only daily bar ingestion is supported. Received timeframe: {timeframe}"
+        raise ValueError(msg)
+
+    normalized_asset_type = _normalize_asset_type(asset_type)
+    requested_provider_name = _normalize_optional_provider_name(provider_name)
+    items: list[dict[str, object]] = []
+    diagnostics: list[dict[str, object]] = []
+    succeeded_count = 0
+    no_data_count = 0
+    failed_count = 0
+    total_bar_count = 0
+
+    for normalized_symbol in normalized_symbols:
+        try:
+            result = ingest_symbol_daily_bars(
+                symbol=normalized_symbol,
+                market=normalized_market,
+                start=start,
+                end=end,
+                session=session,
+                provider_name=requested_provider_name,
+                exchange=exchange,
+                timeframe=normalized_timeframe,
+                asset_type=normalized_asset_type,
+            )
+        except Exception as exc:
+            if session is not None:
+                session.rollback()
+            failed_count += 1
+            error_message = str(exc)
+            diagnostics.append(
+                {
+                    "symbol": normalized_symbol,
+                    "code": "SYMBOL_DAILY_BAR_INGESTION_FAILED",
+                    "message": error_message,
+                }
+            )
+            items.append(
+                {
+                    "symbol": normalized_symbol,
+                    "market": normalized_market,
+                    "asset_type": normalized_asset_type,
+                    "status": "failed",
+                    "instrument_count": 0,
+                    "bar_count": 0,
+                    "error": error_message,
+                }
+            )
+            continue
+
+        item_bar_count = int(result["bar_count"])
+        item_status = str(result["status"])
+        total_bar_count += item_bar_count
+        if item_status == "ingested":
+            succeeded_count += 1
+        elif item_status == "no_data":
+            no_data_count += 1
+        else:
+            failed_count += 1
+
+        items.append(
+            {
+                "symbol": str(result["symbol"]),
+                "market": str(result["market"]),
+                "asset_type": str(result["instruments"][0]["asset_type"]),
+                "status": item_status,
+                "instrument_count": int(result["instrument_count"]),
+                "bar_count": item_bar_count,
+                "provider": str(result["provider"]),
+                "requested_provider": result.get("requested_provider"),
+                "effective_provider": str(result["effective_provider"]),
+                "timeframe": str(result["timeframe"]),
+                "no_data_reason": result.get("no_data_reason"),
+                "quality_diagnostics": result["quality_diagnostics"],
+            }
+        )
+
+    symbol_count = len(normalized_symbols)
+    return {
+        "symbols": normalized_symbols,
+        "market": normalized_market,
+        "asset_type": normalized_asset_type,
+        "provider": requested_provider_name or resolve_market_data_provider_name(provider_name),
+        "requested_provider": requested_provider_name,
+        "timeframe": normalized_timeframe,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "symbol_count": symbol_count,
+        "succeeded_count": succeeded_count,
+        "no_data_count": no_data_count,
+        "failed_count": failed_count,
+        "total_bar_count": total_bar_count,
+        "status": _build_batch_status(
+            symbol_count=symbol_count,
+            succeeded_count=succeeded_count,
+            no_data_count=no_data_count,
+            failed_count=failed_count,
+        ),
+        "items": items,
+        "diagnostics": diagnostics,
     }

@@ -160,3 +160,13 @@ git diff --check
 - [x] Preserve targeted provider fetches by symbol/timeframe/date range without importing InStock schedulers, ETF crawlers, proxy/cookie workflows, or database runtime.
 - [x] Reject unsupported asset types before provider fetch and avoid fabricated rows when providers return no data.
 - [x] Add focused service/API/dispatch/worker tests and backend spec/runbook coverage.
+
+## InStock Batch Symbol Daily-Bar Job Slice
+
+- [x] Add `POST /ingestion/symbol-daily-bars-batch` for explicit comma-separated symbols in one market/date range.
+- [x] Normalize and dedupe symbols before writing TaskRun input, then propagate them through dispatch, worker kwargs, worker result payload, and sync Celery tests.
+- [x] Reuse `ingest_symbol_daily_bars(...)` per symbol to preserve ETF asset type, storage, no-data, and quality-diagnostic behavior.
+- [x] Preserve partial success with per-symbol `items[]`, sanitized diagnostics, and succeeded/no-data/failed counts.
+- [x] Reject empty symbol lists, unsupported timeframe, and unsupported `asset_type` before provider fetch.
+- [x] Avoid provider universe scans, InStock scheduler/runtime imports, strategy execution, order intents, broker calls, watchlist mutation, and buy/sell advice.
+- [x] Add focused service/API/dispatch/worker tests and backend spec/runbook coverage.

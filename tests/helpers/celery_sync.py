@@ -91,5 +91,23 @@ def dispatch_task_run_sync(
             ),
         )
 
+    if task_name == "ingestion.ingest_symbol_daily_bars_batch":
+        from apps.worker.tasks.ingestion import ingest_symbol_daily_bars_batch_task
+
+        return _run_with_session(
+            session,
+            lambda: ingest_symbol_daily_bars_batch_task.run(
+                symbols=input_json["symbols"],
+                market=input_json["market"],
+                start=input_json.get("start"),
+                end=input_json.get("end"),
+                provider=input_json.get("provider"),
+                exchange=input_json.get("exchange"),
+                timeframe=input_json.get("timeframe", "1d"),
+                asset_type=input_json.get("asset_type", "stock"),
+                task_run_id=task_run_id,
+            ),
+        )
+
     msg = f"Unsupported task for sync dispatch: {task_name}"
     raise ValueError(msg)

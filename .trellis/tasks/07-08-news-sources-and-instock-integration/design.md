@@ -358,3 +358,23 @@ project's existing task-run and ingestion boundaries:
   before provider fetch for unsupported asset types;
 - avoid strategy execution, order intents, watchlist mutation, broker calls, and
   buy/sell/hold language.
+
+## Follow-Up Slice: Batch Symbol Daily-Bar Jobs
+
+The next data-job slice adapts InStock's explicit batch-job shape without
+importing scheduler or provider-universe crawling behavior:
+
+- add `POST /ingestion/symbol-daily-bars-batch` for comma-separated explicit
+  symbols within one market/date range;
+- normalize, dedupe, and persist the symbol list in TaskRun input before worker
+  execution;
+- reuse `ingest_symbol_daily_bars(...)` for each symbol so storage, ETF asset
+  type, quality diagnostics, and no-data behavior stay consistent;
+- return batch counts for succeeded, no-data, and failed symbols plus item-level
+  diagnostics;
+- preserve partial success when one symbol fails instead of discarding completed
+  symbols;
+- fail closed before provider fetch for empty symbol lists, unsupported
+  timeframe, or unsupported `asset_type`;
+- avoid provider universe scans, scheduler replacement, watchlist mutation,
+  strategy execution, broker calls, order intents, and buy/sell/hold language.

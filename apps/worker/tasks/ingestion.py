@@ -3,7 +3,12 @@ from uuid import UUID
 
 from apps.worker.celery_app import celery_app
 from packages.domain.models import TaskRun
-from packages.services.ingestion import ingest_market_snapshot, ingest_symbol_daily_bars
+from packages.services.ingestion import (
+    ingest_market_snapshot,
+    ingest_symbol_daily_bars,
+    ingest_symbol_daily_bars_batch,
+    normalize_symbol_list,
+)
 from packages.services.task_runs import fail_task_run, finish_task_run, start_task_run
 from packages.shared.config import settings
 from packages.shared.database import SessionLocal
@@ -166,6 +171,88 @@ def ingest_symbol_daily_bars_task(
             "end": end_date.isoformat(),
             "no_data_reason": ingestion_result.get("no_data_reason"),
             "quality_diagnostics": _extract_quality_diagnostics(ingestion_result),
+        }
+        finish_task_run(task_run, result_payload, session=session)
+        return result_payload
+    except Exception as exc:
+        fail_task_run(task_run, str(exc), session=session)
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="ingestion.ingest_symbol_daily_bars_batch")
+def ingest_symbol_daily_bars_batch_task(
+    symbols: str | list[str],
+    market: str,
+    start: str | None = None,
+    end: str | None = None,
+    provider: str | None = None,
+    exchange: str | None = None,
+    timeframe: str = "1d",
+    asset_type: str = "stock",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    end_date = date.fromisoformat(end) if end else date.today()
+    start_date = date.fromisoformat(start) if start else end_date - timedelta(days=2)
+    normalized_market = market.strip().upper()
+    session = SessionLocal()
+
+    if task_run_id:
+        task_run = session.get(TaskRun, UUID(task_run_id))
+        if task_run is None:
+            session.close()
+            msg = f"Task run not found: {task_run_id}"
+            raise ValueError(msg)
+    else:
+        try:
+            task_input_symbols = normalize_symbol_list(symbols)
+        except ValueError:
+            task_input_symbols = []
+        task_run = start_task_run(
+            "ingestion.ingest_symbol_daily_bars_batch",
+            {
+                "symbols": task_input_symbols,
+                "market": normalized_market,
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+                "provider": provider,
+                "exchange": exchange,
+                "timeframe": timeframe,
+                "asset_type": asset_type,
+            },
+            session=session,
+        )
+
+    try:
+        ingestion_result = ingest_symbol_daily_bars_batch(
+            symbols=symbols,
+            market=normalized_market,
+            start=start_date,
+            end=end_date,
+            session=session,
+            provider_name=provider,
+            exchange=exchange,
+            timeframe=timeframe,
+            asset_type=asset_type,
+        )
+        result_payload = {
+            "symbols": ingestion_result["symbols"],
+            "market": str(ingestion_result["market"]),
+            "asset_type": str(ingestion_result["asset_type"]),
+            "symbol_count": int(ingestion_result["symbol_count"]),
+            "succeeded_count": int(ingestion_result["succeeded_count"]),
+            "no_data_count": int(ingestion_result["no_data_count"]),
+            "failed_count": int(ingestion_result["failed_count"]),
+            "total_bar_count": int(ingestion_result["total_bar_count"]),
+            "status": str(ingestion_result["status"]),
+            "provider": str(ingestion_result["provider"]),
+            "requested_provider": ingestion_result.get("requested_provider"),
+            "timeframe": str(ingestion_result["timeframe"]),
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+            "items": ingestion_result["items"],
+            "diagnostics": ingestion_result["diagnostics"],
         }
         finish_task_run(task_run, result_payload, session=session)
         return result_payload
