@@ -15,6 +15,7 @@ import { Briefcase } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { FlashBanner } from "@/components/flash-banner";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import {
   PortfolioAddPositionForm,
   PortfolioCreateForm,
@@ -148,13 +149,21 @@ export default async function PortfoliosPage({
         <FlashBanner variant="error" message={t("operationFailedDetail", { reason: reason ?? "unknown" })} />
       ) : null}
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="text-muted-foreground">{t("description")}</p>
-        </div>
-        <PortfolioCreateForm locale={locale} className="w-full md:w-auto" />
-      </div>
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[
+          { label: payload?.name ?? selectedPortfolioId, variant: "secondary" },
+          { label: payload?.base_currency ?? "USD" },
+        ]}
+        metrics={[
+          { label: t("totalValue"), value: `$${totalValue.toLocaleString()}`, description: payload ? t("baseCurrency", { currency: payload.base_currency }) : t("loadFailed") },
+          { label: t("unrealizedPnl"), value: `$${unrealizedPnl.toLocaleString()}`, className: getPnlClass(unrealizedPnl, "") },
+          { label: t("returnPct"), value: `${(unrealizedReturnPct * 100).toFixed(2)}%`, className: getPnlClass(unrealizedReturnPct, "") },
+          { label: t("positions"), value: positions.length },
+        ]}
+        actions={<PortfolioCreateForm locale={locale} className="w-full md:w-auto" />}
+      />
 
       {portfolioList.items.length > 0 ? (
         <Card>
@@ -196,47 +205,6 @@ export default async function PortfoliosPage({
               portfolioId={payload.id}
               isDefault={payload.is_default ?? payload.id === "demo"}
             />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{t("totalValue")}</CardTitle>
-                <Briefcase className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">${totalValue.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">
-                  {t("baseCurrency", { currency: payload.base_currency })}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{t("unrealizedPnl")}</CardTitle>
-                <Briefcase className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={getPnlClass(unrealizedPnl, "text-2xl font-bold")}
-                >
-                  ${unrealizedPnl.toLocaleString()}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{t("returnPct")}</CardTitle>
-                <Briefcase className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={getPnlClass(unrealizedReturnPct, "text-2xl font-bold")}
-                >
-                  {(unrealizedReturnPct * 100).toFixed(2)}%
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           <Card>

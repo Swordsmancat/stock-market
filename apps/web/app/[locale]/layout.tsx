@@ -51,11 +51,11 @@ export default async function RootLayout({
           >
             <MarketColorsProvider>
               <ToastProvider />
-              <div className="flex h-screen flex-col overflow-hidden">
+              <div className="flex h-dvh flex-col overflow-hidden bg-background">
                 <TopNavBar />
                 <div className="flex min-w-0 flex-1 overflow-hidden">
                   <SidebarNavigation />
-                  <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+                  <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-panel/60 p-3 pb-24 md:p-5 md:pb-5 lg:p-6">
                     <Breadcrumbs />
                     <BackendStatusBanner />
                     {children}

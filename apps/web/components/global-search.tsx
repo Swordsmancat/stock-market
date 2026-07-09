@@ -70,7 +70,7 @@ export function GlobalSearch() {
       <Button
         type="button"
         variant="outline"
-        className="relative h-9 w-full justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none sm:pr-12 md:w-40 lg:w-64"
+        className="relative h-9 w-full justify-start rounded-md border bg-card text-sm font-normal text-muted-foreground shadow-sm sm:pr-12 md:w-56 lg:w-96"
         onClick={() => setOpen(true)}
       >
         <Search className="mr-2 h-4 w-4 shrink-0" />

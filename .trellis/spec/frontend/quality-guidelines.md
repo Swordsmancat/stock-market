@@ -27,6 +27,34 @@ Frontend quality is enforced mainly through Vitest, Testing Library, and focused
 - Do not change backend API contracts from frontend tests.
 - Do not commit or push from implementation subagents.
 
+## Common Mistakes
+
+### Raw JSON In `next-intl` Messages
+
+**Symptom**: A page renders in tests but the browser console reports `INVALID_MESSAGE: MALFORMED_ARGUMENT` from `next-intl`.
+
+**Cause**: User-visible messages are ICU-formatted. Literal JSON examples such as `{"observations":[...]}` inside `apps/web/messages/*.json` are parsed as interpolation arguments unless every brace is escaped correctly.
+
+**Fix**: Avoid raw JSON with braces in translated message values. Prefer a text placeholder that names the expected fields, or pass dynamic examples from code through an explicit argument.
+
+Wrong:
+
+```json
+{
+  "pastePlaceholder": "{\"observations\":[{\"code\":\"us_10y_yield\"}]}"
+}
+```
+
+Correct:
+
+```json
+{
+  "pastePlaceholder": "JSON or CSV with observations: code, as_of, value, source"
+}
+```
+
+**Tests Required**: When adding complex translated placeholders, browser-smoke the route or render the page through the server component path so malformed ICU messages are caught before delivery.
+
 ---
 
 ## Testing Requirements

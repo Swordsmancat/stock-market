@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Link } from "@/src/i18n/routing";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
 import { IntradayPriceChart } from "@/components/intraday-price-chart";
@@ -32,6 +34,87 @@ function isChartBarData(bar: InstrumentBar): bar is ChartBarData {
     Number.isFinite(bar.high) &&
     Number.isFinite(bar.low) &&
     Number.isFinite(bar.close)
+  );
+}
+
+function formatDetailDate(value: string | null | undefined, locale: string, unavailableLabel: string): string {
+  if (!value) {
+    return unavailableLabel;
+  }
+
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? unavailableLabel : parsedDate.toLocaleDateString(locale);
+}
+
+function formatDetailNumber(value: number | null | undefined, locale: string, unavailableLabel: string): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return unavailableLabel;
+  }
+
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatPercentMetric(value: number | null | undefined, locale: string, unavailableLabel: string): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return unavailableLabel;
+  }
+
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "percent",
+  }).format(value);
+}
+
+function cleanMarkdownPreviewLine(line: string): string {
+  return line
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*]\s+/, "")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/[*_`]/g, "")
+    .trim();
+}
+
+function extractMarkdownPreview(contentMarkdown: string | null | undefined, fallback: string): string {
+  if (!contentMarkdown) {
+    return fallback;
+  }
+
+  const meaningfulLine = contentMarkdown
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (!meaningfulLine) {
+    return fallback;
+  }
+
+  return cleanMarkdownPreviewLine(meaningfulLine) || fallback;
+}
+
+function formatIndicatorValue(value: unknown, locale: string, unavailableLabel: string): string {
+  if (typeof value === "number") {
+    return formatDetailNumber(value, locale, unavailableLabel);
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, nestedValue]) => `${key}: ${formatIndicatorValue(nestedValue, locale, unavailableLabel)}`)
+      .join(" / ");
+  }
+  return unavailableLabel;
+}
+
+function ContextMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-muted/20 p-3">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
+    </div>
   );
 }
 
@@ -148,6 +231,13 @@ export function InstrumentDetailClient({
     as_of: latestBar?.timestamp,
     no_data_reason: data.bars?.no_data_reason,
   });
+  const indicatorEntries = Object.entries(data.indicators?.indicators ?? {});
+  const latestReport = data.latest_daily_report ?? null;
+  const latestReportHasContent = Boolean(latestReport?.content_markdown);
+  const reportHistoryItems = data.daily_report_history?.items ?? [];
+  const fundamentalsItem = data.fundamentals?.item ?? null;
+  const newsItems = data.news?.items ?? [];
+  const latestNews = newsItems[0] ?? null;
 
   return (
     <div className="space-y-6">
@@ -199,6 +289,191 @@ export function InstrumentDetailClient({
         />
 
         <MarketDepthCard marketDepth={data.market_depth ?? null} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <Card className="rounded-md shadow-none">
+          <CardHeader className="border-b bg-muted/20 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>{t("aiReport")}</CardTitle>
+                <CardDescription>{t("aiReportDesc")}</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/reports?symbol=${encodeURIComponent(symbol)}` as any}>
+                  <ExternalLink className="h-4 w-4" />
+                  {t("viewReports")}
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4">
+            {latestReportHasContent ? (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {latestReport?.as_of ? (
+                    <Badge variant="secondary">
+                      {t("reportAsOf", { date: formatDetailDate(latestReport.as_of, locale, t("unavailableShort")) })}
+                    </Badge>
+                  ) : null}
+                  <Badge variant="outline">
+                    {t("reportCitations", { count: latestReport?.citations?.length ?? 0 })}
+                  </Badge>
+                  {latestReport?.task_run_id ? (
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href={`/task-runs/${latestReport.task_run_id}` as any}>
+                        {t("reportTaskRun", { id: latestReport.task_run_id.slice(0, 8) })}
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {extractMarkdownPreview(latestReport?.content_markdown, t("noReport"))}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("noReport")}</p>
+            )}
+
+            {reportHistoryItems.length > 0 ? (
+              <div className="border-t pt-3">
+                <div className="mb-2 text-sm font-semibold">{t("reportHistory")}</div>
+                <div className="space-y-2">
+                  {reportHistoryItems.slice(0, 3).map((report, index) => (
+                    <div key={`${report.as_of ?? "report"}-${index}`} className="rounded-md border p-3 text-sm">
+                      <div className="font-medium">
+                        {report.as_of
+                          ? t("reportAsOf", { date: formatDetailDate(report.as_of, locale, t("unavailableShort")) })
+                          : t("aiReport")}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-muted-foreground">
+                        {extractMarkdownPreview(report.content_markdown, t("noReport"))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4">
+          <Card className="rounded-md shadow-none">
+            <CardHeader className="border-b bg-muted/20 p-4">
+              <CardTitle>{t("technicalIndicators")}</CardTitle>
+              <CardDescription>
+                {t("technicalIndicatorsDesc")}{" "}
+                {data.indicators?.as_of
+                  ? t("indicatorAsOf", {
+                      date: formatDetailDate(data.indicators.as_of, locale, t("unavailableShort")),
+                    })
+                  : null}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+              {indicatorEntries.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {indicatorEntries.map(([code, value]) => (
+                    <div key={code} className="rounded-md border p-3">
+                      <div className="font-mono text-xs text-muted-foreground">{code}</div>
+                      <div className="mt-1 text-sm font-medium">
+                        {formatIndicatorValue(value, locale, t("unavailableShort"))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("noTechnicalIndicators")}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-md shadow-none">
+            <CardHeader className="border-b bg-muted/20 p-4">
+              <CardTitle>{t("fundamentalsSummary")}</CardTitle>
+              <CardDescription>{t("fundamentalsDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4">
+              {fundamentalsItem ? (
+                <>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <ContextMetric label={t("fundamentalPeRatio")} value={formatDetailNumber(fundamentalsItem.pe_ratio, locale, t("unavailableShort"))} />
+                    <ContextMetric label={t("fundamentalRevenueGrowth")} value={formatPercentMetric(fundamentalsItem.revenue_growth, locale, t("unavailableShort"))} />
+                    <ContextMetric label={t("fundamentalNetMargin")} value={formatPercentMetric(fundamentalsItem.net_margin, locale, t("unavailableShort"))} />
+                    <ContextMetric label={t("fundamentalDebtToAssets")} value={formatPercentMetric(fundamentalsItem.debt_to_assets, locale, t("unavailableShort"))} />
+                  </div>
+                  {fundamentalsItem.summary ? (
+                    <p className="text-sm leading-6 text-muted-foreground">{fundamentalsItem.summary}</p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">
+                      {t("sourceValue", { source: data.fundamentals?.source ?? t("unavailableShort") })}
+                    </Badge>
+                    {data.fundamentals?.as_of ? (
+                      <Badge variant="outline">
+                        {t("fundamentalAsOf", {
+                          date: formatDetailDate(data.fundamentals.as_of, locale, t("unavailableShort")),
+                        })}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("noFundamentals")}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-md shadow-none">
+            <CardHeader className="border-b bg-muted/20 p-4">
+              <CardTitle>{t("latestNews")}</CardTitle>
+              <CardDescription>{t("latestNewsDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4">
+              {latestNews ? (
+                <>
+                  <div className="space-y-2 rounded-md border p-3">
+                    <div className="font-medium leading-6">{latestNews.title}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {latestNews.sentiment ? <Badge variant="secondary">{latestNews.sentiment}</Badge> : null}
+                      {typeof latestNews.confidence === "number" ? (
+                        <Badge variant="outline">
+                          {t("confidence", { score: Math.round(latestNews.confidence * 100) })}
+                        </Badge>
+                      ) : null}
+                      {latestNews.published_at ? (
+                        <Badge variant="outline">
+                          {formatDetailDate(latestNews.published_at, locale, t("unavailableShort"))}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    {latestNews.summary ? (
+                      <p className="text-sm text-muted-foreground">{latestNews.summary}</p>
+                    ) : null}
+                    {latestNews.url ? (
+                      <a
+                        href={latestNews.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                      >
+                        {t("readNews")}
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                      </a>
+                    ) : null}
+                  </div>
+                  {newsItems.length > 1 ? (
+                    <div className="text-xs text-muted-foreground">
+                      {t("newsArticleCount", { count: newsItems.length })}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("noNews")}</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card className="rounded-md shadow-none">

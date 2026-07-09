@@ -190,7 +190,7 @@ export function HotSectors({
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="text-base">🔥 {t("hotSectorsTitle")}</CardTitle>
+          <CardTitle className="text-base">{t("hotSectorsTitle")}</CardTitle>
           <CardDescription className="text-xs">{t("hotSectorsDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -215,7 +215,7 @@ export function HotSectors({
       <Card className={className}>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-base">🔥 {t("hotSectorsTitle")}</CardTitle>
+            <CardTitle className="text-base">{t("hotSectorsTitle")}</CardTitle>
             <Badge variant={statusBadgeVariant}>{statusBadgeLabel}</Badge>
           </div>
           <CardDescription className="text-xs">{message ?? t("hotSectorsDesc")}</CardDescription>
@@ -241,7 +241,7 @@ export function HotSectors({
     <Card className={className}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">🔥 {t("hotSectorsTitle")}</CardTitle>
+          <CardTitle className="text-base">{t("hotSectorsTitle")}</CardTitle>
           <Badge variant={statusBadgeVariant}>{statusBadgeLabel}</Badge>
         </div>
         <CardDescription className="text-xs">

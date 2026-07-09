@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { backendFetch } from "@/lib/backend-api";
 
 type AlertTrigger = {
@@ -45,10 +46,17 @@ export default async function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("description")}</p>
-      </div>
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[]}
+        metrics={[
+          { label: t("recentTriggers"), value: payload.items.length, description: t("triggerHistoryDesc") },
+          { label: t("symbol"), value: new Set(payload.items.map((item) => item.symbol)).size },
+          { label: t("market"), value: new Set(payload.items.map((item) => item.market)).size },
+          { label: t("rule"), value: new Set(payload.items.map((item) => item.rule_key)).size },
+        ]}
+      />
 
       <Card>
         <CardHeader>

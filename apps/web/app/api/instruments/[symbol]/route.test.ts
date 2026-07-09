@@ -135,6 +135,11 @@ it("fetches instrument latest and bars using the backend date-range contract", a
     "/market-data/AAPL/depth?depth_levels=5&large_order_threshold_amount=1000000&provider=yfinance",
     { cache: "no-store" },
   );
+  expect(backendFetchMock).toHaveBeenCalledWith("/indicators/AAPL", { cache: "no-store" });
+  expect(backendFetchMock).toHaveBeenCalledWith("/fundamentals/AAPL", { cache: "no-store" });
+  expect(backendFetchMock).toHaveBeenCalledWith("/news/AAPL", { cache: "no-store" });
+  expect(backendFetchMock).toHaveBeenCalledWith("/reports/AAPL/daily/latest", { cache: "no-store" });
+  expect(backendFetchMock).toHaveBeenCalledWith("/reports/AAPL/daily/history?limit=5", { cache: "no-store" });
 
   expect(response.status).toBe(200);
   await expect(response.json()).resolves.toEqual({
@@ -153,6 +158,25 @@ it("fetches instrument latest and bars using the backend date-range contract", a
       availability: { status: "degraded", reason: "Provider does not support intraday data." },
     },
     market_depth: buildMarketDepthPayload(),
+    indicators: { symbol: "AAPL", source: "database", indicators: {} },
+    fundamentals: { symbol: "AAPL", source: null, item: null },
+    news: {
+      symbol: "AAPL",
+      source: null,
+      summary: { latest_sentiment: null, article_count: 0 },
+      items: [],
+    },
+    latest_daily_report: {
+      symbol: "AAPL",
+      report_type: "stock_daily",
+      source: "database",
+      items: [],
+    },
+    daily_report_history: {
+      symbol: "AAPL",
+      source: "database",
+      items: [],
+    },
     range: { timeframe: "1d", start: "2026-01-04", end: "2026-07-03" },
   });
 });

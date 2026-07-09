@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Bar,
   Cell,
+  CartesianGrid,
   ComposedChart,
   Line,
   ResponsiveContainer,
@@ -23,6 +24,9 @@ type CompactCandlestickChartProps = {
   data: Array<Partial<OhlcBar> & { timestamp: string; close: number }>;
   emptyMessage: string;
   className?: string;
+  candleBarSize?: number;
+  plotHeight?: number;
+  showGrid?: boolean;
 };
 
 type CompactCandleShapeProps = {
@@ -84,6 +88,9 @@ export function CompactCandlestickChart({
   data,
   emptyMessage,
   className,
+  candleBarSize = 8,
+  plotHeight = 142,
+  showGrid = false,
 }: CompactCandlestickChartProps) {
   const normalizedBars = React.useMemo(
     () => data.map((bar) => deriveOhlcBar(bar)),
@@ -107,12 +114,19 @@ export function CompactCandlestickChart({
   const domainMin = minPrice - padding;
   const domainMax = maxPrice + padding;
   const hasVolume = normalizedBars.some((bar) => bar.volume !== undefined);
-  const plotHeight = 142;
 
   return (
     <div className={className ?? "h-40 w-full"}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+          {showGrid ? (
+            <CartesianGrid
+              stroke="hsl(var(--border))"
+              strokeDasharray="3 6"
+              vertical={false}
+              opacity={0.45}
+            />
+          ) : null}
           <XAxis dataKey="date" hide />
           <YAxis yAxisId="price" domain={[domainMin, domainMax]} hide />
           {hasVolume ? <YAxis yAxisId="volume" orientation="right" hide /> : null}
@@ -141,7 +155,7 @@ export function CompactCandlestickChart({
           <Bar
             yAxisId="price"
             dataKey="close"
-            barSize={8}
+            barSize={candleBarSize}
             shape={(props) => (
               <CompactCandleShape
                 {...props}

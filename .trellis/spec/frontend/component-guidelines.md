@@ -80,6 +80,22 @@ Do not pass functions such as `description: (count) => t("key", { count })` acro
 
 If a badge intentionally repeats the title text, tests should target the semantic heading with `getByRole("heading", { name })` instead of assuming a unique text node.
 
+### Convention: Curated Dashboard Homepage
+
+**What**: The dashboard homepage is a curated market overview, not a full research workspace. Keep it limited to the top index ticker, core US/A-share index cards, macro favorites, hot sectors, latest news sentiment, and compact important status. Put AI research briefs, source-readiness workflows, recommendations, comparison tools, K-line workspaces, reports, technical indicators, and fundamentals in their routed modules.
+
+**Why**: The homepage is the scan-first entry point. Expanding every feature there makes the product harder to read and duplicates ownership from AI Research, Macro Research, Instruments, Reports, Alerts, and Task Runs.
+
+**Example**:
+
+```tsx
+<MarketTicker items={tickerItems} labels={tickerLabels} />
+<FinancialDashboardHero title={t("homeOverviewTitle")} metrics={homepageMetrics} />
+<HotSectors sectors={hotSectorItemsForHome} />
+```
+
+Use page tests to assert both sides of the contract: the curated market sections render, and deep modules such as `AI research brief`, `Followed K-line charts`, `Daily Report`, and `Technical Indicators` do not render on the homepage. When moving a deep module off the homepage, also add or update the owning submodule test so the feature is still visible in its routed home, for example AI workflows under AI Research, comparison/K-line workflows under Instruments, and reports or report history under Reports or Instrument Detail.
+
 ---
 
 ## Accessibility

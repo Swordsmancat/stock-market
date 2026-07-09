@@ -18,6 +18,7 @@ import {
   type EvidenceSeedImportReviewLabels,
 } from "@/components/evidence-seed-import-review";
 import { ErrorState } from "@/components/error-state";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import {
   OfficialMacroRefreshActions,
   type OfficialMacroRefreshActionsLabels,
@@ -1173,15 +1174,29 @@ export default async function EvidenceCenterPage({
   if (marketOverviewResult.status === "failed") {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-            <p className="text-muted-foreground">{t("description")}</p>
-          </div>
-          <Button variant="outline" asChild>
-            <Link href="/settings">{t("openSettings")}</Link>
-          </Button>
-        </div>
+        <FinancialPageHeader
+          title={t("title")}
+          description={t("description")}
+          badges={[
+            { label: t("badge"), variant: "secondary" },
+            { label: t("activeProvider", { provider }) },
+          ]}
+          metrics={[
+            { label: t("metricIndicators"), value: t("unavailableShort"), description: t("metricIndicatorsDesc") },
+            { label: t("metricCitable"), value: t("unavailableShort"), description: t("metricCitableDesc") },
+            { label: t("metricMissing"), value: t("unavailableShort"), description: t("metricMissingDesc") },
+            {
+              label: t("metricSourcesNeedAction"),
+              value: t("unavailableShort"),
+              description: t("metricSourcesNeedActionDesc"),
+            },
+          ]}
+          actions={
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/settings">{t("openSettings")}</Link>
+            </Button>
+          }
+        />
         <ErrorState title={t("loadFailedTitle")} description={t("loadFailedDescription")} />
       </div>
     );
@@ -1215,38 +1230,35 @@ export default async function EvidenceCenterPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{t("badge")}</Badge>
-            <Badge variant="outline">{t("activeProvider", { provider })}</Badge>
-            <Badge variant="outline">
-              {t("generatedAt", { date: formatDate(payload.generated_at, locale, t("unavailableShort")) })}
-            </Badge>
-          </div>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="mt-1 text-muted-foreground">{t("description")}</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="outline" asChild>
-            <Link href="/reports">{t("openReports")}</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/task-runs">{t("openTaskRuns")}</Link>
-          </Button>
-        </div>
-      </div>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {renderMetric(t("metricIndicators"), indicators.length, t("metricIndicatorsDesc"))}
-        {renderMetric(t("metricCitable"), citableIndicatorCount, t("metricCitableDesc"))}
-        {renderMetric(t("metricMissing"), missingIndicatorCount, t("metricMissingDesc"))}
-        {renderMetric(
-          t("metricSourcesNeedAction"),
-          informationSources?.summary?.needs_action ?? 0,
-          t("metricSourcesNeedActionDesc"),
-        )}
-      </section>
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[
+          { label: t("badge"), variant: "secondary" },
+          { label: t("activeProvider", { provider }) },
+          { label: t("generatedAt", { date: formatDate(payload.generated_at, locale, t("unavailableShort")) }) },
+        ]}
+        metrics={[
+          { label: t("metricIndicators"), value: indicators.length, description: t("metricIndicatorsDesc") },
+          { label: t("metricCitable"), value: citableIndicatorCount, description: t("metricCitableDesc") },
+          { label: t("metricMissing"), value: missingIndicatorCount, description: t("metricMissingDesc") },
+          {
+            label: t("metricSourcesNeedAction"),
+            value: informationSources?.summary?.needs_action ?? 0,
+            description: t("metricSourcesNeedActionDesc"),
+          },
+        ]}
+        actions={
+          <>
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/reports">{t("openReports")}</Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/task-runs">{t("openTaskRuns")}</Link>
+            </Button>
+          </>
+        }
+      />
 
       {renderOfficialRefreshGuidance(
         indicators,

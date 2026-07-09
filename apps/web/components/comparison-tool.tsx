@@ -19,10 +19,31 @@ import {
   buildNormalizedComparisonChartData,
   calculateComparisonSummaries,
   type ComparisonInstrument,
+  type ComparisonReportLabels,
 } from "@/lib/comparison-utils";
+
+export type ComparisonToolLabels = {
+  title: string;
+  description: string;
+  insufficientTitle: string;
+  insufficientDescription: string;
+  insufficientBody: string;
+  exportReport: string;
+  selectAtLeastTwo: string;
+  returnsTitle: string;
+  correlationTitle: string;
+  instrument: string;
+  startClose: string;
+  latestClose: string;
+  intervalReturn: string;
+  volatility: string;
+  report: ComparisonReportLabels;
+};
 
 type ComparisonToolProps = {
   instruments: ComparisonInstrument[];
+  labels: ComparisonToolLabels;
+  locale: string;
   className?: string;
 };
 
@@ -30,12 +51,12 @@ const COMPARISON_COLORS = ["#2563eb", "#16a34a", "#dc2626", "#9333ea"];
 const MAX_SELECTED_INSTRUMENTS = 4;
 const MIN_SELECTED_INSTRUMENTS = 2;
 
-function formatPercent(value: number | null): string {
+function formatPercent(value: number | null, locale: string): string {
   if (value === null) {
     return "--";
   }
 
-  const formattedValue = new Intl.NumberFormat("zh-CN", {
+  const formattedValue = new Intl.NumberFormat(locale, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
     style: "percent",
@@ -50,18 +71,18 @@ function formatPercent(value: number | null): string {
   return formattedValue;
 }
 
-function formatNumber(value: number | null): string {
+function formatNumber(value: number | null, locale: string): string {
   if (value === null) {
     return "--";
   }
 
-  return new Intl.NumberFormat("zh-CN", {
+  return new Intl.NumberFormat(locale, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   }).format(value);
 }
 
-export function ComparisonTool({ instruments, className = "" }: ComparisonToolProps) {
+export function ComparisonTool({ instruments, labels, locale, className = "" }: ComparisonToolProps) {
   const availableInstruments = React.useMemo(
     () => instruments.filter((instrument) => instrument.bars.length > 0).slice(0, 12),
     [instruments],
@@ -119,6 +140,7 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
       selectedInstruments,
       summaries,
       correlationMatrix,
+      labels: labels.report,
     });
     const reportBlob = new Blob([reportText], { type: "text/plain;charset=utf-8" });
     const reportUrl = URL.createObjectURL(reportBlob);
@@ -133,10 +155,10 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="text-base">对比分析</CardTitle>
-          <CardDescription className="text-xs">需要至少 2 个有历史数据的标的</CardDescription>
+          <CardTitle className="text-base">{labels.insufficientTitle}</CardTitle>
+          <CardDescription className="text-xs">{labels.insufficientDescription}</CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">暂无足够标的用于对比。</CardContent>
+        <CardContent className="text-sm text-muted-foreground">{labels.insufficientBody}</CardContent>
       </Card>
     );
   }
@@ -146,10 +168,8 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-base">对比分析</CardTitle>
-            <CardDescription className="text-xs">
-              支持选择 2-4 个指数/标的，查看归一化走势、收益和相关性
-            </CardDescription>
+            <CardTitle className="text-base">{labels.title}</CardTitle>
+            <CardDescription className="text-xs">{labels.description}</CardDescription>
           </div>
           <Button
             type="button"
@@ -158,7 +178,7 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
             onClick={exportReport}
             disabled={selectedInstruments.length < MIN_SELECTED_INSTRUMENTS}
           >
-            导出对比报告
+            {labels.exportReport}
           </Button>
         </div>
       </CardHeader>
@@ -190,7 +210,7 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
 
         {selectedInstruments.length < MIN_SELECTED_INSTRUMENTS ? (
           <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
-            请至少选择 2 个标的进行对比。
+            {labels.selectAtLeastTwo}
           </div>
         ) : (
           <>
@@ -199,7 +219,7 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
                 <LineChart data={chartData}>
                   <XAxis dataKey="timestamp" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} domain={["dataMin - 2", "dataMax + 2"]} />
-                  <Tooltip formatter={(value) => formatNumber(typeof value === "number" ? value : null)} />
+                  <Tooltip formatter={(value) => formatNumber(typeof value === "number" ? value : null, locale)} />
                   {selectedInstruments.map((instrument, instrumentIndex) => (
                     <Line
                       key={instrument.id}
@@ -217,16 +237,16 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
 
             <div className="grid gap-4 xl:grid-cols-2">
               <div className="space-y-2">
-                <div className="text-sm font-semibold">涨跌幅对比</div>
+                <div className="text-sm font-semibold">{labels.returnsTitle}</div>
                 <div className="overflow-x-auto rounded-md border">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-xs text-muted-foreground">
                       <tr>
-                        <th className="px-3 py-2 text-left">标的</th>
-                        <th className="px-3 py-2 text-right">起始价</th>
-                        <th className="px-3 py-2 text-right">最新价</th>
-                        <th className="px-3 py-2 text-right">区间收益</th>
-                        <th className="px-3 py-2 text-right">波动率</th>
+                        <th className="px-3 py-2 text-left">{labels.instrument}</th>
+                        <th className="px-3 py-2 text-right">{labels.startClose}</th>
+                        <th className="px-3 py-2 text-right">{labels.latestClose}</th>
+                        <th className="px-3 py-2 text-right">{labels.intervalReturn}</th>
+                        <th className="px-3 py-2 text-right">{labels.volatility}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -236,14 +256,14 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
                             <div className="font-medium">{summary.symbol}</div>
                             <div className="text-xs text-muted-foreground">{summary.name}</div>
                           </td>
-                          <td className="px-3 py-2 text-right font-mono">{formatNumber(summary.startClose)}</td>
-                          <td className="px-3 py-2 text-right font-mono">{formatNumber(summary.latestClose)}</td>
+                          <td className="px-3 py-2 text-right font-mono">{formatNumber(summary.startClose, locale)}</td>
+                          <td className="px-3 py-2 text-right font-mono">{formatNumber(summary.latestClose, locale)}</td>
                           <td className="px-3 py-2 text-right font-mono">
                             <Badge variant={summary.percentChange >= 0 ? "secondary" : "destructive"}>
-                              {formatPercent(summary.percentChange)}
+                              {formatPercent(summary.percentChange, locale)}
                             </Badge>
                           </td>
-                          <td className="px-3 py-2 text-right font-mono">{formatPercent(summary.volatility)}</td>
+                          <td className="px-3 py-2 text-right font-mono">{formatPercent(summary.volatility, locale)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -252,12 +272,12 @@ export function ComparisonTool({ instruments, className = "" }: ComparisonToolPr
               </div>
 
               <div className="space-y-2">
-                <div className="text-sm font-semibold">皮尔逊相关系数</div>
+                <div className="text-sm font-semibold">{labels.correlationTitle}</div>
                 <div className="overflow-x-auto rounded-md border">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-xs text-muted-foreground">
                       <tr>
-                        <th className="px-3 py-2 text-left">标的</th>
+                        <th className="px-3 py-2 text-left">{labels.instrument}</th>
                         {selectedInstruments.map((instrument) => (
                           <th key={instrument.id} className="px-3 py-2 text-right">
                             {instrument.symbol}

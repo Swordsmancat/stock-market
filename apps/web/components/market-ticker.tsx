@@ -2,7 +2,6 @@
 
 import { memo, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMarketColorsContext } from "@/context/market-colors-context";
 import { createDataTrustSignal, getDataTrustTitle } from "@/lib/data-trust";
 
@@ -25,6 +24,12 @@ type TickerItem = {
 
 interface MarketTickerProps {
   items: TickerItem[];
+  labels?: {
+    allMarkets: string;
+    cnMarket: string;
+    hkMarket: string;
+    usMarket: string;
+  };
   className?: string;
 }
 
@@ -58,24 +63,35 @@ function formatPercent(value: number | null, locale: string, fallback: string): 
 
 function getTickerMovementColor(value: number, getMovementColor: (value: number) => string): string {
   if (value === 0) {
-    return "text-gray-300";
+    return "text-muted-foreground";
   }
   return getMovementColor(value);
 }
 
-function MarketTickerComponent({ items, className }: MarketTickerProps) {
+function MarketTickerComponent({ items, labels, className }: MarketTickerProps) {
   const locale = "zh-CN";
   const [selectedMarket, setSelectedMarket] = useState<string>("all");
   const { getMovementColor } = useMarketColorsContext();
+  const resolvedLabels = labels ?? {
+    allMarkets: "All",
+    cnMarket: "CN",
+    hkMarket: "HK",
+    usMarket: "US",
+  };
 
   const marketOptions = useMemo(
     () => [
-      { value: "all", label: "全部市场" },
-      { value: "CN", label: "中国A股" },
-      { value: "HK", label: "香港" },
-      { value: "US", label: "美股" },
+      { value: "all", label: resolvedLabels.allMarkets },
+      { value: "CN", label: resolvedLabels.cnMarket },
+      { value: "HK", label: resolvedLabels.hkMarket },
+      { value: "US", label: resolvedLabels.usMarket },
     ],
-    [],
+    [
+      resolvedLabels.allMarkets,
+      resolvedLabels.cnMarket,
+      resolvedLabels.hkMarket,
+      resolvedLabels.usMarket,
+    ],
   );
 
   const filteredItems = useMemo(
@@ -88,30 +104,33 @@ function MarketTickerComponent({ items, className }: MarketTickerProps) {
   return (
     <div
       className={cn(
-        "bg-black text-white border-b border-gray-800",
+        "border-b bg-background/95 text-foreground",
         className
       )}
     >
-      <div className="flex items-center gap-4 overflow-hidden px-4 py-2">
-        <Select value={selectedMarket} onValueChange={setSelectedMarket}>
-          <SelectTrigger className="h-7 w-32 shrink-0 bg-gray-900 border-gray-700 text-white text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-gray-900 border-gray-700">
-            {marketOptions.map(option => (
-              <SelectItem 
-                key={option.value} 
-                value={option.value}
-                className="text-white hover:bg-gray-800 focus:bg-gray-800"
+      <div className="flex items-center gap-3 overflow-hidden px-3 py-2 sm:px-4">
+        <div className="flex shrink-0 items-center gap-1 rounded-sm border bg-card p-0.5">
+          {marketOptions.map((option) => {
+            const isSelected = selectedMarket === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={isSelected}
+                className={cn(
+                  "h-7 rounded-sm px-2 text-xs font-medium transition-colors hover:bg-muted",
+                  isSelected ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground",
+                )}
+                onClick={() => setSelectedMarket(option.value)}
               >
                 {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              </button>
+            );
+          })}
+        </div>
 
         <div className="min-w-0 flex-1">
-          <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="flex min-w-0 max-w-full gap-3 overflow-x-auto whitespace-nowrap scrollbar-thin [contain:layout_paint]">
             {filteredItems.map((item) => {
               const changeValue = item.change ?? 0;
               const changeColor = getTickerMovementColor(changeValue, getMovementColor);
@@ -130,11 +149,11 @@ function MarketTickerComponent({ items, className }: MarketTickerProps) {
               return (
                 <div
                   key={item.code}
-                  className="inline-flex min-w-0 items-center gap-2 font-mono text-sm whitespace-nowrap"
+                  className="inline-flex min-w-[15rem] items-center gap-2 rounded-sm border bg-card px-2 py-1 font-mono text-sm"
                   title={trustTitle}
                   aria-label={`${item.name} ${trustTitle}`}
                 >
-                  <span className="truncate text-gray-400 font-sans">{item.name}</span>
+                  <span className="truncate font-sans text-muted-foreground">{item.name}</span>
                   <span className="shrink-0 font-bold">
                     {formatNumber(item.close, locale, "--")}
                   </span>

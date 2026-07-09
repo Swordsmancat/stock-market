@@ -80,6 +80,21 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
         ),
       );
     }
+    if (url.includes("/market-data/AAPL/bars")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "AAPL",
+            source: "database",
+            items: [
+              { timestamp: "2026-01-19", close: 100 },
+              { timestamp: "2026-01-20", close: 101 },
+              { timestamp: "2026-01-21", close: 102.15 },
+            ],
+          }),
+        ),
+      );
+    }
     if (url.includes("/market-data/MSFT/latest")) {
       return Promise.resolve(
         new Response(
@@ -91,6 +106,21 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
             status: "no_data",
             no_data_reason: "No daily bars were available for the requested symbol/date range.",
             item: null,
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/MSFT/bars")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "MSFT",
+            source: "database",
+            items: [
+              { timestamp: "2026-01-19", close: 200 },
+              { timestamp: "2026-01-20", close: 198 },
+              { timestamp: "2026-01-21", close: 199 },
+            ],
           }),
         ),
       );
@@ -111,15 +141,18 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
   expect(screen.getByText("Visible daily-bar health")).toBeInTheDocument();
   expect(screen.getByText("Latest daily-bar health for 2 of 2 instruments using yfinance.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "AAPL" })).toHaveAttribute("href", "/instruments/AAPL");
-  expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+  expect(screen.getAllByText("Apple Inc.").length).toBeGreaterThan(0);
   expect(screen.getByText("$102.15")).toBeInTheDocument();
   expect(screen.getByText("Source: database")).toBeInTheDocument();
   expect(screen.getAllByText("Provider: yfinance").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Fresh").length).toBeGreaterThan(0);
-  expect(screen.getByText("Microsoft Corp.")).toBeInTheDocument();
+  expect(screen.getAllByText("Microsoft Corp.").length).toBeGreaterThan(0);
   expect(screen.getByText("No latest daily bar.")).toBeInTheDocument();
   expect(screen.getAllByText("No data").length).toBeGreaterThan(0);
   expect(screen.getAllByRole("link", { name: /Reports/ })[0]).toHaveAttribute("href", "/reports?symbol=AAPL");
+  expect(screen.getByText("Comparison analysis")).toBeInTheDocument();
+  expect(screen.getByText("Return comparison")).toBeInTheDocument();
+  expect(screen.getByText("Pearson correlation")).toBeInTheDocument();
 });
 
 it("renders an actionable empty state when the instrument list is empty", async () => {

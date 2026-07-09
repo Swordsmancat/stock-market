@@ -3,6 +3,8 @@ import { getTranslations } from "next-intl/server";
 
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
+import { FinancialPageHeader } from "@/components/financial-page-header";
+import { ComparisonTool } from "@/components/comparison-tool";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,11 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { backendFetch } from "@/lib/backend-api";
+import { getDashboardDateRanges } from "@/lib/dates";
 import { withProviderQuery } from "@/lib/market-data";
+import type { ComparisonInstrument } from "@/lib/comparison-utils";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
 import { Link } from "@/src/i18n/routing";
 
 const MAX_LATEST_DAILY_BAR_REQUESTS = 25;
+const MAX_COMPARISON_BAR_REQUESTS = 8;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 type Instrument = {
@@ -50,6 +55,13 @@ type LatestDailyBarPayload = {
     timestamp?: string;
     close?: number;
   } | null;
+};
+
+type ComparisonBarsPayload = {
+  items?: Array<{
+    timestamp?: string;
+    close?: number | null;
+  }>;
 };
 
 type InstrumentsLoadResult =
@@ -122,6 +134,57 @@ async function fetchLatestDailyBar(
   } catch {
     return { status: "failed" };
   }
+}
+
+async function fetchComparisonBars(
+  symbol: string,
+  provider: string,
+  range: { start: string; end: string },
+): Promise<ComparisonBarsPayload> {
+  try {
+    const response = await backendFetch(
+      withProviderQuery(
+        `/market-data/${encodeURIComponent(symbol)}/bars?timeframe=1d&start=${range.start}&end=${range.end}`,
+        provider,
+      ),
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return { items: [] };
+    }
+
+    return (await response.json()) as ComparisonBarsPayload;
+  } catch {
+    return { items: [] };
+  }
+}
+
+async function buildComparisonInstruments(
+  instruments: Instrument[],
+  provider: string,
+  range: { start: string; end: string },
+): Promise<ComparisonInstrument[]> {
+  const comparisonCandidates = instruments.slice(0, MAX_COMPARISON_BAR_REQUESTS);
+  const barsPayloads = await Promise.all(
+    comparisonCandidates.map((instrument) => fetchComparisonBars(instrument.symbol, provider, range)),
+  );
+
+  return comparisonCandidates.map((instrument, index) => ({
+    id: `${instrument.market}-${instrument.symbol}`,
+    symbol: instrument.symbol,
+    name: instrument.name,
+    market: instrument.market,
+    bars: (barsPayloads[index].items ?? []).flatMap((bar) =>
+      typeof bar.timestamp === "string"
+        ? [
+            {
+              timestamp: bar.timestamp,
+              close: bar.close ?? null,
+            },
+          ]
+        : [],
+    ),
+  }));
 }
 
 function getCurrencyCode(instrument: Instrument): string {
@@ -261,12 +324,18 @@ export default async function InstrumentsPage({
   if (instrumentsResult.status === "failed") {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-            <p className="text-muted-foreground">{t("description")}</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+        <FinancialPageHeader
+          title={t("title")}
+          description={t("description")}
+          badges={[{ label: t("activeProvider", { provider: activeProvider }), variant: "secondary" }]}
+          metrics={[
+            { label: t("visibleInstruments"), value: 0 },
+            { label: t("fresh"), value: 0 },
+            { label: t("stale"), value: 0 },
+            { label: t("unavailable"), value: 0 },
+          ]}
+          actions={
+            <div className="flex flex-col gap-2 sm:flex-row">
             <Button variant="outline" asChild>
               <Link href="/settings">
                 <Settings className="mr-2 h-4 w-4" />
@@ -280,7 +349,8 @@ export default async function InstrumentsPage({
               </Link>
             </Button>
           </div>
-        </div>
+          }
+        />
         <Card>
           <CardContent className="pt-6">
             <ErrorState title={t("loadFailed")} description={t("loadFailedHint")} />
@@ -292,23 +362,30 @@ export default async function InstrumentsPage({
 
   const instruments = instrumentsResult.payload.items;
   const visibleInstruments = instruments.slice(0, MAX_LATEST_DAILY_BAR_REQUESTS);
+  const { analysis } = getDashboardDateRanges();
   const latestDailyBars = await Promise.all(
     visibleInstruments.map((instrument) => fetchLatestDailyBar(instrument.symbol, activeProvider)),
   );
+  const comparisonInstruments = await buildComparisonInstruments(visibleInstruments, activeProvider, analysis);
   const latestDailyBarHealthCounts = countLatestDailyBarHealth(latestDailyBars);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="text-muted-foreground">{t("description")}</p>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline">{t("dataSource", { source: instrumentsResult.payload.source })}</Badge>
-            <Badge variant="outline">{t("activeProvider", { provider: activeProvider })}</Badge>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[
+          { label: t("dataSource", { source: instrumentsResult.payload.source }), variant: "secondary" },
+          { label: t("activeProvider", { provider: activeProvider }) },
+        ]}
+        metrics={[
+          { label: t("visibleInstruments"), value: visibleInstruments.length, description: t("tableDescription", { visible: visibleInstruments.length, total: instruments.length }) },
+          { label: t("fresh"), value: latestDailyBarHealthCounts.fresh },
+          { label: t("stale"), value: latestDailyBarHealthCounts.stale },
+          { label: t("unavailable"), value: latestDailyBarHealthCounts.unavailable + latestDailyBarHealthCounts.no_data },
+        ]}
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row">
           <Button variant="outline" asChild>
             <Link href="/settings">
               <Settings className="mr-2 h-4 w-4" />
@@ -322,7 +399,8 @@ export default async function InstrumentsPage({
             </Link>
           </Button>
         </div>
-      </div>
+        }
+      />
 
       <Card>
         <CardContent className="pt-6">
@@ -336,7 +414,7 @@ export default async function InstrumentsPage({
               name="market"
               defaultValue={resolvedSearchParams.market ?? ""}
               aria-label={t("market")}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+              className="flex h-10 rounded-sm border border-input bg-background px-3 py-2 text-sm ring-offset-background"
             >
               <option value="">{t("allMarkets")}</option>
               <option value="US">US</option>
@@ -487,6 +565,41 @@ export default async function InstrumentsPage({
           )}
         </CardContent>
       </Card>
+
+      <ComparisonTool
+        instruments={comparisonInstruments}
+        locale={locale}
+        labels={{
+          title: t("comparisonTitle"),
+          description: t("comparisonDescription"),
+          insufficientTitle: t("comparisonInsufficientTitle"),
+          insufficientDescription: t("comparisonInsufficientDescription"),
+          insufficientBody: t("comparisonInsufficientBody"),
+          exportReport: t("comparisonExportReport"),
+          selectAtLeastTwo: t("comparisonSelectAtLeastTwo"),
+          returnsTitle: t("comparisonReturnsTitle"),
+          correlationTitle: t("comparisonCorrelationTitle"),
+          instrument: t("comparisonInstrument"),
+          startClose: t("comparisonStartClose"),
+          latestClose: t("comparisonLatestClose"),
+          intervalReturn: t("comparisonIntervalReturn"),
+          volatility: t("comparisonVolatility"),
+          report: {
+            title: t("comparisonReportTitle"),
+            generatedAt: t("comparisonReportGeneratedAt"),
+            selectedInstruments: t("comparisonReportSelectedInstruments"),
+            summaryMetrics: t("comparisonReportSummaryMetrics"),
+            correlationMatrix: t("comparisonReportCorrelationMatrix"),
+            instrument: t("comparisonInstrument"),
+            name: t("name"),
+            market: t("market"),
+            startClose: t("comparisonStartClose"),
+            latestClose: t("comparisonLatestClose"),
+            intervalReturn: t("comparisonIntervalReturn"),
+            volatility: t("comparisonVolatility"),
+          },
+        }}
+      />
     </div>
   );
 }

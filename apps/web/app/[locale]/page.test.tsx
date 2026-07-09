@@ -1,5 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+const { getPlatformSettingsMock } = vi.hoisted(() => ({
+  getPlatformSettingsMock: vi.fn(),
+}));
 
 vi.mock("@/lib/dates", () => ({
   getDashboardDateRanges: () => ({
@@ -23,11 +27,64 @@ vi.mock("@/context/market-colors-context", () => ({
   }),
 }));
 
+vi.mock("@/lib/platform-settings-store", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/platform-settings-store")>(
+    "@/lib/platform-settings-store",
+  );
+  return {
+    ...actual,
+    getPlatformSettings: getPlatformSettingsMock,
+  };
+});
+
 import HomePage from "./page";
+
+function buildPlatformSettings(overrides: Record<string, unknown> = {}) {
+  return {
+    market_data_provider: "yfinance",
+    llm_provider: "mock",
+    llm_api_key: "",
+    llm_api_base: "https://api.openai.com/v1",
+    akshare_enabled: false,
+    tushare_token: "",
+    tushare_http_url: "",
+    color_scheme: "china",
+    favorite_home_index_codes: [
+      "us_sp_500",
+      "us_nasdaq_composite",
+      "us_dow_jones",
+      "cn_shanghai_composite",
+      "cn_shenzhen_component",
+      "cn_csi_300",
+      "cn_chinext",
+      "cn_csi_500",
+    ],
+    home_index_display_fields: ["latest_close", "percent_change", "freshness", "as_of", "region"],
+    favorite_macro_indicator_codes: [
+      "buffett_indicator_us",
+      "buffett_indicator_cn",
+      "buffett_indicator_hk",
+      "us_10y_yield",
+      "us_10y_2y_spread",
+      "us_cpi_yoy",
+      "us_m2_yoy",
+      "cn_m2_yoy",
+    ],
+    llm_api_key_configured: false,
+    tushare_token_configured: false,
+    market_data_provider_capabilities: [],
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  getPlatformSettingsMock.mockResolvedValue(buildPlatformSettings());
+});
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  getPlatformSettingsMock.mockReset();
 });
 
 function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", market = "US", latestClose = 102) {
@@ -347,6 +404,71 @@ function createOfficialMacroSourceStatusPayload() {
       },
     ],
   };
+}
+
+function mockCuratedHomepageFetch(marketOverviewPayload = createMarketOverviewPayload()) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/instruments")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            items: [{ symbol: "AAPL", name: "Apple Inc.", market: "US" }],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/AAPL/latest")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "AAPL",
+            source: "database",
+            status: "ok",
+            item: { timestamp: "2026-01-02", close: 102 },
+          }),
+        ),
+      );
+    }
+    if (url.endsWith("/watchlist")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+    }
+    if (url.endsWith("/alerts/triggers/recent?limit=5")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+    }
+    if (url.endsWith("/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis")) {
+      return Promise.resolve(new Response(JSON.stringify({ status: "succeeded" })));
+    }
+    if (url.includes("/news/AAPL")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            source: "database",
+            items: [{ title: "Apple reports strong growth in services revenue", sentiment: "positive", confidence: 0.6 }],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/sectors/hot")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            data_mode: "live",
+            count: 0,
+            items: [],
+          }),
+        ),
+      );
+    }
+    if (url.includes("/dashboard/market-overview")) {
+      return Promise.resolve(new Response(JSON.stringify(marketOverviewPayload)));
+    }
+    if (url.includes("/market-indicators/official-sources/status")) {
+      return Promise.resolve(new Response(JSON.stringify(createOfficialMacroSourceStatusPayload())));
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
 }
 
 it("renders stock analysis dashboard data from backend APIs", async () => {
@@ -673,119 +795,109 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
     }),
   );
 
-  expect(screen.getByText("Dashboard")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Market overview" })).toBeInTheDocument();
+  expect(
+    screen.getByText("Core market pulse, macro watchpoints, sector rotation, news sentiment, and key operating status."),
+  ).toBeInTheDocument();
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
-  expect(screen.getByText("AI research brief")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Open AI research" })).toHaveAttribute("href", "/ai-research");
-  expect(screen.getByText(/Use the AI Research Desk to combine selected stocks/)).toBeInTheDocument();
-  expect(screen.getByText("Narrative synthesis")).toBeInTheDocument();
-  expect(screen.getByText("Deterministic fallback")).toBeInTheDocument();
-  expect(screen.getByText("Model: dashboard-brief-deterministic-fallback")).toBeInTheDocument();
-  expect(screen.getByText(/US 10Y remains the cited macro datapoint/)).toBeInTheDocument();
-  expect(screen.getByText("Macro evidence: 1")).toBeInTheDocument();
-  expect(screen.getByText("Source-note evidence: 1")).toBeInTheDocument();
-  expect(screen.getByText("Source gaps: 3")).toBeInTheDocument();
-  expect(screen.getByText("What changed")).toBeInTheDocument();
-  expect(screen.getByText(/US 10Y Treasury Yield: 4.25%/)).toBeInTheDocument();
-  expect(screen.getByText("MACRO_INDICATOR_NO_DATA: Some macro indicators are configured but do not have audited observations yet.")).toBeInTheDocument();
-  expect(screen.getByText("Followed macro indicators")).toBeInTheDocument();
+  expect(screen.getAllByText("Core market indices").length).toBeGreaterThan(0);
+  expect(screen.getByText("US and A-share benchmark indices stay at the top of the homepage.")).toBeInTheDocument();
+  expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("S&P 500").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Followed macro indicators").length).toBeGreaterThan(0);
   expect(screen.getByText("Your homepage watchlist for Buffett Indicator, rates, inflation, and liquidity context.")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Open macro research" })).toHaveAttribute("href", "/evidence");
+  expect(screen.getAllByRole("link", { name: "Open macro research" }).length).toBeGreaterThan(0);
   expect(screen.getByRole("link", { name: "Edit favorites" })).toHaveAttribute("href", "/settings");
   expect(screen.getAllByText("Buffett Indicator - US").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Buffett Indicator - CN").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("US 10Y Treasury Yield").length).toBeGreaterThan(0);
   expect(screen.getByText("Code: buffett_indicator_us")).toBeInTheDocument();
   expect(screen.getByText("Code: buffett_indicator_cn")).toBeInTheDocument();
   expect(screen.getAllByText(/Source gap: No audited observation has been seeded for this indicator yet/).length).toBeGreaterThan(0);
   expect(screen.getAllByText("Next:").length).toBeGreaterThan(0);
   expect(screen.getAllByText(/Configure FRED_API_KEY/).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/World Bank refresh; values are annual and lagged/).length).toBeGreaterThan(0);
-  expect(screen.getByText(/Use Macro Research for reviewed manual seed/)).toBeInTheDocument();
-  expect(screen.getByText("Information source readiness")).toBeInTheDocument();
-  expect(screen.getByText("FRED US Treasury rates")).toBeInTheDocument();
-  expect(screen.getByText("Needs adapter")).toBeInTheDocument();
-  expect(screen.getAllByText("Collection guidance").length).toBeGreaterThan(0);
-  expect(screen.getByText("Collect DGS10, DGS2, and T10Y2Y observations from official FRED pages before seeding rates data.")).toBeInTheDocument();
-  expect(screen.getAllByText("Citation boundary").length).toBeGreaterThan(0);
-  expect(screen.getByText("Can be cited only after a reviewed observation is stored locally.")).toBeInTheDocument();
-  expect(screen.getAllByText("Official/legal source links").length).toBeGreaterThan(0);
-  expect(screen.getByRole("link", { name: "FRED DGS10" }))
-    .toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");
-  expect(screen.getByRole("link", { name: "FRED DGS10" })).toHaveAttribute("target", "_blank");
-  expect(screen.getByRole("link", { name: "FRED DGS10" })).toHaveAttribute("rel", "noreferrer");
-  expect(screen.getAllByText("Seed template").length).toBeGreaterThan(0);
-  expect(screen.getByText("FRED rates seed template")).toBeInTheDocument();
-  expect(screen.getByText("Target indicator codes")).toBeInTheDocument();
-  expect(screen.getByText("us_10y_yield")).toBeInTheDocument();
-  expect(screen.getByText("Required fields")).toBeInTheDocument();
-  expect(screen.getByText("code, as_of, value, source, components")).toBeInTheDocument();
-  expect(screen.getByText("Import command")).toBeInTheDocument();
-  expect(screen.getByText("python scripts/import_market_indicator_seeds.py path/to/macro-seeds.json")).toBeInTheDocument();
-  expect(screen.getByText("JSON template")).toBeInTheDocument();
-  expect(screen.getAllByText(/<reviewed decimal>/).length).toBeGreaterThan(0);
-  expect(screen.getByText("CSV template")).toBeInTheDocument();
-  expect(screen.getByText("Review checklist")).toBeInTheDocument();
-  expect(screen.getByText(/Replace every placeholder date and value before import/)).toBeInTheDocument();
-  expect(screen.getByText("Template warnings")).toBeInTheDocument();
-  expect(screen.getByText(/This template is not evidence/)).toBeInTheDocument();
-  expect(screen.getByText("Define legal ingestion policy before storing filing text or transcripts.")).toBeInTheDocument();
-  expect(screen.getByText("Do not cite filings until an adapter or manually reviewed local document is available.")).toBeInTheDocument();
-  expect(screen.getByText("Core market indices")).toBeInTheDocument();
-  expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
-  expect(screen.getByRole("link", { name: /AAPL 突破20日均线/ })).toHaveAttribute("href", "/instruments/AAPL");
-  expect(screen.getByText("AAPL 突破20日均线")).toBeInTheDocument();
-  expect(screen.getByText("Research candidates")).toBeInTheDocument();
-  expect(screen.getByText("Technical signal candidates from available data: 1")).toBeInTheDocument();
-  expect(screen.getByText("Breakout")).toBeInTheDocument();
-  expect(screen.queryByText("今日推荐")).not.toBeInTheDocument();
+  expect(screen.getAllByText("Hot sectors").length).toBeGreaterThan(0);
   expect(screen.getByText("Mock data")).toBeInTheDocument();
   expect(screen.getByText(/This sector data is not complete verified realtime fund-flow data/)).toBeInTheDocument();
   expect(screen.getByText(/Provider: static_fixture/)).toBeInTheDocument();
   expect(screen.getAllByText(/Definition: Static fixture values for UI demonstration only/).length).toBeGreaterThan(0);
   expect(screen.getByText("新能源汽车")).toBeInTheDocument();
   expect(screen.getByText(/Constituents: 特斯拉 \/ 蔚来/)).toBeInTheDocument();
-  expect(screen.getByText("对比分析")).toBeInTheDocument();
-  expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
-  expect(screen.getByText("皮尔逊相关系数")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "导出对比报告" })).toBeInTheDocument();
-  expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
-  expect(screen.getAllByText("Buffett Indicator - CN").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("US 10Y Treasury Yield").length).toBeGreaterThan(0);
-  expect(screen.getByText("Rates")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
-    .toHaveAttribute("href", "/instruments/AAPL");
-  expect(screen.getByText("Daily-bar command center")).toBeInTheDocument();
+  expect(screen.getAllByText("Latest News").length).toBeGreaterThan(0);
+  expect(screen.getByText("Apple reports strong growth in services revenue")).toBeInTheDocument();
+  expect(screen.getByText("Important signals")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
-  expect(screen.getByText("Default sample: first 25 instruments")).toBeInTheDocument();
-  expect(screen.getByText("Recommended next action")).toBeInTheDocument();
-  expect(screen.getByText("AAPL daily story")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /AAPL Apple Inc./ }))
-    .toHaveAttribute("href", "/instruments/AAPL");
-  expect(screen.getAllByText("AAPL Latest Price").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("102.00").length).toBeGreaterThan(0);
-  expect(screen.getByText("Technical Indicators")).toBeInTheDocument();
-  expect(screen.getByText("Fundamentals")).toBeInTheDocument();
-  expect(screen.getByText("Latest News")).toBeInTheDocument();
+  expect(screen.getByText("0 triggered rules")).toBeInTheDocument();
+  expect(screen.getByText("Latest run: succeeded")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "View alert history" })).toHaveAttribute("href", "/alerts");
+  expect(screen.getByRole("link", { name: "View task runs" })).toHaveAttribute("href", "/task-runs");
+  expect(screen.getByRole("link", { name: "Open instrument" })).toHaveAttribute("href", "/instruments/AAPL");
+  expect(screen.getByText(/102\.00/)).toBeInTheDocument();
+  expect(screen.queryByText("Market workspace")).not.toBeInTheDocument();
+  expect(screen.queryByText("AAPL daily candles")).not.toBeInTheDocument();
+  expect(screen.queryByText("Watchlist")).not.toBeInTheDocument();
+  expect(screen.queryByText("AI research brief")).not.toBeInTheDocument();
+  expect(screen.queryByText("Narrative synthesis")).not.toBeInTheDocument();
+  expect(screen.queryByText("Information source readiness")).not.toBeInTheDocument();
+  expect(screen.queryByText("Research candidates")).not.toBeInTheDocument();
+  expect(screen.queryByText("对比分析")).not.toBeInTheDocument();
+  expect(screen.queryByText("Followed K-line charts")).not.toBeInTheDocument();
+  expect(screen.queryByText("Daily Report (AAPL)")).not.toBeInTheDocument();
+  expect(screen.queryByText("Technical Indicators")).not.toBeInTheDocument();
+  expect(screen.queryByText("Fundamentals")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Ingest daily bars" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Refresh Analysis" })).not.toBeInTheDocument();
+});
+
+it("uses configured homepage index order for the ticker and core cards", async () => {
+  getPlatformSettingsMock.mockResolvedValueOnce(
+    buildPlatformSettings({
+      favorite_home_index_codes: ["cn_csi_300", "us_sp_500", "us_nasdaq_composite"],
+      home_index_display_fields: ["latest_close", "provider"],
+    }),
+  );
+  mockCuratedHomepageFetch();
+
+  render(
+    await HomePage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
+
+  const firstCsi300 = screen.getAllByText("CSI 300")[0];
+  const firstSp500 = screen.getAllByText("S&P 500")[0];
+  expect(firstCsi300.compareDocumentPosition(firstSp500) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  const coreIndexRegion = screen.getByRole("region", { name: "Core market indices" });
+  const coreText = coreIndexRegion.textContent ?? "";
+  expect(coreText.indexOf("CSI 300")).toBeLessThan(coreText.indexOf("S&P 500"));
+  expect(coreText.indexOf("S&P 500")).toBeLessThan(coreText.indexOf("Nasdaq Composite"));
+  expect(coreText).toContain("Provider: yfinance");
+  expect(coreText).not.toContain("Region: CN");
+});
+
+it("shows an explicit unavailable card for configured homepage indices missing from the payload", async () => {
+  getPlatformSettingsMock.mockResolvedValueOnce(
+    buildPlatformSettings({
+      favorite_home_index_codes: ["missing_index"],
+    }),
+  );
+  mockCuratedHomepageFetch();
+
+  render(
+    await HomePage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
+
+  expect(screen.getAllByText("missing_index").length).toBeGreaterThan(0);
   expect(
-    screen.getByText((content) =>
-      content.includes("# AAPL AI 个股报告") &&
-      content.includes("MA 119.00, RSI 100.00") &&
-      content.includes("Apple reports strong growth in services revenue"),
-    ),
+    screen.getByText("missing_index is configured for the homepage, but it is not present in the current market overview payload."),
   ).toBeInTheDocument();
-  expect(screen.getAllByText("Citations").length).toBeGreaterThan(0);
-  expect(screen.getByText("Daily Report (AAPL)")).toBeInTheDocument();
-  expect(
-    screen.getAllByText((content) =>
-      content.includes("# AAPL 每日报告") && content.includes("持久化日报"),
-    ).length,
-  ).toBeGreaterThan(0);
-  expect(screen.getByText("bars_1d:AAPL:2026-01-02")).toBeInTheDocument();
-  expect(screen.getByText("fundamental_metrics:AAPL:2026-01-02")).toBeInTheDocument();
-  expect(screen.getAllByText("Latest Task Run").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("Portfolio Value").length).toBeGreaterThan(0);
-  expect(screen.getByRole("button", { name: "Ingest daily bars" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Refresh Analysis" })).toBeInTheDocument();
+  expect(screen.getAllByText("N/A").length).toBeGreaterThan(0);
 });
 
 it("renders the dashboard when optional analysis APIs have no data", async () => {
@@ -920,20 +1032,24 @@ it("renders the dashboard when optional analysis APIs have no data", async () =>
     }),
   );
 
-  expect(screen.getAllByText("600519 Latest Price").length).toBeGreaterThan(0);
+  expect(screen.getByRole("heading", { name: "Market overview" })).toBeInTheDocument();
   expect(screen.getAllByText("Market dashboard").length).toBeGreaterThan(0);
-  expect(screen.getByText("AI research brief")).toBeInTheDocument();
-  expect(screen.getByText("Narrative synthesis")).toBeInTheDocument();
-  expect(screen.getByText("Core market indices")).toBeInTheDocument();
-  expect(screen.getByText("No research candidates yet. Keep monitoring the available data.")).toBeInTheDocument();
+  expect(screen.getAllByText("Core market indices").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Shanghai Composite").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Followed macro indicators").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Buffett Indicator - US").length).toBeGreaterThan(0);
   expect(screen.getByText("No live hot-sector data available.")).toBeInTheDocument();
-  expect(screen.getByText("对比分析")).toBeInTheDocument();
-  expect(screen.getByText("涨跌幅对比")).toBeInTheDocument();
-  expect(screen.getByText("皮尔逊相关系数")).toBeInTheDocument();
-  expect(screen.getByText("Followed K-line charts")).toBeInTheDocument();
+  expect(screen.getAllByText("Latest News").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("No news sentiment available.").length).toBeGreaterThan(0);
+  expect(screen.getByText("Important signals")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("1,666.00").length).toBeGreaterThan(0);
-  expect(screen.getByText("No technical indicators available.")).toBeInTheDocument();
-  expect(screen.getByText("No news sentiment available.")).toBeInTheDocument();
-  expect(screen.getAllByText("Latest Task Run").length).toBeGreaterThan(0);
+  expect(screen.getByText(/1,666\.00/)).toBeInTheDocument();
+  expect(screen.getByText("Latest run: unknown")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open instrument" })).toHaveAttribute("href", "/instruments/600519");
+  expect(screen.queryByText("AI research brief")).not.toBeInTheDocument();
+  expect(screen.queryByText("Narrative synthesis")).not.toBeInTheDocument();
+  expect(screen.queryByText("No research candidates yet. Keep monitoring the available data.")).not.toBeInTheDocument();
+  expect(screen.queryByText("对比分析")).not.toBeInTheDocument();
+  expect(screen.queryByText("Followed K-line charts")).not.toBeInTheDocument();
+  expect(screen.queryByText("No technical indicators available.")).not.toBeInTheDocument();
 });

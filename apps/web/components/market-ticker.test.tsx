@@ -88,28 +88,28 @@ const tickerItems = [
 ];
 
 it("renders all ticker items by default", () => {
-  const { container } = render(<MarketTicker items={tickerItems} />);
+  render(<MarketTicker items={tickerItems} />);
 
   expect(screen.getByText("上证指数")).toBeInTheDocument();
   expect(screen.getByText("恒生指数")).toBeInTheDocument();
   expect(screen.getByText("S&P 500")).toBeInTheDocument();
   expect(getTickerMovementElement("+12.34")).toHaveClass("text-positive");
   expect(getTickerMovementElement("-20.10")).toHaveClass("text-negative");
-  expect(getTickerMovementElement("(--)")).toHaveClass("text-gray-300");
+  expect(getTickerMovementElement("(--)")).toHaveClass("text-muted-foreground");
   expect(screen.getByLabelText(/上证指数.*provider: yfinance/)).toBeInTheDocument();
   expect(screen.getByText(/source: database/)).toBeInTheDocument();
   expect(screen.getByLabelText(/CSI 500.*provider returned no rows/)).toBeInTheDocument();
-  expect(container.querySelector(".grid.min-w-0")).not.toBeNull();
-  expect(container.querySelector(".overflow-hidden.px-4.py-2")).not.toBeNull();
+  expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "CN" })).toBeInTheDocument();
 });
 
-it("filters ticker items by selected market", async () => {
+it("filters ticker items by selected market", () => {
   render(<MarketTicker items={tickerItems} />);
 
-  fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByText("美股"));
+  fireEvent.click(screen.getByRole("button", { name: "US" }));
 
   expect(screen.queryByText("上证指数")).not.toBeInTheDocument();
   expect(screen.queryByText("恒生指数")).not.toBeInTheDocument();
   expect(screen.getByText("S&P 500")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "US" })).toHaveAttribute("aria-pressed", "true");
 });

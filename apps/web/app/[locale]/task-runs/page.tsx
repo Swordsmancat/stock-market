@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { TaskRunRetryButton } from "@/components/task-run-actions";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { backendFetch } from "@/lib/backend-api";
 
 type TaskRun = {
@@ -77,26 +78,39 @@ export default async function TaskRunsPage({
   const payload = await fetchTaskRuns(selectedStatus);
   const { getTranslations } = await import("next-intl/server");
   const t = await getTranslations("TaskRuns");
+  const runningCount = payload.items.filter((item) => item.status === "running").length;
+  const succeededCount = payload.items.filter((item) => item.status === "succeeded").length;
+  const failedCount = payload.items.filter((item) => item.status === "failed").length;
+
+  const statusFilters = (
+    <div className="flex flex-wrap gap-2">
+      <Button variant={!selectedStatus ? "default" : "outline"} size="sm" asChild>
+        <Link href="/task-runs">{t("all")}</Link>
+      </Button>
+      {(["running", "succeeded", "failed"] as const).map((status) => (
+        <Button key={status} variant={selectedStatus === status ? "default" : "outline"} size="sm" asChild>
+          <Link href={`/task-runs?status=${status}` as any}>{t(status)}</Link>
+        </Button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="text-muted-foreground">{t("description")}</p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button variant={!selectedStatus ? "default" : "outline"} size="sm" asChild>
-          <Link href="/task-runs">{t("all")}</Link>
-        </Button>
-        {(["running", "succeeded", "failed"] as const).map((status) => (
-          <Button key={status} variant={selectedStatus === status ? "default" : "outline"} size="sm" asChild>
-            <Link href={`/task-runs?status=${status}` as any}>{t(status)}</Link>
-          </Button>
-        ))}
-      </div>
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[
+          { label: selectedStatus ? t(selectedStatus as "running" | "succeeded" | "failed") : t("all"), variant: "secondary" },
+        ]}
+        metrics={[
+          { label: t("all"), value: payload.items.length },
+          { label: t("runningTasks"), value: runningCount },
+          { label: t("succeededTasks"), value: succeededCount },
+          { label: t("failedTasks"), value: failedCount, className: failedCount > 0 ? "text-destructive" : undefined },
+        ]}
+        actions={statusFilters}
+      />
 
       <Card>
         <CardHeader>

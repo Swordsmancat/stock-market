@@ -231,16 +231,48 @@ function formatCorrelationValue(value: number | null | undefined): string {
   return value === null || value === undefined ? "--" : value.toFixed(3);
 }
 
+export type ComparisonReportLabels = {
+  title: string;
+  generatedAt: string;
+  selectedInstruments: string;
+  summaryMetrics: string;
+  correlationMatrix: string;
+  instrument: string;
+  name: string;
+  market: string;
+  startClose: string;
+  latestClose: string;
+  intervalReturn: string;
+  volatility: string;
+};
+
+const DEFAULT_COMPARISON_REPORT_LABELS: ComparisonReportLabels = {
+  title: "Comparison analysis report",
+  generatedAt: "Generated at",
+  selectedInstruments: "Selected instruments",
+  summaryMetrics: "Summary metrics",
+  correlationMatrix: "Correlation matrix",
+  instrument: "Instrument",
+  name: "Name",
+  market: "Market",
+  startClose: "Start close",
+  latestClose: "Latest close",
+  intervalReturn: "Interval return",
+  volatility: "Volatility",
+};
+
 export function buildComparisonReportText({
   selectedInstruments,
   summaries,
   correlationMatrix,
   generatedAtIso = new Date().toISOString(),
+  labels = DEFAULT_COMPARISON_REPORT_LABELS,
 }: {
   selectedInstruments: ComparisonInstrument[];
   summaries: ComparisonSummary[];
   correlationMatrix: CorrelationCell[];
   generatedAtIso?: string;
+  labels?: ComparisonReportLabels;
 }): string {
   const summaryLines = summaries.map((summary) =>
     [
@@ -254,7 +286,7 @@ export function buildComparisonReportText({
     ].join("\t"),
   );
 
-  const correlationHeader = ["标的", ...selectedInstruments.map((instrument) => instrument.symbol)].join("\t");
+  const correlationHeader = [labels.instrument, ...selectedInstruments.map((instrument) => instrument.symbol)].join("\t");
   const correlationRows = selectedInstruments.map((leftInstrument) => {
     const rowValues = selectedInstruments.map((rightInstrument) => {
       const cell = correlationMatrix.find(
@@ -269,19 +301,27 @@ export function buildComparisonReportText({
   });
 
   return [
-    "对比分析报告",
-    `生成时间: ${generatedAtIso}`,
+    labels.title,
+    `${labels.generatedAt}: ${generatedAtIso}`,
     "",
-    "已选标的:",
+    `${labels.selectedInstruments}:`,
     ...selectedInstruments.map((instrument) =>
       `- ${instrument.symbol} ${instrument.name}${instrument.market ? ` (${instrument.market})` : ""}`,
     ),
     "",
-    "汇总指标:",
-    ["标的", "名称", "市场", "起始价", "最新价", "区间收益", "波动率"].join("\t"),
+    `${labels.summaryMetrics}:`,
+    [
+      labels.instrument,
+      labels.name,
+      labels.market,
+      labels.startClose,
+      labels.latestClose,
+      labels.intervalReturn,
+      labels.volatility,
+    ].join("\t"),
     ...summaryLines,
     "",
-    "相关系数矩阵:",
+    `${labels.correlationMatrix}:`,
     correlationHeader,
     ...correlationRows,
   ].join("\n");

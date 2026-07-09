@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/src/i18n/routing";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -583,9 +584,20 @@ export default async function TaskRunDetailPage({
   if (taskRun === null) {
     return (
       <div className="space-y-6">
-        <Button variant="outline" asChild>
-          <Link href="/task-runs">{t("backToList")}</Link>
-        </Button>
+        <FinancialPageHeader
+          title={t("detailTitle")}
+          description={t("notFound")}
+          badges={[{ label: taskRunId }]}
+          metrics={[
+            { label: t("status"), value: t("notFound"), description: t("description") },
+            { label: t("taskName"), value: taskRunId, description: t("backToList") },
+          ]}
+          actions={
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/task-runs">{t("backToList")}</Link>
+            </Button>
+          }
+        />
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">{t("notFound")}</CardContent>
         </Card>
@@ -599,15 +611,28 @@ export default async function TaskRunDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("detailTitle")}</h1>
-          <p className="font-mono text-sm text-muted-foreground">{taskRun.id}</p>
-        </div>
-        <Button variant="outline" asChild>
-          <Link href="/task-runs">{t("backToList")}</Link>
-        </Button>
-      </div>
+      <FinancialPageHeader
+        title={t("detailTitle")}
+        description={<span className="font-mono">{taskRun.id}</span>}
+        badges={[{ label: taskRun.id }]}
+        metrics={[
+          { label: t("startedAt"), value: new Date(taskRun.started_at).toLocaleString(), description: t("status") },
+          {
+            label: t("duration"),
+            value: taskRun.duration_ms != null ? `${taskRun.duration_ms} ms` : t("qualityUnavailable"),
+            description: t("duration"),
+          },
+          {
+            label: t("celeryTaskId"),
+            value: taskRun.celery_task_id ?? t("qualityUnavailable"),
+          },
+        ]}
+        actions={
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/task-runs">{t("backToList")}</Link>
+          </Button>
+        }
+      />
 
       <Card>
         <CardHeader>

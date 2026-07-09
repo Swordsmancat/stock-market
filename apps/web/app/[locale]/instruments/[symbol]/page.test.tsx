@@ -185,6 +185,71 @@ function mockInstrumentDetailResponse(
           },
         },
       },
+      indicators: {
+        symbol: "AAPL",
+        source: "database",
+        as_of: "2026-01-20T00:00:00+00:00",
+        indicators: {
+          ma: 119,
+          rsi: 100,
+          bollinger: { upper: 121, middle: 119, lower: 117 },
+        },
+      },
+      fundamentals: {
+        symbol: "AAPL",
+        source: "mock_fundamentals",
+        as_of: "2026-01-20",
+        citation: "fundamental_metrics:AAPL:2026-01-20",
+        item: {
+          currency: "USD",
+          pe_ratio: 28.4,
+          revenue_growth: 0.08,
+          net_margin: 0.24,
+          debt_to_assets: 0.31,
+          summary: "PE 28.40，营收增速 8.00%，净利率 24.00%，资产负债率 31.00%",
+        },
+      },
+      news: {
+        symbol: "AAPL",
+        source: "database",
+        summary: { latest_sentiment: "positive", article_count: 1 },
+        items: [
+          {
+            title: "Apple reports strong growth in services revenue",
+            source: "mock_news",
+            published_at: "2026-01-20T00:00:00+00:00",
+            summary: "Apple services revenue accelerated.",
+            sentiment: "positive",
+            confidence: 0.6,
+            url: "https://example.com/aapl-services-growth",
+          },
+        ],
+      },
+      latest_daily_report: {
+        symbol: "AAPL",
+        report_type: "stock_daily",
+        as_of: "2026-01-20",
+        source: "database",
+        content_markdown: "# AAPL 每日报告\n\n持久化日报：MA 119.00，Apple reports strong growth in services revenue",
+        citations: [
+          "technical_indicators:AAPL:2026-01-20T00:00:00+00:00",
+          "news_articles:AAPL:https://example.com/aapl-services-growth",
+        ],
+        task_run_id: "task-report-123456",
+      },
+      daily_report_history: {
+        symbol: "AAPL",
+        source: "database",
+        items: [
+          {
+            symbol: "AAPL",
+            report_type: "stock_daily",
+            as_of: "2026-01-20",
+            content_markdown: "# AAPL 每日报告\n\n最新持久化日报",
+            citations: [],
+          },
+        ],
+      },
       range: { timeframe: "1d", start: "2026-01-01", end: "2026-01-20" },
     },
   });
@@ -228,6 +293,18 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getByText("深度数据")).toBeInTheDocument();
   expect(screen.getByText("展示可用的五档买卖盘、逐笔成交、大单追踪和资金流摘要。")).toBeInTheDocument();
   expect(screen.getByText("当前数据源暂不支持深度数据。")).toBeInTheDocument();
+  expect(screen.getByText("AI 个股报告")).toBeInTheDocument();
+  expect(screen.getAllByText("报告日期：2026/1/20").length).toBeGreaterThan(0);
+  expect(screen.getByText("2 条引用")).toBeInTheDocument();
+  expect(screen.getByText("近期报告历史")).toBeInTheDocument();
+  expect(screen.getByText("技术指标")).toBeInTheDocument();
+  expect(screen.getByText("ma")).toBeInTheDocument();
+  expect(screen.getByText("119.00")).toBeInTheDocument();
+  expect(screen.getByText("基本面摘要")).toBeInTheDocument();
+  expect(screen.getByText("市盈率")).toBeInTheDocument();
+  expect(screen.getByText("PE 28.40，营收增速 8.00%，净利率 24.00%，资产负债率 31.00%")).toBeInTheDocument();
+  expect(screen.getByText("最新新闻舆情")).toBeInTheDocument();
+  expect(screen.getByText("Apple reports strong growth in services revenue")).toBeInTheDocument();
   expect(screen.getAllByText("provider: yfinance").length).toBeGreaterThan(0);
   expect(screen.getAllByText("source: database").length).toBeGreaterThan(0);
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");

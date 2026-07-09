@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { GenerateDailyReportButton } from "@/components/generate-daily-report-button";
 import { getDashboardDateRanges } from "@/lib/dates";
 import { ExternalLink } from "lucide-react";
@@ -142,12 +143,16 @@ export default async function ReportsCenterPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-          <p className="text-muted-foreground">{t("description")}</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[]}
+        metrics={[
+          { label: t("symbol"), value: generateSymbol },
+          { label: t("asOf"), value: params.as_of_start || params.as_of_end ? `${params.as_of_start ?? "--"} / ${params.as_of_end ?? "--"}` : "--" },
+          { label: t("reportType"), value: params.report_type || t("allTypes") },
+        ]}
+        actions={
           <GenerateDailyReportButton
             symbol={generateSymbol}
             start={analysis.start}
@@ -156,8 +161,8 @@ export default async function ReportsCenterPage({
             variant="default"
             size="default"
           />
-        </div>
-      </div>
+        }
+      />
 
       <Card>
         <CardContent className="pt-6">

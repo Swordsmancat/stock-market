@@ -5,6 +5,7 @@ import { FileSearch, Plus, Sparkles, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { MarketAssistantCard } from "@/components/market-assistant-card";
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -198,39 +199,36 @@ export function AiResearchDesk({
 
   return (
     <div className="space-y-6">
-      <div className="border-b bg-background pb-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{t("badge")}</Badge>
-              <Badge variant="outline">{t("provider", { provider })}</Badge>
-              {generatedAt ? <Badge variant="outline">{t("generatedAt", { date: generatedAt })}</Badge> : null}
-            </div>
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{t("title")}</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{t("description")}</p>
-            </div>
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {t("researchBoundary")}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" asChild>
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[
+          { label: t("badge"), variant: "secondary" },
+          { label: t("provider", { provider }) },
+          ...(generatedAt ? [{ label: t("generatedAt", { date: generatedAt }) }] : []),
+        ]}
+        metrics={[
+          { label: t("metricSelected"), value: String(selectedSymbols.length), description: t("metricSelectedDesc") },
+          { label: t("metricSignals"), value: String(recommendations.length), description: t("metricSignalsDesc") },
+          { label: t("metricMacro"), value: String(macroIndicators.length), description: t("metricMacroDesc") },
+          { label: t("metricGaps"), value: String(sourceGaps.length), description: t("metricGapsDesc") },
+        ]}
+        actions={
+          <>
+            <Button size="sm" variant="outline" asChild>
               <Link href="/watchlist">{t("openWatchlist")}</Link>
             </Button>
-            <Button variant="outline" asChild>
+            <Button size="sm" variant="outline" asChild>
               <Link href="/evidence">{t("openMacroResearch")}</Link>
             </Button>
+          </>
+        }
+        warningPanel={
+          <div className="border border-warning/35 bg-warning/10 px-3 py-2 text-sm text-foreground">
+            {t("researchBoundary")}
           </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric label={t("metricSelected")} value={String(selectedSymbols.length)} description={t("metricSelectedDesc")} />
-        <Metric label={t("metricSignals")} value={String(recommendations.length)} description={t("metricSignalsDesc")} />
-        <Metric label={t("metricMacro")} value={String(macroIndicators.length)} description={t("metricMacroDesc")} />
-        <Metric label={t("metricGaps")} value={String(sourceGaps.length)} description={t("metricGapsDesc")} />
-      </div>
+        }
+      />
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-4">
@@ -368,18 +366,6 @@ export function AiResearchDesk({
         </div>
       </div>
     </div>
-  );
-}
-
-function Metric({ label, value, description }: { label: string; value: string; description: string }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
-        <div className="mt-1 font-mono text-2xl font-semibold">{value}</div>
-        <div className="mt-1 text-xs text-muted-foreground">{description}</div>
-      </CardContent>
-    </Card>
   );
 }
 

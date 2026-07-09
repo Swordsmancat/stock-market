@@ -149,6 +149,64 @@ export type InstrumentMarketDepthPayload = {
   };
 };
 
+export type InstrumentIndicatorsPayload = {
+  symbol: string;
+  source?: string | null;
+  as_of?: string | null;
+  indicators?: Record<string, unknown>;
+};
+
+export type InstrumentFundamentalsPayload = {
+  symbol: string;
+  source?: string | null;
+  as_of?: string | null;
+  citation?: string | null;
+  item?: {
+    currency?: string | null;
+    pe_ratio?: number | null;
+    revenue_growth?: number | null;
+    net_margin?: number | null;
+    debt_to_assets?: number | null;
+    summary?: string | null;
+  } | null;
+};
+
+export type InstrumentNewsPayload = {
+  symbol: string;
+  source?: string | null;
+  summary?: {
+    latest_sentiment?: string | null;
+    article_count?: number | null;
+  } | null;
+  items?: Array<{
+    title: string;
+    url?: string | null;
+    source?: string | null;
+    published_at?: string | null;
+    summary?: string | null;
+    sentiment?: string | null;
+    confidence?: number | null;
+  }>;
+};
+
+export type InstrumentDailyReportPayload = {
+  symbol: string;
+  report_type?: string | null;
+  as_of?: string | null;
+  source?: string | null;
+  content_markdown?: string | null;
+  citations?: string[];
+  task_run_id?: string | null;
+  source_summary?: Record<string, unknown> | null;
+  items?: unknown[];
+};
+
+export type InstrumentDailyReportHistoryPayload = {
+  symbol: string;
+  source?: string | null;
+  items?: InstrumentDailyReportPayload[];
+};
+
 export type InstrumentDetailPayload = {
   symbol: string;
   request_symbol: string;
@@ -175,6 +233,11 @@ export type InstrumentDetailPayload = {
   };
   intraday?: InstrumentIntradayPayload;
   market_depth?: InstrumentMarketDepthPayload;
+  indicators?: InstrumentIndicatorsPayload;
+  fundamentals?: InstrumentFundamentalsPayload;
+  news?: InstrumentNewsPayload;
+  latest_daily_report?: InstrumentDailyReportPayload;
+  daily_report_history?: InstrumentDailyReportHistoryPayload;
   range: {
     timeframe: "1d";
     start: string;
@@ -225,6 +288,18 @@ async function readResponseBody(response: Response): Promise<string> {
 function copyContentType(response: Response): HeadersInit {
   const contentType = response.headers.get("content-type");
   return contentType ? { "content-type": contentType } : {};
+}
+
+async function fetchOptionalBackendJson<T>(path: string, fallback: T): Promise<T> {
+  try {
+    const response = await backendFetch(path, { cache: "no-store" });
+    if (!response.ok) {
+      return fallback;
+    }
+    return (await response.json()) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function buildUnavailableIntradayPayload({
@@ -337,24 +412,65 @@ export async function fetchInstrumentDetailPayload({
   const providerQuerySuffix = buildProviderQuerySuffix(normalizedProviderName);
   const requestSymbol = resolveInstrumentDetailRequestSymbol(symbol, normalizedProviderName);
   const encodedSymbol = encodeURIComponent(requestSymbol);
+  const encodedOriginalSymbol = encodeURIComponent(symbol);
 
-  const [latestResult, barsResult, intradayResult, marketDepthResult] = await Promise.allSettled([
-    backendFetch(`/market-data/${encodedSymbol}/latest${providerQuerySuffix.replace("&", "?")}`, {
-      cache: "no-store",
+  const [
+    marketDataResults,
+    indicatorsData,
+    fundamentalsData,
+    newsData,
+    latestDailyReportData,
+    dailyReportHistoryData,
+  ] = await Promise.all([
+    Promise.allSettled([
+      backendFetch(`/market-data/${encodedSymbol}/latest${providerQuerySuffix.replace("&", "?")}`, {
+        cache: "no-store",
+      }),
+      backendFetch(
+        `/market-data/${encodedSymbol}/bars?timeframe=1d&start=${start}&end=${end}${providerQuerySuffix}`,
+        { cache: "no-store" },
+      ),
+      backendFetch(
+        `/market-data/${encodedSymbol}/intraday?date=${end}&timeframe=1m${providerQuerySuffix}`,
+        { cache: "no-store" },
+      ),
+      backendFetch(
+        `/market-data/${encodedSymbol}/depth?depth_levels=${DEFAULT_MARKET_DEPTH_LEVELS}&large_order_threshold_amount=${DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT}${providerQuerySuffix}`,
+        { cache: "no-store" },
+      ),
+    ]),
+    fetchOptionalBackendJson<InstrumentIndicatorsPayload>(`/indicators/${encodedOriginalSymbol}`, {
+      symbol,
+      source: "database",
+      indicators: {},
     }),
-    backendFetch(
-      `/market-data/${encodedSymbol}/bars?timeframe=1d&start=${start}&end=${end}${providerQuerySuffix}`,
-      { cache: "no-store" },
-    ),
-    backendFetch(
-      `/market-data/${encodedSymbol}/intraday?date=${end}&timeframe=1m${providerQuerySuffix}`,
-      { cache: "no-store" },
-    ),
-    backendFetch(
-      `/market-data/${encodedSymbol}/depth?depth_levels=${DEFAULT_MARKET_DEPTH_LEVELS}&large_order_threshold_amount=${DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT}${providerQuerySuffix}`,
-      { cache: "no-store" },
+    fetchOptionalBackendJson<InstrumentFundamentalsPayload>(`/fundamentals/${encodedOriginalSymbol}`, {
+      symbol,
+      source: null,
+      item: null,
+    }),
+    fetchOptionalBackendJson<InstrumentNewsPayload>(`/news/${encodedOriginalSymbol}`, {
+      symbol,
+      source: null,
+      summary: { latest_sentiment: null, article_count: 0 },
+      items: [],
+    }),
+    fetchOptionalBackendJson<InstrumentDailyReportPayload>(`/reports/${encodedOriginalSymbol}/daily/latest`, {
+      symbol,
+      report_type: "stock_daily",
+      source: "database",
+      items: [],
+    }),
+    fetchOptionalBackendJson<InstrumentDailyReportHistoryPayload>(
+      `/reports/${encodedOriginalSymbol}/daily/history?limit=5`,
+      {
+        symbol,
+        source: "database",
+        items: [],
+      },
     ),
   ]);
+  const [latestResult, barsResult, intradayResult, marketDepthResult] = marketDataResults;
 
   if (barsResult.status === "rejected") {
     return {
@@ -405,6 +521,11 @@ export async function fetchInstrumentDetailPayload({
       bars: barsData,
       intraday: intradayData,
       market_depth: marketDepthData,
+      indicators: indicatorsData,
+      fundamentals: fundamentalsData,
+      news: newsData,
+      latest_daily_report: latestDailyReportData,
+      daily_report_history: dailyReportHistoryData,
       range: { timeframe: "1d", start, end },
     },
   };

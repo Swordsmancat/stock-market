@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { Link } from "@/src/i18n/routing";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+
+import { FinancialPageHeader } from "@/components/financial-page-header";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { backendFetch } from "@/lib/backend-api";
+import { Link } from "@/src/i18n/routing";
 
 type ReportDetail = {
   id: string;
@@ -74,62 +75,70 @@ export default async function ReportDetailPage({
   if (report === null) {
     return (
       <div className="space-y-6">
-        <Button variant="outline" asChild>
-          <Link href="/reports">{t("backToReports")}</Link>
-        </Button>
+        <FinancialPageHeader
+          title={t("title")}
+          description={t("noData")}
+          badges={[{ label: t("reportType") }]}
+          metrics={[
+            { label: t("symbol"), value: reportId, description: t("emptyHint") },
+            { label: t("asOf"), value: t("noData"), description: t("description") },
+          ]}
+          actions={
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/reports">{t("backToReports")}</Link>
+            </Button>
+          }
+        />
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("noData")}
-          </CardContent>
+          <CardContent className="py-8 text-center text-muted-foreground">{t("noData")}</CardContent>
         </Card>
       </div>
     );
   }
 
+  const sourceBadges = buildReportSourceDetails(report.source_summary).map((detail) => ({ label: detail }));
+
   return (
     <div className="space-y-6">
-      <Button variant="outline" asChild>
-        <Link href="/reports">{t("backToReports")}</Link>
-      </Button>
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-2xl">{report.symbol}</CardTitle>
-            <Badge variant="secondary" className="capitalize">
-              {report.report_type.replace("_", " ")}
-            </Badge>
-          </div>
-          <CardDescription>
+      <FinancialPageHeader
+        title={report.symbol}
+        description={
+          <>
             {t("asOf")}: {new Date(report.as_of).toLocaleDateString()}
             {report.task_run_id ? (
               <>
-                {" · "}
+                {" / "}
                 <Link href={`/task-runs/${report.task_run_id}` as any} className="text-primary hover:underline">
                   {t("taskRun")}: {report.task_run_id.slice(0, 8)}
                 </Link>
               </>
             ) : null}
-          </CardDescription>
-          {buildReportSourceDetails(report.source_summary).length > 0 ? (
-            <div className="flex flex-wrap gap-2 pt-2 text-xs text-muted-foreground">
-              {buildReportSourceDetails(report.source_summary).map((detail) => (
-                <Badge key={detail} variant="outline" className="font-normal">
-                  {detail}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-          <div className="pt-2">
-            <Button variant="link" className="h-auto p-0" asChild>
+          </>
+        }
+        badges={[
+          { label: report.report_type.replace("_", " "), variant: "secondary" as const },
+          ...sourceBadges,
+        ]}
+        metrics={[
+          { label: t("reportType"), value: report.report_type.replace("_", " "), description: t("description") },
+          { label: t("asOf"), value: new Date(report.as_of).toLocaleDateString(), description: report.created_at },
+          { label: t("citations"), value: report.citations.length, description: t("taskRun") },
+        ]}
+        actions={
+          <>
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/reports">{t("backToReports")}</Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
               <Link href={`/instruments/${report.symbol}` as any}>{t("viewInstrument")}</Link>
             </Button>
-          </div>
-        </CardHeader>
+          </>
+        }
+      />
+
+      <Card>
         <CardContent>
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-7">
-            {report.content_markdown}
-          </pre>
+          <pre className="whitespace-pre-wrap font-sans text-sm leading-7">{report.content_markdown}</pre>
         </CardContent>
       </Card>
 

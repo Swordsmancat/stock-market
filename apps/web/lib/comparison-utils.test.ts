@@ -74,14 +74,14 @@ describe("comparison-utils", () => {
       generatedAtIso: "2026-01-04T00:00:00.000Z",
     });
 
-    expect(reportText).toContain("对比分析报告");
-    expect(reportText).toContain("生成时间: 2026-01-04T00:00:00.000Z");
-    expect(reportText).toContain("已选标的:");
-    expect(reportText).toContain("汇总指标:");
+    expect(reportText).toContain("Comparison analysis report");
+    expect(reportText).toContain("Generated at: 2026-01-04T00:00:00.000Z");
+    expect(reportText).toContain("Selected instruments:");
+    expect(reportText).toContain("Summary metrics:");
     expect(reportText).toContain("LEFT\tLeft Instrument\t--\t100.00\t120.00\t+20.00%");
     expect(reportText).toContain("RIGHT\tRight Instrument\t--\t50.00\t60.00\t+20.00%");
-    expect(reportText).toContain("相关系数矩阵:");
-    expect(reportText).toContain("标的\tLEFT\tRIGHT");
+    expect(reportText).toContain("Correlation matrix:");
+    expect(reportText).toContain("Instrument\tLEFT\tRIGHT");
     expect(reportText).toContain("LEFT\t1.000\t1.000");
   });
 
@@ -105,7 +105,7 @@ describe("comparison-utils", () => {
       generatedAtIso: "2026-01-04T00:00:00.000Z",
     });
 
-    expect(reportText).toContain("标的\tLEFT\tFLAT");
+    expect(reportText).toContain("Instrument\tLEFT\tFLAT");
     expect(reportText).toContain("LEFT\t1.000\t--");
     expect(reportText).toContain("FLAT\t--\t1.000");
   });
