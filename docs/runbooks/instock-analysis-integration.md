@@ -204,6 +204,8 @@ The first criteria are:
 - `max_william_r`
 - `min_chip_benefit_ratio`
 - `max_chip_benefit_ratio`
+- `min_latest_volume`
+- `min_traded_amount`
 - `min_news_article_count`
 - `required_news_sentiment`
 - `min_news_sentiment_confidence`
@@ -226,6 +228,12 @@ rows. They do not call live news/search providers, do not persist social search
 candidates, and do not treat social/public-opinion candidates as verified news.
 When matched, the screener includes a `news:*` evidence citation for the stored
 local article used by the latest sentiment rule.
+
+Market-data criteria read only the latest stored `DailyBar`. `min_latest_volume`
+uses stored volume. `min_traded_amount` uses stored amount when present and
+falls back to the local `close * volume` estimate from the same stored bar when
+amount is missing. The screener does not call live providers to repair missing
+bar fields.
 
 ## Strategy Evaluation API
 

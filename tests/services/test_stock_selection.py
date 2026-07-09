@@ -37,6 +37,8 @@ def seed_instrument(
     close: float,
     ma: float,
     rsi: float,
+    volume: float = 1_000_000.0,
+    amount: float | None = None,
     mfi: float | None = 55.0,
     william_r: float | None = -30.0,
     pattern_codes: list[str] | None = None,
@@ -67,7 +69,8 @@ def seed_instrument(
             high=Decimal(str(close + 1)),
             low=Decimal("99"),
             close=Decimal(str(close)),
-            volume=Decimal("1000000"),
+            volume=Decimal(str(volume)),
+            amount=Decimal(str(amount)) if amount is not None else None,
         )
     )
     indicator_as_of = datetime(2026, 1, 20, tzinfo=timezone.utc)
@@ -357,6 +360,54 @@ def test_stock_selection_matches_stored_news_sentiment_criteria():
     )
 
 
+def test_stock_selection_matches_local_market_data_criteria():
+    session = make_session()
+    seed_instrument(
+        session,
+        "AAPL",
+        close=110.0,
+        ma=100.0,
+        rsi=55.0,
+        volume=2_500_000.0,
+        amount=275_000_000.0,
+    )
+    seed_instrument(
+        session,
+        "MSFT",
+        close=112.0,
+        ma=100.0,
+        rsi=58.0,
+        volume=500_000.0,
+        amount=56_000_000.0,
+    )
+
+    payload = screen_local_stock_selection(
+        session=session,
+        symbols=["AAPL", "MSFT"],
+        min_latest_volume=1_000_000.0,
+        min_traded_amount=200_000_000.0,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["criteria"]["min_latest_volume"] == 1_000_000.0
+    assert payload["criteria"]["min_traded_amount"] == 200_000_000.0
+    assert payload["count"] == 1
+    item = payload["items"][0]
+    assert item["symbol"] == "AAPL"
+    assert item["latest_bar"]["volume"] == 2_500_000.0
+    assert item["latest_bar"]["traded_amount"] == 275_000_000.0
+    assert {rule["code"] for rule in item["matched_rules"]} == {
+        "min_latest_volume",
+        "min_traded_amount",
+    }
+    assert any(
+        diagnostic["symbol"] == "MSFT"
+        and diagnostic["rule"] == "min_latest_volume"
+        and diagnostic["details"]["actual"] == 500_000.0
+        for diagnostic in payload["diagnostics"]
+    )
+
+
 def test_stock_selection_reports_missing_news_without_fabricating_match():
     session = make_session()
     seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0)
@@ -448,7 +499,7 @@ def test_stock_selection_requires_at_least_one_criterion():
     assert payload["items"] == []
     assert payload["diagnostics"][0]["code"] == "NO_SELECTION_CRITERIA"
     assert payload["diagnostics"][0]["message"] == (
-        "At least one fundamental, technical, or news selection criterion is required."
+        "At least one fundamental, technical, market-data, or news selection criterion is required."
     )
 
 

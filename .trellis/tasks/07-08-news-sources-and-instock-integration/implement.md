@@ -163,6 +163,15 @@ git diff --check
 - [x] Return missing or nonmatching news evidence as diagnostics, not fabricated neutral sentiment.
 - [x] Add focused service/API tests and backend spec/runbook coverage.
 
+## InStock Composite Stock Selection Market Data Criteria Slice
+
+- [x] Extend `screen_local_stock_selection` with stored latest-bar criteria for volume and traded amount.
+- [x] Add `GET /stock-selection/screen` query parameters for `min_latest_volume` and `min_traded_amount`.
+- [x] Read only the latest stored `DailyBar` row and use stored `amount` or a local `close * volume` estimate for traded amount.
+- [x] Return missing or nonmatching latest-bar values as diagnostics, not fabricated market data.
+- [x] Keep the response research-only with stored bar evidence citations and the non-advice disclaimer.
+- [x] Add focused service/API tests and backend spec/runbook coverage.
+
 ## InStock Single-Symbol Stock / ETF Daily-Bar Job Slice
 
 - [x] Add `asset_type` to `POST /ingestion/symbol-daily-bars`, defaulting to `stock` and supporting `stock` / `etf`.

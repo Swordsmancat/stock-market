@@ -39,6 +39,8 @@ def screen_local_stock_selection(
     max_william_r: float | None = None,
     min_chip_benefit_ratio: float | None = None,
     max_chip_benefit_ratio: float | None = None,
+    min_latest_volume: float | None = None,
+    min_traded_amount: float | None = None,
     min_news_article_count: int | None = None,
     required_news_sentiment: str | None = None,
     min_news_sentiment_confidence: float | None = None,
@@ -59,6 +61,8 @@ def screen_local_stock_selection(
         max_william_r=max_william_r,
         min_chip_benefit_ratio=min_chip_benefit_ratio,
         max_chip_benefit_ratio=max_chip_benefit_ratio,
+        min_latest_volume=min_latest_volume,
+        min_traded_amount=min_traded_amount,
         min_news_article_count=min_news_article_count,
         required_news_sentiment=required_news_sentiment,
         min_news_sentiment_confidence=min_news_sentiment_confidence,
@@ -79,7 +83,10 @@ def screen_local_stock_selection(
             "diagnostics": [
                 {
                     "code": "NO_SELECTION_CRITERIA",
-                    "message": "At least one fundamental, technical, or news selection criterion is required.",
+                    "message": (
+                        "At least one fundamental, technical, market-data, or news "
+                        "selection criterion is required."
+                    ),
                 }
             ],
             "disclaimer": DISCLAIMER,
@@ -142,6 +149,8 @@ def _criteria_payload(
     max_william_r: float | None,
     min_chip_benefit_ratio: float | None,
     max_chip_benefit_ratio: float | None,
+    min_latest_volume: float | None,
+    min_traded_amount: float | None,
     min_news_article_count: int | None,
     required_news_sentiment: str | None,
     min_news_sentiment_confidence: float | None,
@@ -160,6 +169,8 @@ def _criteria_payload(
         "max_william_r": max_william_r,
         "min_chip_benefit_ratio": min_chip_benefit_ratio,
         "max_chip_benefit_ratio": max_chip_benefit_ratio,
+        "min_latest_volume": min_latest_volume,
+        "min_traded_amount": min_traded_amount,
         "min_news_article_count": min_news_article_count,
         "required_news_sentiment": _normalize_sentiment(required_news_sentiment),
         "min_news_sentiment_confidence": min_news_sentiment_confidence,
@@ -234,6 +245,16 @@ def _evaluate_instrument(
     latest_indicators = _latest_indicator_payload(instrument, session=session)
     latest_fundamentals = _latest_fundamental_snapshot(symbol, session=session)
     matched_rules: list[dict[str, object]] = []
+
+    market_data_result = _evaluate_market_data_rules(
+        symbol=symbol,
+        latest_bar=latest_bar,
+        criteria=criteria,
+    )
+    diagnostics.extend(market_data_result["diagnostics"])
+    if market_data_result["failed"]:
+        return _failed_evaluation(symbol=symbol, diagnostics=diagnostics)
+    matched_rules.extend(market_data_result["matched_rules"])
 
     fundamentals_result = _evaluate_fundamental_rules(
         symbol=symbol,
@@ -346,6 +367,29 @@ def _evaluate_fundamental_rules(
             criteria["min_revenue_growth"],
         ),
         _min_rule("min_net_margin", "net_margin", snapshot.net_margin, criteria["min_net_margin"]),
+    ]
+    return _rule_result(symbol=symbol, checks=checks)
+
+
+def _evaluate_market_data_rules(
+    *,
+    symbol: str,
+    latest_bar: DailyBar,
+    criteria: dict[str, object],
+) -> dict[str, object]:
+    checks = [
+        _min_rule(
+            "min_latest_volume",
+            "latest_bar.volume",
+            latest_bar.volume,
+            criteria["min_latest_volume"],
+        ),
+        _min_rule(
+            "min_traded_amount",
+            "latest_bar.traded_amount",
+            _traded_amount_from_bar(latest_bar),
+            criteria["min_traded_amount"],
+        ),
     ]
     return _rule_result(symbol=symbol, checks=checks)
 
@@ -684,6 +728,7 @@ def _serialize_daily_bar(row: DailyBar) -> dict[str, object]:
         "close": _numeric_value(row.close),
         "volume": _numeric_value(row.volume),
         "amount": _numeric_value(row.amount),
+        "traded_amount": _traded_amount_from_bar(row),
     }
 
 
@@ -794,6 +839,17 @@ def _numeric_value(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     return None
+
+
+def _traded_amount_from_bar(row: DailyBar) -> float | None:
+    amount = _numeric_value(row.amount)
+    if amount is not None:
+        return amount
+    close = _numeric_value(row.close)
+    volume = _numeric_value(row.volume)
+    if close is None or volume is None:
+        return None
+    return close * volume
 
 
 def _nested_numeric_value(payload: object, key: str) -> float | None:

@@ -201,6 +201,8 @@ def test_stock_selection_api_screens_local_composite_criteria():
                 "min_william_r": -50,
                 "max_william_r": -10,
                 "min_chip_benefit_ratio": 0.6,
+                "min_latest_volume": 1_000_000,
+                "min_traded_amount": 100_000_000,
                 "watchlist_only": True,
             },
         )
@@ -218,7 +220,10 @@ def test_stock_selection_api_screens_local_composite_criteria():
     assert payload["items"][0]["technical_indicators"]["mfi"] == 62.0
     assert payload["items"][0]["technical_indicators"]["william_r"] == -24.0
     assert payload["items"][0]["technical_indicators"]["chip_distribution"]["benefit_ratio"] == 0.72
+    assert payload["items"][0]["latest_bar"]["traded_amount"] == 110_000_000.0
     assert {rule["code"] for rule in payload["items"][0]["matched_rules"]} >= {
+        "min_latest_volume",
+        "min_traded_amount",
         "required_pattern_codes",
         "min_mfi",
         "max_mfi",
@@ -290,5 +295,5 @@ def test_stock_selection_api_rejects_empty_criteria():
     assert response.status_code == 400
     assert (
         response.json()["detail"]
-        == "At least one fundamental, technical, or news selection criterion is required."
+        == "At least one fundamental, technical, market-data, or news selection criterion is required."
     )

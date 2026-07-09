@@ -361,6 +361,24 @@ dimension into the existing local evidence screener:
   watchlist mutation, persisted selection results, strategy execution, order
   intents, and buy/sell/hold language.
 
+## Follow-Up Slice: Composite Stock Selection Market Data Criteria
+
+The next incremental stock-selection slice adapts InStock's market-data
+dimension into the existing local evidence screener:
+
+- add criteria for latest stored daily-bar volume and traded amount;
+- read only the latest stored `DailyBar` row already used by the screener;
+- compute `traded_amount` from stored `DailyBar.amount` when present or the
+  local `close * volume` estimate from the same stored bar when amount is
+  missing;
+- expose query parameters through the existing `GET /stock-selection/screen`
+  route instead of creating a second screener;
+- keep missing bar fields diagnostic-only through `SELECTION_RULE_NOT_MATCHED`;
+- preserve stored-row evidence citations, `research_signal_only=true`, and the
+  non-advice disclaimer;
+- avoid live provider scans, persistence of selection results, strategy
+  execution, order intents, and buy/sell/hold language.
+
 ## Follow-Up Slice: Single-Symbol Stock / ETF Daily-Bar Jobs
 
 The next data-job slice adapts InStock's daily stock/ETF job shape to this
