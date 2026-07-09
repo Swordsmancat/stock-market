@@ -1200,3 +1200,36 @@ Closed the frontend-site-redesign parent after the homepage core-index preferenc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 37: Homepage terminal dashboard refactor
+
+**Date**: 2026-07-09
+**Task**: Homepage terminal dashboard refactor
+**Branch**: `master`
+
+### Summary
+
+Refactored the web homepage into a dark terminal-style market dashboard, added news-provider status visibility, updated frontend tests, and captured the terminal homepage convention in frontend specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `083a24b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
