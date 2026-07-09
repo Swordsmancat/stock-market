@@ -1,0 +1,3 @@
+{"file": "apps/web/app/[locale]/page.test.tsx", "reason": "Update homepage tests for selected index ordering, fallback behavior, and no deep-module regression."}
+{"file": "apps/web/app/[locale]/actions.test.ts", "reason": "Update settings save action coverage for new homepage index preference fields."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend tests and i18n quality expectations for settings/homepage changes."}

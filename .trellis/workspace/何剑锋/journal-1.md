@@ -1096,3 +1096,38 @@ Committed configurable Anspire/SerpAPI news search providers, added stored candl
 ### Next Steps
 
 - None - task complete
+
+
+## Session 34: News sources and InStock follow-up slices
+
+**Date**: 2026-07-09
+**Task**: News sources and InStock follow-up slices
+**Branch**: `master`
+
+### Summary
+
+Added research-only strategy return distribution diagnostics and extended local composite stock selection with stored market-data criteria plus asset-type candidate scope. Validated with focused stock/strategy tests, ruff, git diff --check, and full pytest.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8c25b4d` | (see git log) |
+| `579c530` | (see git log) |
+| `be4ddd3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

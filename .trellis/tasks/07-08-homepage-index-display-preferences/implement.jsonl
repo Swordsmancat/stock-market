@@ -1,0 +1,6 @@
+{"file": "apps/web/app/[locale]/page.tsx", "reason": "Homepage builds tickerItems/coreMarketIndexItems from market overview indices; apply index preferences here."}
+{"file": "apps/web/app/[locale]/settings/page.tsx", "reason": "Settings page already has homepage macro favorites; add homepage core index preferences nearby."}
+{"file": "apps/web/lib/platform-settings-store.ts", "reason": "Existing server-side platform settings and macro favorite normalization; extend for homepage index preferences."}
+{"file": "apps/web/app/[locale]/actions.ts", "reason": "savePlatformSettingsAction needs to accept and persist homepage index preference fields."}
+{"file": "apps/web/messages/zh.json", "reason": "Add Chinese labels, descriptions, hints, and defaults for homepage index preferences."}
+{"file": "apps/web/messages/en.json", "reason": "Add English labels, descriptions, hints, and defaults for homepage index preferences."}
