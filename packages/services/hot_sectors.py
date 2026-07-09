@@ -7,8 +7,21 @@ from typing import Protocol
 
 HOT_SECTOR_TAXONOMY_VERSION = "sector-taxonomy-v1"
 DEFAULT_HOT_SECTOR_PROVIDER = "static_fixture"
+DEFAULT_HOT_SECTOR_TYPE = "industry"
+DEFAULT_HOT_SECTOR_WINDOW = "today"
 STATIC_FIXTURE_SOURCE = "static_sector_fixture"
 STATIC_FIXTURE_REASON = "Static mock sector data; not live market data."
+SUPPORTED_HOT_SECTOR_TYPES = {"industry", "concept"}
+SUPPORTED_HOT_SECTOR_WINDOWS = {"today", "5d", "10d"}
+AKSHARE_SECTOR_TYPE_LABELS = {
+    "industry": "\u884c\u4e1a\u8d44\u91d1\u6d41",
+    "concept": "\u6982\u5ff5\u8d44\u91d1\u6d41",
+}
+AKSHARE_WINDOW_LABELS = {
+    "today": "\u4eca\u65e5",
+    "5d": "5\u65e5",
+    "10d": "10\u65e5",
+}
 
 FLOW_DIRECTION_LABELS = {
     "inflow": "流入",
@@ -150,6 +163,8 @@ class HotSectorProviderResult:
     flow_definition: dict[str, object]
     availability: dict[str, object]
     items: list[HotSectorProviderItem]
+    sector_type: str = DEFAULT_HOT_SECTOR_TYPE
+    window: str = DEFAULT_HOT_SECTOR_WINDOW
     requested_provider: str | None = None
     effective_provider: str | None = None
     provider_capabilities: dict[str, object] = field(default_factory=dict)
@@ -158,14 +173,24 @@ class HotSectorProviderResult:
 class HotSectorFundFlowProvider(Protocol):
     provider_name: str
 
-    def fetch_hot_sectors(self, limit: int) -> HotSectorProviderResult:
+    def fetch_hot_sectors(
+        self,
+        limit: int,
+        sector_type: str = DEFAULT_HOT_SECTOR_TYPE,
+        window: str = DEFAULT_HOT_SECTOR_WINDOW,
+    ) -> HotSectorProviderResult:
         ...
 
 
 class StaticHotSectorFixtureProvider:
     provider_name = DEFAULT_HOT_SECTOR_PROVIDER
 
-    def fetch_hot_sectors(self, limit: int) -> HotSectorProviderResult:
+    def fetch_hot_sectors(
+        self,
+        limit: int,
+        sector_type: str = DEFAULT_HOT_SECTOR_TYPE,
+        window: str = DEFAULT_HOT_SECTOR_WINDOW,
+    ) -> HotSectorProviderResult:
         return HotSectorProviderResult(
             status="degraded",
             data_mode="mock",
@@ -194,16 +219,26 @@ class StaticHotSectorFixtureProvider:
                 "constituents": "mock",
             },
             items=_build_static_fixture_items(),
+            sector_type=sector_type,
+            window=window,
         )
 
 
 class AkshareHotSectorFundFlowProvider:
     provider_name = "akshare"
 
-    def fetch_hot_sectors(self, limit: int) -> HotSectorProviderResult:
+    def fetch_hot_sectors(
+        self,
+        limit: int,
+        sector_type: str = DEFAULT_HOT_SECTOR_TYPE,
+        window: str = DEFAULT_HOT_SECTOR_WINDOW,
+    ) -> HotSectorProviderResult:
         import akshare as ak
 
-        sector_frame = ak.stock_sector_fund_flow_rank(indicator="今日")
+        sector_frame = ak.stock_sector_fund_flow_rank(
+            indicator=AKSHARE_WINDOW_LABELS[window],
+            sector_type=AKSHARE_SECTOR_TYPE_LABELS[sector_type],
+        )
         columns = [str(column) for column in getattr(sector_frame, "columns", [])]
         as_of = datetime.now(timezone.utc).isoformat()
         items: list[HotSectorProviderItem] = []
@@ -275,6 +310,8 @@ class AkshareHotSectorFundFlowProvider:
                 "constituents": "available" if items else "no_data",
             },
             items=items,
+            sector_type=sector_type,
+            window=window,
         )
 
 
@@ -282,20 +319,61 @@ def get_hot_sectors_payload(
     limit: int = 5,
     provider_name: str | None = None,
     provider: HotSectorFundFlowProvider | None = None,
+    sector_type: str | None = None,
+    window: str | None = None,
 ) -> dict[str, object]:
     requested_provider = _normalize_requested_provider(provider_name)
+    normalized_sector_type = _normalize_hot_sector_type(sector_type)
+    normalized_window = _normalize_hot_sector_window(window)
+    if normalized_sector_type is None:
+        return build_unavailable_hot_sectors_payload(
+            message=f"Hot-sector type '{sector_type}' is not supported. Use industry or concept.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            sector_type=str(sector_type or "").strip().lower() or DEFAULT_HOT_SECTOR_TYPE,
+            window=normalized_window or DEFAULT_HOT_SECTOR_WINDOW,
+        )
+    if normalized_window is None:
+        return build_unavailable_hot_sectors_payload(
+            message=f"Hot-sector window '{window}' is not supported. Use today, 5d, or 10d.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            sector_type=normalized_sector_type,
+            window=str(window or "").strip().lower() or DEFAULT_HOT_SECTOR_WINDOW,
+        )
+
     if provider is not None:
-        return _fetch_and_normalize_provider(provider, limit, requested_provider)
+        return _fetch_and_normalize_provider(
+            provider,
+            limit,
+            requested_provider,
+            normalized_sector_type,
+            normalized_window,
+        )
 
     if requested_provider in {DEFAULT_HOT_SECTOR_PROVIDER, "mock", "static"}:
-        return _fetch_and_normalize_provider(StaticHotSectorFixtureProvider(), limit, requested_provider)
+        return _fetch_and_normalize_provider(
+            StaticHotSectorFixtureProvider(),
+            limit,
+            requested_provider,
+            normalized_sector_type,
+            normalized_window,
+        )
     if requested_provider == "akshare":
-        return _fetch_and_normalize_provider(AkshareHotSectorFundFlowProvider(), limit, requested_provider)
+        return _fetch_and_normalize_provider(
+            AkshareHotSectorFundFlowProvider(),
+            limit,
+            requested_provider,
+            normalized_sector_type,
+            normalized_window,
+        )
 
     return build_unavailable_hot_sectors_payload(
         message=f"Hot-sector fund-flow provider '{requested_provider}' is not configured or verified.",
         requested_provider=requested_provider,
         effective_provider=requested_provider,
+        sector_type=normalized_sector_type,
+        window=normalized_window,
     )
 
 
@@ -305,6 +383,8 @@ def build_unavailable_hot_sectors_payload(
     requested_provider: str | None = None,
     effective_provider: str | None = None,
     source: str = "none",
+    sector_type: str = DEFAULT_HOT_SECTOR_TYPE,
+    window: str = DEFAULT_HOT_SECTOR_WINDOW,
 ) -> dict[str, object]:
     return {
         "status": "unavailable",
@@ -319,6 +399,8 @@ def build_unavailable_hot_sectors_payload(
         "is_delayed": False,
         "delay_minutes": None,
         "market": "unknown",
+        "sector_type": sector_type,
+        "window": window,
         "taxonomy_version": HOT_SECTOR_TAXONOMY_VERSION,
         "flow_definition": {
             "metric": "unavailable",
@@ -348,26 +430,38 @@ def _fetch_and_normalize_provider(
     provider: HotSectorFundFlowProvider,
     limit: int,
     requested_provider: str,
+    sector_type: str,
+    window: str,
 ) -> dict[str, object]:
     try:
-        provider_result = provider.fetch_hot_sectors(limit=limit)
+        provider_result = provider.fetch_hot_sectors(
+            limit=limit,
+            sector_type=sector_type,
+            window=window,
+        )
     except Exception as error:
         return build_unavailable_hot_sectors_payload(
             message=f"Hot-sector provider '{provider.provider_name}' failed: {error.__class__.__name__}.",
             requested_provider=requested_provider,
             effective_provider=provider.provider_name,
             source="provider_error",
+            sector_type=sector_type,
+            window=window,
         )
 
-    return _normalize_provider_result(provider_result, limit, requested_provider)
+    return _normalize_provider_result(provider_result, limit, requested_provider, sector_type, window)
 
 
 def _normalize_provider_result(
     provider_result: HotSectorProviderResult,
     limit: int,
     requested_provider: str,
+    sector_type: str,
+    window: str,
 ) -> dict[str, object]:
     effective_provider = provider_result.effective_provider or provider_result.provider or DEFAULT_HOT_SECTOR_PROVIDER
+    effective_sector_type = provider_result.sector_type or sector_type
+    effective_window = provider_result.window or window
     if not provider_result.items:
         message = provider_result.message or "No verified hot-sector rows are available."
         return {
@@ -383,6 +477,8 @@ def _normalize_provider_result(
             "is_delayed": provider_result.is_delayed,
             "delay_minutes": provider_result.delay_minutes,
             "market": provider_result.market,
+            "sector_type": effective_sector_type,
+            "window": effective_window,
             "taxonomy_version": HOT_SECTOR_TAXONOMY_VERSION,
             "flow_definition": provider_result.flow_definition,
             "availability": {
@@ -419,6 +515,8 @@ def _normalize_provider_result(
         "is_delayed": provider_result.is_delayed,
         "delay_minutes": provider_result.delay_minutes,
         "market": provider_result.market,
+        "sector_type": effective_sector_type,
+        "window": effective_window,
         "taxonomy_version": HOT_SECTOR_TAXONOMY_VERSION,
         "flow_definition": provider_result.flow_definition,
         "availability": provider_result.availability,
@@ -537,6 +635,20 @@ def _static_item(
 def _normalize_requested_provider(provider_name: str | None) -> str:
     normalized_provider = (provider_name or DEFAULT_HOT_SECTOR_PROVIDER).strip().lower()
     return normalized_provider or DEFAULT_HOT_SECTOR_PROVIDER
+
+
+def _normalize_hot_sector_type(sector_type: str | None) -> str | None:
+    normalized_sector_type = (sector_type or DEFAULT_HOT_SECTOR_TYPE).strip().lower()
+    if normalized_sector_type in SUPPORTED_HOT_SECTOR_TYPES:
+        return normalized_sector_type
+    return None
+
+
+def _normalize_hot_sector_window(window: str | None) -> str | None:
+    normalized_window = (window or DEFAULT_HOT_SECTOR_WINDOW).strip().lower()
+    if normalized_window in SUPPORTED_HOT_SECTOR_WINDOWS:
+        return normalized_window
+    return None
 
 
 def _direction_from_amount(amount: float | None) -> str:

@@ -9,7 +9,12 @@ from packages.services.hot_sectors import (
 class FakeLiveHotSectorProvider:
     provider_name = "fake_live"
 
-    def fetch_hot_sectors(self, limit: int) -> HotSectorProviderResult:
+    def fetch_hot_sectors(
+        self,
+        limit: int,
+        sector_type: str = "industry",
+        window: str = "today",
+    ) -> HotSectorProviderResult:
         return HotSectorProviderResult(
             status="ok",
             data_mode="live",
@@ -35,6 +40,8 @@ class FakeLiveHotSectorProvider:
                 "fund_flow": "available",
                 "constituents": "available",
             },
+            sector_type=sector_type,
+            window=window,
             items=[
                 HotSectorProviderItem(
                     sector_id="cn_ai",
@@ -62,8 +69,13 @@ class FakeLiveHotSectorProvider:
 class FakeDelayedHotSectorProvider(FakeLiveHotSectorProvider):
     provider_name = "fake_delayed"
 
-    def fetch_hot_sectors(self, limit: int) -> HotSectorProviderResult:
-        result = super().fetch_hot_sectors(limit)
+    def fetch_hot_sectors(
+        self,
+        limit: int,
+        sector_type: str = "industry",
+        window: str = "today",
+    ) -> HotSectorProviderResult:
+        result = super().fetch_hot_sectors(limit, sector_type=sector_type, window=window)
         return HotSectorProviderResult(
             status="ok",
             data_mode="delayed",
@@ -78,13 +90,20 @@ class FakeDelayedHotSectorProvider(FakeLiveHotSectorProvider):
             flow_definition=result.flow_definition,
             availability={**result.availability, "status": "delayed"},
             items=result.items,
+            sector_type=sector_type,
+            window=window,
         )
 
 
 class EmptyHotSectorProvider:
     provider_name = "empty_provider"
 
-    def fetch_hot_sectors(self, limit: int) -> HotSectorProviderResult:
+    def fetch_hot_sectors(
+        self,
+        limit: int,
+        sector_type: str = "industry",
+        window: str = "today",
+    ) -> HotSectorProviderResult:
         return HotSectorProviderResult(
             status="degraded",
             data_mode="none",
@@ -110,6 +129,8 @@ class EmptyHotSectorProvider:
                 "fund_flow": "no_data",
                 "constituents": "no_data",
             },
+            sector_type=sector_type,
+            window=window,
             items=[],
         )
 
@@ -117,7 +138,12 @@ class EmptyHotSectorProvider:
 class FailingHotSectorProvider:
     provider_name = "failing_provider"
 
-    def fetch_hot_sectors(self, limit: int) -> HotSectorProviderResult:
+    def fetch_hot_sectors(
+        self,
+        limit: int,
+        sector_type: str = "industry",
+        window: str = "today",
+    ) -> HotSectorProviderResult:
         raise RuntimeError("provider failed token=secret123")
 
 
@@ -128,6 +154,8 @@ def test_static_fixture_fallback_is_degraded_mock_with_metadata():
     assert payload["data_mode"] == "mock"
     assert payload["source"] == "static_sector_fixture"
     assert payload["provider"] == "static_fixture"
+    assert payload["sector_type"] == "industry"
+    assert payload["window"] == "today"
     assert payload["availability"]["status"] == "mock"
     assert payload["flow_definition"]["metric"] == "static_fixture_demo_value"
     assert payload["count"] == 1
@@ -155,6 +183,8 @@ def test_provider_backed_live_payload_is_normalized():
     assert payload["provider"] == "fake_live"
     assert payload["requested_provider"] == "fake_live"
     assert payload["effective_provider"] == "fake_live"
+    assert payload["sector_type"] == "industry"
+    assert payload["window"] == "today"
     assert payload["is_realtime"] is True
     assert payload["is_delayed"] is False
     assert payload["count"] == 1
@@ -202,6 +232,21 @@ def test_provider_backed_delayed_payload_keeps_delay_metadata():
     assert payload["availability"]["status"] == "delayed"
 
 
+def test_provider_backed_payload_accepts_concept_sector_and_window():
+    payload = get_hot_sectors_payload(
+        limit=5,
+        provider_name="fake_live",
+        provider=FakeLiveHotSectorProvider(),
+        sector_type="concept",
+        window="5d",
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["sector_type"] == "concept"
+    assert payload["window"] == "5d"
+    assert payload["count"] == 1
+
+
 def test_empty_provider_payload_returns_no_data_without_fabricated_rows():
     payload = get_hot_sectors_payload(
         limit=5,
@@ -228,6 +273,15 @@ def test_unknown_provider_returns_unavailable_payload():
     assert payload["provider_capabilities"]["sector_fund_flow"]["status"] == "unavailable"
     assert payload["count"] == 0
     assert payload["items"] == []
+
+
+def test_unknown_sector_type_returns_unavailable_payload():
+    payload = get_hot_sectors_payload(limit=5, provider_name="akshare", sector_type="region")
+
+    assert payload["status"] == "unavailable"
+    assert payload["data_mode"] == "none"
+    assert payload["sector_type"] == "region"
+    assert "not supported" in payload["message"]
 
 
 def test_provider_failure_returns_unavailable_payload_without_secret_leak():

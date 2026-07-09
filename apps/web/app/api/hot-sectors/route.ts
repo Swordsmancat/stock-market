@@ -22,6 +22,14 @@ export async function GET(request: Request) {
   if (provider) {
     backendSearchParams.set("provider", provider);
   }
+  const sectorType = searchParams.get("sector_type")?.trim();
+  if (sectorType) {
+    backendSearchParams.set("sector_type", sectorType);
+  }
+  const window = searchParams.get("window")?.trim();
+  if (window) {
+    backendSearchParams.set("window", window);
+  }
 
   try {
     const response = await backendFetch(`/sectors/hot?${backendSearchParams.toString()}`, {

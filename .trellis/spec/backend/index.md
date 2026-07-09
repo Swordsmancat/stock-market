@@ -45,6 +45,7 @@ Primary examples:
 | [InStock-Inspired Analysis Pattern Contract](./instock-analysis-pattern-contract.md) | Stored InStock-inspired technical indicators, candlestick patterns, chip distribution, attribution boundary, and no-trading rules | Filled |
 | [InStock-Inspired Composite Stock Selection Contract](./instock-composite-stock-selection-contract.md) | Research-only local composite stock selection over stored technical/fundamental evidence | Filled |
 | [InStock-Inspired Data Job Contract](./instock-data-job-contract.md) | Single-symbol daily stock/ETF ingestion job signatures, diagnostics, and no-trading boundary | Filled |
+| [Market Daily Data Contract](./market-daily-data-contract.md) | Provider-backed A-share stock fund-flow, industry/concept flow, and limit-up context with no-citation/no-trading boundary | Filled |
 | [Recommendation Signal Evaluation Contract](./recommendation-signal-evaluation-contract.md) | Public historical signal evaluation API, metrics payload, diagnostics, and no-trading boundary | Filled |
 | [InStock-Inspired Strategy Screening Contract](./instock-strategy-screening-contract.md) | Research-only strategy screening/evaluation API, InStock attribution boundary, and no-trading rules | Filled |
 | [Market Indicator Seed Import Contract](./market-indicator-seed-import-contract.md) | Offline audited JSON/CSV macro observation import contract, validation rules, and CLI boundary | Filled |

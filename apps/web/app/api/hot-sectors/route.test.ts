@@ -41,7 +41,7 @@ it("proxies hot-sector degraded mock payloads from the backend", async () => {
   });
 });
 
-it("passes normalized limit and provider query to the backend", async () => {
+it("passes normalized limit, provider, sector type, and window query to the backend", async () => {
   backendFetchMock.mockResolvedValue(
     new Response(
       JSON.stringify({
@@ -58,9 +58,16 @@ it("passes normalized limit and provider query to the backend", async () => {
     ),
   );
 
-  const response = await GET(new Request("http://localhost/api/hot-sectors?limit=999&provider=akshare"));
+  const response = await GET(
+    new Request(
+      "http://localhost/api/hot-sectors?limit=999&provider=akshare&sector_type=concept&window=5d",
+    ),
+  );
 
-  expect(backendFetchMock).toHaveBeenCalledWith("/sectors/hot?limit=10&provider=akshare", { cache: "no-store" });
+  expect(backendFetchMock).toHaveBeenCalledWith(
+    "/sectors/hot?limit=10&provider=akshare&sector_type=concept&window=5d",
+    { cache: "no-store" },
+  );
   expect(response.status).toBe(200);
   await expect(response.json()).resolves.toMatchObject({
     status: "ok",

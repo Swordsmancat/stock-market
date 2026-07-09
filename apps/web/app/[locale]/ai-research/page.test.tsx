@@ -213,6 +213,76 @@ function createOfficialSourceStatusPayload() {
   };
 }
 
+function createStockFundFlowPayload() {
+  return {
+    status: "ok",
+    data_mode: "delayed",
+    source: "fake_stock_fund_flow",
+    provider: "akshare",
+    requested_provider: "akshare",
+    effective_provider: "akshare",
+    as_of: "2026-07-09T09:30:00+00:00",
+    generated_at: "2026-07-09T09:31:00+00:00",
+    market: "CN",
+    window: "today",
+    availability: { status: "delayed", reason: null },
+    provider_capabilities: {
+      stock_fund_flow: { status: "delayed" },
+      citation: { status: "not_citable" },
+    },
+    message: "Fake stock fund-flow rows.",
+    count: 1,
+    items: [
+      {
+        symbol: "600519",
+        name: "Kweichow Moutai",
+        rank: 1,
+        latest_price: 1688.5,
+        change_percent: 1.25,
+        net_flow_amount: 123456789,
+        main_net_flow_amount: 123456789,
+        currency: "CNY",
+        flow_window: "today",
+      },
+    ],
+  };
+}
+
+function createLimitUpReasonsPayload() {
+  return {
+    status: "ok",
+    data_mode: "delayed",
+    source: "fake_limit_up_reasons",
+    provider: "akshare",
+    requested_provider: "akshare",
+    effective_provider: "akshare",
+    as_of: "2026-07-09T09:30:00+00:00",
+    generated_at: "2026-07-09T09:31:00+00:00",
+    market: "CN",
+    window: "today",
+    trade_date: "2026-07-09",
+    availability: { status: "delayed", reason: null, reason_detail: "available" },
+    provider_capabilities: {
+      limit_up_reasons: { status: "delayed" },
+      citation: { status: "not_citable" },
+    },
+    message: "Fake limit-up reason rows.",
+    count: 1,
+    items: [
+      {
+        symbol: "002001",
+        name: "Test Limit",
+        rank: 1,
+        trade_date: "2026-07-09",
+        change_percent: 10,
+        reason: "AI computing",
+        sector: "Software",
+        consecutive_limit_up_count: 2,
+      },
+    ],
+  };
+}
+
 async function renderAiResearchPage() {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
@@ -260,6 +330,12 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
     if (url.endsWith("/market-indicators/official-sources/status")) {
       return Promise.resolve(new Response(JSON.stringify(createOfficialSourceStatusPayload())));
     }
+    if (url.endsWith("/market-daily-data/fund-flow/stocks?market=CN&window=today&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createStockFundFlowPayload())));
+    }
+    if (url.endsWith("/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createLimitUpReasonsPayload())));
+    }
     if (url.includes("/recommendations?symbols=AAPL%2C0700&limit=6")) {
       return Promise.resolve(
         new Response(
@@ -302,6 +378,11 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   expect(screen.getAllByText("0700").length).toBeGreaterThan(0);
   expect(screen.getAllByText("AAPL crossed above its moving average").length).toBeGreaterThan(0);
   expect(screen.getByText("Breakout research signal")).toBeInTheDocument();
+  expect(screen.getByText("A-share daily data")).toBeInTheDocument();
+  expect(screen.getByText("Kweichow Moutai")).toBeInTheDocument();
+  expect(screen.getByText("Main flow: 123,456,789 CNY")).toBeInTheDocument();
+  expect(screen.getByText("Reason: AI computing")).toBeInTheDocument();
+  expect(screen.getByText(/not stored local evidence or assistant citations/)).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - US")).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
   expect(screen.getByText("Value: 188.5%")).toBeInTheDocument();
@@ -332,6 +413,12 @@ it("adds a manual symbol and submits the active symbol through the existing mark
     }
     if (url.endsWith("/market-indicators/official-sources/status")) {
       return Promise.resolve(new Response(JSON.stringify(createOfficialSourceStatusPayload())));
+    }
+    if (url.endsWith("/market-daily-data/fund-flow/stocks?market=CN&window=today&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createStockFundFlowPayload())));
+    }
+    if (url.endsWith("/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createLimitUpReasonsPayload())));
     }
     if (url.includes("/recommendations?")) {
       return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
@@ -383,6 +470,25 @@ it("keeps the AI research desk usable when official source status is unavailable
     if (url.endsWith("/market-indicators/official-sources/status")) {
       return Promise.resolve(new Response("unavailable", { status: 503 }));
     }
+    if (url.endsWith("/market-daily-data/fund-flow/stocks?market=CN&window=today&limit=6&provider=akshare")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "unavailable",
+            data_mode: "none",
+            source: "none",
+            provider: "akshare",
+            effective_provider: "akshare",
+            message: "Market daily-data provider is unavailable.",
+            count: 0,
+            items: [],
+          }),
+        ),
+      );
+    }
+    if (url.endsWith("/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createLimitUpReasonsPayload())));
+    }
     if (url.includes("/recommendations?")) {
       return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
     }
@@ -393,4 +499,5 @@ it("keeps the AI research desk usable when official source status is unavailable
 
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
   expect(screen.getByText("Official source readiness could not be loaded.")).toBeInTheDocument();
+  expect(screen.getByText("Market daily-data provider is unavailable.")).toBeInTheDocument();
 });

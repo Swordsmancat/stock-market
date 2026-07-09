@@ -29,6 +29,9 @@ runtime dependency.
   success diagnostics.
 - Implemented feature: research-only `GET /strategies/screen` strategy screening API.
 - Implemented feature: research-only `GET /strategies/evaluate` strategy evaluation API.
+- Implemented feature: provider-backed A-share individual stock fund-flow ranking API.
+- Implemented feature: provider-backed industry/concept fund-flow parameters on `/sectors/hot`.
+- Implemented feature: provider-backed A-share limit-up pool/reason context API with explicit degraded states when the provider does not expose reason fields.
 - Rule set: `candlestick_patterns_v1`.
 - CYQ rule set: `chip_distribution_v1`.
 - Composite stock selection rule set: `instock_composite_selection_v1`.
@@ -90,6 +93,14 @@ such as `technical_indicators:{symbol}:{as_of}`.
 not currently stored citation rows and must not be cited by the assistant as
 verified evidence unless a future slice adds reviewed persistence with stable
 source metadata.
+
+`GET /market-daily-data/fund-flow/stocks`,
+`GET /market-daily-data/limit-up-reasons`, and provider-backed
+`GET /sectors/hot` rows are live/delayed provider context only in this phase.
+They are not persisted local evidence and must not be emitted as assistant
+citations until a future storage and review contract adds stable evidence IDs.
+Limit-up rows from AkShare may be degraded pool context when no provider reason
+field is available; do not fabricate reason text.
 
 ## Extension Notes
 
@@ -162,6 +173,43 @@ discarding already ingested symbols.
 This is still a targeted ingestion path. It does not scan a provider universe,
 import InStock schedulers, mutate watchlists, execute strategies, create order
 intents, call brokers, or emit buy/sell/hold guidance.
+
+## Provider-Backed Daily Market Context
+
+`GET /market-daily-data/fund-flow/stocks` exposes a non-persistent A-share
+individual stock fund-flow ranking:
+
+```text
+GET /market-daily-data/fund-flow/stocks?market=CN&window=today&limit=20&provider=akshare
+```
+
+The first provider is AkShare's Eastmoney stock fund-flow ranking. Supported
+windows are `today`, `3d`, `5d`, and `10d`. The response includes provider,
+source, as-of, availability, capability metadata, sanitized diagnostics, and
+ranked flow rows. Provider errors, unsupported windows, and empty rows return
+structured unavailable/degraded payloads rather than fabricated values.
+
+`GET /sectors/hot` accepts additive provider parameters for the same daily
+market context:
+
+```text
+GET /sectors/hot?provider=akshare&sector_type=industry&window=today&limit=10
+GET /sectors/hot?provider=akshare&sector_type=concept&window=5d&limit=10
+```
+
+Omitting `sector_type` and `window` preserves the previous default behavior.
+
+`GET /market-daily-data/limit-up-reasons` exposes A-share limit-up context:
+
+```text
+GET /market-daily-data/limit-up-reasons?date=2026-07-09&market=CN&limit=50&provider=akshare
+```
+
+AkShare's currently available path may return limit-up pool rows without a
+reason/detail field. In that case the payload remains visible but degraded, and
+`provider_capabilities.limit_up_reasons.status` is `unavailable`. Do not import
+InStock's 10jqka proxy/cookie implementation or scrape a replacement inside
+this route without a new reviewed provider contract.
 
 ## Strategy Screening API
 

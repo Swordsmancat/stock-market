@@ -2,9 +2,12 @@ import {
   AiResearchDesk,
   type AiResearchDiagnostic,
   type AiResearchFollowedItem,
+  type AiResearchLimitUpReasonItem,
   type AiResearchMacroIndicator,
+  type AiResearchMarketDailyDataPayload,
   type AiResearchOfficialSourceStatus,
   type AiResearchRecommendation,
+  type AiResearchStockFundFlowItem,
   type AiResearchWatchlistItem,
 } from "@/components/ai-research-desk";
 import { backendFetch } from "@/lib/backend-api";
@@ -40,6 +43,8 @@ type RecommendationsPayload = {
 };
 
 type OfficialSourceStatusPayload = AiResearchOfficialSourceStatus;
+type StockFundFlowPayload = AiResearchMarketDailyDataPayload<AiResearchStockFundFlowItem>;
+type LimitUpReasonsPayload = AiResearchMarketDailyDataPayload<AiResearchLimitUpReasonItem>;
 
 type OptionalLoadResult<T> =
   | { status: "loaded"; payload: T }
@@ -57,10 +62,22 @@ export default async function AiResearchPage({
   const settings = await getPlatformSettings();
   const provider = settings.market_data_provider;
 
-  const [watchlistResult, marketOverviewResult, officialSourceStatusResult] = await Promise.all([
+  const [
+    watchlistResult,
+    marketOverviewResult,
+    officialSourceStatusResult,
+    stockFundFlowResult,
+    limitUpReasonsResult,
+  ] = await Promise.all([
     fetchOptionalJson<WatchlistPayload>("/watchlist"),
     fetchOptionalJson<MarketOverviewPayload>(withProviderQuery("/dashboard/market-overview", provider)),
     fetchOptionalJson<OfficialSourceStatusPayload>("/market-indicators/official-sources/status"),
+    fetchOptionalJson<StockFundFlowPayload>(
+      "/market-daily-data/fund-flow/stocks?market=CN&window=today&limit=6&provider=akshare",
+    ),
+    fetchOptionalJson<LimitUpReasonsPayload>(
+      "/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare",
+    ),
   ]);
 
   const watchlistItems = watchlistResult.status === "loaded" ? watchlistResult.payload.items ?? [] : [];
@@ -89,6 +106,12 @@ export default async function AiResearchPage({
       macroIndicators={getMacroIndicators(marketOverviewPayload)}
       officialSourceStatus={
         officialSourceStatusResult.status === "loaded" ? officialSourceStatusResult.payload : null
+      }
+      stockFundFlowPayload={
+        stockFundFlowResult.status === "loaded" ? stockFundFlowResult.payload : null
+      }
+      limitUpReasonsPayload={
+        limitUpReasonsResult.status === "loaded" ? limitUpReasonsResult.payload : null
       }
       overviewDiagnostics={[
         ...(marketOverviewResult.status === "failed"

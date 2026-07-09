@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { FileSearch, Plus, Sparkles, X } from "lucide-react";
+import { Activity, FileSearch, Plus, Sparkles, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { MarketAssistantCard } from "@/components/market-assistant-card";
@@ -97,6 +97,68 @@ export type AiResearchOfficialSourceStatus = {
   providers?: AiResearchOfficialSourceProvider[];
 };
 
+export type AiResearchStockFundFlowItem = {
+  symbol?: string | null;
+  name?: string | null;
+  rank?: number | null;
+  latest_price?: number | null;
+  change_percent?: number | null;
+  net_flow_amount?: number | null;
+  main_net_flow_amount?: number | null;
+  super_large_net_flow_amount?: number | null;
+  large_net_flow_amount?: number | null;
+  medium_net_flow_amount?: number | null;
+  small_net_flow_amount?: number | null;
+  currency?: string | null;
+  unit?: string | null;
+  flow_window?: string | null;
+  provider?: string | null;
+  source?: string | null;
+};
+
+export type AiResearchLimitUpReasonItem = {
+  symbol?: string | null;
+  name?: string | null;
+  rank?: number | null;
+  trade_date?: string | null;
+  latest_price?: number | null;
+  change_percent?: number | null;
+  reason?: string | null;
+  detail?: string | null;
+  sector?: string | null;
+  limit_up_count?: number | null;
+  consecutive_limit_up_count?: number | null;
+  first_limit_up_time?: string | null;
+  last_limit_up_time?: string | null;
+  turnover_rate?: number | null;
+  market_cap?: number | null;
+  provider?: string | null;
+  source?: string | null;
+};
+
+export type AiResearchMarketDailyDataPayload<TItem> = {
+  status?: string | null;
+  data_mode?: string | null;
+  source?: string | null;
+  provider?: string | null;
+  requested_provider?: string | null;
+  effective_provider?: string | null;
+  as_of?: string | null;
+  generated_at?: string | null;
+  market?: string | null;
+  window?: string | null;
+  trade_date?: string | null;
+  availability?: {
+    status?: string | null;
+    reason?: string | null;
+    [key: string]: unknown;
+  } | null;
+  provider_capabilities?: Record<string, unknown> | null;
+  message?: string | null;
+  count?: number | null;
+  items?: TItem[];
+};
+
 type AiResearchDeskProps = {
   locale: string;
   provider: string;
@@ -108,6 +170,8 @@ type AiResearchDeskProps = {
   recommendationDiagnostics: AiResearchDiagnostic[];
   macroIndicators: AiResearchMacroIndicator[];
   officialSourceStatus?: AiResearchOfficialSourceStatus | null;
+  stockFundFlowPayload?: AiResearchMarketDailyDataPayload<AiResearchStockFundFlowItem> | null;
+  limitUpReasonsPayload?: AiResearchMarketDailyDataPayload<AiResearchLimitUpReasonItem> | null;
   overviewDiagnostics: AiResearchDiagnostic[];
 };
 
@@ -135,6 +199,8 @@ export function AiResearchDesk({
   recommendationDiagnostics,
   macroIndicators,
   officialSourceStatus = null,
+  stockFundFlowPayload = null,
+  limitUpReasonsPayload = null,
   overviewDiagnostics,
 }: AiResearchDeskProps) {
   const t = useTranslations("AiResearchDesk");
@@ -433,6 +499,10 @@ export function AiResearchDesk({
                 onUseSymbol={addSymbol}
                 onActivateSymbol={setActiveSymbol}
               />
+              <MarketDailyDataPanel
+                stockFundFlowPayload={stockFundFlowPayload}
+                limitUpReasonsPayload={limitUpReasonsPayload}
+              />
               <MacroContextPanel
                 macroIndicators={prioritizedMacroIndicators.slice(
                   0,
@@ -451,6 +521,153 @@ export function AiResearchDesk({
         </div>
       </div>
     </div>
+  );
+}
+
+function MarketDailyDataPanel({
+  stockFundFlowPayload,
+  limitUpReasonsPayload,
+}: {
+  stockFundFlowPayload?: AiResearchMarketDailyDataPayload<AiResearchStockFundFlowItem> | null;
+  limitUpReasonsPayload?: AiResearchMarketDailyDataPayload<AiResearchLimitUpReasonItem> | null;
+}) {
+  const t = useTranslations("AiResearchDesk");
+  const fundFlowItems = stockFundFlowPayload?.items ?? [];
+  const limitUpItems = limitUpReasonsPayload?.items ?? [];
+
+  return (
+    <FinancialTerminalCard>
+      <FinancialTerminalCardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Activity className="h-4 w-4" />
+              {t("marketDailyTitle")}
+            </CardTitle>
+            <CardDescription>{t("marketDailyDesc")}</CardDescription>
+          </div>
+          <Badge variant="outline">
+            {formatStatusLabel(stockFundFlowPayload?.status ?? limitUpReasonsPayload?.status, t("unavailable"))}
+          </Badge>
+        </div>
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent className="space-y-3">
+        <FinancialTerminalSurface className="p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">{t("marketDailyFundFlowTitle")}</Badge>
+            <span>
+              {t("marketDailyProvider", {
+                provider:
+                  stockFundFlowPayload?.effective_provider ??
+                  stockFundFlowPayload?.provider ??
+                  t("unavailable"),
+              })}
+            </span>
+            {stockFundFlowPayload?.as_of ? (
+              <span>{t("marketDailyAsOf", { date: stockFundFlowPayload.as_of })}</span>
+            ) : null}
+          </div>
+          {fundFlowItems.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {fundFlowItems.slice(0, 4).map((item, index) => (
+                <div
+                  key={`${item.symbol ?? "fund-flow"}-${index}`}
+                  className="grid gap-2 border-t border-border/60 pt-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold">{item.symbol ?? t("unavailable")}</span>
+                      <span className="truncate text-muted-foreground">{item.name ?? t("unavailable")}</span>
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      {t("marketDailyPrice", {
+                        value: formatNumber(item.latest_price, t("unavailable")),
+                      })}
+                      {" · "}
+                      {t("marketDailyChange", {
+                        value: formatPercent(item.change_percent, t("unavailable")),
+                      })}
+                    </div>
+                  </div>
+                  <div className="font-mono text-muted-foreground">
+                    {t("marketDailyMainFlow", {
+                      value: formatAmount(
+                        item.main_net_flow_amount ?? item.net_flow_amount,
+                        item.currency ?? "CNY",
+                        t("unavailable"),
+                      ),
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {stockFundFlowPayload?.message ?? t("marketDailyNoFundFlow")}
+            </p>
+          )}
+        </FinancialTerminalSurface>
+
+        <FinancialTerminalSurface className="p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">{t("marketDailyLimitUpTitle")}</Badge>
+            <span>
+              {t("marketDailyProvider", {
+                provider:
+                  limitUpReasonsPayload?.effective_provider ??
+                  limitUpReasonsPayload?.provider ??
+                  t("unavailable"),
+              })}
+            </span>
+            {limitUpReasonsPayload?.trade_date ? (
+              <span>{t("marketDailyTradeDate", { date: limitUpReasonsPayload.trade_date })}</span>
+            ) : null}
+          </div>
+          {limitUpItems.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {limitUpItems.slice(0, 4).map((item, index) => (
+                <div
+                  key={`${item.symbol ?? "limit-up"}-${index}`}
+                  className="border-t border-border/60 pt-2 text-xs"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-semibold">{item.symbol ?? t("unavailable")}</span>
+                    <span className="font-medium">{item.name ?? t("unavailable")}</span>
+                    {item.consecutive_limit_up_count ? (
+                      <Badge variant="outline">
+                        {item.consecutive_limit_up_count}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {t("marketDailyReason", {
+                      reason: item.reason ?? item.detail ?? t("marketDailyPoolOnly"),
+                    })}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {t("marketDailySector", {
+                      sector: item.sector ?? t("unavailable"),
+                    })}
+                    {" · "}
+                    {t("marketDailyChange", {
+                      value: formatPercent(item.change_percent, t("unavailable")),
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {limitUpReasonsPayload?.message ?? t("marketDailyNoLimitUp")}
+            </p>
+          )}
+        </FinancialTerminalSurface>
+
+        <p className="text-xs text-muted-foreground">
+          {t("marketDailyCitationBoundary")}
+        </p>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
@@ -998,6 +1215,39 @@ function formatSourceStatus(
     return unavailableLabel;
   }
   return status.replaceAll("_", " ");
+}
+
+function formatStatusLabel(status: string | null | undefined, unavailableLabel: string): string {
+  if (!status) {
+    return unavailableLabel;
+  }
+  return status.replaceAll("_", " ");
+}
+
+function formatNumber(value: number | null | undefined, unavailableLabel: string): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return unavailableLabel;
+  }
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatPercent(value: number | null | undefined, unavailableLabel: string): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return unavailableLabel;
+  }
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
+}
+
+function formatAmount(
+  value: number | null | undefined,
+  currency: string,
+  unavailableLabel: string,
+): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return unavailableLabel;
+  }
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency}`;
 }
 
 function formatCodeList(
