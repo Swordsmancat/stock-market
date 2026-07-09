@@ -283,6 +283,78 @@ function createLimitUpReasonsPayload() {
   };
 }
 
+function createDragonTigerPayload() {
+  return {
+    status: "ok",
+    data_mode: "delayed",
+    source: "fake_dragon_tiger_list",
+    provider: "akshare",
+    requested_provider: "akshare",
+    effective_provider: "akshare",
+    as_of: "2026-07-09T09:30:00+00:00",
+    generated_at: "2026-07-09T09:31:00+00:00",
+    market: "CN",
+    window: "today",
+    trade_date: "2026-07-09",
+    availability: { status: "delayed", reason: null, dragon_tiger_list: "available" },
+    provider_capabilities: {
+      dragon_tiger_list: { status: "delayed" },
+      citation: { status: "not_citable" },
+    },
+    message: "Fake Dragon Tiger List rows.",
+    count: 1,
+    items: [
+      {
+        symbol: "600519",
+        name: "Kweichow Moutai",
+        rank: 1,
+        trade_date: "2026-07-09",
+        change_percent: 3.2,
+        net_buy_amount: 123000000,
+        reason: "Daily price deviation reached threshold.",
+        department_name: "Test brokerage seat",
+        department_rank: 1,
+      },
+    ],
+  };
+}
+
+function createBlockTradesPayload() {
+  return {
+    status: "ok",
+    data_mode: "delayed",
+    source: "fake_block_trades",
+    provider: "akshare",
+    requested_provider: "akshare",
+    effective_provider: "akshare",
+    as_of: "2026-07-09T09:30:00+00:00",
+    generated_at: "2026-07-09T09:31:00+00:00",
+    market: "CN",
+    window: "today",
+    trade_date: "2026-07-09",
+    availability: { status: "delayed", reason: null, block_trades: "available" },
+    provider_capabilities: {
+      block_trades: { status: "delayed" },
+      citation: { status: "not_citable" },
+    },
+    message: "Fake block-trade rows.",
+    count: 1,
+    items: [
+      {
+        symbol: "000001",
+        name: "Ping An Bank",
+        rank: 1,
+        trade_date: "2026-07-09",
+        trade_price: 11.8,
+        amount: 11800000,
+        buyer: "Buyer seat",
+        seller: "Seller seat",
+        market: "A股",
+      },
+    ],
+  };
+}
+
 async function renderAiResearchPage() {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
@@ -336,6 +408,12 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
     if (url.endsWith("/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare")) {
       return Promise.resolve(new Response(JSON.stringify(createLimitUpReasonsPayload())));
     }
+    if (url.endsWith("/market-daily-data/dragon-tiger-list?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createDragonTigerPayload())));
+    }
+    if (url.endsWith("/market-daily-data/block-trades?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createBlockTradesPayload())));
+    }
     if (url.includes("/recommendations?symbols=AAPL%2C0700&limit=6")) {
       return Promise.resolve(
         new Response(
@@ -379,9 +457,16 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   expect(screen.getAllByText("AAPL crossed above its moving average").length).toBeGreaterThan(0);
   expect(screen.getByText("Breakout research signal")).toBeInTheDocument();
   expect(screen.getByText("A-share daily data")).toBeInTheDocument();
-  expect(screen.getByText("Kweichow Moutai")).toBeInTheDocument();
+  expect(screen.getAllByText("Kweichow Moutai").length).toBeGreaterThan(0);
   expect(screen.getByText("Main flow: 123,456,789 CNY")).toBeInTheDocument();
   expect(screen.getByText("Reason: AI computing")).toBeInTheDocument();
+  expect(screen.getByText("Dragon Tiger List")).toBeInTheDocument();
+  expect(screen.getByText(/Net buy: 123,000,000 CNY/)).toBeInTheDocument();
+  expect(screen.getByText("Reason: Daily price deviation reached threshold.")).toBeInTheDocument();
+  expect(screen.getByText("Block trades")).toBeInTheDocument();
+  expect(screen.getByText("Ping An Bank")).toBeInTheDocument();
+  expect(screen.getByText(/Deal amount: 11,800,000 CNY/)).toBeInTheDocument();
+  expect(screen.getByText("Buyer: Buyer seat; seller: Seller seat")).toBeInTheDocument();
   expect(screen.getByText(/not stored local evidence or assistant citations/)).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - US")).toBeInTheDocument();
   expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
@@ -419,6 +504,12 @@ it("adds a manual symbol and submits the active symbol through the existing mark
     }
     if (url.endsWith("/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare")) {
       return Promise.resolve(new Response(JSON.stringify(createLimitUpReasonsPayload())));
+    }
+    if (url.endsWith("/market-daily-data/dragon-tiger-list?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createDragonTigerPayload())));
+    }
+    if (url.endsWith("/market-daily-data/block-trades?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createBlockTradesPayload())));
     }
     if (url.includes("/recommendations?")) {
       return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
@@ -489,6 +580,25 @@ it("keeps the AI research desk usable when official source status is unavailable
     if (url.endsWith("/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare")) {
       return Promise.resolve(new Response(JSON.stringify(createLimitUpReasonsPayload())));
     }
+    if (url.endsWith("/market-daily-data/dragon-tiger-list?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "degraded",
+            data_mode: "none",
+            source: "none",
+            provider: "akshare",
+            effective_provider: "akshare",
+            message: "No Dragon Tiger List rows are available.",
+            count: 0,
+            items: [],
+          }),
+        ),
+      );
+    }
+    if (url.endsWith("/market-daily-data/block-trades?market=CN&limit=6&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createBlockTradesPayload())));
+    }
     if (url.includes("/recommendations?")) {
       return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
     }
@@ -500,4 +610,5 @@ it("keeps the AI research desk usable when official source status is unavailable
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
   expect(screen.getByText("Official source readiness could not be loaded.")).toBeInTheDocument();
   expect(screen.getByText("Market daily-data provider is unavailable.")).toBeInTheDocument();
+  expect(screen.getByText("No Dragon Tiger List rows are available.")).toBeInTheDocument();
 });

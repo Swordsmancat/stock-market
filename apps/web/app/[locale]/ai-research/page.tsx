@@ -1,6 +1,8 @@
 import {
   AiResearchDesk,
+  type AiResearchBlockTradeItem,
   type AiResearchDiagnostic,
+  type AiResearchDragonTigerItem,
   type AiResearchFollowedItem,
   type AiResearchLimitUpReasonItem,
   type AiResearchMacroIndicator,
@@ -45,6 +47,8 @@ type RecommendationsPayload = {
 type OfficialSourceStatusPayload = AiResearchOfficialSourceStatus;
 type StockFundFlowPayload = AiResearchMarketDailyDataPayload<AiResearchStockFundFlowItem>;
 type LimitUpReasonsPayload = AiResearchMarketDailyDataPayload<AiResearchLimitUpReasonItem>;
+type DragonTigerPayload = AiResearchMarketDailyDataPayload<AiResearchDragonTigerItem>;
+type BlockTradesPayload = AiResearchMarketDailyDataPayload<AiResearchBlockTradeItem>;
 
 type OptionalLoadResult<T> =
   | { status: "loaded"; payload: T }
@@ -68,6 +72,8 @@ export default async function AiResearchPage({
     officialSourceStatusResult,
     stockFundFlowResult,
     limitUpReasonsResult,
+    dragonTigerResult,
+    blockTradesResult,
   ] = await Promise.all([
     fetchOptionalJson<WatchlistPayload>("/watchlist"),
     fetchOptionalJson<MarketOverviewPayload>(withProviderQuery("/dashboard/market-overview", provider)),
@@ -77,6 +83,12 @@ export default async function AiResearchPage({
     ),
     fetchOptionalJson<LimitUpReasonsPayload>(
       "/market-daily-data/limit-up-reasons?market=CN&limit=6&provider=akshare",
+    ),
+    fetchOptionalJson<DragonTigerPayload>(
+      "/market-daily-data/dragon-tiger-list?market=CN&limit=6&provider=akshare",
+    ),
+    fetchOptionalJson<BlockTradesPayload>(
+      "/market-daily-data/block-trades?market=CN&limit=6&provider=akshare",
     ),
   ]);
 
@@ -112,6 +124,12 @@ export default async function AiResearchPage({
       }
       limitUpReasonsPayload={
         limitUpReasonsResult.status === "loaded" ? limitUpReasonsResult.payload : null
+      }
+      dragonTigerPayload={
+        dragonTigerResult.status === "loaded" ? dragonTigerResult.payload : null
+      }
+      blockTradesPayload={
+        blockTradesResult.status === "loaded" ? blockTradesResult.payload : null
       }
       overviewDiagnostics={[
         ...(marketOverviewResult.status === "failed"

@@ -32,6 +32,8 @@ runtime dependency.
 - Implemented feature: provider-backed A-share individual stock fund-flow ranking API.
 - Implemented feature: provider-backed industry/concept fund-flow parameters on `/sectors/hot`.
 - Implemented feature: provider-backed A-share limit-up pool/reason context API with explicit degraded states when the provider does not expose reason fields.
+- Implemented feature: provider-backed A-share Dragon Tiger List context API.
+- Implemented feature: provider-backed A-share block-trade context API.
 - Rule set: `candlestick_patterns_v1`.
 - CYQ rule set: `chip_distribution_v1`.
 - Composite stock selection rule set: `instock_composite_selection_v1`.
@@ -95,12 +97,16 @@ verified evidence unless a future slice adds reviewed persistence with stable
 source metadata.
 
 `GET /market-daily-data/fund-flow/stocks`,
-`GET /market-daily-data/limit-up-reasons`, and provider-backed
-`GET /sectors/hot` rows are live/delayed provider context only in this phase.
-They are not persisted local evidence and must not be emitted as assistant
-citations until a future storage and review contract adds stable evidence IDs.
-Limit-up rows from AkShare may be degraded pool context when no provider reason
-field is available; do not fabricate reason text.
+`GET /market-daily-data/limit-up-reasons`,
+`GET /market-daily-data/dragon-tiger-list`,
+`GET /market-daily-data/block-trades`, and provider-backed `GET /sectors/hot`
+rows are live/delayed provider context only in this phase. They are not
+persisted local evidence and must not be emitted as assistant citations until a
+future storage and review contract adds stable evidence IDs. Limit-up rows from
+AkShare may be degraded pool context when no provider reason field is available;
+do not fabricate reason text. Dragon Tiger List and block-trade rows may omit
+optional seat, rank, buyer/seller, discount, or amount fields; keep those values
+null rather than inferring them.
 
 ## Extension Notes
 
@@ -210,6 +216,30 @@ reason/detail field. In that case the payload remains visible but degraded, and
 `provider_capabilities.limit_up_reasons.status` is `unavailable`. Do not import
 InStock's 10jqka proxy/cookie implementation or scrape a replacement inside
 this route without a new reviewed provider contract.
+
+`GET /market-daily-data/dragon-tiger-list` exposes A-share Dragon Tiger List
+context:
+
+```text
+GET /market-daily-data/dragon-tiger-list?date=2026-07-09&market=CN&limit=50&provider=akshare
+```
+
+The first provider path is AkShare's Eastmoney Dragon Tiger List detail
+function. The payload includes listing date, close/change, net-buy/buy/sell
+amounts, listing reason, and optional seat fields when the provider supplies
+them. Rows are research context only and are not stored assistant citations.
+
+`GET /market-daily-data/block-trades` exposes A-share block-trade context:
+
+```text
+GET /market-daily-data/block-trades?date=2026-07-09&market=CN&limit=50&provider=akshare
+```
+
+The first provider path is AkShare's Eastmoney block-trade daily detail
+function for A-share rows. The payload includes trade price, close price,
+discount/premium, volume, amount, buyer, seller, and source metadata when
+available. Do not treat block-trade rows as order intent, broker instruction, or
+assistant-citable evidence in this non-persistent phase.
 
 ## Strategy Screening API
 

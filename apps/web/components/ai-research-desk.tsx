@@ -136,6 +136,48 @@ export type AiResearchLimitUpReasonItem = {
   source?: string | null;
 };
 
+export type AiResearchDragonTigerItem = {
+  symbol?: string | null;
+  name?: string | null;
+  rank?: number | null;
+  trade_date?: string | null;
+  close_price?: number | null;
+  change_percent?: number | null;
+  turnover_rate?: number | null;
+  amount?: number | null;
+  net_buy_amount?: number | null;
+  buy_amount?: number | null;
+  sell_amount?: number | null;
+  total_market_amount?: number | null;
+  net_buy_ratio?: number | null;
+  deal_amount_ratio?: number | null;
+  reason?: string | null;
+  interpretation?: string | null;
+  department_name?: string | null;
+  department_rank?: number | null;
+  provider?: string | null;
+  source?: string | null;
+};
+
+export type AiResearchBlockTradeItem = {
+  symbol?: string | null;
+  name?: string | null;
+  rank?: number | null;
+  trade_date?: string | null;
+  trade_price?: number | null;
+  close_price?: number | null;
+  change_percent?: number | null;
+  discount_percent?: number | null;
+  turnover_rate?: number | null;
+  volume?: number | null;
+  amount?: number | null;
+  buyer?: string | null;
+  seller?: string | null;
+  market?: string | null;
+  provider?: string | null;
+  source?: string | null;
+};
+
 export type AiResearchMarketDailyDataPayload<TItem> = {
   status?: string | null;
   data_mode?: string | null;
@@ -172,6 +214,8 @@ type AiResearchDeskProps = {
   officialSourceStatus?: AiResearchOfficialSourceStatus | null;
   stockFundFlowPayload?: AiResearchMarketDailyDataPayload<AiResearchStockFundFlowItem> | null;
   limitUpReasonsPayload?: AiResearchMarketDailyDataPayload<AiResearchLimitUpReasonItem> | null;
+  dragonTigerPayload?: AiResearchMarketDailyDataPayload<AiResearchDragonTigerItem> | null;
+  blockTradesPayload?: AiResearchMarketDailyDataPayload<AiResearchBlockTradeItem> | null;
   overviewDiagnostics: AiResearchDiagnostic[];
 };
 
@@ -201,6 +245,8 @@ export function AiResearchDesk({
   officialSourceStatus = null,
   stockFundFlowPayload = null,
   limitUpReasonsPayload = null,
+  dragonTigerPayload = null,
+  blockTradesPayload = null,
   overviewDiagnostics,
 }: AiResearchDeskProps) {
   const t = useTranslations("AiResearchDesk");
@@ -502,6 +548,8 @@ export function AiResearchDesk({
               <MarketDailyDataPanel
                 stockFundFlowPayload={stockFundFlowPayload}
                 limitUpReasonsPayload={limitUpReasonsPayload}
+                dragonTigerPayload={dragonTigerPayload}
+                blockTradesPayload={blockTradesPayload}
               />
               <MacroContextPanel
                 macroIndicators={prioritizedMacroIndicators.slice(
@@ -527,13 +575,19 @@ export function AiResearchDesk({
 function MarketDailyDataPanel({
   stockFundFlowPayload,
   limitUpReasonsPayload,
+  dragonTigerPayload,
+  blockTradesPayload,
 }: {
   stockFundFlowPayload?: AiResearchMarketDailyDataPayload<AiResearchStockFundFlowItem> | null;
   limitUpReasonsPayload?: AiResearchMarketDailyDataPayload<AiResearchLimitUpReasonItem> | null;
+  dragonTigerPayload?: AiResearchMarketDailyDataPayload<AiResearchDragonTigerItem> | null;
+  blockTradesPayload?: AiResearchMarketDailyDataPayload<AiResearchBlockTradeItem> | null;
 }) {
   const t = useTranslations("AiResearchDesk");
   const fundFlowItems = stockFundFlowPayload?.items ?? [];
   const limitUpItems = limitUpReasonsPayload?.items ?? [];
+  const dragonTigerItems = dragonTigerPayload?.items ?? [];
+  const blockTradeItems = blockTradesPayload?.items ?? [];
 
   return (
     <FinancialTerminalCard>
@@ -547,7 +601,13 @@ function MarketDailyDataPanel({
             <CardDescription>{t("marketDailyDesc")}</CardDescription>
           </div>
           <Badge variant="outline">
-            {formatStatusLabel(stockFundFlowPayload?.status ?? limitUpReasonsPayload?.status, t("unavailable"))}
+            {formatStatusLabel(
+              stockFundFlowPayload?.status ??
+                limitUpReasonsPayload?.status ??
+                dragonTigerPayload?.status ??
+                blockTradesPayload?.status,
+              t("unavailable"),
+            )}
           </Badge>
         </div>
       </FinancialTerminalCardHeader>
@@ -659,6 +719,113 @@ function MarketDailyDataPanel({
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">
               {limitUpReasonsPayload?.message ?? t("marketDailyNoLimitUp")}
+            </p>
+          )}
+        </FinancialTerminalSurface>
+
+        <FinancialTerminalSurface className="p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">{t("marketDailyDragonTigerTitle")}</Badge>
+            <span>
+              {t("marketDailyProvider", {
+                provider:
+                  dragonTigerPayload?.effective_provider ??
+                  dragonTigerPayload?.provider ??
+                  t("unavailable"),
+              })}
+            </span>
+            {dragonTigerPayload?.trade_date ? (
+              <span>{t("marketDailyTradeDate", { date: dragonTigerPayload.trade_date })}</span>
+            ) : null}
+          </div>
+          {dragonTigerItems.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {dragonTigerItems.slice(0, 3).map((item, index) => (
+                <div
+                  key={`${item.symbol ?? "dragon-tiger"}-${index}`}
+                  className="border-t border-border/60 pt-2 text-xs"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-semibold">{item.symbol ?? t("unavailable")}</span>
+                    <span className="font-medium">{item.name ?? t("unavailable")}</span>
+                    {item.department_rank ? (
+                      <Badge variant="outline">
+                        {t("marketDailyRank", { rank: item.department_rank })}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {t("marketDailyNetBuy", {
+                      value: formatAmount(item.net_buy_amount, "CNY", t("unavailable")),
+                    })}
+                    {" · "}
+                    {t("marketDailyChange", {
+                      value: formatPercent(item.change_percent, t("unavailable")),
+                    })}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {t("marketDailyReason", {
+                      reason: item.reason ?? item.interpretation ?? t("unavailable"),
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {dragonTigerPayload?.message ?? t("marketDailyNoDragonTiger")}
+            </p>
+          )}
+        </FinancialTerminalSurface>
+
+        <FinancialTerminalSurface className="p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">{t("marketDailyBlockTradesTitle")}</Badge>
+            <span>
+              {t("marketDailyProvider", {
+                provider:
+                  blockTradesPayload?.effective_provider ??
+                  blockTradesPayload?.provider ??
+                  t("unavailable"),
+              })}
+            </span>
+            {blockTradesPayload?.trade_date ? (
+              <span>{t("marketDailyTradeDate", { date: blockTradesPayload.trade_date })}</span>
+            ) : null}
+          </div>
+          {blockTradeItems.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {blockTradeItems.slice(0, 3).map((item, index) => (
+                <div
+                  key={`${item.symbol ?? "block-trade"}-${index}`}
+                  className="border-t border-border/60 pt-2 text-xs"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-semibold">{item.symbol ?? t("unavailable")}</span>
+                    <span className="font-medium">{item.name ?? t("unavailable")}</span>
+                    {item.market ? <Badge variant="outline">{item.market}</Badge> : null}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {t("marketDailyDealPrice", {
+                      value: formatNumber(item.trade_price, t("unavailable")),
+                    })}
+                    {" · "}
+                    {t("marketDailyDealAmount", {
+                      value: formatAmount(item.amount, "CNY", t("unavailable")),
+                    })}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {t("marketDailyBuyerSeller", {
+                      buyer: item.buyer ?? t("unavailable"),
+                      seller: item.seller ?? t("unavailable"),
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {blockTradesPayload?.message ?? t("marketDailyNoBlockTrades")}
             </p>
           )}
         </FinancialTerminalSurface>

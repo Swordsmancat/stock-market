@@ -42,6 +42,26 @@ CN_TOTAL_MARKET_CAP = "\u603b\u5e02\u503c"
 CN_FREE_MARKET_CAP = "\u6d41\u901a\u5e02\u503c"
 CN_LIMIT_UP_STATS = "\u6da8\u505c\u7edf\u8ba1"
 CN_CONSECUTIVE_LIMIT_UP = "\u8fde\u677f\u6570"
+CN_CLOSE_PRICE = "\u6536\u76d8\u4ef7"
+CN_LIST_DATE = "\u4e0a\u699c\u65e5"
+CN_INTERPRETATION = "\u89e3\u8bfb"
+CN_LHB_NET_BUY_AMOUNT = "\u9f99\u864e\u699c\u51c0\u4e70\u989d"
+CN_LHB_BUY_AMOUNT = "\u9f99\u864e\u699c\u4e70\u5165\u989d"
+CN_LHB_SELL_AMOUNT = "\u9f99\u864e\u699c\u5356\u51fa\u989d"
+CN_LHB_DEAL_AMOUNT = "\u9f99\u864e\u699c\u6210\u4ea4\u989d"
+CN_MARKET_TOTAL_AMOUNT = "\u5e02\u573a\u603b\u6210\u4ea4\u989d"
+CN_NET_BUY_RATIO = "\u51c0\u4e70\u989d\u5360\u603b\u6210\u4ea4\u6bd4"
+CN_DEAL_AMOUNT_RATIO = "\u6210\u4ea4\u989d\u5360\u603b\u6210\u4ea4\u6bd4"
+CN_LIST_REASON = "\u4e0a\u699c\u539f\u56e0"
+CN_TRADE_DATE = "\u4ea4\u6613\u65e5\u671f"
+CN_SECURITY_CODE = "\u8bc1\u5238\u4ee3\u7801"
+CN_SECURITY_NAME = "\u8bc1\u5238\u7b80\u79f0"
+CN_DEAL_PRICE = "\u6210\u4ea4\u4ef7"
+CN_DISCOUNT_PREMIUM_RATE = "\u6298\u6ea2\u7387"
+CN_VOLUME = "\u6210\u4ea4\u91cf"
+CN_DEAL_AMOUNT = "\u6210\u4ea4\u989d"
+CN_BUYER = "\u4e70\u65b9\u8425\u4e1a\u90e8"
+CN_SELLER = "\u5356\u65b9\u8425\u4e1a\u90e8"
 
 
 @dataclass(frozen=True)
@@ -127,7 +147,98 @@ class LimitUpReasonProviderItem:
         }
 
 
-MarketDailyProviderItem = StockFundFlowProviderItem | LimitUpReasonProviderItem
+@dataclass(frozen=True)
+class DragonTigerProviderItem:
+    symbol: str | None = None
+    name: str | None = None
+    trade_date: str | None = None
+    close_price: float | None = None
+    change_percent: float | None = None
+    turnover_rate: float | None = None
+    amount: float | None = None
+    net_buy_amount: float | None = None
+    buy_amount: float | None = None
+    sell_amount: float | None = None
+    total_market_amount: float | None = None
+    net_buy_ratio: float | None = None
+    deal_amount_ratio: float | None = None
+    reason: str | None = None
+    interpretation: str | None = None
+    department_name: str | None = None
+    department_rank: int | None = None
+    provider: str | None = None
+    source: str | None = None
+
+    def to_payload(self, rank: int, fallback_provider: str, fallback_source: str) -> dict[str, object]:
+        return {
+            "symbol": self.symbol,
+            "name": self.name,
+            "rank": rank,
+            "trade_date": self.trade_date,
+            "close_price": self.close_price,
+            "change_percent": self.change_percent,
+            "turnover_rate": self.turnover_rate,
+            "amount": self.amount,
+            "net_buy_amount": self.net_buy_amount,
+            "buy_amount": self.buy_amount,
+            "sell_amount": self.sell_amount,
+            "total_market_amount": self.total_market_amount,
+            "net_buy_ratio": self.net_buy_ratio,
+            "deal_amount_ratio": self.deal_amount_ratio,
+            "reason": self.reason,
+            "interpretation": self.interpretation,
+            "department_name": self.department_name,
+            "department_rank": self.department_rank,
+            "provider": self.provider or fallback_provider,
+            "source": self.source or fallback_source,
+        }
+
+
+@dataclass(frozen=True)
+class BlockTradeProviderItem:
+    symbol: str | None = None
+    name: str | None = None
+    trade_date: str | None = None
+    trade_price: float | None = None
+    close_price: float | None = None
+    change_percent: float | None = None
+    discount_percent: float | None = None
+    turnover_rate: float | None = None
+    volume: float | None = None
+    amount: float | None = None
+    buyer: str | None = None
+    seller: str | None = None
+    market: str | None = None
+    provider: str | None = None
+    source: str | None = None
+
+    def to_payload(self, rank: int, fallback_provider: str, fallback_source: str) -> dict[str, object]:
+        return {
+            "symbol": self.symbol,
+            "name": self.name,
+            "rank": rank,
+            "trade_date": self.trade_date,
+            "trade_price": self.trade_price,
+            "close_price": self.close_price,
+            "change_percent": self.change_percent,
+            "discount_percent": self.discount_percent,
+            "turnover_rate": self.turnover_rate,
+            "volume": self.volume,
+            "amount": self.amount,
+            "buyer": self.buyer,
+            "seller": self.seller,
+            "market": self.market,
+            "provider": self.provider or fallback_provider,
+            "source": self.source or fallback_source,
+        }
+
+
+MarketDailyProviderItem = (
+    StockFundFlowProviderItem
+    | LimitUpReasonProviderItem
+    | DragonTigerProviderItem
+    | BlockTradeProviderItem
+)
 
 
 @dataclass(frozen=True)
@@ -155,6 +266,22 @@ class MarketDailyDataProvider(Protocol):
         ...
 
     def fetch_limit_up_reasons(
+        self,
+        *,
+        trade_date: date,
+        limit: int,
+    ) -> MarketDailyProviderResult:
+        ...
+
+    def fetch_dragon_tiger_list(
+        self,
+        *,
+        trade_date: date,
+        limit: int,
+    ) -> MarketDailyProviderResult:
+        ...
+
+    def fetch_block_trades(
         self,
         *,
         trade_date: date,
@@ -508,6 +635,354 @@ class AkshareMarketDailyDataProvider:
             items=items,
         )
 
+    def fetch_dragon_tiger_list(
+        self,
+        *,
+        trade_date: date,
+        limit: int,
+    ) -> MarketDailyProviderResult:
+        try:
+            import akshare as ak
+        except ImportError:
+            return _provider_unavailable_result(
+                operation="dragon_tiger_list",
+                message="AkShare is not installed in this environment.",
+                trade_date=trade_date.isoformat(),
+            )
+
+        if not hasattr(ak, "stock_lhb_detail_em"):
+            return _provider_unavailable_result(
+                operation="dragon_tiger_list",
+                message="AkShare does not expose stock_lhb_detail_em in this environment.",
+                trade_date=trade_date.isoformat(),
+            )
+
+        trade_date_compact = trade_date.strftime("%Y%m%d")
+        dragon_frame = ak.stock_lhb_detail_em(
+            start_date=trade_date_compact,
+            end_date=trade_date_compact,
+        )
+        columns = [str(column) for column in getattr(dragon_frame, "columns", [])]
+        as_of = _utc_now_isoformat()
+        items: list[MarketDailyProviderItem] = []
+        for _, row in dragon_frame.head(limit).iterrows():
+            items.append(
+                DragonTigerProviderItem(
+                    symbol=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("symbol"), _candidate("code"), _candidate(CN_CODE)],
+                        )
+                    ),
+                    name=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("name"), _candidate(CN_NAME)],
+                        )
+                    ),
+                    trade_date=_safe_date_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("trade_date"), _candidate(CN_LIST_DATE)],
+                        )
+                    )
+                    or trade_date.isoformat(),
+                    close_price=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("close_price"), _candidate(CN_CLOSE_PRICE)],
+                        )
+                    ),
+                    change_percent=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("change_percent"), _candidate("change_rate"), _candidate(CN_CHANGE_PERCENT)],
+                        )
+                    ),
+                    turnover_rate=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("turnover_rate"), _candidate(CN_TURNOVER_RATE)],
+                        )
+                    ),
+                    amount=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("amount"), _candidate(CN_LHB_DEAL_AMOUNT)],
+                        )
+                    ),
+                    net_buy_amount=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("net_buy_amount"), _candidate(CN_LHB_NET_BUY_AMOUNT)],
+                        )
+                    ),
+                    buy_amount=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("buy_amount"), _candidate(CN_LHB_BUY_AMOUNT)],
+                        )
+                    ),
+                    sell_amount=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("sell_amount"), _candidate(CN_LHB_SELL_AMOUNT)],
+                        )
+                    ),
+                    total_market_amount=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("total_market_amount"), _candidate(CN_MARKET_TOTAL_AMOUNT)],
+                        )
+                    ),
+                    net_buy_ratio=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("net_buy_ratio"), _candidate(CN_NET_BUY_RATIO)],
+                        )
+                    ),
+                    deal_amount_ratio=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("deal_amount_ratio"), _candidate(CN_DEAL_AMOUNT_RATIO)],
+                        )
+                    ),
+                    reason=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("reason"), _candidate(CN_LIST_REASON), _candidate(CN_REASON)],
+                        )
+                    ),
+                    interpretation=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("interpretation"), _candidate(CN_INTERPRETATION)],
+                        )
+                    ),
+                    department_name=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("department_name"), _candidate("broker"), _candidate("\u8425\u4e1a\u90e8")],
+                        )
+                    ),
+                    department_rank=_safe_int(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("department_rank"), _candidate("\u8425\u4e1a\u90e8", "\u6392\u540d")],
+                        )
+                    ),
+                    provider=self.provider_name,
+                    source="akshare_stock_lhb_detail_em",
+                )
+            )
+
+        return MarketDailyProviderResult(
+            status="ok" if items else "degraded",
+            data_mode="delayed" if items else "none",
+            source="akshare_stock_lhb_detail_em",
+            provider=self.provider_name,
+            requested_provider=self.provider_name,
+            effective_provider=self.provider_name,
+            as_of=as_of if items else None,
+            market=DEFAULT_MARKET_DAILY_MARKET,
+            window="today",
+            trade_date=trade_date.isoformat(),
+            message="AkShare/Eastmoney Dragon Tiger List rows. Rows are provider-backed research context only.",
+            availability={
+                "status": "delayed" if items else "no_data",
+                "reason": None if items else "AkShare returned no Dragon Tiger List rows for the requested date.",
+                "dragon_tiger_list": "available" if items else "no_data",
+            },
+            provider_capabilities={
+                "dragon_tiger_list": {
+                    "status": "delayed" if items else "unavailable",
+                    "source": "akshare_stock_lhb_detail_em",
+                },
+                "citation": {
+                    "status": "not_citable",
+                    "reason": "Live provider rows are not stored local evidence in this phase.",
+                },
+            },
+            items=items,
+        )
+
+    def fetch_block_trades(
+        self,
+        *,
+        trade_date: date,
+        limit: int,
+    ) -> MarketDailyProviderResult:
+        try:
+            import akshare as ak
+        except ImportError:
+            return _provider_unavailable_result(
+                operation="block_trades",
+                message="AkShare is not installed in this environment.",
+                trade_date=trade_date.isoformat(),
+            )
+
+        if not hasattr(ak, "stock_dzjy_mrmx"):
+            return _provider_unavailable_result(
+                operation="block_trades",
+                message="AkShare does not expose stock_dzjy_mrmx in this environment.",
+                trade_date=trade_date.isoformat(),
+            )
+
+        trade_date_compact = trade_date.strftime("%Y%m%d")
+        block_frame = ak.stock_dzjy_mrmx(
+            symbol="A\u80a1",
+            start_date=trade_date_compact,
+            end_date=trade_date_compact,
+        )
+        columns = [str(column) for column in getattr(block_frame, "columns", [])]
+        as_of = _utc_now_isoformat()
+        items: list[MarketDailyProviderItem] = []
+        for _, row in block_frame.head(limit).iterrows():
+            items.append(
+                BlockTradeProviderItem(
+                    symbol=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [
+                                _candidate("symbol"),
+                                _candidate("code"),
+                                _candidate(CN_SECURITY_CODE),
+                                _candidate(CN_CODE),
+                            ],
+                        )
+                    ),
+                    name=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("name"), _candidate(CN_SECURITY_NAME), _candidate(CN_NAME)],
+                        )
+                    ),
+                    trade_date=_safe_date_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("trade_date"), _candidate(CN_TRADE_DATE)],
+                        )
+                    )
+                    or trade_date.isoformat(),
+                    trade_price=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("trade_price"), _candidate(CN_DEAL_PRICE)],
+                        )
+                    ),
+                    close_price=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("close_price"), _candidate(CN_CLOSE_PRICE)],
+                        )
+                    ),
+                    change_percent=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("change_percent"), _candidate("change_rate"), _candidate(CN_CHANGE_PERCENT)],
+                        )
+                    ),
+                    discount_percent=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("discount_percent"), _candidate("premium_ratio"), _candidate(CN_DISCOUNT_PREMIUM_RATE)],
+                        )
+                    ),
+                    turnover_rate=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("turnover_rate"), _candidate(CN_TURNOVER_RATE), _candidate(CN_DEAL_AMOUNT, CN_FREE_MARKET_CAP)],
+                        )
+                    ),
+                    volume=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("volume"), _candidate(CN_VOLUME)],
+                        )
+                    ),
+                    amount=_safe_float(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("amount"), _candidate(CN_DEAL_AMOUNT)],
+                        )
+                    ),
+                    buyer=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("buyer"), _candidate(CN_BUYER)],
+                        )
+                    ),
+                    seller=_safe_string(
+                        _row_value_from_candidates(
+                            row,
+                            columns,
+                            [_candidate("seller"), _candidate(CN_SELLER)],
+                        )
+                    ),
+                    market="A\u80a1",
+                    provider=self.provider_name,
+                    source="akshare_stock_dzjy_mrmx",
+                )
+            )
+
+        return MarketDailyProviderResult(
+            status="ok" if items else "degraded",
+            data_mode="delayed" if items else "none",
+            source="akshare_stock_dzjy_mrmx",
+            provider=self.provider_name,
+            requested_provider=self.provider_name,
+            effective_provider=self.provider_name,
+            as_of=as_of if items else None,
+            market=DEFAULT_MARKET_DAILY_MARKET,
+            window="today",
+            trade_date=trade_date.isoformat(),
+            message="AkShare/Eastmoney block-trade rows. Rows are provider-backed research context only.",
+            availability={
+                "status": "delayed" if items else "no_data",
+                "reason": None if items else "AkShare returned no block-trade rows for the requested date.",
+                "block_trades": "available" if items else "no_data",
+            },
+            provider_capabilities={
+                "block_trades": {
+                    "status": "delayed" if items else "unavailable",
+                    "source": "akshare_stock_dzjy_mrmx",
+                },
+                "citation": {
+                    "status": "not_citable",
+                    "reason": "Live provider rows are not stored local evidence in this phase.",
+                },
+            },
+            items=items,
+        )
+
 
 def get_stock_fund_flow_payload(
     *,
@@ -636,6 +1111,144 @@ def get_limit_up_reasons_payload(
 
     return _normalize_provider_result(
         operation="limit_up_reasons",
+        result=result,
+        requested_provider=requested_provider,
+        limit=_normalize_limit(limit, default=50, maximum=100),
+        market=normalized_market,
+        window="today",
+        trade_date=parsed_trade_date.isoformat(),
+    )
+
+
+def get_dragon_tiger_list_payload(
+    *,
+    trade_date: str | date | None = None,
+    market: str = DEFAULT_MARKET_DAILY_MARKET,
+    limit: int = 50,
+    provider_name: str | None = None,
+    provider: MarketDailyDataProvider | None = None,
+) -> dict[str, object]:
+    normalized_market = _normalize_market(market)
+    parsed_trade_date = _parse_trade_date(trade_date)
+    requested_provider = _normalize_requested_provider(provider_name)
+    trade_date_label = _trade_date_label(parsed_trade_date, trade_date)
+    if normalized_market is None:
+        return build_unavailable_market_daily_data_payload(
+            operation="dragon_tiger_list",
+            message=f"Market '{market}' is not supported for Dragon Tiger List rows.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            market=str(market or "").strip().upper() or DEFAULT_MARKET_DAILY_MARKET,
+            trade_date=trade_date_label,
+        )
+    if parsed_trade_date is None:
+        return build_unavailable_market_daily_data_payload(
+            operation="dragon_tiger_list",
+            message="Invalid trade date. Use YYYY-MM-DD or YYYYMMDD.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            market=normalized_market,
+            trade_date=trade_date_label,
+        )
+
+    resolved_provider = provider or _resolve_market_daily_data_provider(requested_provider)
+    if resolved_provider is None:
+        return build_unavailable_market_daily_data_payload(
+            operation="dragon_tiger_list",
+            message=f"Market daily-data provider '{requested_provider}' is not configured or verified.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            market=normalized_market,
+            trade_date=parsed_trade_date.isoformat(),
+        )
+
+    try:
+        result = resolved_provider.fetch_dragon_tiger_list(
+            trade_date=parsed_trade_date,
+            limit=_normalize_limit(limit, default=50, maximum=100),
+        )
+    except Exception as error:
+        return build_unavailable_market_daily_data_payload(
+            operation="dragon_tiger_list",
+            message=f"Market daily-data provider '{resolved_provider.provider_name}' failed: {error.__class__.__name__}.",
+            requested_provider=requested_provider,
+            effective_provider=resolved_provider.provider_name,
+            source="provider_error",
+            market=normalized_market,
+            trade_date=parsed_trade_date.isoformat(),
+        )
+
+    return _normalize_provider_result(
+        operation="dragon_tiger_list",
+        result=result,
+        requested_provider=requested_provider,
+        limit=_normalize_limit(limit, default=50, maximum=100),
+        market=normalized_market,
+        window="today",
+        trade_date=parsed_trade_date.isoformat(),
+    )
+
+
+def get_block_trades_payload(
+    *,
+    trade_date: str | date | None = None,
+    market: str = DEFAULT_MARKET_DAILY_MARKET,
+    limit: int = 50,
+    provider_name: str | None = None,
+    provider: MarketDailyDataProvider | None = None,
+) -> dict[str, object]:
+    normalized_market = _normalize_market(market)
+    parsed_trade_date = _parse_trade_date(trade_date)
+    requested_provider = _normalize_requested_provider(provider_name)
+    trade_date_label = _trade_date_label(parsed_trade_date, trade_date)
+    if normalized_market is None:
+        return build_unavailable_market_daily_data_payload(
+            operation="block_trades",
+            message=f"Market '{market}' is not supported for block trades.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            market=str(market or "").strip().upper() or DEFAULT_MARKET_DAILY_MARKET,
+            trade_date=trade_date_label,
+        )
+    if parsed_trade_date is None:
+        return build_unavailable_market_daily_data_payload(
+            operation="block_trades",
+            message="Invalid trade date. Use YYYY-MM-DD or YYYYMMDD.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            market=normalized_market,
+            trade_date=trade_date_label,
+        )
+
+    resolved_provider = provider or _resolve_market_daily_data_provider(requested_provider)
+    if resolved_provider is None:
+        return build_unavailable_market_daily_data_payload(
+            operation="block_trades",
+            message=f"Market daily-data provider '{requested_provider}' is not configured or verified.",
+            requested_provider=requested_provider,
+            effective_provider=requested_provider,
+            market=normalized_market,
+            trade_date=parsed_trade_date.isoformat(),
+        )
+
+    try:
+        result = resolved_provider.fetch_block_trades(
+            trade_date=parsed_trade_date,
+            limit=_normalize_limit(limit, default=50, maximum=100),
+        )
+    except Exception as error:
+        return build_unavailable_market_daily_data_payload(
+            operation="block_trades",
+            message=f"Market daily-data provider '{resolved_provider.provider_name}' failed: {error.__class__.__name__}.",
+            requested_provider=requested_provider,
+            effective_provider=resolved_provider.provider_name,
+            source="provider_error",
+            market=normalized_market,
+            trade_date=parsed_trade_date.isoformat(),
+        )
+
+    return _normalize_provider_result(
+        operation="block_trades",
         result=result,
         requested_provider=requested_provider,
         limit=_normalize_limit(limit, default=50, maximum=100),
@@ -886,6 +1499,21 @@ def _safe_string(value: object) -> str | None:
     return normalized_value
 
 
+def _safe_date_string(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if hasattr(value, "date"):
+        try:
+            return value.date().isoformat()
+        except Exception:
+            pass
+    return _safe_string(value)
+
+
 def _safe_float(value: object) -> float | None:
     if value is None:
         return None
@@ -917,6 +1545,22 @@ def _build_unavailable_provider_capabilities(operation: str, reason: str) -> dic
             "ranking": {"status": "unavailable", "reason": reason},
             "citation": {"status": "not_citable", "reason": "No stored evidence is emitted."},
         }
+    if operation == "limit_up_reasons":
+        return {
+            "limit_up_pool": {"status": "unavailable", "reason": reason},
+            "limit_up_reasons": {"status": "unavailable", "reason": reason},
+            "citation": {"status": "not_citable", "reason": "No stored evidence is emitted."},
+        }
+    if operation == "dragon_tiger_list":
+        return {
+            "dragon_tiger_list": {"status": "unavailable", "reason": reason},
+            "citation": {"status": "not_citable", "reason": "No stored evidence is emitted."},
+        }
+    if operation == "block_trades":
+        return {
+            "block_trades": {"status": "unavailable", "reason": reason},
+            "citation": {"status": "not_citable", "reason": "No stored evidence is emitted."},
+        }
     return {
         "limit_up_pool": {"status": "unavailable", "reason": reason},
         "limit_up_reasons": {"status": "unavailable", "reason": reason},
@@ -933,6 +1577,31 @@ def _build_available_provider_capabilities(
         return {
             "stock_fund_flow": {"status": capability_status, "source": result.source},
             "ranking": {"status": capability_status},
+            "citation": {
+                "status": "not_citable",
+                "reason": "Live provider rows are not stored local evidence in this phase.",
+            },
+        }
+    if operation == "limit_up_reasons":
+        return {
+            "limit_up_pool": {"status": capability_status, "source": result.source},
+            "limit_up_reasons": {"status": capability_status},
+            "citation": {
+                "status": "not_citable",
+                "reason": "Live provider rows are not stored local evidence in this phase.",
+            },
+        }
+    if operation == "dragon_tiger_list":
+        return {
+            "dragon_tiger_list": {"status": capability_status, "source": result.source},
+            "citation": {
+                "status": "not_citable",
+                "reason": "Live provider rows are not stored local evidence in this phase.",
+            },
+        }
+    if operation == "block_trades":
+        return {
+            "block_trades": {"status": capability_status, "source": result.source},
             "citation": {
                 "status": "not_citable",
                 "reason": "Live provider rows are not stored local evidence in this phase.",
