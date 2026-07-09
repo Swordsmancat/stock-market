@@ -4,10 +4,17 @@ import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { FinancialPageHeader } from "@/components/financial-page-header";
+import {
+  FinancialTerminalCard,
+  FinancialTerminalCardContent,
+  FinancialTerminalCardHeader,
+  FinancialTerminalSurface,
+  financialTerminalCardClassName,
+} from "@/components/financial-terminal-section";
 import { ComparisonTool } from "@/components/comparison-tool";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -65,12 +72,10 @@ type ComparisonBarsPayload = {
 };
 
 type InstrumentsLoadResult =
-  | { status: "loaded"; payload: InstrumentsPayload }
-  | { status: "failed" };
+  { status: "loaded"; payload: InstrumentsPayload } | { status: "failed" };
 
 type LatestDailyBarLoadResult =
-  | { status: "loaded"; payload: LatestDailyBarPayload }
-  | { status: "failed" };
+  { status: "loaded"; payload: LatestDailyBarPayload } | { status: "failed" };
 
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
@@ -84,7 +89,10 @@ type InstrumentsPageProps = {
   }>;
 };
 
-async function fetchInstrumentsPayload(searchParams: { q?: string; market?: string }): Promise<InstrumentsLoadResult> {
+async function fetchInstrumentsPayload(searchParams: {
+  q?: string;
+  market?: string;
+}): Promise<InstrumentsLoadResult> {
   const upstreamParams = new URLSearchParams();
   const query = searchParams.q?.trim();
   const market = searchParams.market?.trim();
@@ -97,7 +105,9 @@ async function fetchInstrumentsPayload(searchParams: { q?: string; market?: stri
   }
 
   const queryString = upstreamParams.toString();
-  const requestPath = queryString ? `/instruments?${queryString}` : "/instruments";
+  const requestPath = queryString
+    ? `/instruments?${queryString}`
+    : "/instruments";
 
   try {
     const response = await backendFetch(requestPath, { cache: "no-store" });
@@ -120,7 +130,10 @@ async function fetchLatestDailyBar(
 ): Promise<LatestDailyBarLoadResult> {
   try {
     const response = await backendFetch(
-      withProviderQuery(`/market-data/${encodeURIComponent(symbol)}/latest`, provider),
+      withProviderQuery(
+        `/market-data/${encodeURIComponent(symbol)}/latest`,
+        provider,
+      ),
       { cache: "no-store" },
     );
     if (!response.ok) {
@@ -164,9 +177,14 @@ async function buildComparisonInstruments(
   provider: string,
   range: { start: string; end: string },
 ): Promise<ComparisonInstrument[]> {
-  const comparisonCandidates = instruments.slice(0, MAX_COMPARISON_BAR_REQUESTS);
+  const comparisonCandidates = instruments.slice(
+    0,
+    MAX_COMPARISON_BAR_REQUESTS,
+  );
   const barsPayloads = await Promise.all(
-    comparisonCandidates.map((instrument) => fetchComparisonBars(instrument.symbol, provider, range)),
+    comparisonCandidates.map((instrument) =>
+      fetchComparisonBars(instrument.symbol, provider, range),
+    ),
   );
 
   return comparisonCandidates.map((instrument, index) => ({
@@ -189,7 +207,9 @@ async function buildComparisonInstruments(
 
 function getCurrencyCode(instrument: Instrument): string {
   const normalizedCurrency = instrument.currency?.trim().toUpperCase();
-  return normalizedCurrency && /^[A-Z]{3}$/.test(normalizedCurrency) ? normalizedCurrency : "USD";
+  return normalizedCurrency && /^[A-Z]{3}$/.test(normalizedCurrency)
+    ? normalizedCurrency
+    : "USD";
 }
 
 function formatLatestClose(
@@ -213,7 +233,9 @@ function formatLatestClose(
   }).format(close);
 }
 
-function parseLatestTimestamp(latestDailyBar: LatestDailyBarLoadResult): Date | null {
+function parseLatestTimestamp(
+  latestDailyBar: LatestDailyBarLoadResult,
+): Date | null {
   if (latestDailyBar.status === "failed") {
     return null;
   }
@@ -233,15 +255,22 @@ function formatLatestTimestamp(
   unavailableLabel: string,
 ): string {
   const parsedTimestamp = parseLatestTimestamp(latestDailyBar);
-  return parsedTimestamp === null ? unavailableLabel : parsedTimestamp.toLocaleDateString(locale);
+  return parsedTimestamp === null
+    ? unavailableLabel
+    : parsedTimestamp.toLocaleDateString(locale);
 }
 
-function getFreshnessStatus(latestDailyBar: LatestDailyBarLoadResult): FreshnessStatus {
+function getFreshnessStatus(
+  latestDailyBar: LatestDailyBarLoadResult,
+): FreshnessStatus {
   if (latestDailyBar.status === "failed") {
     return "unavailable";
   }
 
-  if (latestDailyBar.payload.status === "no_data" || latestDailyBar.payload.item == null) {
+  if (
+    latestDailyBar.payload.status === "no_data" ||
+    latestDailyBar.payload.item == null
+  ) {
     return "no_data";
   }
 
@@ -250,11 +279,14 @@ function getFreshnessStatus(latestDailyBar: LatestDailyBarLoadResult): Freshness
     return "unavailable";
   }
 
-  const daysSinceLatestBar = (Date.now() - parsedTimestamp.getTime()) / MILLISECONDS_PER_DAY;
+  const daysSinceLatestBar =
+    (Date.now() - parsedTimestamp.getTime()) / MILLISECONDS_PER_DAY;
   return daysSinceLatestBar <= 3 ? "fresh" : "stale";
 }
 
-function getFreshnessBadgeVariant(freshnessStatus: FreshnessStatus): "secondary" | "outline" | "destructive" {
+function getFreshnessBadgeVariant(
+  freshnessStatus: FreshnessStatus,
+): "secondary" | "outline" | "destructive" {
   if (freshnessStatus === "fresh") {
     return "secondary";
   }
@@ -264,7 +296,9 @@ function getFreshnessBadgeVariant(freshnessStatus: FreshnessStatus): "secondary"
   return "destructive";
 }
 
-function countLatestDailyBarHealth(latestDailyBars: LatestDailyBarLoadResult[]): LatestDailyBarHealthCounts {
+function countLatestDailyBarHealth(
+  latestDailyBars: LatestDailyBarLoadResult[],
+): LatestDailyBarHealthCounts {
   const initialCounts: LatestDailyBarHealthCounts = {
     fresh: 0,
     stale: 0,
@@ -281,18 +315,27 @@ function countLatestDailyBarHealth(latestDailyBars: LatestDailyBarLoadResult[]):
   }, initialCounts);
 }
 
-function getLatestSource(latestDailyBar: LatestDailyBarLoadResult, instrument: Instrument): string {
+function getLatestSource(
+  latestDailyBar: LatestDailyBarLoadResult,
+  instrument: Instrument,
+): string {
   if (latestDailyBar.status === "failed") {
     return "unavailable";
   }
   return latestDailyBar.payload.source || instrument.source || "unavailable";
 }
 
-function getLatestProvider(latestDailyBar: LatestDailyBarLoadResult): string | null {
+function getLatestProvider(
+  latestDailyBar: LatestDailyBarLoadResult,
+): string | null {
   if (latestDailyBar.status === "failed") {
     return null;
   }
-  return latestDailyBar.payload.effective_provider ?? latestDailyBar.payload.provider ?? null;
+  return (
+    latestDailyBar.payload.effective_provider ??
+    latestDailyBar.payload.provider ??
+    null
+  );
 }
 
 function getLatestAvailabilityLabel(
@@ -302,7 +345,10 @@ function getLatestAvailabilityLabel(
   if (latestDailyBar.status === "failed") {
     return t("latestUnavailable");
   }
-  if (latestDailyBar.payload.status === "no_data" || latestDailyBar.payload.item == null) {
+  if (
+    latestDailyBar.payload.status === "no_data" ||
+    latestDailyBar.payload.item == null
+  ) {
     return t("noLatestDailyBar");
   }
   return null;
@@ -312,7 +358,10 @@ export default async function InstrumentsPage({
   params,
   searchParams = Promise.resolve({}),
 }: InstrumentsPageProps) {
-  const [{ locale }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const [{ locale }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const [t, platformSettings, instrumentsResult] = await Promise.all([
     getTranslations("Instruments"),
     getPlatformSettings(),
@@ -327,7 +376,12 @@ export default async function InstrumentsPage({
         <FinancialPageHeader
           title={t("title")}
           description={t("description")}
-          badges={[{ label: t("activeProvider", { provider: activeProvider }), variant: "secondary" }]}
+          badges={[
+            {
+              label: t("activeProvider", { provider: activeProvider }),
+              variant: "secondary",
+            },
+          ]}
           metrics={[
             { label: t("visibleInstruments"), value: 0 },
             { label: t("fresh"), value: 0 },
@@ -336,6 +390,85 @@ export default async function InstrumentsPage({
           ]}
           actions={
             <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" asChild>
+                <Link href="/settings">
+                  <Settings className="mr-2 h-4 w-4" />
+                  {t("goToSettings")}
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/task-runs">
+                  <Activity className="mr-2 h-4 w-4" />
+                  {t("goToTaskRuns")}
+                </Link>
+              </Button>
+            </div>
+          }
+        />
+        <FinancialTerminalCard>
+          <FinancialTerminalCardContent className="p-4">
+            <ErrorState
+              title={t("loadFailed")}
+              description={t("loadFailedHint")}
+            />
+          </FinancialTerminalCardContent>
+        </FinancialTerminalCard>
+      </div>
+    );
+  }
+
+  const instruments = instrumentsResult.payload.items;
+  const visibleInstruments = instruments.slice(
+    0,
+    MAX_LATEST_DAILY_BAR_REQUESTS,
+  );
+  const { analysis } = getDashboardDateRanges();
+  const latestDailyBars = await Promise.all(
+    visibleInstruments.map((instrument) =>
+      fetchLatestDailyBar(instrument.symbol, activeProvider),
+    ),
+  );
+  const comparisonInstruments = await buildComparisonInstruments(
+    visibleInstruments,
+    activeProvider,
+    analysis,
+  );
+  const latestDailyBarHealthCounts = countLatestDailyBarHealth(latestDailyBars);
+
+  return (
+    <div className="space-y-6">
+      <FinancialPageHeader
+        title={t("title")}
+        description={t("description")}
+        badges={[
+          {
+            label: t("dataSource", {
+              source: instrumentsResult.payload.source,
+            }),
+            variant: "secondary",
+          },
+          { label: t("activeProvider", { provider: activeProvider }) },
+        ]}
+        metrics={[
+          {
+            label: t("visibleInstruments"),
+            value: visibleInstruments.length,
+            description: t("tableDescription", {
+              visible: visibleInstruments.length,
+              total: instruments.length,
+            }),
+          },
+          { label: t("fresh"), value: latestDailyBarHealthCounts.fresh },
+          { label: t("stale"), value: latestDailyBarHealthCounts.stale },
+          {
+            label: t("unavailable"),
+            value:
+              latestDailyBarHealthCounts.unavailable +
+              latestDailyBarHealthCounts.no_data,
+          },
+        ]}
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button variant="outline" asChild>
               <Link href="/settings">
                 <Settings className="mr-2 h-4 w-4" />
@@ -349,61 +482,11 @@ export default async function InstrumentsPage({
               </Link>
             </Button>
           </div>
-          }
-        />
-        <Card>
-          <CardContent className="pt-6">
-            <ErrorState title={t("loadFailed")} description={t("loadFailedHint")} />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const instruments = instrumentsResult.payload.items;
-  const visibleInstruments = instruments.slice(0, MAX_LATEST_DAILY_BAR_REQUESTS);
-  const { analysis } = getDashboardDateRanges();
-  const latestDailyBars = await Promise.all(
-    visibleInstruments.map((instrument) => fetchLatestDailyBar(instrument.symbol, activeProvider)),
-  );
-  const comparisonInstruments = await buildComparisonInstruments(visibleInstruments, activeProvider, analysis);
-  const latestDailyBarHealthCounts = countLatestDailyBarHealth(latestDailyBars);
-
-  return (
-    <div className="space-y-6">
-      <FinancialPageHeader
-        title={t("title")}
-        description={t("description")}
-        badges={[
-          { label: t("dataSource", { source: instrumentsResult.payload.source }), variant: "secondary" },
-          { label: t("activeProvider", { provider: activeProvider }) },
-        ]}
-        metrics={[
-          { label: t("visibleInstruments"), value: visibleInstruments.length, description: t("tableDescription", { visible: visibleInstruments.length, total: instruments.length }) },
-          { label: t("fresh"), value: latestDailyBarHealthCounts.fresh },
-          { label: t("stale"), value: latestDailyBarHealthCounts.stale },
-          { label: t("unavailable"), value: latestDailyBarHealthCounts.unavailable + latestDailyBarHealthCounts.no_data },
-        ]}
-        actions={
-          <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="outline" asChild>
-            <Link href="/settings">
-              <Settings className="mr-2 h-4 w-4" />
-              {t("goToSettings")}
-            </Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/task-runs">
-              <Activity className="mr-2 h-4 w-4" />
-              {t("goToTaskRuns")}
-            </Link>
-          </Button>
-        </div>
         }
       />
 
-      <Card>
-        <CardContent className="pt-6">
+      <FinancialTerminalCard>
+        <FinancialTerminalCardContent>
           <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_auto_auto]">
             <Input
               name="q"
@@ -426,11 +509,11 @@ export default async function InstrumentsPage({
               <Link href="/instruments">{t("reset")}</Link>
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
 
-      <Card>
-        <CardHeader>
+      <FinancialTerminalCard>
+        <FinancialTerminalCardHeader>
           <CardTitle>{t("healthSummaryTitle")}</CardTitle>
           <CardDescription>
             {t("healthSummaryDesc", {
@@ -439,35 +522,51 @@ export default async function InstrumentsPage({
               provider: activeProvider,
             })}
           </CardDescription>
-        </CardHeader>
-        <CardContent>
+        </FinancialTerminalCardHeader>
+        <FinancialTerminalCardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-lg border p-3">
-              <div className="text-xs text-muted-foreground">{t("visibleInstruments")}</div>
-              <div className="text-2xl font-bold">{visibleInstruments.length}</div>
-            </div>
-            <div className="rounded-lg border p-3">
+            <FinancialTerminalSurface className="p-3">
+              <div className="text-xs text-muted-foreground">
+                {t("visibleInstruments")}
+              </div>
+              <div className="font-mono text-2xl font-bold">
+                {visibleInstruments.length}
+              </div>
+            </FinancialTerminalSurface>
+            <FinancialTerminalSurface className="p-3">
               <div className="text-xs text-muted-foreground">{t("fresh")}</div>
-              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.fresh}</div>
-            </div>
-            <div className="rounded-lg border p-3">
+              <div className="font-mono text-2xl font-bold">
+                {latestDailyBarHealthCounts.fresh}
+              </div>
+            </FinancialTerminalSurface>
+            <FinancialTerminalSurface className="p-3">
               <div className="text-xs text-muted-foreground">{t("stale")}</div>
-              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.stale}</div>
-            </div>
-            <div className="rounded-lg border p-3">
-              <div className="text-xs text-muted-foreground">{t("no_data")}</div>
-              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.no_data}</div>
-            </div>
-            <div className="rounded-lg border p-3">
-              <div className="text-xs text-muted-foreground">{t("unavailable")}</div>
-              <div className="text-2xl font-bold">{latestDailyBarHealthCounts.unavailable}</div>
-            </div>
+              <div className="font-mono text-2xl font-bold">
+                {latestDailyBarHealthCounts.stale}
+              </div>
+            </FinancialTerminalSurface>
+            <FinancialTerminalSurface className="p-3">
+              <div className="text-xs text-muted-foreground">
+                {t("no_data")}
+              </div>
+              <div className="font-mono text-2xl font-bold">
+                {latestDailyBarHealthCounts.no_data}
+              </div>
+            </FinancialTerminalSurface>
+            <FinancialTerminalSurface className="p-3">
+              <div className="text-xs text-muted-foreground">
+                {t("unavailable")}
+              </div>
+              <div className="font-mono text-2xl font-bold">
+                {latestDailyBarHealthCounts.unavailable}
+              </div>
+            </FinancialTerminalSurface>
           </div>
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
 
-      <Card>
-        <CardHeader>
+      <FinancialTerminalCard>
+        <FinancialTerminalCardHeader>
           <CardTitle>{t("tableTitle")}</CardTitle>
           <CardDescription>
             {t("tableDescription", {
@@ -475,98 +574,143 @@ export default async function InstrumentsPage({
               total: instruments.length,
             })}
           </CardDescription>
-        </CardHeader>
-        <CardContent>
+        </FinancialTerminalCardHeader>
+        <FinancialTerminalCardContent className="p-0">
           {instruments.length === 0 ? (
-            <EmptyState title={t("noData")} description={t("emptyHint")} />
+            <div className="p-4">
+              <EmptyState title={t("noData")} description={t("emptyHint")} />
+            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("symbol")}</TableHead>
-                  <TableHead>{t("name")}</TableHead>
-                  <TableHead>{t("market")}</TableHead>
-                  <TableHead>{t("latestClose")}</TableHead>
-                  <TableHead>{t("asOf")}</TableHead>
-                  <TableHead>{t("sourceProvider")}</TableHead>
-                  <TableHead>{t("freshness")}</TableHead>
-                  <TableHead className="text-right">{t("actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleInstruments.map((instrument, index) => {
-                  const latestDailyBar = latestDailyBars[index];
-                  const freshnessStatus = getFreshnessStatus(latestDailyBar);
-                  const latestAvailabilityLabel = getLatestAvailabilityLabel(latestDailyBar, t);
-                  const latestProvider = getLatestProvider(latestDailyBar);
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("symbol")}</TableHead>
+                    <TableHead>{t("name")}</TableHead>
+                    <TableHead>{t("market")}</TableHead>
+                    <TableHead>{t("latestClose")}</TableHead>
+                    <TableHead>{t("asOf")}</TableHead>
+                    <TableHead>{t("sourceProvider")}</TableHead>
+                    <TableHead>{t("freshness")}</TableHead>
+                    <TableHead className="text-right">{t("actions")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleInstruments.map((instrument, index) => {
+                    const latestDailyBar = latestDailyBars[index];
+                    const freshnessStatus = getFreshnessStatus(latestDailyBar);
+                    const latestAvailabilityLabel = getLatestAvailabilityLabel(
+                      latestDailyBar,
+                      t,
+                    );
+                    const latestProvider = getLatestProvider(latestDailyBar);
 
-                  return (
-                    <TableRow key={`${instrument.market}-${instrument.symbol}`}>
-                      <TableCell className="font-medium">
-                        <Link href={`/instruments/${instrument.symbol}` as any} className="hover:underline">
-                          {instrument.symbol}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <div>{instrument.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {[instrument.exchange, instrument.asset_type, instrument.currency]
-                            .filter(Boolean)
-                            .join(" / ")}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{instrument.market}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">
-                          {formatLatestClose(latestDailyBar, instrument, locale, t("unavailableShort"))}
-                        </div>
-                        {latestAvailabilityLabel ? (
-                          <div className="text-xs text-muted-foreground">{latestAvailabilityLabel}</div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        {formatLatestTimestamp(latestDailyBar, locale, t("unavailableShort"))}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {t("sourceValue", { source: getLatestSource(latestDailyBar, instrument) })}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {latestProvider
-                            ? t("providerValue", { provider: latestProvider })
-                            : t("providerUnavailable")}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getFreshnessBadgeVariant(freshnessStatus)}>
-                          {t(freshnessStatus)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" asChild>
-                            <Link href={`/instruments/${instrument.symbol}` as any}>{t("viewDetails")}</Link>
-                          </Button>
-                          <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/reports?symbol=${encodeURIComponent(instrument.symbol)}` as any}>
-                              <FileText className="mr-2 h-4 w-4" />
-                              {t("viewReports")}
-                            </Link>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    return (
+                      <TableRow
+                        key={`${instrument.market}-${instrument.symbol}`}
+                      >
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/instruments/${instrument.symbol}` as any}
+                            className="hover:underline"
+                          >
+                            {instrument.symbol}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <div>{instrument.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {[
+                              instrument.exchange,
+                              instrument.asset_type,
+                              instrument.currency,
+                            ]
+                              .filter(Boolean)
+                              .join(" / ")}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{instrument.market}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-mono font-medium">
+                            {formatLatestClose(
+                              latestDailyBar,
+                              instrument,
+                              locale,
+                              t("unavailableShort"),
+                            )}
+                          </div>
+                          {latestAvailabilityLabel ? (
+                            <div className="text-xs text-muted-foreground">
+                              {latestAvailabilityLabel}
+                            </div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>
+                          {formatLatestTimestamp(
+                            latestDailyBar,
+                            locale,
+                            t("unavailableShort"),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {t("sourceValue", {
+                              source: getLatestSource(
+                                latestDailyBar,
+                                instrument,
+                              ),
+                            })}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {latestProvider
+                              ? t("providerValue", { provider: latestProvider })
+                              : t("providerUnavailable")}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={getFreshnessBadgeVariant(freshnessStatus)}
+                          >
+                            {t(freshnessStatus)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" asChild>
+                              <Link
+                                href={
+                                  `/instruments/${instrument.symbol}` as any
+                                }
+                              >
+                                {t("viewDetails")}
+                              </Link>
+                            </Button>
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link
+                                href={
+                                  `/reports?symbol=${encodeURIComponent(instrument.symbol)}` as any
+                                }
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                {t("viewReports")}
+                              </Link>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
 
       <ComparisonTool
+        className={financialTerminalCardClassName}
         instruments={comparisonInstruments}
         locale={locale}
         labels={{

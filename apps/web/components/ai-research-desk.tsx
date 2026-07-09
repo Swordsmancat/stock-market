@@ -6,9 +6,15 @@ import { useTranslations } from "next-intl";
 
 import { MarketAssistantCard } from "@/components/market-assistant-card";
 import { FinancialPageHeader } from "@/components/financial-page-header";
+import {
+  FinancialTerminalCard,
+  FinancialTerminalCardContent,
+  FinancialTerminalCardHeader,
+  FinancialTerminalSurface,
+} from "@/components/financial-terminal-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "@/src/i18n/routing";
@@ -36,7 +42,12 @@ export type AiResearchFollowedItem = {
 
 export type AiResearchRecommendation = {
   symbol: string;
-  type: "breakout" | "volume_anomaly" | "oversold_rebound" | "strong_momentum" | string;
+  type:
+    | "breakout"
+    | "volume_anomaly"
+    | "oversold_rebound"
+    | "strong_momentum"
+    | string;
   title: string;
   reason: string;
   confidence?: number | null;
@@ -132,30 +143,53 @@ export function AiResearchDesk({
     [watchlistItems, followedItems, recommendations],
   );
   const initialSelectedSymbols = useMemo(
-    () => candidates.slice(0, Math.min(3, SELECTED_SYMBOL_LIMIT)).map((candidate) => candidate.symbol),
+    () =>
+      candidates
+        .slice(0, Math.min(3, SELECTED_SYMBOL_LIMIT))
+        .map((candidate) => candidate.symbol),
     [candidates],
   );
-  const [selectedSymbols, setSelectedSymbols] = useState<string[]>(initialSelectedSymbols);
-  const [activeSymbol, setActiveSymbol] = useState(initialSelectedSymbols[0] ?? "");
+  const [selectedSymbols, setSelectedSymbols] = useState<string[]>(
+    initialSelectedSymbols,
+  );
+  const [activeSymbol, setActiveSymbol] = useState(
+    initialSelectedSymbols[0] ?? "",
+  );
   const [manualSymbol, setManualSymbol] = useState("");
 
   const activeSelectedSymbol = selectedSymbols.includes(activeSymbol)
     ? activeSymbol
-    : selectedSymbols[0] ?? "";
-  const prioritizedMacroIndicators = useMemo(() => prioritizeMacroIndicators(macroIndicators), [macroIndicators]);
+    : (selectedSymbols[0] ?? "");
+  const prioritizedMacroIndicators = useMemo(
+    () => prioritizeMacroIndicators(macroIndicators),
+    [macroIndicators],
+  );
   const officialSourceProviders = officialSourceStatus?.providers ?? [];
   const sourceGaps = useMemo(
-    () => buildSourceGaps(prioritizedMacroIndicators, overviewDiagnostics, recommendationDiagnostics),
-    [overviewDiagnostics, prioritizedMacroIndicators, recommendationDiagnostics],
+    () =>
+      buildSourceGaps(
+        prioritizedMacroIndicators,
+        overviewDiagnostics,
+        recommendationDiagnostics,
+      ),
+    [
+      overviewDiagnostics,
+      prioritizedMacroIndicators,
+      recommendationDiagnostics,
+    ],
   );
   const activeSignal = recommendations.find(
-    (recommendation) => normalizeSymbol(recommendation.symbol) === activeSelectedSymbol,
+    (recommendation) =>
+      normalizeSymbol(recommendation.symbol) === activeSelectedSymbol,
   );
   const assistantInitialQuestion = activeSelectedSymbol
     ? t("assistantQuestion", {
         symbol: activeSelectedSymbol,
         signal: activeSignal?.title ?? t("noActiveSignal"),
-        macro: buildMacroQuestionContext(prioritizedMacroIndicators, t("macroUnavailable")),
+        macro: buildMacroQuestionContext(
+          prioritizedMacroIndicators,
+          t("macroUnavailable"),
+        ),
         sources: buildOfficialSourceQuestionContext(
           officialSourceProviders,
           t("sourceStatusNoAction"),
@@ -174,7 +208,10 @@ export function AiResearchDesk({
       if (currentSymbols.includes(normalizedSymbol)) {
         return currentSymbols;
       }
-      return [...currentSymbols, normalizedSymbol].slice(0, SELECTED_SYMBOL_LIMIT);
+      return [...currentSymbols, normalizedSymbol].slice(
+        0,
+        SELECTED_SYMBOL_LIMIT,
+      );
     });
     setActiveSymbol(normalizedSymbol);
   }
@@ -205,13 +242,31 @@ export function AiResearchDesk({
         badges={[
           { label: t("badge"), variant: "secondary" },
           { label: t("provider", { provider }) },
-          ...(generatedAt ? [{ label: t("generatedAt", { date: generatedAt }) }] : []),
+          ...(generatedAt
+            ? [{ label: t("generatedAt", { date: generatedAt }) }]
+            : []),
         ]}
         metrics={[
-          { label: t("metricSelected"), value: String(selectedSymbols.length), description: t("metricSelectedDesc") },
-          { label: t("metricSignals"), value: String(recommendations.length), description: t("metricSignalsDesc") },
-          { label: t("metricMacro"), value: String(macroIndicators.length), description: t("metricMacroDesc") },
-          { label: t("metricGaps"), value: String(sourceGaps.length), description: t("metricGapsDesc") },
+          {
+            label: t("metricSelected"),
+            value: String(selectedSymbols.length),
+            description: t("metricSelectedDesc"),
+          },
+          {
+            label: t("metricSignals"),
+            value: String(recommendations.length),
+            description: t("metricSignalsDesc"),
+          },
+          {
+            label: t("metricMacro"),
+            value: String(macroIndicators.length),
+            description: t("metricMacroDesc"),
+          },
+          {
+            label: t("metricGaps"),
+            value: String(sourceGaps.length),
+            description: t("metricGapsDesc"),
+          },
         ]}
         actions={
           <>
@@ -232,12 +287,14 @@ export function AiResearchDesk({
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle className="text-base">{t("basketTitle")}</CardTitle>
-              <CardDescription>{t("basketDesc", { limit: SELECTED_SYMBOL_LIMIT })}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              <CardDescription>
+                {t("basketDesc", { limit: SELECTED_SYMBOL_LIMIT })}
+              </CardDescription>
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-4">
               <form className="flex gap-2" onSubmit={submitManualSymbol}>
                 <Input
                   value={manualSymbol}
@@ -245,7 +302,10 @@ export function AiResearchDesk({
                   placeholder={t("manualPlaceholder")}
                   aria-label={t("manualLabel")}
                 />
-                <Button type="submit" disabled={parseSymbols(manualSymbol).length === 0}>
+                <Button
+                  type="submit"
+                  disabled={parseSymbols(manualSymbol).length === 0}
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   {t("addSymbol")}
                 </Button>
@@ -257,7 +317,9 @@ export function AiResearchDesk({
                     <div
                       key={symbol}
                       className={`flex items-center gap-1 rounded-md border px-2 py-1 text-sm ${
-                        symbol === activeSelectedSymbol ? "border-primary bg-primary/10" : "bg-background"
+                        symbol === activeSelectedSymbol
+                          ? "border-primary bg-primary/10"
+                          : "border-border/70 bg-background/60"
                       }`}
                     >
                       <button
@@ -280,15 +342,19 @@ export function AiResearchDesk({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">{t("emptyBasket")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("emptyBasket")}
+                </p>
               )}
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
           <CandidatePanel
             title={t("watchlistCandidates")}
             emptyText={t("noWatchlistCandidates")}
-            candidates={candidates.filter((candidate) => candidate.source === "watchlist").slice(0, DISPLAY_CANDIDATE_LIMIT)}
+            candidates={candidates
+              .filter((candidate) => candidate.source === "watchlist")
+              .slice(0, DISPLAY_CANDIDATE_LIMIT)}
             activeSymbol={activeSelectedSymbol}
             onUseSymbol={addSymbol}
             onActivateSymbol={setActiveSymbol}
@@ -297,7 +363,9 @@ export function AiResearchDesk({
           <CandidatePanel
             title={t("followedCandidates")}
             emptyText={t("noFollowedCandidates")}
-            candidates={candidates.filter((candidate) => candidate.source === "followed").slice(0, DISPLAY_CANDIDATE_LIMIT)}
+            candidates={candidates
+              .filter((candidate) => candidate.source === "followed")
+              .slice(0, DISPLAY_CANDIDATE_LIMIT)}
             activeSymbol={activeSelectedSymbol}
             onUseSymbol={addSymbol}
             onActivateSymbol={setActiveSymbol}
@@ -307,11 +375,13 @@ export function AiResearchDesk({
         <div className="space-y-4">
           <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_420px]">
             <div className="space-y-4">
-              <Card>
-                <CardHeader className="pb-3">
+              <FinancialTerminalCard>
+                <FinancialTerminalCardHeader className="pb-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <CardTitle className="text-base">{t("activeSymbolTitle")}</CardTitle>
+                      <CardTitle className="text-base">
+                        {t("activeSymbolTitle")}
+                      </CardTitle>
                       <CardDescription>{t("activeSymbolDesc")}</CardDescription>
                     </div>
                     {activeSelectedSymbol ? (
@@ -320,21 +390,29 @@ export function AiResearchDesk({
                       </Badge>
                     ) : null}
                   </div>
-                </CardHeader>
-                <CardContent>
+                </FinancialTerminalCardHeader>
+                <FinancialTerminalCardContent>
                   {activeSelectedSymbol ? (
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <ContextLine label={t("activeSignal")} value={activeSignal?.title ?? t("noActiveSignal")} />
+                      <ContextLine
+                        label={t("activeSignal")}
+                        value={activeSignal?.title ?? t("noActiveSignal")}
+                      />
                       <ContextLine
                         label={t("activeMacroContext")}
-                        value={buildMacroQuestionContext(prioritizedMacroIndicators, t("macroUnavailable"))}
+                        value={buildMacroQuestionContext(
+                          prioritizedMacroIndicators,
+                          t("macroUnavailable"),
+                        )}
                       />
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">{t("selectSymbolFirst")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("selectSymbolFirst")}
+                    </p>
                   )}
-                </CardContent>
-              </Card>
+                </FinancialTerminalCardContent>
+              </FinancialTerminalCard>
 
               {activeSelectedSymbol ? (
                 <MarketAssistantCard
@@ -355,12 +433,19 @@ export function AiResearchDesk({
                 onUseSymbol={addSymbol}
                 onActivateSymbol={setActiveSymbol}
               />
-              <MacroContextPanel macroIndicators={prioritizedMacroIndicators.slice(0, DISPLAY_MACRO_LIMIT)} />
+              <MacroContextPanel
+                macroIndicators={prioritizedMacroIndicators.slice(
+                  0,
+                  DISPLAY_MACRO_LIMIT,
+                )}
+              />
               <OfficialSourceStatusPanel
                 providers={officialSourceProviders}
                 citationPolicy={officialSourceStatus?.citation_policy ?? null}
               />
-              <SourceGapPanel sourceGaps={sourceGaps.slice(0, DISPLAY_GAP_LIMIT)} />
+              <SourceGapPanel
+                sourceGaps={sourceGaps.slice(0, DISPLAY_GAP_LIMIT)}
+              />
             </div>
           </div>
         </div>
@@ -387,17 +472,17 @@ function CandidatePanel({
   const t = useTranslations("AiResearchDesk");
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <FinancialTerminalCard>
+      <FinancialTerminalCardHeader className="pb-3">
         <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent>
         {candidates.length > 0 ? (
           <div className="space-y-2">
             {candidates.map((candidate) => (
               <div
                 key={`${candidate.source}-${candidate.symbol}`}
-                className="flex items-center justify-between gap-3 rounded-md border p-2"
+                className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-background/60 p-2"
               >
                 <button
                   type="button"
@@ -405,18 +490,28 @@ function CandidatePanel({
                   onClick={() => onActivateSymbol(candidate.symbol)}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-semibold">{candidate.symbol}</span>
-                    {candidate.market ? <Badge variant="outline">{candidate.market}</Badge> : null}
+                    <span className="font-mono text-sm font-semibold">
+                      {candidate.symbol}
+                    </span>
+                    {candidate.market ? (
+                      <Badge variant="outline">{candidate.market}</Badge>
+                    ) : null}
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">{candidate.name ?? candidate.detail ?? candidate.symbol}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {candidate.name ?? candidate.detail ?? candidate.symbol}
+                  </div>
                 </button>
                 <Button
                   type="button"
-                  variant={candidate.symbol === activeSymbol ? "secondary" : "outline"}
+                  variant={
+                    candidate.symbol === activeSymbol ? "secondary" : "outline"
+                  }
                   size="sm"
                   onClick={() => onUseSymbol(candidate.symbol)}
                 >
-                  {candidate.symbol === activeSymbol ? t("active") : t("useSymbol")}
+                  {candidate.symbol === activeSymbol
+                    ? t("active")
+                    : t("useSymbol")}
                 </Button>
               </div>
             ))}
@@ -424,8 +519,8 @@ function CandidatePanel({
         ) : (
           <p className="text-sm text-muted-foreground">{emptyText}</p>
         )}
-      </CardContent>
-    </Card>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
@@ -445,8 +540,8 @@ function ResearchSignalPanel({
   const t = useTranslations("AiResearchDesk");
 
   return (
-    <Card>
-      <CardHeader>
+    <FinancialTerminalCard>
+      <FinancialTerminalCardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -455,96 +550,145 @@ function ResearchSignalPanel({
             </CardTitle>
             <CardDescription>{t("signalsDesc")}</CardDescription>
           </div>
-          {recommendationStatus ? <Badge variant="outline">{recommendationStatus}</Badge> : null}
+          {recommendationStatus ? (
+            <Badge variant="outline">{recommendationStatus}</Badge>
+          ) : null}
         </div>
-      </CardHeader>
-      <CardContent>
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent>
         {recommendations.length > 0 ? (
           <ScrollArea className="h-[300px] pr-3">
             <div className="space-y-3">
               {recommendations.map((recommendation, index) => (
-                <div key={`${recommendation.symbol}-${recommendation.type}-${index}`} className="rounded-md border p-3">
+                <FinancialTerminalSurface
+                  key={`${recommendation.symbol}-${recommendation.type}-${index}`}
+                  className="p-3"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-semibold">{recommendation.title}</div>
+                      <div className="font-semibold">
+                        {recommendation.title}
+                      </div>
                       <div className="mt-1 flex flex-wrap gap-2">
-                        <Badge variant="secondary">{formatSignalType(recommendation.type, t)}</Badge>
+                        <Badge variant="secondary">
+                          {formatSignalType(recommendation.type, t)}
+                        </Badge>
                         <Badge variant="outline">{recommendation.symbol}</Badge>
-                        {recommendation.confidence !== null && recommendation.confidence !== undefined ? (
+                        {recommendation.confidence !== null &&
+                        recommendation.confidence !== undefined ? (
                           <Badge variant="outline">
-                            {t("confidence", { value: Math.round(recommendation.confidence * 100) })}
+                            {t("confidence", {
+                              value: Math.round(
+                                recommendation.confidence * 100,
+                              ),
+                            })}
                           </Badge>
                         ) : null}
                       </div>
                     </div>
                     <Button
                       type="button"
-                      variant={recommendation.symbol === activeSymbol ? "secondary" : "outline"}
+                      variant={
+                        recommendation.symbol === activeSymbol
+                          ? "secondary"
+                          : "outline"
+                      }
                       size="sm"
                       onClick={() => {
                         onUseSymbol(recommendation.symbol);
-                        onActivateSymbol(normalizeSymbol(recommendation.symbol));
+                        onActivateSymbol(
+                          normalizeSymbol(recommendation.symbol),
+                        );
                       }}
                     >
-                      {recommendation.symbol === activeSymbol ? t("active") : t("useSymbol")}
+                      {recommendation.symbol === activeSymbol
+                        ? t("active")
+                        : t("useSymbol")}
                     </Button>
                   </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{recommendation.reason}</p>
-                </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {recommendation.reason}
+                  </p>
+                </FinancialTerminalSurface>
               ))}
             </div>
           </ScrollArea>
         ) : (
           <p className="text-sm text-muted-foreground">{t("noSignals")}</p>
         )}
-      </CardContent>
-    </Card>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
-function MacroContextPanel({ macroIndicators }: { macroIndicators: AiResearchMacroIndicator[] }) {
+function MacroContextPanel({
+  macroIndicators,
+}: {
+  macroIndicators: AiResearchMacroIndicator[];
+}) {
   const t = useTranslations("AiResearchDesk");
 
   return (
-    <Card>
-      <CardHeader>
+    <FinancialTerminalCard>
+      <FinancialTerminalCardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <FileSearch className="h-4 w-4" />
           {t("macroTitle")}
         </CardTitle>
         <CardDescription>{t("macroDesc")}</CardDescription>
-      </CardHeader>
-      <CardContent>
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent>
         {macroIndicators.length > 0 ? (
           <div className="space-y-2">
             {macroIndicators.map((indicator) => {
               const citable = isMacroIndicatorCitable(indicator);
               return (
-                <div key={indicator.code} className="rounded-md border p-3">
+                <FinancialTerminalSurface key={indicator.code} className="p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{indicator.name}</div>
-                      <div className="font-mono text-xs text-muted-foreground">{indicator.code}</div>
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {indicator.code}
+                      </div>
                     </div>
                     <Badge variant={citable ? "secondary" : "outline"}>
                       {citable ? t("macroCitable") : t("macroGap")}
                     </Badge>
                   </div>
                   <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                    <div>{t("macroValue", { value: formatMacroValue(indicator, t("unavailable")) })}</div>
-                    <div>{t("macroAsOf", { date: indicator.as_of ?? t("unavailable") })}</div>
-                    <div>{t("macroRegion", { region: indicator.region ?? t("unavailable") })}</div>
-                    <div>{t("macroSource", { source: indicator.source ?? indicator.no_data_reason ?? t("unavailable") })}</div>
+                    <div>
+                      {t("macroValue", {
+                        value: formatMacroValue(indicator, t("unavailable")),
+                      })}
+                    </div>
+                    <div>
+                      {t("macroAsOf", {
+                        date: indicator.as_of ?? t("unavailable"),
+                      })}
+                    </div>
+                    <div>
+                      {t("macroRegion", {
+                        region: indicator.region ?? t("unavailable"),
+                      })}
+                    </div>
+                    <div>
+                      {t("macroSource", {
+                        source:
+                          indicator.source ??
+                          indicator.no_data_reason ??
+                          t("unavailable"),
+                      })}
+                    </div>
                   </div>
-                </div>
+                </FinancialTerminalSurface>
               );
             })}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">{t("noMacro")}</p>
         )}
-      </CardContent>
-    </Card>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
@@ -558,22 +702,26 @@ function OfficialSourceStatusPanel({
   const t = useTranslations("AiResearchDesk");
 
   return (
-    <Card>
-      <CardHeader>
+    <FinancialTerminalCard>
+      <FinancialTerminalCardHeader>
         <CardTitle className="text-base">{t("sourceStatusTitle")}</CardTitle>
         <CardDescription>{t("sourceStatusDesc")}</CardDescription>
-      </CardHeader>
-      <CardContent>
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent>
         {providers.length > 0 ? (
           <div className="space-y-2">
             {providers.map((provider) => (
-              <div key={provider.provider} className="rounded-md border p-3">
+              <FinancialTerminalSurface key={provider.provider} className="p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium">{provider.label}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{provider.provider}</div>
+                    <div className="font-mono text-xs text-muted-foreground">
+                      {provider.provider}
+                    </div>
                   </div>
-                  <Badge variant={provider.status === "ok" ? "secondary" : "outline"}>
+                  <Badge
+                    variant={provider.status === "ok" ? "secondary" : "outline"}
+                  >
                     {formatSourceStatus(provider.status, t("unavailable"))}
                   </Badge>
                 </div>
@@ -583,10 +731,17 @@ function OfficialSourceStatusPanel({
                       count: provider.evidence_count ?? 0,
                     })}
                   </div>
-                  <div>{t("sourceStatusLatest", { date: provider.latest_as_of ?? t("unavailable") })}</div>
+                  <div>
+                    {t("sourceStatusLatest", {
+                      date: provider.latest_as_of ?? t("unavailable"),
+                    })}
+                  </div>
                   <div>
                     {t("sourceStatusMissing", {
-                      codes: formatCodeList(provider.missing_indicator_codes, t("unavailable")),
+                      codes: formatCodeList(
+                        provider.missing_indicator_codes,
+                        t("unavailable"),
+                      ),
                     })}
                   </div>
                   <div>
@@ -597,62 +752,86 @@ function OfficialSourceStatusPanel({
                 </div>
                 {provider.recommended_next_action ? (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {t("sourceStatusNextAction", { action: provider.recommended_next_action })}
+                    {t("sourceStatusNextAction", {
+                      action: provider.recommended_next_action,
+                    })}
                   </p>
                 ) : null}
                 <p className="mt-2 text-xs text-muted-foreground">
                   {t("sourceStatusCitationPolicy", {
-                    policy: provider.citation_policy ?? citationPolicy ?? t("unavailable"),
+                    policy:
+                      provider.citation_policy ??
+                      citationPolicy ??
+                      t("unavailable"),
                   })}
                 </p>
-              </div>
+              </FinancialTerminalSurface>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">{t("sourceStatusUnavailable")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("sourceStatusUnavailable")}
+          </p>
         )}
-      </CardContent>
-    </Card>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
-function SourceGapPanel({ sourceGaps }: { sourceGaps: AiResearchDiagnostic[] }) {
+function SourceGapPanel({
+  sourceGaps,
+}: {
+  sourceGaps: AiResearchDiagnostic[];
+}) {
   const t = useTranslations("AiResearchDesk");
 
   return (
-    <Card>
-      <CardHeader>
+    <FinancialTerminalCard>
+      <FinancialTerminalCardHeader>
         <CardTitle className="text-base">{t("gapsTitle")}</CardTitle>
         <CardDescription>{t("gapsDesc")}</CardDescription>
-      </CardHeader>
-      <CardContent>
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent>
         {sourceGaps.length > 0 ? (
           <div className="space-y-2">
             {sourceGaps.map((gap, index) => (
-              <div key={`${gap.source ?? "gap"}-${gap.code ?? gap.status ?? index}`} className="rounded-md border p-3 text-sm">
+              <FinancialTerminalSurface
+                key={`${gap.source ?? "gap"}-${gap.code ?? gap.status ?? index}`}
+                className="p-3 text-sm"
+              >
                 <div className="flex flex-wrap gap-2">
-                  {gap.source ? <Badge variant="outline">{gap.source}</Badge> : null}
-                  {gap.code ? <Badge variant="secondary">{gap.code}</Badge> : null}
-                  {gap.status ? <Badge variant="outline">{gap.status}</Badge> : null}
+                  {gap.source ? (
+                    <Badge variant="outline">{gap.source}</Badge>
+                  ) : null}
+                  {gap.code ? (
+                    <Badge variant="secondary">{gap.code}</Badge>
+                  ) : null}
+                  {gap.status ? (
+                    <Badge variant="outline">{gap.status}</Badge>
+                  ) : null}
                 </div>
-                <p className="mt-2 text-muted-foreground">{getGapMessage(gap, t)}</p>
-              </div>
+                <p className="mt-2 text-muted-foreground">
+                  {getGapMessage(gap, t)}
+                </p>
+              </FinancialTerminalSurface>
             ))}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">{t("noGaps")}</p>
         )}
-      </CardContent>
-    </Card>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
 function ContextLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border bg-muted/20 p-3">
-      <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
+    <FinancialTerminalSurface className="p-3">
+      <div className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-1 text-sm">{value}</div>
-    </div>
+    </FinancialTerminalSurface>
   );
 }
 
@@ -706,7 +885,9 @@ function buildCandidateSymbols(
   return [...candidates.values()];
 }
 
-function prioritizeMacroIndicators(indicators: AiResearchMacroIndicator[]): AiResearchMacroIndicator[] {
+function prioritizeMacroIndicators(
+  indicators: AiResearchMacroIndicator[],
+): AiResearchMacroIndicator[] {
   return [...indicators].sort((left, right) => {
     const leftBuffett = left.code.includes("buffett") ? 0 : 1;
     const rightBuffett = right.code.includes("buffett") ? 0 : 1;
@@ -733,15 +914,24 @@ function buildSourceGaps(
       source: "macro_indicators",
       status: indicator.status ?? "no_data",
       code: indicator.code,
-      message: indicator.no_data_reason ?? `${indicator.name} is not available as citable local evidence yet.`,
+      message:
+        indicator.no_data_reason ??
+        `${indicator.name} is not available as citable local evidence yet.`,
     }));
 
-  return [...macroGaps, ...overviewDiagnostics, ...recommendationDiagnostics].filter(
+  return [
+    ...macroGaps,
+    ...overviewDiagnostics,
+    ...recommendationDiagnostics,
+  ].filter(
     (diagnostic) => diagnostic.message || diagnostic.code || diagnostic.status,
   );
 }
 
-function buildMacroQuestionContext(indicators: AiResearchMacroIndicator[], fallback: string): string {
+function buildMacroQuestionContext(
+  indicators: AiResearchMacroIndicator[],
+  fallback: string,
+): string {
   const contexts = indicators.slice(0, 3).map((indicator) => {
     const value = formatMacroValue(indicator, "unavailable");
     return `${indicator.name}: ${value}`;
@@ -756,42 +946,73 @@ function buildOfficialSourceQuestionContext(
   reviewSourceStatusLabel: string,
 ): string {
   const contexts = providers
-    .filter((provider) => provider.status !== "ok" || (provider.missing_indicator_codes?.length ?? 0) > 0)
+    .filter(
+      (provider) =>
+        provider.status !== "ok" ||
+        (provider.missing_indicator_codes?.length ?? 0) > 0,
+    )
     .slice(0, 2)
     .map((provider) => {
-      const missingCodes = formatCodeList(provider.missing_indicator_codes, noMissingCodesLabel);
-      const action = provider.recommended_next_action ?? provider.status ?? reviewSourceStatusLabel;
+      const missingCodes = formatCodeList(
+        provider.missing_indicator_codes,
+        noMissingCodesLabel,
+      );
+      const action =
+        provider.recommended_next_action ??
+        provider.status ??
+        reviewSourceStatusLabel;
       return `${provider.label}: ${missingCodes}; ${action}`;
     });
   return contexts.length > 0 ? contexts.join("; ") : fallback;
 }
 
 function isMacroIndicatorCitable(indicator: AiResearchMacroIndicator): boolean {
-  return indicator.value !== null && indicator.value !== undefined && Boolean(indicator.as_of) && Boolean(indicator.source);
+  return (
+    indicator.value !== null &&
+    indicator.value !== undefined &&
+    Boolean(indicator.as_of) &&
+    Boolean(indicator.source)
+  );
 }
 
-function formatMacroValue(indicator: AiResearchMacroIndicator, unavailableLabel: string): string {
+function formatMacroValue(
+  indicator: AiResearchMacroIndicator,
+  unavailableLabel: string,
+): string {
   if (indicator.value === null || indicator.value === undefined) {
     return unavailableLabel;
   }
-  const formattedValue = indicator.value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return indicator.unit ? `${formattedValue}${indicator.unit === "percent" ? "%" : ` ${indicator.unit}`}` : formattedValue;
+  const formattedValue = indicator.value.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
+  return indicator.unit
+    ? `${formattedValue}${indicator.unit === "percent" ? "%" : ` ${indicator.unit}`}`
+    : formattedValue;
 }
 
-function formatSourceStatus(status: string | null | undefined, unavailableLabel: string): string {
+function formatSourceStatus(
+  status: string | null | undefined,
+  unavailableLabel: string,
+): string {
   if (!status) {
     return unavailableLabel;
   }
   return status.replaceAll("_", " ");
 }
 
-function formatCodeList(codes: string[] | null | undefined, fallback: string): string {
+function formatCodeList(
+  codes: string[] | null | undefined,
+  fallback: string,
+): string {
   return codes && codes.length > 0 ? codes.join(", ") : fallback;
 }
 
 function formatSignalType(
   type: AiResearchRecommendation["type"],
-  t: (key: "signalBreakout" | "signalVolume" | "signalOversold" | "signalMomentum") => string,
+  t: (
+    key:
+      "signalBreakout" | "signalVolume" | "signalOversold" | "signalMomentum",
+  ) => string,
 ): string {
   if (type === "breakout") {
     return t("signalBreakout");
@@ -819,7 +1040,10 @@ function parseSymbols(input: string): string[] {
     .filter(Boolean);
 }
 
-function getGapMessage(gap: AiResearchDiagnostic, t: (key: "marketOverviewUnavailable" | "unknownGap") => string): string {
+function getGapMessage(
+  gap: AiResearchDiagnostic,
+  t: (key: "marketOverviewUnavailable" | "unknownGap") => string,
+): string {
   if (gap.code === "MARKET_OVERVIEW_UNAVAILABLE") {
     return t("marketOverviewUnavailable");
   }

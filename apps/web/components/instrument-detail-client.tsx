@@ -7,7 +7,14 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/src/i18n/routing";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  FinancialTerminalCard,
+  FinancialTerminalCardContent,
+  FinancialTerminalCardHeader,
+  FinancialTerminalSurface,
+  financialTerminalCardClassName,
+} from "@/components/financial-terminal-section";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
 import { IntradayPriceChart } from "@/components/intraday-price-chart";
 import { MarketAssistantCard } from "@/components/market-assistant-card";
@@ -16,8 +23,14 @@ import { DataTrustBadge } from "@/components/data-trust-badge";
 import { FinancialPageHeader } from "@/components/financial-page-header";
 import { useMarketColorsContext } from "@/context/market-colors-context";
 import { createDataTrustSignal } from "@/lib/data-trust";
-import { decodeInstrumentSymbol, getInstrumentDisplayName } from "@/lib/instrument-display";
-import type { InstrumentBar, InstrumentDetailPayload } from "@/lib/instrument-detail";
+import {
+  decodeInstrumentSymbol,
+  getInstrumentDisplayName,
+} from "@/lib/instrument-display";
+import type {
+  InstrumentBar,
+  InstrumentDetailPayload,
+} from "@/lib/instrument-detail";
 
 type ChartBarData = InstrumentBar & {
   timestamp: string;
@@ -37,16 +50,26 @@ function isChartBarData(bar: InstrumentBar): bar is ChartBarData {
   );
 }
 
-function formatDetailDate(value: string | null | undefined, locale: string, unavailableLabel: string): string {
+function formatDetailDate(
+  value: string | null | undefined,
+  locale: string,
+  unavailableLabel: string,
+): string {
   if (!value) {
     return unavailableLabel;
   }
 
   const parsedDate = new Date(value);
-  return Number.isNaN(parsedDate.getTime()) ? unavailableLabel : parsedDate.toLocaleDateString(locale);
+  return Number.isNaN(parsedDate.getTime())
+    ? unavailableLabel
+    : parsedDate.toLocaleDateString(locale);
 }
 
-function formatDetailNumber(value: number | null | undefined, locale: string, unavailableLabel: string): string {
+function formatDetailNumber(
+  value: number | null | undefined,
+  locale: string,
+  unavailableLabel: string,
+): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return unavailableLabel;
   }
@@ -57,7 +80,11 @@ function formatDetailNumber(value: number | null | undefined, locale: string, un
   }).format(value);
 }
 
-function formatPercentMetric(value: number | null | undefined, locale: string, unavailableLabel: string): string {
+function formatPercentMetric(
+  value: number | null | undefined,
+  locale: string,
+  unavailableLabel: string,
+): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return unavailableLabel;
   }
@@ -78,7 +105,10 @@ function cleanMarkdownPreviewLine(line: string): string {
     .trim();
 }
 
-function extractMarkdownPreview(contentMarkdown: string | null | undefined, fallback: string): string {
+function extractMarkdownPreview(
+  contentMarkdown: string | null | undefined,
+  fallback: string,
+): string {
   if (!contentMarkdown) {
     return fallback;
   }
@@ -94,7 +124,11 @@ function extractMarkdownPreview(contentMarkdown: string | null | undefined, fall
   return cleanMarkdownPreviewLine(meaningfulLine) || fallback;
 }
 
-function formatIndicatorValue(value: unknown, locale: string, unavailableLabel: string): string {
+function formatIndicatorValue(
+  value: unknown,
+  locale: string,
+  unavailableLabel: string,
+): string {
   if (typeof value === "number") {
     return formatDetailNumber(value, locale, unavailableLabel);
   }
@@ -103,7 +137,10 @@ function formatIndicatorValue(value: unknown, locale: string, unavailableLabel: 
   }
   if (value && typeof value === "object") {
     return Object.entries(value as Record<string, unknown>)
-      .map(([key, nestedValue]) => `${key}: ${formatIndicatorValue(nestedValue, locale, unavailableLabel)}`)
+      .map(
+        ([key, nestedValue]) =>
+          `${key}: ${formatIndicatorValue(nestedValue, locale, unavailableLabel)}`,
+      )
       .join(" / ");
   }
   return unavailableLabel;
@@ -111,10 +148,10 @@ function formatIndicatorValue(value: unknown, locale: string, unavailableLabel: 
 
 function ContextMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border bg-muted/20 p-3">
+    <FinancialTerminalSurface className="p-3">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
-    </div>
+    </FinancialTerminalSurface>
   );
 }
 
@@ -135,7 +172,9 @@ export function InstrumentDetailClient({
   const t = useTranslations("InstrumentDetail");
   const { getMovementColor } = useMarketColorsContext();
   const [data, setData] = useState<InstrumentDetailPayload | null>(initialData);
-  const [loading, setLoading] = useState(initialData === null && initialError === null);
+  const [loading, setLoading] = useState(
+    initialData === null && initialError === null,
+  );
   const [error, setError] = useState<string | null>(initialError);
 
   useEffect(() => {
@@ -146,8 +185,10 @@ export function InstrumentDetailClient({
     async function fetchData() {
       try {
         setLoading(true);
-        const response = await fetch(`/api/instruments/${encodeURIComponent(symbol)}`);
-        
+        const response = await fetch(
+          `/api/instruments/${encodeURIComponent(symbol)}`,
+        );
+
         if (!response.ok) {
           throw new Error("Failed to fetch instrument data");
         }
@@ -186,13 +227,13 @@ export function InstrumentDetailClient({
           <ArrowLeft className="mr-2 h-4 w-4" />
           {t("back")}
         </Button>
-        <Card>
-          <CardContent className="p-6">
+        <FinancialTerminalCard>
+          <FinancialTerminalCardContent className="p-6">
             <p className="text-center text-destructive">
               {t("loadFailed", { reason: error ?? t("unavailableShort") })}
             </p>
-          </CardContent>
-        </Card>
+          </FinancialTerminalCardContent>
+        </FinancialTerminalCard>
       </div>
     );
   }
@@ -201,7 +242,7 @@ export function InstrumentDetailClient({
   const chartBars = bars.filter(isChartBarData);
   const latestBar = bars.at(-1) ?? data.latest?.item ?? null;
   const prevBar = bars.at(-2) ?? null;
-  
+
   const currentPrice = latestBar?.close || 0;
   const prevPrice = prevBar?.close || currentPrice;
   const change = currentPrice - prevPrice;
@@ -210,9 +251,15 @@ export function InstrumentDetailClient({
   const formattedChangePercent = `${changePercent >= 0 ? "+" : ""}${(changePercent * 100).toFixed(2)}%`;
   const decodedSymbol = decodeInstrumentSymbol(symbol);
   const displayName = getInstrumentDisplayName(symbol, locale);
-  const subtitle = displayName === decodedSymbol ? t("detailSubtitle") : `${decodedSymbol} · ${t("detailSubtitle")}`;
+  const subtitle =
+    displayName === decodedSymbol
+      ? t("detailSubtitle")
+      : `${decodedSymbol} · ${t("detailSubtitle")}`;
   const assistantSymbol = data.request_symbol ?? symbol;
-  const assistantProvider = data.market_depth?.effective_provider ?? data.market_depth?.provider ?? null;
+  const assistantProvider =
+    data.market_depth?.effective_provider ??
+    data.market_depth?.provider ??
+    null;
   const latestTrustSignal = createDataTrustSignal({
     status: data.latest?.status,
     source: data.latest?.source,
@@ -246,14 +293,18 @@ export function InstrumentDetailClient({
         description={subtitle}
         badges={[
           { label: decodedSymbol, variant: "secondary" },
-          { label: `provider: ${assistantProvider ?? data.latest?.effective_provider ?? data.latest?.provider ?? "none"}` },
+          {
+            label: `provider: ${assistantProvider ?? data.latest?.effective_provider ?? data.latest?.provider ?? "none"}`,
+          },
           { label: `${data.range?.start ?? "-"} / ${data.range?.end ?? "-"}` },
         ]}
         metrics={[
           {
             label: t("latestPriceCard"),
             value: currentPrice.toFixed(2),
-            description: <DataTrustBadge signal={latestTrustSignal} mode="summary" />,
+            description: (
+              <DataTrustBadge signal={latestTrustSignal} mode="summary" />
+            ),
           },
           {
             label: t("priceChange"),
@@ -268,7 +319,9 @@ export function InstrumentDetailClient({
           {
             label: t("klineTitle"),
             value: chartBars.length,
-            description: <DataTrustBadge signal={barsTrustSignal} mode="summary" />,
+            description: (
+              <DataTrustBadge signal={barsTrustSignal} mode="summary" />
+            ),
           },
         ]}
         actions={
@@ -288,47 +341,67 @@ export function InstrumentDetailClient({
           end={data.range?.end ?? null}
         />
 
-        <MarketDepthCard marketDepth={data.market_depth ?? null} />
+        <MarketDepthCard
+          marketDepth={data.market_depth ?? null}
+          className={financialTerminalCardClassName}
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <Card className="rounded-md shadow-none">
-          <CardHeader className="border-b bg-muted/20 p-4">
+        <FinancialTerminalCard>
+          <FinancialTerminalCardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <CardTitle>{t("aiReport")}</CardTitle>
                 <CardDescription>{t("aiReportDesc")}</CardDescription>
               </div>
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/reports?symbol=${encodeURIComponent(symbol)}` as any}>
+                <Link
+                  href={`/reports?symbol=${encodeURIComponent(symbol)}` as any}
+                >
                   <ExternalLink className="h-4 w-4" />
                   {t("viewReports")}
                 </Link>
               </Button>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4 p-4">
+          </FinancialTerminalCardHeader>
+          <FinancialTerminalCardContent className="space-y-4">
             {latestReportHasContent ? (
               <>
                 <div className="flex flex-wrap gap-2">
                   {latestReport?.as_of ? (
                     <Badge variant="secondary">
-                      {t("reportAsOf", { date: formatDetailDate(latestReport.as_of, locale, t("unavailableShort")) })}
+                      {t("reportAsOf", {
+                        date: formatDetailDate(
+                          latestReport.as_of,
+                          locale,
+                          t("unavailableShort"),
+                        ),
+                      })}
                     </Badge>
                   ) : null}
                   <Badge variant="outline">
-                    {t("reportCitations", { count: latestReport?.citations?.length ?? 0 })}
+                    {t("reportCitations", {
+                      count: latestReport?.citations?.length ?? 0,
+                    })}
                   </Badge>
                   {latestReport?.task_run_id ? (
                     <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/task-runs/${latestReport.task_run_id}` as any}>
-                        {t("reportTaskRun", { id: latestReport.task_run_id.slice(0, 8) })}
+                      <Link
+                        href={`/task-runs/${latestReport.task_run_id}` as any}
+                      >
+                        {t("reportTaskRun", {
+                          id: latestReport.task_run_id.slice(0, 8),
+                        })}
                       </Link>
                     </Button>
                   ) : null}
                 </div>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  {extractMarkdownPreview(latestReport?.content_markdown, t("noReport"))}
+                  {extractMarkdownPreview(
+                    latestReport?.content_markdown,
+                    t("noReport"),
+                  )}
                 </p>
               </>
             ) : (
@@ -337,118 +410,197 @@ export function InstrumentDetailClient({
 
             {reportHistoryItems.length > 0 ? (
               <div className="border-t pt-3">
-                <div className="mb-2 text-sm font-semibold">{t("reportHistory")}</div>
+                <div className="mb-2 text-sm font-semibold">
+                  {t("reportHistory")}
+                </div>
                 <div className="space-y-2">
                   {reportHistoryItems.slice(0, 3).map((report, index) => (
-                    <div key={`${report.as_of ?? "report"}-${index}`} className="rounded-md border p-3 text-sm">
+                    <FinancialTerminalSurface
+                      key={`${report.as_of ?? "report"}-${index}`}
+                      className="p-3 text-sm"
+                    >
                       <div className="font-medium">
                         {report.as_of
-                          ? t("reportAsOf", { date: formatDetailDate(report.as_of, locale, t("unavailableShort")) })
+                          ? t("reportAsOf", {
+                              date: formatDetailDate(
+                                report.as_of,
+                                locale,
+                                t("unavailableShort"),
+                              ),
+                            })
                           : t("aiReport")}
                       </div>
                       <div className="mt-1 line-clamp-2 text-muted-foreground">
-                        {extractMarkdownPreview(report.content_markdown, t("noReport"))}
+                        {extractMarkdownPreview(
+                          report.content_markdown,
+                          t("noReport"),
+                        )}
                       </div>
-                    </div>
+                    </FinancialTerminalSurface>
                   ))}
                 </div>
               </div>
             ) : null}
-          </CardContent>
-        </Card>
+          </FinancialTerminalCardContent>
+        </FinancialTerminalCard>
 
         <div className="grid gap-4">
-          <Card className="rounded-md shadow-none">
-            <CardHeader className="border-b bg-muted/20 p-4">
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("technicalIndicators")}</CardTitle>
               <CardDescription>
                 {t("technicalIndicatorsDesc")}{" "}
                 {data.indicators?.as_of
                   ? t("indicatorAsOf", {
-                      date: formatDetailDate(data.indicators.as_of, locale, t("unavailableShort")),
+                      date: formatDetailDate(
+                        data.indicators.as_of,
+                        locale,
+                        t("unavailableShort"),
+                      ),
                     })
                   : null}
               </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent>
               {indicatorEntries.length > 0 ? (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {indicatorEntries.map(([code, value]) => (
-                    <div key={code} className="rounded-md border p-3">
-                      <div className="font-mono text-xs text-muted-foreground">{code}</div>
-                      <div className="mt-1 text-sm font-medium">
-                        {formatIndicatorValue(value, locale, t("unavailableShort"))}
+                    <FinancialTerminalSurface key={code} className="p-3">
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {code}
                       </div>
-                    </div>
+                      <div className="mt-1 text-sm font-medium">
+                        {formatIndicatorValue(
+                          value,
+                          locale,
+                          t("unavailableShort"),
+                        )}
+                      </div>
+                    </FinancialTerminalSurface>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">{t("noTechnicalIndicators")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("noTechnicalIndicators")}
+                </p>
               )}
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none">
-            <CardHeader className="border-b bg-muted/20 p-4">
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("fundamentalsSummary")}</CardTitle>
               <CardDescription>{t("fundamentalsDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 p-4">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-3">
               {fundamentalsItem ? (
                 <>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <ContextMetric label={t("fundamentalPeRatio")} value={formatDetailNumber(fundamentalsItem.pe_ratio, locale, t("unavailableShort"))} />
-                    <ContextMetric label={t("fundamentalRevenueGrowth")} value={formatPercentMetric(fundamentalsItem.revenue_growth, locale, t("unavailableShort"))} />
-                    <ContextMetric label={t("fundamentalNetMargin")} value={formatPercentMetric(fundamentalsItem.net_margin, locale, t("unavailableShort"))} />
-                    <ContextMetric label={t("fundamentalDebtToAssets")} value={formatPercentMetric(fundamentalsItem.debt_to_assets, locale, t("unavailableShort"))} />
+                    <ContextMetric
+                      label={t("fundamentalPeRatio")}
+                      value={formatDetailNumber(
+                        fundamentalsItem.pe_ratio,
+                        locale,
+                        t("unavailableShort"),
+                      )}
+                    />
+                    <ContextMetric
+                      label={t("fundamentalRevenueGrowth")}
+                      value={formatPercentMetric(
+                        fundamentalsItem.revenue_growth,
+                        locale,
+                        t("unavailableShort"),
+                      )}
+                    />
+                    <ContextMetric
+                      label={t("fundamentalNetMargin")}
+                      value={formatPercentMetric(
+                        fundamentalsItem.net_margin,
+                        locale,
+                        t("unavailableShort"),
+                      )}
+                    />
+                    <ContextMetric
+                      label={t("fundamentalDebtToAssets")}
+                      value={formatPercentMetric(
+                        fundamentalsItem.debt_to_assets,
+                        locale,
+                        t("unavailableShort"),
+                      )}
+                    />
                   </div>
                   {fundamentalsItem.summary ? (
-                    <p className="text-sm leading-6 text-muted-foreground">{fundamentalsItem.summary}</p>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {fundamentalsItem.summary}
+                    </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline">
-                      {t("sourceValue", { source: data.fundamentals?.source ?? t("unavailableShort") })}
+                      {t("sourceValue", {
+                        source:
+                          data.fundamentals?.source ?? t("unavailableShort"),
+                      })}
                     </Badge>
                     {data.fundamentals?.as_of ? (
                       <Badge variant="outline">
                         {t("fundamentalAsOf", {
-                          date: formatDetailDate(data.fundamentals.as_of, locale, t("unavailableShort")),
+                          date: formatDetailDate(
+                            data.fundamentals.as_of,
+                            locale,
+                            t("unavailableShort"),
+                          ),
                         })}
                       </Badge>
                     ) : null}
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">{t("noFundamentals")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("noFundamentals")}
+                </p>
               )}
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none">
-            <CardHeader className="border-b bg-muted/20 p-4">
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("latestNews")}</CardTitle>
               <CardDescription>{t("latestNewsDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 p-4">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-3">
               {latestNews ? (
                 <>
-                  <div className="space-y-2 rounded-md border p-3">
-                    <div className="font-medium leading-6">{latestNews.title}</div>
+                  <FinancialTerminalSurface className="space-y-2 p-3">
+                    <div className="font-medium leading-6">
+                      {latestNews.title}
+                    </div>
                     <div className="flex flex-wrap gap-2">
-                      {latestNews.sentiment ? <Badge variant="secondary">{latestNews.sentiment}</Badge> : null}
+                      {latestNews.sentiment ? (
+                        <Badge variant="secondary">
+                          {latestNews.sentiment}
+                        </Badge>
+                      ) : null}
                       {typeof latestNews.confidence === "number" ? (
                         <Badge variant="outline">
-                          {t("confidence", { score: Math.round(latestNews.confidence * 100) })}
+                          {t("confidence", {
+                            score: Math.round(latestNews.confidence * 100),
+                          })}
                         </Badge>
                       ) : null}
                       {latestNews.published_at ? (
                         <Badge variant="outline">
-                          {formatDetailDate(latestNews.published_at, locale, t("unavailableShort"))}
+                          {formatDetailDate(
+                            latestNews.published_at,
+                            locale,
+                            t("unavailableShort"),
+                          )}
                         </Badge>
                       ) : null}
                     </div>
                     {latestNews.summary ? (
-                      <p className="text-sm text-muted-foreground">{latestNews.summary}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {latestNews.summary}
+                      </p>
                     ) : null}
                     {latestNews.url ? (
                       <a
@@ -461,7 +613,7 @@ export function InstrumentDetailClient({
                         <ExternalLink className="h-3 w-3" aria-hidden="true" />
                       </a>
                     ) : null}
-                  </div>
+                  </FinancialTerminalSurface>
                   {newsItems.length > 1 ? (
                     <div className="text-xs text-muted-foreground">
                       {t("newsArticleCount", { count: newsItems.length })}
@@ -471,17 +623,17 @@ export function InstrumentDetailClient({
               ) : (
                 <p className="text-sm text-muted-foreground">{t("noNews")}</p>
               )}
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
         </div>
       </div>
 
-      <Card className="rounded-md shadow-none">
-        <CardHeader className="border-b bg-muted/20 p-4">
+      <FinancialTerminalCard>
+        <FinancialTerminalCardHeader>
           <CardTitle>{t("intradayTitle")}</CardTitle>
           <CardDescription>{t("intradayDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4">
+        </FinancialTerminalCardHeader>
+        <FinancialTerminalCardContent>
           <IntradayPriceChart
             points={data.intraday?.items ?? []}
             previousClose={data.intraday?.previous_close ?? null}
@@ -496,15 +648,15 @@ export function InstrumentDetailClient({
             session={data.intraday?.session ?? null}
             height={280}
           />
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
 
-      <Card className="rounded-md shadow-none">
-        <CardHeader className="border-b bg-muted/20 p-4">
+      <FinancialTerminalCard>
+        <FinancialTerminalCardHeader>
           <CardTitle>{t("klineTitle")}</CardTitle>
           <CardDescription>{t("interactiveKlineDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4">
+        </FinancialTerminalCardHeader>
+        <FinancialTerminalCardContent>
           <div className="mb-4">
             <DataTrustBadge signal={barsTrustSignal} mode="summary" />
           </div>
@@ -517,12 +669,12 @@ export function InstrumentDetailClient({
               showVolume={true}
             />
           ) : (
-            <div className="flex items-center justify-center h-96 text-muted-foreground">
+            <FinancialTerminalSurface className="flex h-96 items-center justify-center text-muted-foreground">
               {t("noKlineData")}
-            </div>
+            </FinancialTerminalSurface>
           )}
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
     </div>
   );
 }

@@ -121,6 +121,37 @@ const newsSearchProviderCapabilities =
 
 Tests should assert that the provider strip renders at least one configured provider and one setup/degraded state when the fixture includes both. Homepage tests should also assert the "More" hrefs and any setup action hrefs for modules that add them.
 
+### Convention: Terminal Entry Page Sections
+
+**What**: Routed pages opened from homepage terminal module actions should keep `FinancialPageHeader` for the top summary and use `FinancialTerminalCard`, `FinancialTerminalCardHeader`, `FinancialTerminalCardContent`, and `FinancialTerminalSurface` from `apps/web/components/financial-terminal-section.tsx` for downstream sections.
+
+**Why**: Homepage "More" destinations should feel like the same market terminal without changing the global `Card` primitive or duplicating long Tailwind strings across instruments, evidence, settings, and AI research surfaces.
+
+**Example**:
+
+```tsx
+import {
+  FinancialTerminalCard,
+  FinancialTerminalCardContent,
+  FinancialTerminalCardHeader,
+  FinancialTerminalSurface,
+} from "@/components/financial-terminal-section";
+
+<FinancialTerminalCard>
+  <FinancialTerminalCardHeader>
+    <CardTitle>{t("tableTitle")}</CardTitle>
+    <CardDescription>{t("tableDescription")}</CardDescription>
+  </FinancialTerminalCardHeader>
+  <FinancialTerminalCardContent className="p-0">
+    <div className="overflow-x-auto">
+      <Table>{/* rows */}</Table>
+    </div>
+  </FinancialTerminalCardContent>
+</FinancialTerminalCard>
+```
+
+Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics, or preview blocks. Keep numeric values in `font-mono` where they are scan-first data. If the change only touches visual classes and no visible behavior changes, keep tests focused on existing route actions, headings, forms, empty/error states, and run Chrome visual checks at desktop and tall mobile sizes.
+
 ---
 
 ## Accessibility

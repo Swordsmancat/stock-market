@@ -4,12 +4,12 @@ import { savePlatformSettingsAction } from "@/app/[locale]/actions";
 import { FlashBanner } from "@/components/flash-banner";
 import { FinancialPageHeader } from "@/components/financial-page-header";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  FinancialTerminalCard,
+  FinancialTerminalCardContent,
+  FinancialTerminalCardHeader,
+  FinancialTerminalSurface,
+} from "@/components/financial-terminal-section";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -141,12 +141,12 @@ export default async function SettingsPage({
         />
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <Card className="rounded-md shadow-none">
-            <CardHeader>
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("dataProviderTitle")}</CardTitle>
               <CardDescription>{t("dataProviderDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-4">
               <select
                 name="market_data_provider"
                 defaultValue={settings.market_data_provider}
@@ -166,17 +166,17 @@ export default async function SettingsPage({
               <div className="grid gap-3 md:grid-cols-2">
                 {settings.market_data_provider_capabilities.map(
                   (capability) => (
-                    <div
+                    <FinancialTerminalSurface
                       key={capability.provider}
-                      className="rounded-lg border p-3 text-sm"
+                      className="p-3 text-sm"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-medium">{capability.provider}</div>
                         <span
                           className={
                             capability.configured
-                              ? "rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
-                              : "rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800"
+                              ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400"
+                              : "rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300"
                           }
                         >
                           {capability.configured
@@ -207,19 +207,19 @@ export default async function SettingsPage({
                           ? t("tushareReadiness")
                           : null}
                       </p>
-                    </div>
+                    </FinancialTerminalSurface>
                   ),
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none">
-            <CardHeader>
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("akshareTitle")}</CardTitle>
               <CardDescription>{t("akshareDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent>
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent>
               <label className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -232,15 +232,15 @@ export default async function SettingsPage({
               <p className="mt-2 text-xs text-muted-foreground">
                 {t("akshareHint")}
               </p>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none">
-            <CardHeader>
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("tushareTitle")}</CardTitle>
               <CardDescription>{t("tushareDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="tushare_token">
                   {t("tushareToken")}
@@ -274,15 +274,15 @@ export default async function SettingsPage({
               <p className="text-xs text-muted-foreground">
                 {t("tushareHint")}
               </p>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none xl:col-span-2">
-            <CardHeader>
+          <FinancialTerminalCard className="xl:col-span-2">
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("newsSourcesTitle")}</CardTitle>
               <CardDescription>{t("newsSourcesDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
               <div className="space-y-4">
                 <fieldset className="space-y-3">
                   <legend className="text-sm font-medium">
@@ -293,7 +293,7 @@ export default async function SettingsPage({
                       (capability) => (
                         <label
                           key={capability.provider}
-                          className="flex min-h-28 gap-3 rounded-md border bg-background p-3 text-sm"
+                          className="flex min-h-28 gap-3 rounded-md border border-border/70 bg-background/60 p-3 text-sm"
                         >
                           <input
                             type="checkbox"
@@ -313,15 +313,15 @@ export default async function SettingsPage({
                               <span
                                 className={
                                   capability.configured
-                                    ? "rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
-                                    : "rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800"
+                                    ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400"
+                                    : "rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300"
                                 }
                               >
                                 {capability.configured
                                   ? t("providerConfigured")
                                   : t("providerNeedsSetup")}
                               </span>
-                              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                              <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                 {newsProviderStatusLabel(
                                   capability.implementation_status,
                                 )}
@@ -443,15 +443,15 @@ export default async function SettingsPage({
                   {t("newsSourcesQuotaHint")}
                 </p>
               </div>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none">
-            <CardHeader>
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("llmTitle")}</CardTitle>
               <CardDescription>{t("llmDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="llm_provider">
                   {t("llmProvider")}
@@ -493,14 +493,14 @@ export default async function SettingsPage({
                   }
                 />
               </div>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none">
-            <CardHeader>
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("displayPreferencesTitle")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">
                   {t("colorSchemeLabel")}
@@ -556,15 +556,15 @@ export default async function SettingsPage({
                   </label>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none xl:col-span-2">
-            <CardHeader>
+          <FinancialTerminalCard className="xl:col-span-2">
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("homeIndexPreferencesTitle")}</CardTitle>
               <CardDescription>{t("homeIndexPreferencesDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
               <div className="space-y-3">
                 <label
                   className="text-sm font-medium"
@@ -596,7 +596,7 @@ export default async function SettingsPage({
                   {HOME_INDEX_DISPLAY_FIELD_VALUES.map((field) => (
                     <label
                       key={field}
-                      className="flex min-h-10 items-center gap-3 rounded-md border bg-background px-3 py-2"
+                      className="flex min-h-10 items-center gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-2"
                     >
                       <input
                         type="checkbox"
@@ -624,15 +624,15 @@ export default async function SettingsPage({
                   })}
                 </p>
               </fieldset>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
 
-          <Card className="rounded-md shadow-none xl:col-span-2">
-            <CardHeader>
+          <FinancialTerminalCard className="xl:col-span-2">
+            <FinancialTerminalCardHeader>
               <CardTitle>{t("macroFavoritesTitle")}</CardTitle>
               <CardDescription>{t("macroFavoritesDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-3">
               <label
                 className="text-sm font-medium"
                 htmlFor="favorite_macro_indicator_codes"
@@ -654,8 +654,8 @@ export default async function SettingsPage({
               <p className="text-xs text-muted-foreground">
                 {t("macroFavoritesDefault")}
               </p>
-            </CardContent>
-          </Card>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
         </div>
 
         <Button type="submit">{t("save")}</Button>

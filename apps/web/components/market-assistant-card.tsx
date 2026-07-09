@@ -2,11 +2,22 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import {
+  FinancialTerminalCard,
+  FinancialTerminalCardContent,
+  FinancialTerminalCardHeader,
+  FinancialTerminalSurface,
+} from "@/components/financial-terminal-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { askMarketAssistant } from "@/lib/market-assistant";
-import type { MarketAssistantCitation, MarketAssistantDiagnostic, MarketAssistantResponse, MarketAssistantStatus } from "@/lib/market-assistant";
+import type {
+  MarketAssistantCitation,
+  MarketAssistantDiagnostic,
+  MarketAssistantResponse,
+  MarketAssistantStatus,
+} from "@/lib/market-assistant";
 
 type MarketAssistantCardProps = {
   symbol: string;
@@ -15,6 +26,7 @@ type MarketAssistantCardProps = {
   start?: string | null;
   end?: string | null;
   initialQuestion?: string | null;
+  className?: string;
 };
 
 const QUICK_PROMPT_IDS = ["trend", "risk", "data"] as const;
@@ -26,15 +38,20 @@ export function MarketAssistantCard({
   start = null,
   end = null,
   initialQuestion = null,
+  className,
 }: MarketAssistantCardProps) {
   const t = useTranslations("MarketAssistant");
   const normalizedLocale = locale === "en" ? "en" : "zh";
   const defaultQuestion = useMemo(() => {
     const trimmedInitialQuestion = initialQuestion?.trim();
-    return trimmedInitialQuestion ? trimmedInitialQuestion : t("defaultQuestion", { symbol });
+    return trimmedInitialQuestion
+      ? trimmedInitialQuestion
+      : t("defaultQuestion", { symbol });
   }, [initialQuestion, symbol, t]);
   const [question, setQuestion] = useState(defaultQuestion);
-  const [response, setResponse] = useState<MarketAssistantResponse | null>(null);
+  const [response, setResponse] = useState<MarketAssistantResponse | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -61,7 +78,9 @@ export function MarketAssistantCard({
       setResponse(assistantResponse);
     } catch (caughtError) {
       setResponse(null);
-      setError(caughtError instanceof Error ? caughtError.message : t("unknownError"));
+      setError(
+        caughtError instanceof Error ? caughtError.message : t("unknownError"),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -72,8 +91,8 @@ export function MarketAssistantCard({
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <FinancialTerminalCard className={className}>
+      <FinancialTerminalCardHeader>
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle>{t("title")}</CardTitle>
@@ -81,10 +100,13 @@ export function MarketAssistantCard({
           </div>
           {response ? <AssistantStatusBadge status={response.status} /> : null}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent className="space-y-4">
         <form className="space-y-3" onSubmit={submitQuestion}>
-          <label className="text-sm font-medium" htmlFor="market-assistant-question">
+          <label
+            className="text-sm font-medium"
+            htmlFor="market-assistant-question"
+          >
             {t("questionLabel")}
           </label>
           <textarea
@@ -122,9 +144,13 @@ export function MarketAssistantCard({
           </div>
         ) : null}
 
-        {response ? <AssistantResponsePanel response={response} /> : <InitialEmptyState />}
-      </CardContent>
-    </Card>
+        {response ? (
+          <AssistantResponsePanel response={response} />
+        ) : (
+          <InitialEmptyState />
+        )}
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
@@ -134,19 +160,34 @@ function AssistantStatusBadge({ status }: { status: MarketAssistantStatus }) {
   return <Badge variant={variant}>{t(`status${status}` as never)}</Badge>;
 }
 
-function AssistantResponsePanel({ response }: { response: MarketAssistantResponse }) {
+function AssistantResponsePanel({
+  response,
+}: {
+  response: MarketAssistantResponse;
+}) {
   const t = useTranslations("MarketAssistant");
   return (
-    <div className="space-y-4 rounded-md border bg-muted/30 p-4">
+    <FinancialTerminalSurface className="space-y-4 bg-muted/20 p-4">
       <div className="space-y-2">
         <div className="text-sm font-semibold">{t("answerTitle")}</div>
-        <div className="whitespace-pre-wrap text-sm leading-6">{response.answer_markdown}</div>
+        <div className="whitespace-pre-wrap text-sm leading-6">
+          {response.answer_markdown}
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <Metric label={t("barCount")} value={String(response.context.bar_count)} />
-        <Metric label={t("latestClose")} value={formatNullableNumber(response.context.latest_close)} />
-        <Metric label={t("periodChange")} value={formatPercent(response.context.period_change_pct)} />
+        <Metric
+          label={t("barCount")}
+          value={String(response.context.bar_count)}
+        />
+        <Metric
+          label={t("latestClose")}
+          value={formatNullableNumber(response.context.latest_close)}
+        />
+        <Metric
+          label={t("periodChange")}
+          value={formatPercent(response.context.period_change_pct)}
+        />
       </div>
 
       {response.citations.length > 0 ? (
@@ -166,7 +207,7 @@ function AssistantResponsePanel({ response }: { response: MarketAssistantRespons
                   </a>
                 ) : (
                   <span>{citation.label}</span>
-                )} {" "}
+                )}{" "}
                 <span className="font-mono">({citation.source})</span>
                 <CitationMetadata citation={citation} />
               </li>
@@ -180,7 +221,9 @@ function AssistantResponsePanel({ response }: { response: MarketAssistantRespons
           <div className="text-sm font-semibold">{t("diagnosticsTitle")}</div>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             {response.diagnostics.map((diagnostic) => (
-              <li key={`${diagnostic.source}:${diagnostic.status}:${diagnostic.message}`}>
+              <li
+                key={`${diagnostic.source}:${diagnostic.status}:${diagnostic.message}`}
+              >
                 {formatDiagnosticPrefix(diagnostic)}: {diagnostic.message}
               </li>
             ))}
@@ -188,10 +231,10 @@ function AssistantResponsePanel({ response }: { response: MarketAssistantRespons
         </div>
       ) : null}
 
-      <div className="rounded-md border bg-background p-3 text-xs text-muted-foreground">
+      <FinancialTerminalSurface className="p-3 text-xs text-muted-foreground">
         {response.safety.disclaimer}
-      </div>
-    </div>
+      </FinancialTerminalSurface>
+    </FinancialTerminalSurface>
   );
 }
 
@@ -210,14 +253,22 @@ function CitationMetadata({ citation }: { citation: MarketAssistantCitation }) {
   return (
     <div className="ml-5 space-y-1 text-xs text-muted-foreground">
       {metadataParts.length > 0 ? <div>{metadataParts.join(" · ")}</div> : null}
-      {citation.excerpt ? <div className="line-clamp-2">{citation.excerpt}</div> : null}
+      {citation.excerpt ? (
+        <div className="line-clamp-2">{citation.excerpt}</div>
+      ) : null}
     </div>
   );
 }
 
 function formatDiagnosticPrefix(diagnostic: MarketAssistantDiagnostic): string {
-  const statusParts = [diagnostic.source, diagnostic.severity, diagnostic.code].filter(Boolean);
-  return statusParts.length > 1 ? `${diagnostic.source} [${statusParts.slice(1).join("/")}]` : diagnostic.source;
+  const statusParts = [
+    diagnostic.source,
+    diagnostic.severity,
+    diagnostic.code,
+  ].filter(Boolean);
+  return statusParts.length > 1
+    ? `${diagnostic.source} [${statusParts.slice(1).join("/")}]`
+    : diagnostic.source;
 }
 
 function InitialEmptyState() {
@@ -227,10 +278,10 @@ function InitialEmptyState() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border bg-background p-3">
+    <FinancialTerminalSurface className="p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-sm font-semibold">{value}</div>
-    </div>
+    </FinancialTerminalSurface>
   );
 }
 

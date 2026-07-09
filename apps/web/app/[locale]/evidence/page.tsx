@@ -20,6 +20,12 @@ import {
 import { ErrorState } from "@/components/error-state";
 import { FinancialPageHeader } from "@/components/financial-page-header";
 import {
+  FinancialTerminalCard,
+  FinancialTerminalCardContent,
+  FinancialTerminalCardHeader,
+  FinancialTerminalSurface,
+} from "@/components/financial-terminal-section";
+import {
   OfficialMacroRefreshActions,
   type OfficialMacroRefreshActionsLabels,
 } from "@/components/official-macro-refresh-actions";
@@ -36,7 +42,7 @@ import {
 } from "@/components/research-brief-inbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -67,8 +73,7 @@ type EvidenceCenterPageProps = {
 };
 
 type MarketOverviewLoadResult =
-  | { status: "loaded"; payload: MarketOverviewPayload }
-  | { status: "failed" };
+  { status: "loaded"; payload: MarketOverviewPayload } | { status: "failed" };
 
 type ResearchSourceNotesLoadResult =
   | { status: "loaded"; items: ResearchSourceNote[] }
@@ -91,8 +96,18 @@ type IndicatorEvidenceState =
   | "needs_review";
 
 const FALLBACK_LOCALE = "en-US";
-const AUDIT_SOURCE_COMPONENT_KEYS = ["source_url", "source_series_id", "source_document", "source_name"];
-const AUDIT_METHOD_COMPONENT_KEYS = ["methodology", "calculation", "notes", "review_note"];
+const AUDIT_SOURCE_COMPONENT_KEYS = [
+  "source_url",
+  "source_series_id",
+  "source_document",
+  "source_name",
+];
+const AUDIT_METHOD_COMPONENT_KEYS = [
+  "methodology",
+  "calculation",
+  "notes",
+  "review_note",
+];
 const FRED_OFFICIAL_REFRESH_CODES = [
   "us_10y_yield",
   "us_2y_yield",
@@ -105,14 +120,25 @@ const WORLD_BANK_BUFFETT_REFRESH_CODES = [
   "buffett_indicator_cn",
   "buffett_indicator_hk",
 ];
-const FRED_OFFICIAL_SOURCE_IDS = new Set(["fred_us_rates", "fred_us_inflation", "fred_us_liquidity"]);
-const WORLD_BANK_OFFICIAL_SOURCE_IDS = new Set(["world_bank_buffett_indicator"]);
+const FRED_OFFICIAL_SOURCE_IDS = new Set([
+  "fred_us_rates",
+  "fred_us_inflation",
+  "fred_us_liquidity",
+]);
+const WORLD_BANK_OFFICIAL_SOURCE_IDS = new Set([
+  "world_bank_buffett_indicator",
+]);
 
-async function fetchMarketOverview(provider: string): Promise<MarketOverviewLoadResult> {
+async function fetchMarketOverview(
+  provider: string,
+): Promise<MarketOverviewLoadResult> {
   try {
-    const response = await backendFetch(withProviderQuery("/dashboard/market-overview", provider), {
-      cache: "no-store",
-    });
+    const response = await backendFetch(
+      withProviderQuery("/dashboard/market-overview", provider),
+      {
+        cache: "no-store",
+      },
+    );
     if (!response.ok) {
       return { status: "failed" };
     }
@@ -128,9 +154,12 @@ async function fetchMarketOverview(provider: string): Promise<MarketOverviewLoad
 
 async function fetchOfficialMacroSourceStatus(): Promise<OfficialMacroSourceStatusLoadResult> {
   try {
-    const response = await backendFetch("/market-indicators/official-sources/status", {
-      cache: "no-store",
-    });
+    const response = await backendFetch(
+      "/market-indicators/official-sources/status",
+      {
+        cache: "no-store",
+      },
+    );
     if (!response.ok) {
       return { status: "failed", payload: null };
     }
@@ -172,7 +201,9 @@ async function fetchResearchBriefs(): Promise<ResearchBriefsLoadResult> {
       return { status: "failed", items: [] };
     }
 
-    const payload = (await response.json()) as { items?: ResearchBriefPayload[] };
+    const payload = (await response.json()) as {
+      items?: ResearchBriefPayload[];
+    };
     return {
       status: "loaded",
       items: payload.items ?? [],
@@ -195,7 +226,11 @@ function getSafeLocale(locale: string | undefined): string {
   }
 }
 
-function formatDate(value: string | null | undefined, locale: string, unavailableLabel: string): string {
+function formatDate(
+  value: string | null | undefined,
+  locale: string,
+  unavailableLabel: string,
+): string {
   if (!value) {
     return unavailableLabel;
   }
@@ -222,14 +257,19 @@ function formatIndicatorValue(
   return item.unit === "percent" ? `${formattedValue}%` : formattedValue;
 }
 
-function hasNonEmptyComponent(components: Record<string, unknown> | undefined, keys: string[]): boolean {
+function hasNonEmptyComponent(
+  components: Record<string, unknown> | undefined,
+  keys: string[],
+): boolean {
   if (!components) {
     return false;
   }
 
   return keys.some((key) => {
     const value = components[key];
-    return value !== undefined && value !== null && String(value).trim().length > 0;
+    return (
+      value !== undefined && value !== null && String(value).trim().length > 0
+    );
   });
 }
 
@@ -241,10 +281,18 @@ function hasAuditMetadata(item: MarketOverviewIndicatorItem): boolean {
 }
 
 function isIndicatorCitable(item: MarketOverviewIndicatorItem): boolean {
-  return item.status === "ok" && typeof item.value === "number" && Boolean(item.as_of) && Boolean(item.source);
+  return (
+    item.status === "ok" &&
+    typeof item.value === "number" &&
+    Boolean(item.as_of) &&
+    Boolean(item.source)
+  );
 }
 
-function sourceMentionsIndicator(source: InformationSourceItem, code: string): boolean {
+function sourceMentionsIndicator(
+  source: InformationSourceItem,
+  code: string,
+): boolean {
   if ((source.coverage ?? []).includes(code)) {
     return true;
   }
@@ -286,12 +334,18 @@ function getIndicatorEvidenceState(
   return "no_local_evidence";
 }
 
-function getIndicatorItems(payload: MarketOverviewPayload): MarketOverviewIndicatorItem[] {
-  return payload.macro_indicators?.items ?? payload.valuation_indicators?.items ?? [];
+function getIndicatorItems(
+  payload: MarketOverviewPayload,
+): MarketOverviewIndicatorItem[] {
+  return (
+    payload.macro_indicators?.items ?? payload.valuation_indicators?.items ?? []
+  );
 }
 
 function getSourceGroups(informationSources: InformationSourcesPayload | null) {
-  const groupsWithItems = (informationSources?.groups ?? []).filter((group) => group.items.length > 0);
+  const groupsWithItems = (informationSources?.groups ?? []).filter(
+    (group) => group.items.length > 0,
+  );
   if (groupsWithItems.length > 0) {
     return groupsWithItems;
   }
@@ -313,7 +367,9 @@ function getSourceGroups(informationSources: InformationSourcesPayload | null) {
   }));
 }
 
-function buildNotebookSourceTargets(informationSources: InformationSourcesPayload | null): ResearchSourceTargetOption[] {
+function buildNotebookSourceTargets(
+  informationSources: InformationSourcesPayload | null,
+): ResearchSourceTargetOption[] {
   const seen = new Set<string>();
   return (informationSources?.items ?? []).flatMap((item) => {
     if (seen.has(item.id)) {
@@ -327,25 +383,35 @@ function buildNotebookSourceTargets(informationSources: InformationSourcesPayloa
         category: item.category,
         status: item.status,
         targetIndicatorCodes:
-          item.seed_template?.target_indicator_codes && item.seed_template.target_indicator_codes.length > 0
+          item.seed_template?.target_indicator_codes &&
+          item.seed_template.target_indicator_codes.length > 0
             ? item.seed_template.target_indicator_codes
-            : item.coverage ?? [],
+            : (item.coverage ?? []),
       },
     ];
   });
 }
 
 function getNoteMetadata(note: ResearchSourceNote): Record<string, unknown> {
-  return note.metadata && typeof note.metadata === "object" ? note.metadata : {};
+  return note.metadata && typeof note.metadata === "object"
+    ? note.metadata
+    : {};
 }
 
-function getLinkedNotesForSource(sourceId: string, notes: ResearchSourceNote[]): ResearchSourceNote[] {
+function getLinkedNotesForSource(
+  sourceId: string,
+  notes: ResearchSourceNote[],
+): ResearchSourceNote[] {
   return notes.filter((note) => getNoteMetadata(note).source_id === sourceId);
 }
 
 function getNoteCompletenessStatus(note: ResearchSourceNote): string {
   const completeness = getNoteMetadata(note).completeness;
-  if (!completeness || typeof completeness !== "object" || !("status" in completeness)) {
+  if (
+    !completeness ||
+    typeof completeness !== "object" ||
+    !("status" in completeness)
+  ) {
     return "missing";
   }
   const status = completeness.status;
@@ -360,9 +426,14 @@ function countMissingIndicators(items: MarketOverviewIndicatorItem[]): number {
   return items.filter((item) => !isIndicatorCitable(item)).length;
 }
 
-function getRefreshCoverage(items: MarketOverviewIndicatorItem[], codes: string[]) {
+function getRefreshCoverage(
+  items: MarketOverviewIndicatorItem[],
+  codes: string[],
+) {
   const itemsByCode = new Map(items.map((item) => [item.code, item]));
-  const matchedItems = codes.map((code) => itemsByCode.get(code)).filter(Boolean) as MarketOverviewIndicatorItem[];
+  const matchedItems = codes
+    .map((code) => itemsByCode.get(code))
+    .filter(Boolean) as MarketOverviewIndicatorItem[];
   const citableCount = matchedItems.filter(isIndicatorCitable).length;
   const latestAsOf = matchedItems
     .map((item) => item.as_of)
@@ -378,15 +449,26 @@ function getRefreshCoverage(items: MarketOverviewIndicatorItem[], codes: string[
   };
 }
 
-function getSourcesByIds(informationSources: InformationSourcesPayload | null, sourceIds: Set<string>) {
-  return (informationSources?.items ?? []).filter((item) => sourceIds.has(item.id));
+function getSourcesByIds(
+  informationSources: InformationSourcesPayload | null,
+  sourceIds: Set<string>,
+) {
+  return (informationSources?.items ?? []).filter((item) =>
+    sourceIds.has(item.id),
+  );
 }
 
-function badgeVariantForStatus(status: string): "secondary" | "outline" | "destructive" {
+function badgeVariantForStatus(
+  status: string,
+): "secondary" | "outline" | "destructive" {
   if (status === "ok" || status === "configured" || status === "ai_citable") {
     return "secondary";
   }
-  if (status === "needs_configuration" || status === "no_local_evidence" || status === "no_data") {
+  if (
+    status === "needs_configuration" ||
+    status === "no_local_evidence" ||
+    status === "no_data"
+  ) {
     return "destructive";
   }
   return "outline";
@@ -469,9 +551,9 @@ function renderOfficialSourceStatusPanel(
 ) {
   if (sourceStatus === null) {
     return (
-      <div className="mt-4 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+      <FinancialTerminalSurface className="mt-4 border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
         {t("officialSourceStatusUnavailable")}
-      </div>
+      </FinancialTerminalSurface>
     );
   }
 
@@ -479,85 +561,119 @@ function renderOfficialSourceStatusPanel(
   return (
     <div className="mt-4 space-y-3">
       <div className="grid gap-2 text-xs md:grid-cols-2">
-        <div className="border bg-muted/20 p-2">
-          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceReadiness")}</div>
+        <FinancialTerminalSurface className="p-2">
+          <div className="font-semibold uppercase text-muted-foreground">
+            {t("officialSourceReadiness")}
+          </div>
           <div className="mt-1 flex flex-wrap gap-2">
             <Badge variant={badgeVariantForStatus(sourceStatus.status)}>
               {officialSourceStatusLabel(sourceStatus.status, t)}
             </Badge>
-            <Badge variant={sourceStatus.can_refresh_from_browser ? "secondary" : "outline"}>
+            <Badge
+              variant={
+                sourceStatus.can_refresh_from_browser ? "secondary" : "outline"
+              }
+            >
               {officialSourceRefreshLabel(sourceStatus, t)}
             </Badge>
           </div>
-        </div>
-        <div className="border bg-muted/20 p-2">
-          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceCredential")}</div>
-          <p className="mt-1">{officialSourceCredentialLabel(sourceStatus, t)}</p>
+        </FinancialTerminalSurface>
+        <FinancialTerminalSurface className="p-2">
+          <div className="font-semibold uppercase text-muted-foreground">
+            {t("officialSourceCredential")}
+          </div>
+          <p className="mt-1">
+            {officialSourceCredentialLabel(sourceStatus, t)}
+          </p>
           {sourceStatus.base_url ? (
             <p className="mt-1 break-all text-muted-foreground">
               {t("officialSourceBaseUrl", { url: sourceStatus.base_url })}
             </p>
           ) : null}
-        </div>
-        <div className="border bg-muted/20 p-2">
-          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceEvidence")}</div>
+        </FinancialTerminalSurface>
+        <FinancialTerminalSurface className="p-2">
+          <div className="font-semibold uppercase text-muted-foreground">
+            {t("officialSourceEvidence")}
+          </div>
           <p className="mt-1">
-            {t("officialSourceEvidenceCount", { count: sourceStatus.evidence_count })}
+            {t("officialSourceEvidenceCount", {
+              count: sourceStatus.evidence_count,
+            })}
           </p>
           <p className="mt-1 text-muted-foreground">
             {t("officialSourceLatest", {
-              date: formatDate(sourceStatus.latest_as_of, locale, t("unavailableShort")),
+              date: formatDate(
+                sourceStatus.latest_as_of,
+                locale,
+                t("unavailableShort"),
+              ),
             })}
           </p>
-        </div>
-        <div className="border bg-muted/20 p-2">
-          <div className="font-semibold uppercase text-muted-foreground">{t("officialSourceCoverage")}</div>
-          <p className="mt-1 break-words font-mono">{sourceStatus.indicator_codes.join(", ")}</p>
+        </FinancialTerminalSurface>
+        <FinancialTerminalSurface className="p-2">
+          <div className="font-semibold uppercase text-muted-foreground">
+            {t("officialSourceCoverage")}
+          </div>
+          <p className="mt-1 break-words font-mono">
+            {sourceStatus.indicator_codes.join(", ")}
+          </p>
           {missingCodes.length > 0 ? (
             <p className="mt-1 break-words text-muted-foreground">
-              {t("officialSourceMissingCodes", { codes: missingCodes.join(", ") })}
+              {t("officialSourceMissingCodes", {
+                codes: missingCodes.join(", "),
+              })}
             </p>
           ) : null}
-        </div>
+        </FinancialTerminalSurface>
       </div>
-      <div className="border bg-muted/20 p-3 text-xs text-muted-foreground">
+      <FinancialTerminalSurface className="p-3 text-xs text-muted-foreground">
         <p>
-          <span className="font-semibold text-foreground">{t("officialSourceNextAction")}</span>{" "}
+          <span className="font-semibold text-foreground">
+            {t("officialSourceNextAction")}
+          </span>{" "}
           {officialSourceNextAction(sourceStatus, t)}
         </p>
         <p className="mt-1">
-          <span className="font-semibold text-foreground">{t("officialSourceFreshness")}</span>{" "}
+          <span className="font-semibold text-foreground">
+            {t("officialSourceFreshness")}
+          </span>{" "}
           {officialSourceFreshnessPolicy(sourceStatus, t)}
         </p>
         <p className="mt-1">
-          <span className="font-semibold text-foreground">{t("officialSourceCitationBoundary")}</span>{" "}
+          <span className="font-semibold text-foreground">
+            {t("officialSourceCitationBoundary")}
+          </span>{" "}
           {t("officialSourceCitationPolicy")}
         </p>
-      </div>
+      </FinancialTerminalSurface>
     </div>
   );
 }
 
-function renderMetric(label: string, value: string | number, description: string) {
+function renderMetric(
+  label: string,
+  value: string | number,
+  description: string,
+) {
   return (
-    <div className="border bg-background p-3">
+    <FinancialTerminalSurface className="p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 font-mono text-2xl font-semibold">{value}</div>
       <div className="mt-1 text-xs text-muted-foreground">{description}</div>
-    </div>
+    </FinancialTerminalSurface>
   );
 }
 
 function renderBriefSectionList(brief: DashboardBriefPayload) {
   return brief.sections.map((section) => (
-    <div key={section.id} className="border bg-background p-3">
+    <FinancialTerminalSurface key={section.id} className="p-3">
       <div className="text-sm font-semibold">{section.title}</div>
       <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
         {section.items.map((item, index) => (
           <li key={`${section.id}-${index}`}>{item}</li>
         ))}
       </ul>
-    </div>
+    </FinancialTerminalSurface>
   ));
 }
 
@@ -595,37 +711,53 @@ function renderOfficialRefreshPanel({
   actions?: ReactNode;
 }) {
   return (
-    <div className="border bg-background p-4">
+    <FinancialTerminalSurface className="p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-base font-semibold">{title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        <Badge variant={coverage.missingCount === 0 ? "secondary" : "outline"}>{coverageLabel}</Badge>
+        <Badge variant={coverage.missingCount === 0 ? "secondary" : "outline"}>
+          {coverageLabel}
+        </Badge>
       </div>
       {statusPanel}
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-        <div className="border bg-muted/20 p-2">
-          <div className="text-xs font-semibold uppercase text-muted-foreground">{commandLabel}</div>
-          <code className="mt-1 block break-all font-mono text-xs">{command}</code>
-        </div>
-        <div className="border bg-muted/20 p-2">
-          <div className="text-xs font-semibold uppercase text-muted-foreground">{dryRunLabel}</div>
-          <code className="mt-1 block break-all font-mono text-xs">{dryRunCommand}</code>
-        </div>
+        <FinancialTerminalSurface className="p-2">
+          <div className="text-xs font-semibold uppercase text-muted-foreground">
+            {commandLabel}
+          </div>
+          <code className="mt-1 block break-all font-mono text-xs">
+            {command}
+          </code>
+        </FinancialTerminalSurface>
+        <FinancialTerminalSurface className="p-2">
+          <div className="text-xs font-semibold uppercase text-muted-foreground">
+            {dryRunLabel}
+          </div>
+          <code className="mt-1 block break-all font-mono text-xs">
+            {dryRunCommand}
+          </code>
+        </FinancialTerminalSurface>
       </div>
       {actions}
       <div className="mt-4 flex flex-wrap gap-2 text-xs">
         <Badge variant="outline">{latestLabel}</Badge>
-        <Badge variant={coverage.missingCount > 0 ? "destructive" : "secondary"}>{missingLabel}</Badge>
+        <Badge
+          variant={coverage.missingCount > 0 ? "destructive" : "secondary"}
+        >
+          {missingLabel}
+        </Badge>
         {sourceItems.map((item) => (
           <Badge key={item.id} variant={badgeVariantForStatus(item.status)}>
             {item.label}: {sourceStatusLabels[item.status] ?? item.status}
           </Badge>
         ))}
-        {sourceItems.length === 0 ? <Badge variant="outline">{unavailableLabel}</Badge> : null}
+        {sourceItems.length === 0 ? (
+          <Badge variant="outline">{unavailableLabel}</Badge>
+        ) : null}
       </div>
-    </div>
+    </FinancialTerminalSurface>
   );
 }
 
@@ -638,17 +770,35 @@ function renderOfficialRefreshGuidance(
   sourceStatusLabels: Record<string, string>,
 ) {
   const unavailableLabel = t("unavailableShort");
-  const fredCoverage = getRefreshCoverage(indicators, FRED_OFFICIAL_REFRESH_CODES);
-  const worldBankCoverage = getRefreshCoverage(indicators, WORLD_BANK_BUFFETT_REFRESH_CODES);
-  const fredSources = getSourcesByIds(informationSources, FRED_OFFICIAL_SOURCE_IDS);
-  const worldBankSources = getSourcesByIds(informationSources, WORLD_BANK_OFFICIAL_SOURCE_IDS);
-  const fredSourceStatus = getOfficialMacroProviderStatus(officialSourceStatus, "fred");
-  const worldBankSourceStatus = getOfficialMacroProviderStatus(officialSourceStatus, "world_bank");
+  const fredCoverage = getRefreshCoverage(
+    indicators,
+    FRED_OFFICIAL_REFRESH_CODES,
+  );
+  const worldBankCoverage = getRefreshCoverage(
+    indicators,
+    WORLD_BANK_BUFFETT_REFRESH_CODES,
+  );
+  const fredSources = getSourcesByIds(
+    informationSources,
+    FRED_OFFICIAL_SOURCE_IDS,
+  );
+  const worldBankSources = getSourcesByIds(
+    informationSources,
+    WORLD_BANK_OFFICIAL_SOURCE_IDS,
+  );
+  const fredSourceStatus = getOfficialMacroProviderStatus(
+    officialSourceStatus,
+    "fred",
+  );
+  const worldBankSourceStatus = getOfficialMacroProviderStatus(
+    officialSourceStatus,
+    "world_bank",
+  );
   const actionLabels = buildOfficialMacroRefreshLabels(t);
 
   return (
-    <Card className="border-emerald-200/70 dark:border-emerald-900/60">
-      <CardHeader>
+    <FinancialTerminalCard className="border-emerald-500/30">
+      <FinancialTerminalCardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{t("officialRefreshManualBadge")}</Badge>
           <Badge variant="outline">{t("officialRefreshWebActionBadge")}</Badge>
@@ -658,8 +808,8 @@ function renderOfficialRefreshGuidance(
           {t("officialRefreshTitle")}
         </CardTitle>
         <CardDescription>{t("officialRefreshDescription")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent className="space-y-4">
         <div className="grid gap-3 xl:grid-cols-2">
           {renderOfficialRefreshPanel({
             title: t("officialRefreshFredTitle"),
@@ -674,13 +824,23 @@ function renderOfficialRefreshGuidance(
               total: fredCoverage.total,
             }),
             latestLabel: t("officialRefreshLatest", {
-              date: formatDate(fredCoverage.latestAsOf, locale, unavailableLabel),
+              date: formatDate(
+                fredCoverage.latestAsOf,
+                locale,
+                unavailableLabel,
+              ),
             }),
-            missingLabel: t("officialRefreshMissing", { count: fredCoverage.missingCount }),
+            missingLabel: t("officialRefreshMissing", {
+              count: fredCoverage.missingCount,
+            }),
             sourceItems: fredSources,
             sourceStatusLabels,
             unavailableLabel,
-            statusPanel: renderOfficialSourceStatusPanel(fredSourceStatus, t, locale),
+            statusPanel: renderOfficialSourceStatusPanel(
+              fredSourceStatus,
+              t,
+              locale,
+            ),
             actions: (
               <OfficialMacroRefreshActions
                 endpoint="/api/market-indicators/official-refresh/fred"
@@ -702,13 +862,23 @@ function renderOfficialRefreshGuidance(
               total: worldBankCoverage.total,
             }),
             latestLabel: t("officialRefreshLatest", {
-              date: formatDate(worldBankCoverage.latestAsOf, locale, unavailableLabel),
+              date: formatDate(
+                worldBankCoverage.latestAsOf,
+                locale,
+                unavailableLabel,
+              ),
             }),
-            missingLabel: t("officialRefreshMissing", { count: worldBankCoverage.missingCount }),
+            missingLabel: t("officialRefreshMissing", {
+              count: worldBankCoverage.missingCount,
+            }),
             sourceItems: worldBankSources,
             sourceStatusLabels,
             unavailableLabel,
-            statusPanel: renderOfficialSourceStatusPanel(worldBankSourceStatus, t, locale),
+            statusPanel: renderOfficialSourceStatusPanel(
+              worldBankSourceStatus,
+              t,
+              locale,
+            ),
             actions: (
               <OfficialMacroRefreshActions
                 endpoint="/api/market-indicators/official-refresh/world-bank"
@@ -718,7 +888,7 @@ function renderOfficialRefreshGuidance(
             ),
           })}
         </div>
-        <div className="border bg-muted/20 p-3 text-sm text-muted-foreground">
+        <FinancialTerminalSurface className="p-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2 font-semibold text-foreground">
             <TerminalSquare className="h-4 w-4" />
             {t("officialRefreshRunbookTitle")}
@@ -726,9 +896,9 @@ function renderOfficialRefreshGuidance(
           <p className="mt-1">{t("officialRefreshRunbookPath")}</p>
           <p className="mt-2">{t("officialRefreshCitationBoundary")}</p>
           <p className="mt-2">{t("officialRefreshUnsupportedGap")}</p>
-        </div>
-      </CardContent>
-    </Card>
+        </FinancialTerminalSurface>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
@@ -743,12 +913,16 @@ function buildOfficialMacroRefreshLabels(
     writeStoresObservation: t("officialRefreshWriteStoresObservation"),
     resultDryRun: t("officialRefreshResultDryRun"),
     resultWrite: t("officialRefreshResultWrite"),
-    resultObservations: t("officialRefreshResultObservations", { count: "{count}" }),
+    resultObservations: t("officialRefreshResultObservations", {
+      count: "{count}",
+    }),
     resultFetched: t("officialRefreshResultFetched", { count: "{count}" }),
     resultSkipped: t("officialRefreshResultSkipped", { count: "{count}" }),
     resultCodes: t("officialRefreshResultCodes", { codes: "{codes}" }),
     resultLatestAsOf: t("officialRefreshResultLatestAsOf", { date: "{date}" }),
-    resultCacheCleared: t("officialRefreshResultCacheCleared", { count: "{count}" }),
+    resultCacheCleared: t("officialRefreshResultCacheCleared", {
+      count: "{count}",
+    }),
     diagnosticsTitle: t("officialRefreshDiagnosticsTitle"),
     diagnosticsEmpty: t("officialRefreshDiagnosticsEmpty"),
     failed: t("officialRefreshFailed"),
@@ -756,7 +930,10 @@ function buildOfficialMacroRefreshLabels(
   };
 }
 
-function followUpKindLabel(kind: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {
+function followUpKindLabel(
+  kind: string | undefined,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
   switch (kind) {
     case "source_review":
       return t("followUpKindSourceReview");
@@ -773,7 +950,10 @@ function followUpKindLabel(kind: string | undefined, t: Awaited<ReturnType<typeo
   }
 }
 
-function followUpPolicyLabel(policy: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {
+function followUpPolicyLabel(
+  policy: string | undefined,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
   switch (policy) {
     case "citable":
       return t("followUpPolicyCitable");
@@ -786,7 +966,10 @@ function followUpPolicyLabel(policy: string | undefined, t: Awaited<ReturnType<t
   }
 }
 
-function followUpPriorityLabel(priority: string | undefined, t: Awaited<ReturnType<typeof getTranslations>>): string {
+function followUpPriorityLabel(
+  priority: string | undefined,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): string {
   switch (priority) {
     case "high":
       return t("followUpPriorityHigh");
@@ -799,7 +982,9 @@ function followUpPriorityLabel(priority: string | undefined, t: Awaited<ReturnTy
   }
 }
 
-function followUpPolicyBadgeVariant(policy: string | undefined): "secondary" | "outline" | "destructive" {
+function followUpPolicyBadgeVariant(
+  policy: string | undefined,
+): "secondary" | "outline" | "destructive" {
   if (policy === "citable") {
     return "secondary";
   }
@@ -820,45 +1005,66 @@ function renderFollowUpMetadata(
     <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
       {sourceLabel ? (
         <div>
-          <span className="font-medium text-foreground">{t("followUpSource")}</span> {sourceLabel}
+          <span className="font-medium text-foreground">
+            {t("followUpSource")}
+          </span>{" "}
+          {sourceLabel}
         </div>
       ) : null}
       {item.source_status ? (
         <div>
-          <span className="font-medium text-foreground">{t("followUpSourceStatus")}</span> {item.source_status}
+          <span className="font-medium text-foreground">
+            {t("followUpSourceStatus")}
+          </span>{" "}
+          {item.source_status}
         </div>
       ) : null}
       {item.component_role ? (
         <div>
-          <span className="font-medium text-foreground">{t("followUpComponentRole")}</span> {item.component_role}
+          <span className="font-medium text-foreground">
+            {t("followUpComponentRole")}
+          </span>{" "}
+          {item.component_role}
         </div>
       ) : null}
       {item.completeness_status ? (
         <div>
-          <span className="font-medium text-foreground">{t("followUpCompleteness")}</span>{" "}
+          <span className="font-medium text-foreground">
+            {t("followUpCompleteness")}
+          </span>{" "}
           {item.completeness_status}
         </div>
       ) : null}
       {dateLabel ? (
         <div>
-          <span className="font-medium text-foreground">{t("followUpDate")}</span>{" "}
+          <span className="font-medium text-foreground">
+            {t("followUpDate")}
+          </span>{" "}
           {formatDate(dateLabel, locale, t("unavailableShort"))}
         </div>
       ) : null}
       {typeof item.linked_note_count === "number" ? (
         <div>
-          <span className="font-medium text-foreground">{t("followUpLinkedNotes")}</span> {item.linked_note_count}
+          <span className="font-medium text-foreground">
+            {t("followUpLinkedNotes")}
+          </span>{" "}
+          {item.linked_note_count}
         </div>
       ) : null}
       {typeof item.seed_ready_note_count === "number" ? (
         <div>
-          <span className="font-medium text-foreground">{t("followUpSeedReadyNotes")}</span>{" "}
+          <span className="font-medium text-foreground">
+            {t("followUpSeedReadyNotes")}
+          </span>{" "}
           {item.seed_ready_note_count}
         </div>
       ) : null}
       {item.citation_id ? (
         <div className="font-mono">
-          <span className="font-sans font-medium text-foreground">{t("followUpCitation")}</span> {item.citation_id}
+          <span className="font-sans font-medium text-foreground">
+            {t("followUpCitation")}
+          </span>{" "}
+          {item.citation_id}
         </div>
       ) : null}
     </div>
@@ -873,8 +1079,8 @@ function renderResearchFollowUpQueue(
   const summary = queue?.summary ?? {};
   const items = queue?.items ?? [];
   return (
-    <Card className="border-primary/20">
-      <CardHeader>
+    <FinancialTerminalCard>
+      <FinancialTerminalCardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={queue?.status === "ok" ? "secondary" : "outline"}>
             {queue?.status ?? t("unavailableShort")}
@@ -882,7 +1088,11 @@ function renderResearchFollowUpQueue(
           {queue?.generated_at ? (
             <Badge variant="outline">
               {t("followUpGenerated", {
-                date: formatDate(queue.generated_at, locale, t("unavailableShort")),
+                date: formatDate(
+                  queue.generated_at,
+                  locale,
+                  t("unavailableShort"),
+                ),
               })}
             </Badge>
           ) : null}
@@ -892,73 +1102,114 @@ function renderResearchFollowUpQueue(
           {t("followUpTitle")}
         </CardTitle>
         <CardDescription>{t("followUpDescription")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </FinancialTerminalCardHeader>
+      <FinancialTerminalCardContent className="space-y-4">
         <div className="grid gap-3 md:grid-cols-4">
-          {renderMetric(t("followUpTotal"), summary.total ?? 0, t("followUpTotalDesc"))}
+          {renderMetric(
+            t("followUpTotal"),
+            summary.total ?? 0,
+            t("followUpTotalDesc"),
+          )}
           {renderMetric(
             t("followUpAiQuestions"),
             summary.ai_summary_question ?? 0,
             t("followUpAiQuestionsDesc"),
           )}
-          {renderMetric(t("followUpSeedPrep"), summary.seed_prep ?? 0, t("followUpSeedPrepDesc"))}
-          {renderMetric(t("followUpSourceGaps"), summary.source_gap ?? 0, t("followUpSourceGapsDesc"))}
+          {renderMetric(
+            t("followUpSeedPrep"),
+            summary.seed_prep ?? 0,
+            t("followUpSeedPrepDesc"),
+          )}
+          {renderMetric(
+            t("followUpSourceGaps"),
+            summary.source_gap ?? 0,
+            t("followUpSourceGapsDesc"),
+          )}
         </div>
 
         {items.length === 0 ? (
-          <EmptyState title={t("followUpNoItems")} description={t("followUpNoItemsDesc")} />
+          <EmptyState
+            title={t("followUpNoItems")}
+            description={t("followUpNoItemsDesc")}
+          />
         ) : (
           <div className="grid gap-3 xl:grid-cols-2">
             {items.map((item) => (
-              <article key={item.id} className="border bg-background p-4">
+              <FinancialTerminalSurface key={item.id} className="p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{followUpKindLabel(item.kind, t)}</Badge>
-                      <Badge variant="outline">{followUpPriorityLabel(item.priority, t)}</Badge>
-                      <Badge variant={followUpPolicyBadgeVariant(item.citation_policy)}>
+                      <Badge variant="outline">
+                        {followUpKindLabel(item.kind, t)}
+                      </Badge>
+                      <Badge variant="outline">
+                        {followUpPriorityLabel(item.priority, t)}
+                      </Badge>
+                      <Badge
+                        variant={followUpPolicyBadgeVariant(
+                          item.citation_policy,
+                        )}
+                      >
                         {followUpPolicyLabel(item.citation_policy, t)}
                       </Badge>
                     </div>
-                    <h3 className="mt-2 font-semibold">{item.title ?? item.note_title ?? item.source_label}</h3>
+                    <h3 className="mt-2 font-semibold">
+                      {item.title ?? item.note_title ?? item.source_label}
+                    </h3>
                   </div>
-                  <div className="font-mono text-xs text-muted-foreground">{item.id}</div>
+                  <div className="font-mono text-xs text-muted-foreground">
+                    {item.id}
+                  </div>
                 </div>
                 {item.prompt ? (
                   <p className="mt-3 text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">{t("followUpPrompt")}</span> {item.prompt}
+                    <span className="font-medium text-foreground">
+                      {t("followUpPrompt")}
+                    </span>{" "}
+                    {item.prompt}
                   </p>
                 ) : null}
                 {item.next_action ? (
                   <p className="mt-2 text-sm">
-                    <span className="font-medium">{t("followUpNextAction")}</span> {item.next_action}
+                    <span className="font-medium">
+                      {t("followUpNextAction")}
+                    </span>{" "}
+                    {item.next_action}
                   </p>
                 ) : null}
                 {(item.target_indicator_codes ?? []).length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-1">
                     {item.target_indicator_codes?.map((code) => (
-                      <Badge key={`${item.id}-${code}`} variant="outline" className="text-[10px]">
+                      <Badge
+                        key={`${item.id}-${code}`}
+                        variant="outline"
+                        className="text-[10px]"
+                      >
                         {code}
                       </Badge>
                     ))}
                   </div>
                 ) : null}
                 {renderFollowUpMetadata(item, t, locale)}
-              </article>
+              </FinancialTerminalSurface>
             ))}
           </div>
         )}
 
-        <div className="border bg-muted/20 p-3 text-sm text-muted-foreground">
-          <div className="font-semibold text-foreground">{t("followUpSafetyTitle")}</div>
+        <FinancialTerminalSurface className="p-3 text-sm text-muted-foreground">
+          <div className="font-semibold text-foreground">
+            {t("followUpSafetyTitle")}
+          </div>
           <p className="mt-1">{t("followUpSafetyDescription")}</p>
-        </div>
-      </CardContent>
-    </Card>
+        </FinancialTerminalSurface>
+      </FinancialTerminalCardContent>
+    </FinancialTerminalCard>
   );
 }
 
-function buildSeedImportLabels(t: Awaited<ReturnType<typeof getTranslations>>): EvidenceSeedImportReviewLabels {
+function buildSeedImportLabels(
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): EvidenceSeedImportReviewLabels {
   return {
     title: t("title"),
     description: t("description"),
@@ -1012,7 +1263,9 @@ function buildSeedImportLabels(t: Awaited<ReturnType<typeof getTranslations>>): 
   };
 }
 
-function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): ResearchSourceNotebookLabels {
+function buildNotebookLabels(
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): ResearchSourceNotebookLabels {
   return {
     title: t("title"),
     description: t("description"),
@@ -1030,7 +1283,9 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
     extractionStatusInvalid: t("extractionStatusInvalid"),
     extractionModelLlm: t("extractionModelLlm"),
     extractionModelFallback: t("extractionModelFallback"),
-    extractionFallbackReason: t("extractionFallbackReason", { reason: "{reason}" }),
+    extractionFallbackReason: t("extractionFallbackReason", {
+      reason: "{reason}",
+    }),
     extractionSummaryTitle: t("extractionSummaryTitle"),
     extractionIndicatorsTitle: t("extractionIndicatorsTitle"),
     extractionCitationCluesTitle: t("extractionCitationCluesTitle"),
@@ -1106,7 +1361,10 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
     targetIndicatorsBadge: t("targetIndicatorsBadge", { code: "{code}" }),
     componentRoleBadge: t("componentRoleBadge", { role: "{role}" }),
     reviewChecklistTitle: t("reviewChecklistTitle"),
-    completenessSummary: t("completenessSummary", { score: "{score}", total: "{total}" }),
+    completenessSummary: t("completenessSummary", {
+      score: "{score}",
+      total: "{total}",
+    }),
     completenessComplete: t("completenessComplete"),
     completenessPartial: t("completenessPartial"),
     completenessMissing: t("completenessMissing"),
@@ -1121,7 +1379,9 @@ function buildNotebookLabels(t: Awaited<ReturnType<typeof getTranslations>>): Re
   };
 }
 
-function buildResearchBriefInboxLabels(t: Awaited<ReturnType<typeof getTranslations>>): ResearchBriefInboxLabels {
+function buildResearchBriefInboxLabels(
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): ResearchBriefInboxLabels {
   return {
     title: t("title"),
     description: t("description"),
@@ -1153,7 +1413,15 @@ export default async function EvidenceCenterPage({
   params = Promise.resolve({ locale: "en" }),
   searchParams = Promise.resolve({}),
 }: EvidenceCenterPageProps = {}) {
-  const [{ locale: requestedLocale }, query, platformSettings, t, seedImportT, notebookT, researchBriefT] = await Promise.all([
+  const [
+    { locale: requestedLocale },
+    query,
+    platformSettings,
+    t,
+    seedImportT,
+    notebookT,
+    researchBriefT,
+  ] = await Promise.all([
     params,
     searchParams,
     getPlatformSettings(),
@@ -1163,8 +1431,14 @@ export default async function EvidenceCenterPage({
     getTranslations("ResearchBriefInbox"),
   ]);
   const locale = getSafeLocale(requestedLocale);
-  const provider = query.provider?.trim() || platformSettings.market_data_provider;
-  const [marketOverviewResult, officialSourceStatusResult, researchSourceNotesResult, researchBriefsResult] = await Promise.all([
+  const provider =
+    query.provider?.trim() || platformSettings.market_data_provider;
+  const [
+    marketOverviewResult,
+    officialSourceStatusResult,
+    researchSourceNotesResult,
+    researchBriefsResult,
+  ] = await Promise.all([
     fetchMarketOverview(provider),
     fetchOfficialMacroSourceStatus(),
     fetchResearchSourceNotes(),
@@ -1182,9 +1456,21 @@ export default async function EvidenceCenterPage({
             { label: t("activeProvider", { provider }) },
           ]}
           metrics={[
-            { label: t("metricIndicators"), value: t("unavailableShort"), description: t("metricIndicatorsDesc") },
-            { label: t("metricCitable"), value: t("unavailableShort"), description: t("metricCitableDesc") },
-            { label: t("metricMissing"), value: t("unavailableShort"), description: t("metricMissingDesc") },
+            {
+              label: t("metricIndicators"),
+              value: t("unavailableShort"),
+              description: t("metricIndicatorsDesc"),
+            },
+            {
+              label: t("metricCitable"),
+              value: t("unavailableShort"),
+              description: t("metricCitableDesc"),
+            },
+            {
+              label: t("metricMissing"),
+              value: t("unavailableShort"),
+              description: t("metricMissingDesc"),
+            },
             {
               label: t("metricSourcesNeedAction"),
               value: t("unavailableShort"),
@@ -1197,7 +1483,10 @@ export default async function EvidenceCenterPage({
             </Button>
           }
         />
-        <ErrorState title={t("loadFailedTitle")} description={t("loadFailedDescription")} />
+        <ErrorState
+          title={t("loadFailedTitle")}
+          description={t("loadFailedDescription")}
+        />
       </div>
     );
   }
@@ -1207,7 +1496,9 @@ export default async function EvidenceCenterPage({
   const dashboardBrief = payload.dashboard_brief ?? null;
   const informationSources = payload.information_sources ?? null;
   const officialSourceStatus =
-    officialSourceStatusResult.status === "loaded" ? officialSourceStatusResult.payload : null;
+    officialSourceStatusResult.status === "loaded"
+      ? officialSourceStatusResult.payload
+      : null;
   const sourceGroups = getSourceGroups(informationSources);
   const sourceTargetOptions = buildNotebookSourceTargets(informationSources);
   const citableIndicatorCount = countCitableIndicators(indicators);
@@ -1236,12 +1527,32 @@ export default async function EvidenceCenterPage({
         badges={[
           { label: t("badge"), variant: "secondary" },
           { label: t("activeProvider", { provider }) },
-          { label: t("generatedAt", { date: formatDate(payload.generated_at, locale, t("unavailableShort")) }) },
+          {
+            label: t("generatedAt", {
+              date: formatDate(
+                payload.generated_at,
+                locale,
+                t("unavailableShort"),
+              ),
+            }),
+          },
         ]}
         metrics={[
-          { label: t("metricIndicators"), value: indicators.length, description: t("metricIndicatorsDesc") },
-          { label: t("metricCitable"), value: citableIndicatorCount, description: t("metricCitableDesc") },
-          { label: t("metricMissing"), value: missingIndicatorCount, description: t("metricMissingDesc") },
+          {
+            label: t("metricIndicators"),
+            value: indicators.length,
+            description: t("metricIndicatorsDesc"),
+          },
+          {
+            label: t("metricCitable"),
+            value: citableIndicatorCount,
+            description: t("metricCitableDesc"),
+          },
+          {
+            label: t("metricMissing"),
+            value: missingIndicatorCount,
+            description: t("metricMissingDesc"),
+          },
           {
             label: t("metricSourcesNeedAction"),
             value: informationSources?.summary?.needs_action ?? 0,
@@ -1270,15 +1581,23 @@ export default async function EvidenceCenterPage({
       )}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
-        <Card className="border-primary/20">
-          <CardHeader>
+        <FinancialTerminalCard>
+          <FinancialTerminalCardHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={dashboardBrief?.status === "ok" ? "secondary" : "outline"}>
+              <Badge
+                variant={
+                  dashboardBrief?.status === "ok" ? "secondary" : "outline"
+                }
+              >
                 {dashboardBrief?.status ?? t("unavailableShort")}
               </Badge>
               {dashboardBrief ? (
                 <Badge variant="outline">
-                  {formatDate(dashboardBrief.generated_at, locale, t("unavailableShort"))}
+                  {formatDate(
+                    dashboardBrief.generated_at,
+                    locale,
+                    t("unavailableShort"),
+                  )}
                 </Badge>
               ) : null}
             </div>
@@ -1287,21 +1606,31 @@ export default async function EvidenceCenterPage({
               {t("briefTitle")}
             </CardTitle>
             <CardDescription>{t("briefDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          </FinancialTerminalCardHeader>
+          <FinancialTerminalCardContent className="space-y-4">
             {dashboardBrief?.narrative?.answer_markdown ? (
-              <div className="border border-primary/20 bg-primary/5 p-3">
+              <FinancialTerminalSurface className="border-primary/30 bg-primary/5 p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-sm font-semibold">{t("briefNarrative")}</div>
+                  <div className="text-sm font-semibold">
+                    {t("briefNarrative")}
+                  </div>
                   <Badge
-                    variant={dashboardBrief.narrative.model.used_llm ? "secondary" : "outline"}
+                    variant={
+                      dashboardBrief.narrative.model.used_llm
+                        ? "secondary"
+                        : "outline"
+                    }
                     className="text-[10px]"
                   >
-                    {dashboardBrief.narrative.model.used_llm ? t("modelGenerated") : t("modelFallback")}
+                    {dashboardBrief.narrative.model.used_llm
+                      ? t("modelGenerated")
+                      : t("modelFallback")}
                   </Badge>
                   {dashboardBrief.narrative.model.name ? (
                     <Badge variant="outline" className="text-[10px]">
-                      {t("modelName", { name: dashboardBrief.narrative.model.name })}
+                      {t("modelName", {
+                        name: dashboardBrief.narrative.model.name,
+                      })}
                     </Badge>
                   ) : null}
                 </div>
@@ -1313,33 +1642,44 @@ export default async function EvidenceCenterPage({
                     {dashboardBrief.narrative.model.fallback_reason}
                   </p>
                 ) : null}
-              </div>
+              </FinancialTerminalSurface>
             ) : (
-              <EmptyState title={t("briefNarrativeUnavailable")} description={t("briefNarrativeUnavailableDesc")} />
+              <EmptyState
+                title={t("briefNarrativeUnavailable")}
+                description={t("briefNarrativeUnavailableDesc")}
+              />
             )}
 
             {dashboardBrief?.narrative?.context?.source_mix ? (
               <div className="grid gap-2 text-sm sm:grid-cols-4">
-                <div className="border p-2">
+                <FinancialTerminalSurface className="p-2">
                   {t("macroEvidence", {
-                    count: dashboardBrief.narrative.context.source_mix.macro_citations ?? 0,
+                    count:
+                      dashboardBrief.narrative.context.source_mix
+                        .macro_citations ?? 0,
                   })}
-                </div>
-                <div className="border p-2">
+                </FinancialTerminalSurface>
+                <FinancialTerminalSurface className="p-2">
                   {t("reportEvidence", {
-                    count: dashboardBrief.narrative.context.source_mix.report_citations ?? 0,
+                    count:
+                      dashboardBrief.narrative.context.source_mix
+                        .report_citations ?? 0,
                   })}
-                </div>
-                <div className="border p-2">
+                </FinancialTerminalSurface>
+                <FinancialTerminalSurface className="p-2">
                   {t("newsEvidence", {
-                    count: dashboardBrief.narrative.context.source_mix.news_citations ?? 0,
+                    count:
+                      dashboardBrief.narrative.context.source_mix
+                        .news_citations ?? 0,
                   })}
-                </div>
-                <div className="border p-2">
+                </FinancialTerminalSurface>
+                <FinancialTerminalSurface className="p-2">
                   {t("sourceGaps", {
-                    count: dashboardBrief.narrative.context.source_mix.information_source_gaps ?? 0,
+                    count:
+                      dashboardBrief.narrative.context.source_mix
+                        .information_source_gaps ?? 0,
                   })}
-                </div>
+                </FinancialTerminalSurface>
               </div>
             ) : null}
 
@@ -1348,21 +1688,23 @@ export default async function EvidenceCenterPage({
                 {renderBriefSectionList(dashboardBrief)}
               </div>
             ) : null}
-          </CardContent>
-        </Card>
+          </FinancialTerminalCardContent>
+        </FinancialTerminalCard>
 
-        <Card>
-          <CardHeader>
+        <FinancialTerminalCard>
+          <FinancialTerminalCardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
               <ShieldCheck className="h-5 w-5" />
               {t("briefEvidenceTitle")}
             </CardTitle>
             <CardDescription>{t("briefEvidenceDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          </FinancialTerminalCardHeader>
+          <FinancialTerminalCardContent className="space-y-4">
             {(dashboardBrief?.citations?.length ?? 0) > 0 ? (
               <div className="space-y-2">
-                <div className="text-sm font-semibold">{t("citationsTitle")}</div>
+                <div className="text-sm font-semibold">
+                  {t("citationsTitle")}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {dashboardBrief?.citations?.map((citation) => (
                     <Badge key={citation.id} variant="outline">
@@ -1372,21 +1714,27 @@ export default async function EvidenceCenterPage({
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">{t("noCitations")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("noCitations")}
+              </p>
             )}
 
             {(dashboardBrief?.diagnostics?.length ?? 0) > 0 ? (
-              <div className="border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+              <FinancialTerminalSurface className="border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
                 <div className="font-semibold">{t("diagnosticsTitle")}</div>
                 <ul className="mt-2 list-disc space-y-1 pl-4">
                   {dashboardBrief?.diagnostics?.map((diagnostic, index) => (
-                    <li key={`${diagnostic.source ?? "diagnostic"}-${diagnostic.code ?? index}`}>
+                    <li
+                      key={`${diagnostic.source ?? "diagnostic"}-${diagnostic.code ?? index}`}
+                    >
                       {diagnostic.code ? `${diagnostic.code}: ` : null}
-                      {diagnostic.message ?? diagnostic.status ?? t("unavailableShort")}
+                      {diagnostic.message ??
+                        diagnostic.status ??
+                        t("unavailableShort")}
                     </li>
                   ))}
                 </ul>
-              </div>
+              </FinancialTerminalSurface>
             ) : null}
 
             {dashboardBrief?.safety ? (
@@ -1397,16 +1745,20 @@ export default async function EvidenceCenterPage({
                     <Badge variant="secondary">{t("safetyNotAdvice")}</Badge>
                   ) : null}
                   {dashboardBrief.safety.no_buy_sell_hold ? (
-                    <Badge variant="secondary">{t("safetyNoTradingInstruction")}</Badge>
+                    <Badge variant="secondary">
+                      {t("safetyNoTradingInstruction")}
+                    </Badge>
                   ) : null}
                   {dashboardBrief.safety.no_fabricated_macro_data ? (
-                    <Badge variant="secondary">{t("safetyNoFabricatedData")}</Badge>
+                    <Badge variant="secondary">
+                      {t("safetyNoFabricatedData")}
+                    </Badge>
                   ) : null}
                 </div>
               </div>
             ) : null}
-          </CardContent>
-        </Card>
+          </FinancialTerminalCardContent>
+        </FinancialTerminalCard>
       </section>
 
       <ResearchBriefInbox
@@ -1417,17 +1769,22 @@ export default async function EvidenceCenterPage({
         locale={locale}
       />
 
-      <Card>
-        <CardHeader>
+      <FinancialTerminalCard>
+        <FinancialTerminalCardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Database className="h-5 w-5" />
             {t("indicatorTableTitle")}
           </CardTitle>
           <CardDescription>{t("indicatorTableDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
+        </FinancialTerminalCardHeader>
+        <FinancialTerminalCardContent className="p-0">
           {indicators.length === 0 ? (
-            <EmptyState title={t("noIndicators")} description={t("noIndicatorsDesc")} />
+            <div className="p-4">
+              <EmptyState
+                title={t("noIndicators")}
+                description={t("noIndicatorsDesc")}
+              />
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -1444,15 +1801,22 @@ export default async function EvidenceCenterPage({
                 </TableHeader>
                 <TableBody>
                   {indicators.map((item) => {
-                    const evidenceState = getIndicatorEvidenceState(item, informationSources);
+                    const evidenceState = getIndicatorEvidenceState(
+                      item,
+                      informationSources,
+                    );
                     const metadataPresent = hasAuditMetadata(item);
                     return (
                       <TableRow key={item.code}>
                         <TableCell className="min-w-56">
                           <div className="font-medium">{item.name}</div>
-                          <div className="font-mono text-xs text-muted-foreground">{item.code}</div>
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {item.code}
+                          </div>
                           <div className="mt-1 text-xs text-muted-foreground">
-                            {[item.region, item.category].filter(Boolean).join(" / ") || t("unavailableShort")}
+                            {[item.region, item.category]
+                              .filter(Boolean)
+                              .join(" / ") || t("unavailableShort")}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -1461,21 +1825,35 @@ export default async function EvidenceCenterPage({
                           </Badge>
                         </TableCell>
                         <TableCell className="font-mono">
-                          {formatIndicatorValue(item, locale, t("unavailableShort"))}
+                          {formatIndicatorValue(
+                            item,
+                            locale,
+                            t("unavailableShort"),
+                          )}
                         </TableCell>
-                        <TableCell>{formatDate(item.as_of, locale, t("unavailableShort"))}</TableCell>
+                        <TableCell>
+                          {formatDate(
+                            item.as_of,
+                            locale,
+                            t("unavailableShort"),
+                          )}
+                        </TableCell>
                         <TableCell className="max-w-64 text-sm text-muted-foreground">
                           {item.source ?? t("unavailableShort")}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={metadataPresent ? "secondary" : "outline"}>
-                            {metadataPresent ? t("metadataPresent") : t("metadataMissing")}
+                          <Badge
+                            variant={metadataPresent ? "secondary" : "outline"}
+                          >
+                            {metadataPresent
+                              ? t("metadataPresent")
+                              : t("metadataMissing")}
                           </Badge>
                         </TableCell>
                         <TableCell className="max-w-72 text-sm text-muted-foreground">
                           {item.status === "ok"
                             ? t("indicatorStoredObservation")
-                            : item.no_data_reason ?? t("indicatorNoData")}
+                            : (item.no_data_reason ?? t("indicatorNoData"))}
                         </TableCell>
                       </TableRow>
                     );
@@ -1484,18 +1862,18 @@ export default async function EvidenceCenterPage({
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
 
-      <Card>
-        <CardHeader>
+      <FinancialTerminalCard>
+        <FinancialTerminalCardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <FileWarning className="h-5 w-5" />
             {t("sourceReadinessTitle")}
           </CardTitle>
           <CardDescription>{t("sourceReadinessDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </FinancialTerminalCardHeader>
+        <FinancialTerminalCardContent className="space-y-4">
           {informationSources ? (
             <div className="grid gap-2 sm:grid-cols-4">
               {renderMetric(
@@ -1513,219 +1891,306 @@ export default async function EvidenceCenterPage({
                 informationSources.summary?.needs_action ?? 0,
                 t("sourceNeedsActionDesc"),
               )}
-              {renderMetric(t("sourceFuture"), informationSources.summary?.future ?? 0, t("sourceFutureDesc"))}
+              {renderMetric(
+                t("sourceFuture"),
+                informationSources.summary?.future ?? 0,
+                t("sourceFutureDesc"),
+              )}
             </div>
           ) : null}
 
           {sourceGroups.length === 0 ? (
-            <EmptyState title={t("noSources")} description={t("noSourcesDesc")} />
+            <EmptyState
+              title={t("noSources")}
+              description={t("noSourcesDesc")}
+            />
           ) : (
             <div className="space-y-5">
               {sourceGroups.map((group) => (
                 <section key={group.category} className="space-y-3">
                   <div>
                     <h2 className="text-lg font-semibold">{group.label}</h2>
-                    <p className="text-sm text-muted-foreground">{t("sourceGroupCount", { count: group.items.length })}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("sourceGroupCount", { count: group.items.length })}
+                    </p>
                   </div>
                   <div className="grid gap-3 xl:grid-cols-2">
                     {group.items.map((item) => {
-                      const linkedNotes = getLinkedNotesForSource(item.id, researchSourceNotesResult.items);
+                      const linkedNotes = getLinkedNotesForSource(
+                        item.id,
+                        researchSourceNotesResult.items,
+                      );
                       const seedReadyNotes = linkedNotes.filter(
-                        (note) => getNoteCompletenessStatus(note) === "complete",
+                        (note) =>
+                          getNoteCompletenessStatus(note) === "complete",
                       );
                       return (
-                      <div key={item.id} className="border bg-background p-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <div className="text-base font-semibold">{item.label}</div>
-                            <div className="text-xs text-muted-foreground">{item.authority ?? t("unavailableShort")}</div>
-                          </div>
-                          <Badge variant={badgeVariantForStatus(item.status)}>
-                            {sourceStatusLabels[item.status] ?? item.status}
-                          </Badge>
-                        </div>
-                        <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                          <div>{t("sourceEvidenceCount", { count: item.evidence_count ?? 0 })}</div>
-                          <div>
-                            {t("sourceLatestAsOf", {
-                              date: formatDate(item.latest_as_of, locale, t("unavailableShort")),
-                            })}
-                          </div>
-                        </div>
-                        {(item.coverage ?? []).length > 0 ? (
-                          <div className="mt-3 flex flex-wrap gap-1">
-                            {item.coverage?.map((coverage) => (
-                              <Badge key={`${item.id}-${coverage}`} variant="outline" className="text-[10px]">
-                                {coverage}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : null}
-                        <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                          <p>{item.ai_usage ?? t("sourceNoAiUsage")}</p>
-                          <p>{item.freshness_policy ?? t("sourceNoFreshnessPolicy")}</p>
-                          <p className="font-medium text-foreground">{item.next_action ?? t("sourceNoNextAction")}</p>
-                        </div>
-                        {item.collection_note ? (
-                          <div className="mt-3 space-y-1 text-sm">
-                            <div className="text-xs font-semibold uppercase text-muted-foreground">
-                              {t("collectionNote")}
+                        <FinancialTerminalSurface key={item.id} className="p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <div className="text-base font-semibold">
+                                {item.label}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {item.authority ?? t("unavailableShort")}
+                              </div>
                             </div>
-                            <p className="text-muted-foreground">{item.collection_note}</p>
+                            <Badge variant={badgeVariantForStatus(item.status)}>
+                              {sourceStatusLabels[item.status] ?? item.status}
+                            </Badge>
                           </div>
-                        ) : null}
-                        {item.citation_policy ? (
-                          <div className="mt-3 space-y-1 text-sm">
-                            <div className="text-xs font-semibold uppercase text-muted-foreground">
-                              {t("citationPolicy")}
-                            </div>
-                            <p className="text-muted-foreground">{item.citation_policy}</p>
-                          </div>
-                        ) : null}
-                        {(item.collection_links ?? []).length > 0 ? (
-                          <div className="mt-3 space-y-2">
-                            <div className="text-xs font-semibold uppercase text-muted-foreground">
-                              {t("collectionLinks")}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {item.collection_links?.map((link) => (
-                                <a
-                                  key={`${item.id}-${link.url}`}
-                                  href={link.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 border px-2 py-1 text-sm text-primary hover:bg-muted hover:underline"
-                                >
-                                  <span>{link.label}</span>
-                                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                        {linkedNotes.length > 0 ? (
-                          <div className="mt-3 border bg-muted/20 p-3">
-                            <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline">
-                                {t("sourceLinkedNotebookEntries", { count: linkedNotes.length })}
-                              </Badge>
-                              <Badge variant={seedReadyNotes.length > 0 ? "secondary" : "outline"}>
-                                {t("sourceLinkedNotebookReady", { count: seedReadyNotes.length })}
-                              </Badge>
-                            </div>
-                            <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                              {linkedNotes.slice(0, 3).map((note) => (
-                                <li key={`${item.id}-${note.id}`}>{note.title}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : null}
-                        {item.seed_template ? (
-                          <div className="mt-4 space-y-3 border-t pt-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold">
-                              <FileCheck2 className="h-4 w-4" />
-                              {t("seedTemplate")}
+                          <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                            <div>
+                              {t("sourceEvidenceCount", {
+                                count: item.evidence_count ?? 0,
+                              })}
                             </div>
                             <div>
-                              <div className="font-medium">{item.seed_template.label}</div>
-                              {item.seed_template.description ? (
-                                <p className="mt-1 text-sm text-muted-foreground">{item.seed_template.description}</p>
+                              {t("sourceLatestAsOf", {
+                                date: formatDate(
+                                  item.latest_as_of,
+                                  locale,
+                                  t("unavailableShort"),
+                                ),
+                              })}
+                            </div>
+                          </div>
+                          {(item.coverage ?? []).length > 0 ? (
+                            <div className="mt-3 flex flex-wrap gap-1">
+                              {item.coverage?.map((coverage) => (
+                                <Badge
+                                  key={`${item.id}-${coverage}`}
+                                  variant="outline"
+                                  className="text-[10px]"
+                                >
+                                  {coverage}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                            <p>{item.ai_usage ?? t("sourceNoAiUsage")}</p>
+                            <p>
+                              {item.freshness_policy ??
+                                t("sourceNoFreshnessPolicy")}
+                            </p>
+                            <p className="font-medium text-foreground">
+                              {item.next_action ?? t("sourceNoNextAction")}
+                            </p>
+                          </div>
+                          {item.collection_note ? (
+                            <div className="mt-3 space-y-1 text-sm">
+                              <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                {t("collectionNote")}
+                              </div>
+                              <p className="text-muted-foreground">
+                                {item.collection_note}
+                              </p>
+                            </div>
+                          ) : null}
+                          {item.citation_policy ? (
+                            <div className="mt-3 space-y-1 text-sm">
+                              <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                {t("citationPolicy")}
+                              </div>
+                              <p className="text-muted-foreground">
+                                {item.citation_policy}
+                              </p>
+                            </div>
+                          ) : null}
+                          {(item.collection_links ?? []).length > 0 ? (
+                            <div className="mt-3 space-y-2">
+                              <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                {t("collectionLinks")}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {item.collection_links?.map((link) => (
+                                  <a
+                                    key={`${item.id}-${link.url}`}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 border px-2 py-1 text-sm text-primary hover:bg-muted hover:underline"
+                                  >
+                                    <span>{link.label}</span>
+                                    <ExternalLink
+                                      className="h-3 w-3"
+                                      aria-hidden="true"
+                                    />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {linkedNotes.length > 0 ? (
+                            <FinancialTerminalSurface className="mt-3 p-3">
+                              <div className="flex flex-wrap gap-2">
+                                <Badge variant="outline">
+                                  {t("sourceLinkedNotebookEntries", {
+                                    count: linkedNotes.length,
+                                  })}
+                                </Badge>
+                                <Badge
+                                  variant={
+                                    seedReadyNotes.length > 0
+                                      ? "secondary"
+                                      : "outline"
+                                  }
+                                >
+                                  {t("sourceLinkedNotebookReady", {
+                                    count: seedReadyNotes.length,
+                                  })}
+                                </Badge>
+                              </div>
+                              <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                                {linkedNotes.slice(0, 3).map((note) => (
+                                  <li key={`${item.id}-${note.id}`}>
+                                    {note.title}
+                                  </li>
+                                ))}
+                              </ul>
+                            </FinancialTerminalSurface>
+                          ) : null}
+                          {item.seed_template ? (
+                            <div className="mt-4 space-y-3 border-t pt-4">
+                              <div className="flex items-center gap-2 text-sm font-semibold">
+                                <FileCheck2 className="h-4 w-4" />
+                                {t("seedTemplate")}
+                              </div>
+                              <div>
+                                <div className="font-medium">
+                                  {item.seed_template.label}
+                                </div>
+                                {item.seed_template.description ? (
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    {item.seed_template.description}
+                                  </p>
+                                ) : null}
+                              </div>
+                              {(item.seed_template.target_indicator_codes ?? [])
+                                .length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                    {t("templateTargets")}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {item.seed_template.target_indicator_codes?.map(
+                                      (code) => (
+                                        <Badge
+                                          key={`${item.id}-${code}`}
+                                          variant="outline"
+                                          className="text-[10px]"
+                                        >
+                                          {code}
+                                        </Badge>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {(item.seed_template.required_fields ?? [])
+                                .length > 0 ? (
+                                <div className="space-y-1 text-sm">
+                                  <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                    {t("templateRequiredFields")}
+                                  </div>
+                                  <p className="text-muted-foreground">
+                                    {item.seed_template.required_fields?.join(
+                                      ", ",
+                                    )}
+                                  </p>
+                                </div>
+                              ) : null}
+                              {item.seed_template.import_command ? (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                    {t("templateImportCommand")}
+                                  </div>
+                                  <code className="block break-all border bg-muted/40 p-2 font-mono text-xs">
+                                    {item.seed_template.import_command}
+                                  </code>
+                                </div>
+                              ) : null}
+                              {item.seed_template.json_template ? (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                    {t("templateJson")}
+                                  </div>
+                                  <pre className="max-h-48 overflow-auto border bg-muted/30 p-2 text-xs">
+                                    {JSON.stringify(
+                                      item.seed_template.json_template,
+                                      null,
+                                      2,
+                                    )}
+                                  </pre>
+                                </div>
+                              ) : null}
+                              {item.seed_template.csv_header ||
+                              item.seed_template.csv_example_rows ? (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                    {t("templateCsv")}
+                                  </div>
+                                  <pre className="max-h-32 overflow-auto border bg-muted/30 p-2 text-xs">
+                                    {[
+                                      item.seed_template.csv_header?.join(","),
+                                      ...(item.seed_template.csv_example_rows ??
+                                        []),
+                                    ]
+                                      .filter(Boolean)
+                                      .join("\n")}
+                                  </pre>
+                                </div>
+                              ) : null}
+                              {(item.seed_template.review_checklist ?? [])
+                                .length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                    {t("templateChecklist")}
+                                  </div>
+                                  <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                                    {item.seed_template.review_checklist?.map(
+                                      (checklistItem) => (
+                                        <li
+                                          key={`${item.id}-${checklistItem.id}`}
+                                        >
+                                          <span className="font-medium text-foreground">
+                                            {checklistItem.label}
+                                          </span>
+                                          {checklistItem.why ? (
+                                            <span> {checklistItem.why}</span>
+                                          ) : null}
+                                        </li>
+                                      ),
+                                    )}
+                                  </ul>
+                                </div>
+                              ) : null}
+                              {(item.seed_template.warnings ?? []).length >
+                              0 ? (
+                                <div className="space-y-1">
+                                  <div className="text-xs font-semibold uppercase text-muted-foreground">
+                                    {t("templateWarnings")}
+                                  </div>
+                                  <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                                    {item.seed_template.warnings?.map(
+                                      (warning) => (
+                                        <li key={`${item.id}-${warning}`}>
+                                          {warning}
+                                        </li>
+                                      ),
+                                    )}
+                                  </ul>
+                                </div>
+                              ) : null}
+                              {item.seed_template.citation_boundary ? (
+                                <p className="border-l-2 pl-3 text-sm text-muted-foreground">
+                                  {item.seed_template.citation_boundary}
+                                </p>
                               ) : null}
                             </div>
-                            {(item.seed_template.target_indicator_codes ?? []).length > 0 ? (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                                  {t("templateTargets")}
-                                </div>
-                                <div className="flex flex-wrap gap-1">
-                                  {item.seed_template.target_indicator_codes?.map((code) => (
-                                    <Badge key={`${item.id}-${code}`} variant="outline" className="text-[10px]">
-                                      {code}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                            {(item.seed_template.required_fields ?? []).length > 0 ? (
-                              <div className="space-y-1 text-sm">
-                                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                                  {t("templateRequiredFields")}
-                                </div>
-                                <p className="text-muted-foreground">
-                                  {item.seed_template.required_fields?.join(", ")}
-                                </p>
-                              </div>
-                            ) : null}
-                            {item.seed_template.import_command ? (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                                  {t("templateImportCommand")}
-                                </div>
-                                <code className="block break-all border bg-muted/40 p-2 font-mono text-xs">
-                                  {item.seed_template.import_command}
-                                </code>
-                              </div>
-                            ) : null}
-                            {item.seed_template.json_template ? (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                                  {t("templateJson")}
-                                </div>
-                                <pre className="max-h-48 overflow-auto border bg-muted/30 p-2 text-xs">
-                                  {JSON.stringify(item.seed_template.json_template, null, 2)}
-                                </pre>
-                              </div>
-                            ) : null}
-                            {item.seed_template.csv_header || item.seed_template.csv_example_rows ? (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                                  {t("templateCsv")}
-                                </div>
-                                <pre className="max-h-32 overflow-auto border bg-muted/30 p-2 text-xs">
-                                  {[
-                                    item.seed_template.csv_header?.join(","),
-                                    ...(item.seed_template.csv_example_rows ?? []),
-                                  ]
-                                    .filter(Boolean)
-                                    .join("\n")}
-                                </pre>
-                              </div>
-                            ) : null}
-                            {(item.seed_template.review_checklist ?? []).length > 0 ? (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                                  {t("templateChecklist")}
-                                </div>
-                                <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                                  {item.seed_template.review_checklist?.map((checklistItem) => (
-                                    <li key={`${item.id}-${checklistItem.id}`}>
-                                      <span className="font-medium text-foreground">{checklistItem.label}</span>
-                                      {checklistItem.why ? <span> {checklistItem.why}</span> : null}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-                            {(item.seed_template.warnings ?? []).length > 0 ? (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold uppercase text-muted-foreground">
-                                  {t("templateWarnings")}
-                                </div>
-                                <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                                  {item.seed_template.warnings?.map((warning) => (
-                                    <li key={`${item.id}-${warning}`}>{warning}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-                            {item.seed_template.citation_boundary ? (
-                              <p className="border-l-2 pl-3 text-sm text-muted-foreground">
-                                {item.seed_template.citation_boundary}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
+                          ) : null}
+                        </FinancialTerminalSurface>
                       );
                     })}
                   </div>
@@ -1733,20 +2198,24 @@ export default async function EvidenceCenterPage({
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
 
       <section className="space-y-3">
         <div>
           <h2 className="text-xl font-semibold">{t("advancedToolsTitle")}</h2>
-          <p className="text-sm text-muted-foreground">{t("advancedToolsDescription")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("advancedToolsDescription")}
+          </p>
         </div>
-        <details className="border border-dashed bg-muted/10 p-4">
+        <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
           <summary className="cursor-pointer text-sm font-semibold text-foreground">
             {t("advancedToolsSummary")}
           </summary>
           <div className="mt-4 space-y-4">
-            <EvidenceSeedImportReview labels={buildSeedImportLabels(seedImportT)} />
+            <EvidenceSeedImportReview
+              labels={buildSeedImportLabels(seedImportT)}
+            />
 
             <ResearchSourceNotebook
               labels={buildNotebookLabels(notebookT)}
@@ -1755,24 +2224,34 @@ export default async function EvidenceCenterPage({
               loadFailed={researchSourceNotesResult.status === "failed"}
             />
 
-            {renderResearchFollowUpQueue(payload.research_follow_up_queue, t, locale)}
+            {renderResearchFollowUpQueue(
+              payload.research_follow_up_queue,
+              t,
+              locale,
+            )}
           </div>
         </details>
       </section>
 
-      <Card className="border-primary/20">
-        <CardHeader>
+      <FinancialTerminalCard>
+        <FinancialTerminalCardHeader>
           <CardTitle>{t("citationBoundaryTitle")}</CardTitle>
           <CardDescription>{t("citationBoundaryDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
+        </FinancialTerminalCardHeader>
+        <FinancialTerminalCardContent>
           <ul className="grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
-            <li className="border p-3">{t("citationBoundaryLocalEvidence")}</li>
-            <li className="border p-3">{t("citationBoundaryGuidanceOnly")}</li>
-            <li className="border p-3">{t("citationBoundaryNoTradingAdvice")}</li>
+            <li className="rounded-md border border-border/70 bg-background/60 p-3">
+              {t("citationBoundaryLocalEvidence")}
+            </li>
+            <li className="rounded-md border border-border/70 bg-background/60 p-3">
+              {t("citationBoundaryGuidanceOnly")}
+            </li>
+            <li className="rounded-md border border-border/70 bg-background/60 p-3">
+              {t("citationBoundaryNoTradingAdvice")}
+            </li>
           </ul>
-        </CardContent>
-      </Card>
+        </FinancialTerminalCardContent>
+      </FinancialTerminalCard>
     </div>
   );
 }
