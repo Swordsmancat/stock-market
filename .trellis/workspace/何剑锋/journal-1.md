@@ -1332,3 +1332,36 @@ Aligned homepage More destination routes with terminal-style shared sections, pr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 41: InStock daily data enhancement phase 1
+
+**Date**: 2026-07-09
+**Task**: InStock daily data enhancement phase 1
+**Branch**: `master`
+
+### Summary
+
+Added provider-backed A-share stock fund-flow, industry/concept sector-flow parameters, and limit-up context with AI Research Desk visibility, no-citation boundaries, docs, specs, and focused/full validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2b78d2f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
