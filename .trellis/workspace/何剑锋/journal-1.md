@@ -1131,3 +1131,37 @@ Added research-only strategy return distribution diagnostics and extended local 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 35: Homepage core index preferences validation
+
+**Date**: 2026-07-09
+**Task**: Homepage core index preferences validation
+**Branch**: `master`
+
+### Summary
+
+Revalidated the homepage core-index preference slice: settings storage, Server Action, settings APIs, localized Settings UI, homepage ticker/core-card ordering, missing-index fallback, and curated homepage exclusions. Current checks passed: message JSON parse, focused Vitest, full web Vitest, TypeScript, and git diff --check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `11b69aa` | (see git log) |
+| `b4b7e99` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
