@@ -4,7 +4,15 @@ from decimal import Decimal
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from packages.domain.models import DailyBar, FundamentalSnapshot, Instrument, Market, TechnicalIndicator
+from packages.domain.models import (
+    DailyBar,
+    FundamentalSnapshot,
+    Instrument,
+    Market,
+    NewsArticle,
+    SentimentSignal,
+    TechnicalIndicator,
+)
 from packages.services.watchlists import get_active_watchlist_scope
 
 
@@ -31,6 +39,9 @@ def screen_local_stock_selection(
     max_william_r: float | None = None,
     min_chip_benefit_ratio: float | None = None,
     max_chip_benefit_ratio: float | None = None,
+    min_news_article_count: int | None = None,
+    required_news_sentiment: str | None = None,
+    min_news_sentiment_confidence: float | None = None,
     watchlist_only: bool = False,
     limit: int = 20,
 ) -> dict[str, object]:
@@ -48,6 +59,9 @@ def screen_local_stock_selection(
         max_william_r=max_william_r,
         min_chip_benefit_ratio=min_chip_benefit_ratio,
         max_chip_benefit_ratio=max_chip_benefit_ratio,
+        min_news_article_count=min_news_article_count,
+        required_news_sentiment=required_news_sentiment,
+        min_news_sentiment_confidence=min_news_sentiment_confidence,
     )
     if not _has_active_criteria(criteria):
         return {
@@ -65,7 +79,7 @@ def screen_local_stock_selection(
             "diagnostics": [
                 {
                     "code": "NO_SELECTION_CRITERIA",
-                    "message": "At least one fundamental or technical selection criterion is required.",
+                    "message": "At least one fundamental, technical, or news selection criterion is required.",
                 }
             ],
             "disclaimer": DISCLAIMER,
@@ -128,6 +142,9 @@ def _criteria_payload(
     max_william_r: float | None,
     min_chip_benefit_ratio: float | None,
     max_chip_benefit_ratio: float | None,
+    min_news_article_count: int | None,
+    required_news_sentiment: str | None,
+    min_news_sentiment_confidence: float | None,
 ) -> dict[str, object]:
     return {
         "max_pe_ratio": max_pe_ratio,
@@ -143,6 +160,9 @@ def _criteria_payload(
         "max_william_r": max_william_r,
         "min_chip_benefit_ratio": min_chip_benefit_ratio,
         "max_chip_benefit_ratio": max_chip_benefit_ratio,
+        "min_news_article_count": min_news_article_count,
+        "required_news_sentiment": _normalize_sentiment(required_news_sentiment),
+        "min_news_sentiment_confidence": min_news_sentiment_confidence,
     }
 
 
@@ -236,30 +256,47 @@ def _evaluate_instrument(
         return _failed_evaluation(symbol=symbol, diagnostics=diagnostics)
     matched_rules.extend(technical_result["matched_rules"])
 
+    news_sentiment = None
+    if _news_criteria_requested(criteria):
+        news_sentiment = _latest_news_sentiment_payload(symbol, session=session)
+        news_result = _evaluate_news_rules(
+            symbol=symbol,
+            news_sentiment=news_sentiment,
+            criteria=criteria,
+        )
+        diagnostics.extend(news_result["diagnostics"])
+        if news_result["failed"]:
+            return _failed_evaluation(symbol=symbol, diagnostics=diagnostics)
+        matched_rules.extend(news_result["matched_rules"])
+
     criteria_count = max(1, len([rule for rule in matched_rules if rule["status"] == "matched"]))
     evidence_citations = _evidence_citations(
         symbol=symbol,
         latest_bar=latest_bar,
         indicators=latest_indicators,
         fundamentals=latest_fundamentals,
+        news_sentiment=news_sentiment,
     )
+    item = {
+        "symbol": symbol,
+        "name": instrument.name,
+        "market": instrument.market.code if instrument.market else None,
+        "asset_type": instrument.asset_type,
+        "score": round(criteria_count / max(1, _active_criteria_count(criteria)), 4),
+        "latest_bar": _serialize_daily_bar(latest_bar),
+        "fundamentals": _serialize_fundamentals(latest_fundamentals),
+        "technical_indicators": latest_indicators["values"],
+        "matched_rules": matched_rules,
+        "evidence_citations": evidence_citations,
+        "research_signal_only": True,
+    }
+    if news_sentiment is not None:
+        item["news_sentiment"] = news_sentiment
 
     return {
         "matched": True,
         "diagnostics": diagnostics,
-        "item": {
-            "symbol": symbol,
-            "name": instrument.name,
-            "market": instrument.market.code if instrument.market else None,
-            "asset_type": instrument.asset_type,
-            "score": round(criteria_count / max(1, _active_criteria_count(criteria)), 4),
-            "latest_bar": _serialize_daily_bar(latest_bar),
-            "fundamentals": _serialize_fundamentals(latest_fundamentals),
-            "technical_indicators": latest_indicators["values"],
-            "matched_rules": matched_rules,
-            "evidence_citations": evidence_citations,
-            "research_signal_only": True,
-        },
+        "item": item,
     }
 
 
@@ -367,6 +404,35 @@ def _evaluate_technical_rules(
             )
         )
 
+    return _rule_result(symbol=symbol, checks=checks)
+
+
+def _evaluate_news_rules(
+    *,
+    symbol: str,
+    news_sentiment: dict[str, object],
+    criteria: dict[str, object],
+) -> dict[str, object]:
+    checks = [
+        _min_rule(
+            "min_news_article_count",
+            "news.article_count",
+            news_sentiment["article_count"],
+            criteria["min_news_article_count"],
+        ),
+        _sentiment_rule(
+            "required_news_sentiment",
+            "news.latest_sentiment",
+            news_sentiment.get("latest_sentiment"),
+            criteria["required_news_sentiment"],
+        ),
+        _min_rule(
+            "min_news_sentiment_confidence",
+            "news.latest_confidence",
+            news_sentiment.get("latest_confidence"),
+            criteria["min_news_sentiment_confidence"],
+        ),
+    ]
     return _rule_result(symbol=symbol, checks=checks)
 
 
@@ -504,6 +570,32 @@ def _boolean_rule(
     }
 
 
+def _sentiment_rule(
+    code: str,
+    field: str,
+    actual: object,
+    threshold: object,
+) -> dict[str, object] | None:
+    if not isinstance(threshold, str) or not threshold:
+        return None
+    actual_value = _normalize_sentiment(actual)
+    if actual_value is None:
+        return {
+            "code": code,
+            "field": field,
+            "status": "missing_value",
+            "actual": actual_value,
+            "threshold": threshold,
+        }
+    return {
+        "code": code,
+        "field": field,
+        "status": "matched" if actual_value == threshold else "not_matched",
+        "actual": actual_value,
+        "threshold": threshold,
+    }
+
+
 def _latest_daily_bar(instrument: Instrument, *, session: Session) -> DailyBar | None:
     return (
         session.query(DailyBar)
@@ -550,6 +642,39 @@ def _latest_fundamental_snapshot(symbol: str, *, session: Session) -> Fundamenta
     )
 
 
+def _latest_news_sentiment_payload(symbol: str, *, session: Session) -> dict[str, object]:
+    rows = (
+        session.query(NewsArticle, SentimentSignal)
+        .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
+        .filter(NewsArticle.symbol == symbol)
+        .order_by(NewsArticle.published_at.desc(), SentimentSignal.created_at.desc())
+        .all()
+    )
+    if not rows:
+        return {
+            "article_count": 0,
+            "latest_sentiment": None,
+            "latest_confidence": None,
+            "latest_published_at": None,
+            "latest_title": None,
+            "latest_source": None,
+            "latest_url": None,
+            "citation_id": None,
+        }
+
+    latest_article, latest_signal = rows[0]
+    return {
+        "article_count": len({article.id for article, _signal in rows}),
+        "latest_sentiment": latest_signal.sentiment,
+        "latest_confidence": _numeric_value(latest_signal.confidence),
+        "latest_published_at": _isoformat_utc(latest_article.published_at),
+        "latest_title": latest_article.title,
+        "latest_source": latest_article.source,
+        "latest_url": latest_article.url,
+        "citation_id": f"news:{symbol}:{latest_article.id}",
+    }
+
+
 def _serialize_daily_bar(row: DailyBar) -> dict[str, object]:
     return {
         "trade_date": row.trade_date.isoformat(),
@@ -582,6 +707,7 @@ def _evidence_citations(
     latest_bar: DailyBar,
     indicators: dict[str, object],
     fundamentals: FundamentalSnapshot | None,
+    news_sentiment: dict[str, object] | None,
 ) -> list[str]:
     citations = [f"bars_1d:{symbol}:{latest_bar.trade_date.isoformat()}"]
     indicator_as_of = indicators.get("as_of")
@@ -589,6 +715,8 @@ def _evidence_citations(
         citations.append(f"technical_indicators:{symbol}:{indicator_as_of}")
     if fundamentals is not None:
         citations.append(f"fundamental_metrics:{symbol}:{fundamentals.as_of.isoformat()}")
+    if news_sentiment is not None and isinstance(news_sentiment.get("citation_id"), str):
+        citations.append(str(news_sentiment["citation_id"]))
     return citations
 
 
@@ -631,6 +759,24 @@ def _normalize_pattern_codes(pattern_codes: list[str] | None) -> list[str]:
         normalized.append(normalized_code)
         seen.add(normalized_code)
     return normalized
+
+
+def _normalize_sentiment(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
+def _news_criteria_requested(criteria: dict[str, object]) -> bool:
+    return any(
+        _criteria_value_is_active(criteria[key])
+        for key in (
+            "min_news_article_count",
+            "required_news_sentiment",
+            "min_news_sentiment_confidence",
+        )
+    )
 
 
 def _normalize_optional_text(value: str | None) -> str | None:

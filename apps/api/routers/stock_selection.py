@@ -30,6 +30,12 @@ def screen_stock_selection(
     max_william_r: float | None = Query(default=None, ge=-100, le=0),
     min_chip_benefit_ratio: float | None = Query(default=None, ge=0, le=1),
     max_chip_benefit_ratio: float | None = Query(default=None, ge=0, le=1),
+    min_news_article_count: int | None = Query(default=None, ge=1),
+    required_news_sentiment: str | None = Query(
+        default=None,
+        description="Optional latest stored sentiment label, such as positive, neutral, or negative.",
+    ),
+    min_news_sentiment_confidence: float | None = Query(default=None, ge=0, le=1),
     watchlist_only: bool = Query(
         default=False,
         description="When true, scan only active instruments in the default watchlist.",
@@ -54,6 +60,9 @@ def screen_stock_selection(
         max_william_r=max_william_r,
         min_chip_benefit_ratio=min_chip_benefit_ratio,
         max_chip_benefit_ratio=max_chip_benefit_ratio,
+        min_news_article_count=min_news_article_count,
+        required_news_sentiment=required_news_sentiment,
+        min_news_sentiment_confidence=min_news_sentiment_confidence,
         watchlist_only=watchlist_only,
         limit=limit,
     )

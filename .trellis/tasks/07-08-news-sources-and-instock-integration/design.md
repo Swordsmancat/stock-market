@@ -343,6 +343,24 @@ project's local screener:
 - avoid provider scans, watchlist mutation, persisted selection results,
   strategy execution, order intents, and buy/sell/hold language.
 
+## Follow-Up Slice: Composite Stock Selection News/Sentiment Criteria
+
+The next incremental stock-selection slice adapts InStock's news/event
+dimension into the existing local evidence screener:
+
+- add criteria for stored news article count, latest stored sentiment label, and
+  latest sentiment confidence;
+- read only local `NewsArticle` plus `SentimentSignal` rows already ingested by
+  reviewed news paths;
+- expose query parameters through the existing `GET /stock-selection/screen`
+  route instead of creating a second screener;
+- include matched local news evidence in `evidence_citations` using a `news:*`
+  citation ID;
+- keep missing news diagnostic-only through `SELECTION_RULE_NOT_MATCHED`;
+- avoid live news/search provider calls, social-candidate persistence,
+  watchlist mutation, persisted selection results, strategy execution, order
+  intents, and buy/sell/hold language.
+
 ## Follow-Up Slice: Single-Symbol Stock / ETF Daily-Bar Jobs
 
 The next data-job slice adapts InStock's daily stock/ETF job shape to this

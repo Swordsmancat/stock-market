@@ -17,6 +17,8 @@ runtime dependency.
   chip-distribution benefit ratio.
 - Implemented feature: watchlist-scoped composite stock selection over active
   default-watchlist entries.
+- Implemented feature: composite stock selection over stored news/sentiment
+  evidence: article count, latest sentiment, and sentiment confidence.
 - Implemented feature: single-symbol daily-bar ingestion can persist stock or
   ETF asset type.
 - Implemented feature: explicit-symbol batch daily-bar ingestion with partial
@@ -202,6 +204,9 @@ The first criteria are:
 - `max_william_r`
 - `min_chip_benefit_ratio`
 - `max_chip_benefit_ratio`
+- `min_news_article_count`
+- `required_news_sentiment`
+- `min_news_sentiment_confidence`
 - `watchlist_only` to limit candidate instruments to active default-watchlist
   entries before criteria evaluation
 
@@ -215,6 +220,12 @@ research-only analysis payload.
 `watchlist_only` is a candidate-scope flag, not evidence. It reads active
 watchlist `symbol`/`market` pairs without provider-backed watchlist enrichment
 and still requires the ordinary stored evidence rows before a symbol can match.
+
+News/sentiment criteria read only stored `NewsArticle` plus `SentimentSignal`
+rows. They do not call live news/search providers, do not persist social search
+candidates, and do not treat social/public-opinion candidates as verified news.
+When matched, the screener includes a `news:*` evidence citation for the stored
+local article used by the latest sentiment rule.
 
 ## Strategy Evaluation API
 

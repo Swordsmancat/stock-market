@@ -153,6 +153,15 @@ git diff --check
 - [x] Preserve stored evidence citations, `research_signal_only=true`, and the non-advice disclaimer.
 - [x] Add focused service/API/watchlist tests and backend spec/runbook coverage.
 
+## InStock Composite Stock Selection News/Sentiment Criteria Slice
+
+- [x] Extend `screen_local_stock_selection` with stored news/sentiment criteria for article count, latest sentiment label, and latest sentiment confidence.
+- [x] Add `GET /stock-selection/screen` query parameters for `min_news_article_count`, `required_news_sentiment`, and `min_news_sentiment_confidence`.
+- [x] Read only stored `NewsArticle` plus `SentimentSignal` rows and avoid live news/search provider calls during screening.
+- [x] Include matched stored-news evidence through `news:*` evidence citations while keeping selection results research-only.
+- [x] Return missing or nonmatching news evidence as diagnostics, not fabricated neutral sentiment.
+- [x] Add focused service/API tests and backend spec/runbook coverage.
+
 ## InStock Single-Symbol Stock / ETF Daily-Bar Job Slice
 
 - [x] Add `asset_type` to `POST /ingestion/symbol-daily-bars`, defaulting to `stock` and supporting `stock` / `etf`.

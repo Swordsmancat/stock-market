@@ -6,7 +6,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
-from packages.domain.models import DailyBar, FundamentalSnapshot, Instrument, Market, TechnicalIndicator
+from packages.domain.models import (
+    DailyBar,
+    FundamentalSnapshot,
+    Instrument,
+    Market,
+    NewsArticle,
+    SentimentSignal,
+    TechnicalIndicator,
+)
 from packages.services.stock_selection import screen_local_stock_selection
 from packages.services.watchlists import upsert_watchlist_item
 from packages.shared.database import Base
@@ -150,6 +158,38 @@ def seed_instrument(
     session.commit()
 
 
+def seed_news_sentiment(
+    session,
+    symbol: str,
+    *,
+    sentiment: str,
+    confidence: float,
+    published_at: datetime | None = None,
+) -> NewsArticle:
+    article = NewsArticle(
+        symbol=symbol,
+        title=f"{symbol} stored news",
+        url=f"https://example.com/{symbol.lower()}-stored-news",
+        source="test_news",
+        published_at=published_at or datetime(2026, 1, 21, tzinfo=timezone.utc),
+        summary=f"{symbol} stored news summary",
+        dedupe_hash=f"{symbol.lower()}-{sentiment}-stored-news",
+    )
+    session.add(article)
+    session.flush()
+    session.add(
+        SentimentSignal(
+            article_id=article.id,
+            symbol=symbol,
+            sentiment=sentiment,
+            confidence=Decimal(str(confidence)),
+            reason="test fixture",
+        )
+    )
+    session.commit()
+    return article
+
+
 def _candlestick_payload(pattern_codes: list[str]) -> dict[str, object]:
     return {
         "rule_set": "candlestick_patterns_v1",
@@ -279,6 +319,73 @@ def test_stock_selection_matches_stored_technical_evidence_criteria():
     )
 
 
+def test_stock_selection_matches_stored_news_sentiment_criteria():
+    session = make_session()
+    seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0)
+    seed_instrument(session, "MSFT", close=112.0, ma=100.0, rsi=58.0)
+    aapl_news = seed_news_sentiment(session, "AAPL", sentiment="positive", confidence=0.82)
+    seed_news_sentiment(session, "MSFT", sentiment="negative", confidence=0.91)
+
+    payload = screen_local_stock_selection(
+        session=session,
+        symbols=["AAPL", "MSFT"],
+        min_news_article_count=1,
+        required_news_sentiment="Positive",
+        min_news_sentiment_confidence=0.75,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["criteria"]["required_news_sentiment"] == "positive"
+    assert payload["count"] == 1
+    item = payload["items"][0]
+    assert item["symbol"] == "AAPL"
+    assert item["news_sentiment"]["article_count"] == 1
+    assert item["news_sentiment"]["latest_sentiment"] == "positive"
+    assert item["news_sentiment"]["latest_confidence"] == 0.82
+    assert item["news_sentiment"]["citation_id"] == f"news:AAPL:{aapl_news.id}"
+    assert f"news:AAPL:{aapl_news.id}" in item["evidence_citations"]
+    assert {rule["code"] for rule in item["matched_rules"]} == {
+        "min_news_article_count",
+        "required_news_sentiment",
+        "min_news_sentiment_confidence",
+    }
+    assert any(
+        diagnostic["symbol"] == "MSFT"
+        and diagnostic["rule"] == "required_news_sentiment"
+        and diagnostic["details"]["actual"] == "negative"
+        for diagnostic in payload["diagnostics"]
+    )
+
+
+def test_stock_selection_reports_missing_news_without_fabricating_match():
+    session = make_session()
+    seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0)
+
+    payload = screen_local_stock_selection(
+        session=session,
+        symbols=["AAPL"],
+        min_news_article_count=1,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["items"] == []
+    assert payload["diagnostics"] == [
+        {
+            "symbol": "AAPL",
+            "code": "SELECTION_RULE_NOT_MATCHED",
+            "rule": "min_news_article_count",
+            "message": "A requested stock-selection criterion was not matched.",
+            "details": {
+                "code": "min_news_article_count",
+                "field": "news.article_count",
+                "status": "not_matched",
+                "actual": 0.0,
+                "threshold": 1.0,
+            },
+        }
+    ]
+
+
 def test_stock_selection_reports_missing_technical_evidence_without_fabricating_match():
     session = make_session()
     seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0, mfi=None)
@@ -340,6 +447,9 @@ def test_stock_selection_requires_at_least_one_criterion():
     assert payload["status"] == "invalid_request"
     assert payload["items"] == []
     assert payload["diagnostics"][0]["code"] == "NO_SELECTION_CRITERIA"
+    assert payload["diagnostics"][0]["message"] == (
+        "At least one fundamental, technical, or news selection criterion is required."
+    )
 
 
 def test_stock_selection_reports_missing_fundamentals_without_fabricating_match():

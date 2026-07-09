@@ -8,7 +8,15 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
-from packages.domain.models import DailyBar, FundamentalSnapshot, Instrument, Market, TechnicalIndicator
+from packages.domain.models import (
+    DailyBar,
+    FundamentalSnapshot,
+    Instrument,
+    Market,
+    NewsArticle,
+    SentimentSignal,
+    TechnicalIndicator,
+)
 from packages.shared.database import Base, get_session
 
 
@@ -142,6 +150,31 @@ def seed_selection_fixture(session) -> None:
     session.commit()
 
 
+def seed_news_sentiment(session, symbol: str, sentiment: str, confidence: float) -> NewsArticle:
+    article = NewsArticle(
+        symbol=symbol,
+        title=f"{symbol} stored news",
+        url=f"https://example.com/{symbol.lower()}-stored-news",
+        source="test_news",
+        published_at=datetime(2026, 1, 21, tzinfo=timezone.utc),
+        summary=f"{symbol} stored news summary",
+        dedupe_hash=f"{symbol.lower()}-{sentiment}-api-news",
+    )
+    session.add(article)
+    session.flush()
+    session.add(
+        SentimentSignal(
+            article_id=article.id,
+            symbol=symbol,
+            sentiment=sentiment,
+            confidence=Decimal(str(confidence)),
+            reason="test fixture",
+        )
+    )
+    session.commit()
+    return article
+
+
 def test_stock_selection_api_screens_local_composite_criteria():
     session = make_session()
     seed_selection_fixture(session)
@@ -201,6 +234,45 @@ def test_stock_selection_api_screens_local_composite_criteria():
     ]
 
 
+def test_stock_selection_api_screens_stored_news_sentiment_criteria():
+    session = make_session()
+    seed_selection_fixture(session)
+    article = seed_news_sentiment(session, "AAPL", "positive", 0.82)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/stock-selection/screen",
+            params={
+                "symbols": "AAPL",
+                "min_news_article_count": 1,
+                "required_news_sentiment": "positive",
+                "min_news_sentiment_confidence": 0.75,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["count"] == 1
+    item = payload["items"][0]
+    assert item["symbol"] == "AAPL"
+    assert item["news_sentiment"]["latest_sentiment"] == "positive"
+    assert item["news_sentiment"]["latest_confidence"] == 0.82
+    assert f"news:AAPL:{article.id}" in item["evidence_citations"]
+    assert {rule["code"] for rule in item["matched_rules"]} == {
+        "min_news_article_count",
+        "required_news_sentiment",
+        "min_news_sentiment_confidence",
+    }
+
+
 def test_stock_selection_api_rejects_empty_criteria():
     session = make_session()
     seed_selection_fixture(session)
@@ -216,4 +288,7 @@ def test_stock_selection_api_rejects_empty_criteria():
         app.dependency_overrides.clear()
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "At least one fundamental or technical selection criterion is required."
+    assert (
+        response.json()["detail"]
+        == "At least one fundamental, technical, or news selection criterion is required."
+    )

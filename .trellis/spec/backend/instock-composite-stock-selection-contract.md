@@ -35,6 +35,10 @@
   - `max_william_r`
   - `min_chip_benefit_ratio`
   - `max_chip_benefit_ratio`
+  - `min_news_article_count`
+  - `required_news_sentiment`: latest stored sentiment label, such as
+    `positive`, `neutral`, or `negative`.
+  - `min_news_sentiment_confidence`
   - `watchlist_only`: when `true`, candidate instruments are limited to active
     entries from the default watchlist before criteria evaluation.
   - `limit`, bounded to `1..100`.
@@ -48,18 +52,24 @@
   - `Instrument` scope;
   - latest stored `DailyBar`;
   - latest stored `TechnicalIndicator` values;
-  - latest stored `FundamentalSnapshot`.
+  - latest stored `FundamentalSnapshot`;
+  - stored `NewsArticle` plus `SentimentSignal` rows when news/sentiment
+    criteria are requested.
 - Technical criteria may inspect stored scalar indicators (`rsi`, `mfi`,
   `william_r`) and reviewed nested indicator payloads
   (`candlestick_patterns.patterns[]`, `chip_distribution.benefit_ratio`).
 - `watchlist_only` is a candidate-scope control, not a selection criterion and
   not citable evidence. It must read only active default-watchlist
   `symbol`/`market` pairs without triggering provider enrichment.
+- News/sentiment criteria must read only stored local news rows. They must not
+  call live search providers, news ingestion, social-candidate persistence, or
+  provider fallback while screening.
 - At least one selection criterion is required. Empty criteria returns HTTP 400
   at the API boundary and an `invalid_request` service payload.
 - Missing local evidence must produce diagnostics and no fabricated match.
 - Matching items may expose evidence citation IDs for the stored rows used:
-  `bars_1d:*`, `technical_indicators:*`, and `fundamental_metrics:*`.
+  `bars_1d:*`, `technical_indicators:*`, `fundamental_metrics:*`, and
+  `news:*` when news criteria are active and stored news exists.
 - Payloads include `candidate_scope` with normalized `symbols`, optional
   `market`, and `watchlist_only` so callers can audit the scanned universe.
 - The stock-selection result itself is a research analysis payload, not a stored
@@ -81,6 +91,12 @@
   `SELECTION_RULE_NOT_MATCHED` with `missing_pattern_codes`, no match.
 - Missing nested chip-distribution payload or `benefit_ratio` -> diagnostic
   `SELECTION_RULE_NOT_MATCHED` with `missing_value`, no match.
+- News article-count criterion requested but no stored news -> diagnostic
+  `SELECTION_RULE_NOT_MATCHED` with actual count `0`, no match.
+- Required latest sentiment missing or different -> diagnostic
+  `SELECTION_RULE_NOT_MATCHED` with `missing_value` or `not_matched`, no match.
+- Minimum latest sentiment confidence missing or too low -> diagnostic
+  `SELECTION_RULE_NOT_MATCHED`, no match.
 - No stored daily bar -> diagnostic `MISSING_DAILY_BAR`, no match.
 - A criterion fails -> diagnostic `SELECTION_RULE_NOT_MATCHED`, no match.
 - `watchlist_only=true` with an empty active watchlist -> no candidates and an
@@ -95,14 +111,21 @@
 - Good: `/stock-selection/screen?symbols=AAPL&required_pattern_codes=hammer&min_mfi=50&max_william_r=-10&min_chip_benefit_ratio=0.6`
   returns AAPL only when those stored technical-indicator payloads are present
   and satisfy the thresholds.
+- Good: `/stock-selection/screen?symbols=AAPL&min_news_article_count=1&required_news_sentiment=positive&min_news_sentiment_confidence=0.7`
+  returns AAPL only when stored `NewsArticle` / `SentimentSignal` evidence
+  satisfies those local criteria.
 - Good: a symbol without fundamentals is skipped with diagnostics instead of a
   fake valuation metric.
+- Good: a symbol without stored news is skipped with diagnostics instead of
+  fetching live news inside the screener.
 - Base: scanning by `market=US` without `symbols` uses stored active instruments
   only and does not fetch provider data.
 - Base: `watchlist_only=true` narrows the scan to stored active watchlist
   entries but still requires ordinary stored market/fundamental/technical rows
   before a symbol can match.
 - Bad: the endpoint calls a live provider for every listed symbol.
+- Bad: the endpoint calls `/news/search`, `/news/search-ingest`, yfinance news,
+  or another live provider to satisfy news criteria.
 - Bad: watchlist enrichment runs provider-backed price lookups before candidate
   scoping.
 - Bad: a selected symbol is described as a buy recommendation, target allocation,
@@ -113,10 +136,11 @@
 
 - Service tests assert matching across fundamental and technical criteria,
   duplicate symbol normalization, evidence citations, failed criteria diagnostics,
-  missing fundamentals diagnostics, watchlist-only candidate scoping, and
-  no-criteria validation.
+  missing fundamentals diagnostics, stored news/sentiment criteria, missing news
+  diagnostics, watchlist-only candidate scoping, and no-criteria validation.
 - API tests assert route registration, query parsing, HTTP 400 for no criteria,
-  `candidate_scope.watchlist_only`, and `research_signal_only=true`.
+  news/sentiment query fields, `candidate_scope.watchlist_only`, and
+  `research_signal_only=true`.
 - Focused validation should include:
   `pytest tests/services/test_stock_selection.py tests/api/test_stock_selection_api.py`,
   ruff on touched stock-selection files, full backend pytest, and
