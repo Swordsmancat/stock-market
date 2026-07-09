@@ -34,8 +34,8 @@ export function FinancialPageHeader({
   warningPanel,
 }: FinancialPageHeaderProps) {
   return (
-    <Card className="overflow-hidden border-primary/15 bg-card shadow-sm">
-      <div className="border-b bg-background/95 p-3 sm:p-4">
+    <Card className="overflow-hidden rounded-md border-primary/20 bg-card/95 shadow-[0_0_0_1px_hsl(var(--primary)/0.04)]">
+      <div className="border-b bg-background/60 p-3 sm:p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -54,7 +54,7 @@ export function FinancialPageHeader({
         </div>
       </div>
       <CardContent className="p-0">
-        <div className="grid divide-y bg-muted/10 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
+        <div className="grid divide-y bg-background/25 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
           {metrics.map((metric) => (
             <div key={metric.label} className="min-w-0 space-y-1 p-3">
               <div className="text-[11px] font-medium uppercase text-muted-foreground">{metric.label}</div>

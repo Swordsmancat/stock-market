@@ -96,6 +96,27 @@ If a badge intentionally repeats the title text, tests should target the semanti
 
 Use page tests to assert both sides of the contract: the curated market sections render, and deep modules such as `AI research brief`, `Followed K-line charts`, `Daily Report`, and `Technical Indicators` do not render on the homepage. When moving a deep module off the homepage, also add or update the owning submodule test so the feature is still visible in its routed home, for example AI workflows under AI Research, comparison/K-line workflows under Instruments, and reports or report history under Reports or Instrument Detail.
 
+### Convention: Terminal Dashboard Homepage
+
+**What**: The homepage is the first-run terminal dashboard. Keep the app's first-run theme default set to dark, keep the top ticker and homepage panels dense, and use compact tables/cards with lightweight SVG sparklines or status bars when existing payloads already contain the data.
+
+**Why**: The homepage should match the product's market-terminal direction without turning into a marketing page or duplicating deep research workflows.
+
+**Provider strip contract**: The homepage news/provider status strip reads from `getPlatformSettings().news_search_provider_capabilities`. It may display `display_name`, `enabled`, `configured`, `credential_required`, `credential_configured`, `implementation_status`, and `priority`. It must not expose `news_search_provider_keys`; public settings already redact key values.
+
+**Citation boundary**: News search providers on the homepage are readiness/status signals only. Search results become citable evidence only after they are stored locally as `NewsArticle` rows or another approved local evidence record.
+
+**Example**:
+
+```tsx
+const newsSearchProviderCapabilities =
+  platformSettings.news_search_provider_capabilities ?? [];
+
+<NewsProviderStrip providers={newsSearchProviderCapabilities} />
+```
+
+Tests should assert that the provider strip renders at least one configured provider and one setup/degraded state when the fixture includes both.
+
 ---
 
 ## Accessibility

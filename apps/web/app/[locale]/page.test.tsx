@@ -73,6 +73,44 @@ function buildPlatformSettings(overrides: Record<string, unknown> = {}) {
     llm_api_key_configured: false,
     tushare_token_configured: false,
     market_data_provider_capabilities: [],
+    news_search_provider_capabilities: [
+      {
+        provider: "anspire",
+        display_name: "Anspire AI Search",
+        enabled: true,
+        configured: true,
+        credential_required: true,
+        credential_configured: true,
+        credential_field: "api_key",
+        priority: 1,
+        supported_markets: ["A-share", "US", "HK"],
+        supported_regions: ["CN", "US", "HK"],
+        supported_result_kinds: ["news", "web", "public_opinion"],
+        default_timeout_seconds: 8,
+        default_max_results: 10,
+        implementation_status: "implemented",
+        readiness_note: "Bearer-auth search adapter.",
+        citation_caveat: "Search results become citable only after local storage.",
+      },
+      {
+        provider: "serpapi_baidu",
+        display_name: "SerpAPI Baidu",
+        enabled: true,
+        configured: false,
+        credential_required: true,
+        credential_configured: false,
+        credential_field: "api_key",
+        priority: 2,
+        supported_markets: ["A-share", "HK", "China"],
+        supported_regions: ["CN"],
+        supported_result_kinds: ["news", "web", "social"],
+        default_timeout_seconds: 8,
+        default_max_results: 10,
+        implementation_status: "implemented",
+        readiness_note: "Baidu search adapter.",
+        citation_caveat: "Collection candidates until stored locally.",
+      },
+    ],
     ...overrides,
   };
 }
@@ -827,6 +865,10 @@ it("renders stock analysis dashboard data from backend APIs", async () => {
   expect(screen.getAllByText("Latest News").length).toBeGreaterThan(0);
   expect(screen.getByText("Apple reports strong growth in services revenue")).toBeInTheDocument();
   expect(screen.getByText("Important signals")).toBeInTheDocument();
+  expect(screen.getByText("News source status")).toBeInTheDocument();
+  expect(screen.getByText("Anspire AI Search")).toBeInTheDocument();
+  expect(screen.getByText("SerpAPI Baidu")).toBeInTheDocument();
+  expect(screen.getByText("Needs key")).toBeInTheDocument();
   expect(screen.getAllByText("Market data health").length).toBeGreaterThan(0);
   expect(screen.getByText("0 triggered rules")).toBeInTheDocument();
   expect(screen.getByText("Latest run: succeeded")).toBeInTheDocument();

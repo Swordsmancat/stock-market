@@ -11,6 +11,7 @@ type TickerItem = {
   close: number | null;
   change: number | null;
   changePercent: number | null;
+  sparkline?: number[];
   region?: string;
   status?: string | null;
   freshness?: string | null;
@@ -68,6 +69,59 @@ function getTickerMovementColor(value: number, getMovementColor: (value: number)
   return getMovementColor(value);
 }
 
+function buildSparklinePath(values: number[], width: number, height: number): string | null {
+  const points = values.filter((value) => Number.isFinite(value));
+  if (points.length < 2) {
+    return null;
+  }
+
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  return points
+    .map((value, index) => {
+      const x = (index / (points.length - 1)) * width;
+      const y = height - ((value - min) / range) * height;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function Sparkline({
+  values,
+  movement,
+}: {
+  values: number[] | undefined;
+  movement: number;
+}) {
+  const width = 124;
+  const height = 34;
+  const path = buildSparklinePath(values ?? [], width, height);
+  const movementClassName = movement < 0 ? "stroke-negative" : movement > 0 ? "stroke-positive" : "stroke-muted-foreground";
+
+  return (
+    <svg
+      className="mt-2 h-9 w-full overflow-visible"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={`M0,${height - 3} L${width},${height - 3}`} className="stroke-border" strokeWidth="1" strokeDasharray="2 5" />
+      {path ? (
+        <path
+          d={path}
+          className={movementClassName}
+          fill="none"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+    </svg>
+  );
+}
+
 function MarketTickerComponent({ items, labels, className }: MarketTickerProps) {
   const locale = "zh-CN";
   const [selectedMarket, setSelectedMarket] = useState<string>("all");
@@ -104,12 +158,12 @@ function MarketTickerComponent({ items, labels, className }: MarketTickerProps) 
   return (
     <div
       className={cn(
-        "border-b bg-background/95 text-foreground",
+        "rounded-md border bg-card/95 text-foreground shadow-[0_0_0_1px_hsl(var(--primary)/0.05)]",
         className
       )}
     >
-      <div className="flex items-center gap-3 overflow-hidden px-3 py-2 sm:px-4">
-        <div className="flex shrink-0 items-center gap-1 rounded-sm border bg-card p-0.5">
+      <div className="flex flex-col gap-2 overflow-hidden p-2 lg:flex-row lg:items-stretch">
+        <div className="flex shrink-0 items-center gap-1 rounded-sm border bg-background/70 p-0.5 lg:self-start">
           {marketOptions.map((option) => {
             const isSelected = selectedMarket === option.value;
             return (
@@ -118,7 +172,7 @@ function MarketTickerComponent({ items, labels, className }: MarketTickerProps) 
                 type="button"
                 aria-pressed={isSelected}
                 className={cn(
-                  "h-7 rounded-sm px-2 text-xs font-medium transition-colors hover:bg-muted",
+                  "h-8 rounded-sm px-2 text-xs font-medium transition-colors hover:bg-accent",
                   isSelected ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground",
                 )}
                 onClick={() => setSelectedMarket(option.value)}
@@ -130,7 +184,7 @@ function MarketTickerComponent({ items, labels, className }: MarketTickerProps) 
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 max-w-full gap-3 overflow-x-auto whitespace-nowrap scrollbar-thin [contain:layout_paint]">
+          <div className="flex min-w-0 max-w-full gap-2 overflow-x-auto whitespace-nowrap scrollbar-thin [contain:layout_paint]">
             {filteredItems.map((item) => {
               const changeValue = item.change ?? 0;
               const changeColor = getTickerMovementColor(changeValue, getMovementColor);
@@ -149,18 +203,18 @@ function MarketTickerComponent({ items, labels, className }: MarketTickerProps) 
               return (
                 <div
                   key={item.code}
-                  className="inline-flex min-w-[15rem] items-center gap-2 rounded-sm border bg-card px-2 py-1 font-mono text-sm"
+                  className="inline-flex min-h-[7.25rem] w-[13.5rem] shrink-0 flex-col rounded-sm border bg-background/60 px-2.5 py-2 font-mono text-sm transition-colors hover:border-primary/30 hover:bg-accent/50"
                   title={trustTitle}
                   aria-label={`${item.name} ${trustTitle}`}
                 >
-                  <span className="truncate font-sans text-muted-foreground">{item.name}</span>
-                  <span className="shrink-0 font-bold">
+                  <span className="min-w-0 truncate font-sans text-xs font-medium text-muted-foreground">{item.name}</span>
+                  <span className="mt-1 shrink-0 text-xl font-semibold tabular-nums">
                     {formatNumber(item.close, locale, "--")}
                   </span>
-                  <span className={cn("shrink-0", changeColor)}>
-                    {formatChange(item.change, locale, "--")}{" "}
-                    ({formatPercent(item.changePercent, locale, "--")})
+                  <span className={cn("mt-0.5 shrink-0 text-xs tabular-nums", changeColor)}>
+                    {formatChange(item.change, locale, "--")} ({formatPercent(item.changePercent, locale, "--")})
                   </span>
+                  <Sparkline values={item.sparkline} movement={changeValue} />
                   <span className="sr-only">{trustTitle}</span>
                 </div>
               );

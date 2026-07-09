@@ -11,7 +11,7 @@ export function MobileNavigation() {
   const t = useTranslations("Navigation");
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/80 bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_0_hsl(var(--primary)/0.12)] backdrop-blur md:hidden">
       <ul className="flex overflow-x-auto px-1.5 py-1 scrollbar-thin">
         {NAVIGATION_ITEMS.map((item) => {
           const isActive =
@@ -23,7 +23,7 @@ export function MobileNavigation() {
                 href={item.href as any}
                 className={cn(
                   "flex min-h-12 min-w-[4.6rem] flex-col items-center justify-center gap-1 rounded-sm border border-transparent px-1 py-1.5 text-[10px] transition-colors duration-200",
-                  isActive ? "border-primary/20 bg-primary/10 text-primary font-medium" : "text-muted-foreground",
+                  isActive ? "border-primary/30 bg-primary/15 text-primary font-medium" : "text-muted-foreground",
                 )}
               >
                 <item.icon className="h-4 w-4" />

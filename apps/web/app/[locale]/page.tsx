@@ -1,5 +1,6 @@
 import { Link } from "@/src/i18n/routing";
-import { TrendingUp, Activity, Newspaper, Bell } from "lucide-react";
+import type { ReactNode } from "react";
+import { TrendingUp, Activity, Newspaper, Bell, Search, Settings2, ShieldCheck, CircleAlert } from "lucide-react";
 
 import { FlashBanner } from "@/components/flash-banner";
 import { FinancialDashboardHero } from "@/components/financial-dashboard-hero";
@@ -17,6 +18,7 @@ import {
   DEFAULT_FAVORITE_MACRO_INDICATOR_CODES,
   getPlatformSettings,
   type HomeIndexDisplayField,
+  type NewsSearchProviderCapability,
 } from "@/lib/platform-settings-store";
 import { backendFetch } from "@/lib/backend-api";
 import type {
@@ -692,6 +694,120 @@ function buildHomeIndexItems(
   return requestedCodes.map((code) => availableByCode.get(code) ?? buildMissingDashboardIndexItem(code));
 }
 
+function buildSparklinePath(values: number[], width: number, height: number): string | null {
+  const points = values.filter((value) => Number.isFinite(value));
+  if (points.length < 2) {
+    return null;
+  }
+
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  return points
+    .map((value, index) => {
+      const x = (index / (points.length - 1)) * width;
+      const y = height - ((value - min) / range) * height;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function MiniSparkline({
+  bars,
+  movementValue,
+}: {
+  bars: DashboardBarItem[];
+  movementValue: number;
+}) {
+  const width = 148;
+  const height = 42;
+  const path = buildSparklinePath(bars.map((bar) => bar.close), width, height);
+  const strokeClassName = movementValue < 0 ? "stroke-negative" : movementValue > 0 ? "stroke-positive" : "stroke-muted-foreground";
+
+  return (
+    <svg
+      className="mt-3 h-11 w-full overflow-visible"
+      viewBox={`0 0 ${width} ${height}`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={`M0,${height - 4} L${width},${height - 4}`} className="stroke-border" strokeWidth="1" strokeDasharray="3 6" />
+      {path ? (
+        <path
+          d={path}
+          className={strokeClassName}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+        />
+      ) : null}
+    </svg>
+  );
+}
+
+function TerminalPanel({
+  title,
+  description,
+  icon,
+  action,
+  children,
+  className = "",
+  titleId,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  icon?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  titleId?: string;
+}) {
+  return (
+    <Card className={`overflow-hidden rounded-md border bg-card/95 shadow-[0_0_0_1px_hsl(var(--primary)/0.04)] ${className}`}>
+      <CardHeader className="border-b bg-background/55 px-3 py-2.5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle id={titleId} className="flex items-center gap-2 text-base">
+              {icon}
+              <span className="truncate">{title}</span>
+            </CardTitle>
+            {description ? <CardDescription className="mt-1 text-xs">{description}</CardDescription> : null}
+          </div>
+          {action ? <div className="shrink-0">{action}</div> : null}
+        </div>
+      </CardHeader>
+      <CardContent className="p-3">{children}</CardContent>
+    </Card>
+  );
+}
+
+function getNewsProviderStatusKey(capability: NewsSearchProviderCapability): string {
+  if (!capability.enabled) {
+    return "newsProviderStatusDisabled";
+  }
+  if (capability.credential_required && !capability.credential_configured) {
+    return "newsProviderStatusNeedsSetup";
+  }
+  if (["implemented", "existing", "mock"].includes(capability.implementation_status)) {
+    return "newsProviderStatusReady";
+  }
+  return "newsProviderStatusRegistered";
+}
+
+function getNewsProviderStatusClassName(capability: NewsSearchProviderCapability): string {
+  if (!capability.enabled) {
+    return "border-muted text-muted-foreground";
+  }
+  if (capability.credential_required && !capability.credential_configured) {
+    return "border-warning/40 bg-warning/10 text-warning";
+  }
+  if (["implemented", "existing", "mock"].includes(capability.implementation_status)) {
+    return "border-positive/40 bg-positive/10 text-positive";
+  }
+  return "border-primary/35 bg-primary/10 text-primary";
+}
+
 function getOfficialMacroProviderStatus(
   payload: OfficialMacroSourceStatusPayload | null,
   provider: "fred" | "world_bank",
@@ -853,6 +969,7 @@ export default async function HomePage({
     close: item.latest?.close ?? null,
     change: item.latest?.movement?.absolute_change ?? null,
     changePercent: item.latest?.movement?.percent_change ?? null,
+    sparkline: item.bars.map((bar) => bar.close),
     status: item.status,
     freshness: item.freshness,
     source: item.source ?? null,
@@ -866,6 +983,7 @@ export default async function HomePage({
   const macroTotalCount = favoriteMacroIndicatorRows.length;
   const missingHealthCount = dashboardHealthCounts.no_data + dashboardHealthCounts.unavailable;
   const hotSectorItemsForHome = hotSectors.slice(0, 4);
+  const newsSearchProviderCapabilities = platformSettings.news_search_provider_capabilities ?? [];
   const latestNewsConfidence = latestNews ? (latestNews.confidence * 100).toFixed(0) : null;
   const homepageMetrics = [
     {
@@ -891,7 +1009,7 @@ export default async function HomePage({
   ];
 
   return (
-    <div className="space-y-0 overflow-x-hidden">
+    <div className="space-y-3 overflow-x-hidden">
       {tickerItems.length > 0 && (
         <MarketTicker
           items={tickerItems}
@@ -904,7 +1022,7 @@ export default async function HomePage({
         />
       )}
 
-      <div className="space-y-6 p-3 sm:p-4 lg:p-6">
+      <div className="space-y-3">
         {flash.ingest === "ok" ? (
           <FlashBanner
             variant="success"
@@ -995,23 +1113,19 @@ export default async function HomePage({
         ) : null}
 
         <section className="space-y-4" aria-labelledby="core-market-indices-heading">
-          <Card className="rounded-none border-x-0">
-            <CardHeader className="pb-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <CardTitle id="core-market-indices-heading" className="text-lg">
-                    {t("coreIndicesTitle")}
-                  </CardTitle>
-                  <CardDescription className="text-xs">{t("homeCoreIndicesDesc")}</CardDescription>
-                </div>
-                <Badge variant="outline" className="w-fit text-[10px]">
-                  {t("homePrimaryInstrument", { symbol: primaryInstrument.symbol })}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
+          <TerminalPanel
+            title={t("coreIndicesTitle")}
+            titleId="core-market-indices-heading"
+            description={t("homeCoreIndicesDesc")}
+            icon={<TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />}
+            action={
+              <Badge variant="outline" className="w-fit text-[10px]">
+                {t("homePrimaryInstrument", { symbol: primaryInstrument.symbol })}
+              </Badge>
+            }
+          >
               {coreMarketIndexItems.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                   {coreMarketIndexItems.map((item) => {
                     const movement = item.latest?.movement ?? null;
                     const movementValue = movement?.absolute_change ?? 0;
@@ -1019,7 +1133,7 @@ export default async function HomePage({
                     const indexName = locale === "zh" ? item.name_zh ?? item.name : item.name;
                     const providerLabel = item.effective_provider ?? item.provider ?? item.source ?? t("unavailableShort");
                     return (
-                      <div key={item.code} className="rounded-none border bg-background p-3">
+                      <div key={item.code} className="min-h-[10.5rem] rounded-sm border bg-background/60 p-3 transition-colors hover:border-primary/30 hover:bg-accent/40">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold">{indexName}</div>
@@ -1059,6 +1173,7 @@ export default async function HomePage({
                             {t("homeIndexProvider", { provider: providerLabel })}
                           </div>
                         ) : null}
+                        <MiniSparkline bars={item.bars} movementValue={movementValue} />
                         {item.isConfiguredMissing ? (
                           <p className="mt-2 text-xs text-muted-foreground">
                             {t("homeIndexPayloadMissing", { code: item.code })}
@@ -1071,66 +1186,50 @@ export default async function HomePage({
               ) : (
                 <p className="text-sm text-muted-foreground">{t("noCoreIndices")}</p>
               )}
-            </CardContent>
-          </Card>
+          </TerminalPanel>
         </section>
 
         <section className="space-y-4" aria-labelledby="macro-watch-heading">
-          <Card className="rounded-none border-x-0 border-cyan-200/70 dark:border-cyan-900/60">
-            <CardHeader className="pb-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <CardTitle id="macro-watch-heading" className="text-lg">
-                    {t("favoriteMacroTitle")}
-                  </CardTitle>
-                  <CardDescription className="text-xs">{t("favoriteMacroDesc")}</CardDescription>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className="text-[10px]">
-                    {t("homeMacroMetricDesc", { available: availableMacroCount, total: macroTotalCount })}
-                  </Badge>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/settings">{t("favoriteMacroSettingsLink")}</Link>
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/evidence">{t("favoriteMacroDetailLink")}</Link>
-                  </Button>
-                </div>
+          <TerminalPanel
+            title={t("favoriteMacroTitle")}
+            titleId="macro-watch-heading"
+            description={t("favoriteMacroDesc")}
+            icon={<Activity className="h-4 w-4 text-primary" aria-hidden="true" />}
+            action={
+              <div className="flex flex-wrap justify-end gap-2">
+                <Badge variant="outline" className="text-[10px]">
+                  {t("homeMacroMetricDesc", { available: availableMacroCount, total: macroTotalCount })}
+                </Badge>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/settings">{t("favoriteMacroSettingsLink")}</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/evidence">{t("favoriteMacroDetailLink")}</Link>
+                </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {favoriteMacroIndicatorRows.map(({ code, item }) => {
-                  const isAvailable = item?.status === "ok";
-                  const displayName = item?.name ?? code;
-                  const sourceOrGap = item
-                    ? isAvailable
-                      ? t("favoriteMacroSource", { source: item.source ?? t("unavailableShort") })
-                      : t("favoriteMacroSourceGap", {
-                          reason: item.no_data_reason ?? t("indicatorNoData"),
-                        })
-                    : t("favoriteMacroSourceGap", { reason: t("favoriteMacroPayloadMissing") });
-                  const nextAction = getFavoriteMacroNextAction(code, item);
-                  return (
-                    <div key={code} className="rounded-none border bg-background p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold">{displayName}</div>
-                          <div className="mt-1 text-[10px] text-muted-foreground">
-                            {t("favoriteMacroCode", { code })}
-                          </div>
-                        </div>
-                        <Badge variant={isAvailable ? "secondary" : "outline"} className="shrink-0 text-[10px]">
-                          {isAvailable ? t("available") : t("no_data")}
-                        </Badge>
-                      </div>
-                      <div className="mt-3 font-mono text-2xl font-semibold tabular-nums">
-                        {item ? formatValuationIndicatorValue(item, locale, t("unavailableShort")) : t("unavailableShort")}
-                      </div>
+            }
+          >
+            <div className="overflow-hidden rounded-sm border">
+              {favoriteMacroIndicatorRows.map(({ code, item }) => {
+                const isAvailable = item?.status === "ok";
+                const displayName = item?.name ?? code;
+                const sourceOrGap = item
+                  ? isAvailable
+                    ? t("favoriteMacroSource", { source: item.source ?? t("unavailableShort") })
+                    : t("favoriteMacroSourceGap", {
+                        reason: item.no_data_reason ?? t("indicatorNoData"),
+                      })
+                  : t("favoriteMacroSourceGap", { reason: t("favoriteMacroPayloadMissing") });
+                const nextAction = getFavoriteMacroNextAction(code, item);
+                return (
+                  <div
+                    key={code}
+                    className="grid gap-3 border-b bg-background/50 p-3 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_8rem_minmax(0,1fr)] md:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{displayName}</div>
                       <div className="mt-1 text-[10px] text-muted-foreground">
-                        {t("valuationAsOf", {
-                          date: item ? formatDashboardDate(item.as_of, locale, t("unavailableShort")) : t("unavailableShort"),
-                        })}
+                        {t("favoriteMacroCode", { code })}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
                         {item?.region ? (
@@ -1144,19 +1243,34 @@ export default async function HomePage({
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">{sourceOrGap}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-mono text-xl font-semibold tabular-nums">
+                        {item ? formatValuationIndicatorValue(item, locale, t("unavailableShort")) : t("unavailableShort")}
+                      </div>
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        {t("valuationAsOf", {
+                          date: item ? formatDashboardDate(item.as_of, locale, t("unavailableShort")) : t("unavailableShort"),
+                        })}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <Badge variant={isAvailable ? "secondary" : "outline"} className="mb-2 text-[10px]">
+                        {isAvailable ? t("available") : t("no_data")}
+                      </Badge>
+                      <p className="line-clamp-2 text-xs text-muted-foreground">{sourceOrGap}</p>
                       {nextAction ? (
-                        <p className="mt-2 text-xs text-muted-foreground">
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                           <span className="font-semibold text-foreground">{t("favoriteMacroNextAction")}</span>{" "}
                           {nextAction}
                         </p>
                       ) : null}
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                );
+              })}
+            </div>
+          </TerminalPanel>
         </section>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -1171,21 +1285,17 @@ export default async function HomePage({
             isDelayed={hotSectorsPayload.is_delayed ?? false}
             delayMinutes={hotSectorsPayload.delay_minutes ?? null}
             flowDefinition={hotSectorsPayload.flow_definition ?? null}
-            className="rounded-none border-x-0"
+            className="rounded-md bg-card/95"
           />
 
           <div className="grid gap-4">
-            <Card className="rounded-none border-x-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Newspaper className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  {t("latestNews")}
-                </CardTitle>
-                <CardDescription className="text-xs">{t("latestNewsDesc", { source: newsPayload.source })}</CardDescription>
-              </CardHeader>
-              <CardContent>
+            <TerminalPanel
+              title={t("latestNews")}
+              description={t("latestNewsDesc", { source: newsPayload.source })}
+              icon={<Newspaper className="h-4 w-4 text-primary" aria-hidden="true" />}
+            >
                 {latestNews ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3 rounded-sm border bg-background/55 p-3">
                     <p className="text-sm font-medium leading-6">{latestNews.title}</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge
@@ -1207,19 +1317,15 @@ export default async function HomePage({
                 ) : (
                   <p className="text-sm text-muted-foreground">{t("noNews")}</p>
                 )}
-              </CardContent>
-            </Card>
+            </TerminalPanel>
 
-            <Card className="rounded-none border-x-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Activity className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  {t("importantSignalsTitle")}
-                </CardTitle>
-                <CardDescription className="text-xs">{t("importantSignalsDesc")}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-none border bg-background p-3">
+            <TerminalPanel
+              title={t("importantSignalsTitle")}
+              description={t("importantSignalsDesc")}
+              icon={<Activity className="h-4 w-4 text-primary" aria-hidden="true" />}
+            >
+              <div className="space-y-2">
+                <div className="rounded-sm border bg-background/55 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold">{t("dataHealthTitle")}</div>
@@ -1240,7 +1346,7 @@ export default async function HomePage({
                   </div>
                 </div>
 
-                <div className="rounded-none border bg-background p-3">
+                <div className="rounded-sm border bg-background/55 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 text-sm font-semibold">
@@ -1257,7 +1363,7 @@ export default async function HomePage({
                   </div>
                 </div>
 
-                <div className="rounded-none border bg-background p-3">
+                <div className="rounded-sm border bg-background/55 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold">{t("latestTaskRun")}</div>
@@ -1273,7 +1379,7 @@ export default async function HomePage({
                   </div>
                 </div>
 
-                <div className="rounded-none border bg-background p-3">
+                <div className="rounded-sm border bg-background/55 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 text-sm font-semibold">
@@ -1289,10 +1395,68 @@ export default async function HomePage({
                     </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </TerminalPanel>
           </div>
         </div>
+
+        <TerminalPanel
+          title={t("newsProviderStripTitle")}
+          description={t("newsProviderStripDesc")}
+          icon={<Search className="h-4 w-4 text-primary" aria-hidden="true" />}
+          action={
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/settings" className="gap-2">
+                <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+                {t("providerSettings")}
+              </Link>
+            </Button>
+          }
+        >
+          {newsSearchProviderCapabilities.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              {newsSearchProviderCapabilities.map((capability) => {
+                const statusKey = getNewsProviderStatusKey(capability);
+                const statusClassName = getNewsProviderStatusClassName(capability);
+                return (
+                  <div
+                    key={capability.provider}
+                    className={`min-h-[5.75rem] rounded-sm border bg-background/55 p-2.5 ${statusClassName}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-foreground">{capability.display_name}</div>
+                        <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                          {t("newsProviderPriority", { priority: capability.priority })}
+                        </div>
+                      </div>
+                      {capability.configured ? (
+                        <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                        {t(statusKey as any)}
+                      </Badge>
+                      {capability.enabled ? (
+                        <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                          {t("newsProviderEnabled")}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 truncate text-[10px] text-muted-foreground">
+                      {capability.implementation_status}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("newsProviderStripEmpty")}</p>
+          )}
+        </TerminalPanel>
       </div>
     </div>
   );

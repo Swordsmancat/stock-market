@@ -23,17 +23,17 @@ export function TopNavBar() {
   const t = useTranslations("TopNav")
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
-      <div className="flex h-14 items-center gap-3 px-3 md:px-5">
+    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.12)] backdrop-blur supports-[backdrop-filter]:bg-background/90">
+      <div className="flex h-14 items-center gap-3 px-3 md:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-5">
           <Link
             href="/"
-            className="flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-muted"
+            className="flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-1 transition-colors hover:bg-accent"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/15 text-primary shadow-[0_0_18px_hsl(var(--primary)/0.18)]">
               <CandlestickChart className="h-4 w-4" />
             </span>
-            <span className="hidden truncate text-sm font-semibold tracking-normal sm:inline-block">
+            <span className="hidden truncate text-sm font-semibold tracking-normal text-foreground sm:inline-block">
               {t("title")}
             </span>
           </Link>
@@ -47,7 +47,7 @@ export function TopNavBar() {
           <ModeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-sm p-0">
+              <Button variant="ghost" className="relative h-9 w-9 rounded-sm border border-border/70 p-0 hover:bg-accent">
                 <Avatar className="h-8 w-8 rounded-sm">
                   <AvatarFallback>U</AvatarFallback>
                 </Avatar>

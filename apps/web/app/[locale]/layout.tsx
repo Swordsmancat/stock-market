@@ -18,8 +18,8 @@ import { BackendStatusBanner } from "@/components/backend-status-banner"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Stock Analysis Platform",
-  description: "AI-powered stock analysis and portfolio management",
+  title: "StockAI Hub",
+  description: "AI-powered market research and stock analysis dashboard",
   other: {
     "darkreader-lock": "true",
   },
@@ -45,7 +45,7 @@ export default async function RootLayout({
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme="dark"
             enableSystem
             disableTransitionOnChange
           >
@@ -55,7 +55,7 @@ export default async function RootLayout({
                 <TopNavBar />
                 <div className="flex min-w-0 flex-1 overflow-hidden">
                   <SidebarNavigation />
-                  <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-panel/60 p-3 pb-24 md:p-5 md:pb-5 lg:p-6">
+                  <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-panel/80 bg-terminal-grid p-2 pb-24 md:p-3 md:pb-3 lg:p-4">
                     <Breadcrumbs />
                     <BackendStatusBanner />
                     {children}
