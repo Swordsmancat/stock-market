@@ -1233,3 +1233,36 @@ Refactored the web homepage into a dark terminal-style market dashboard, added n
 ### Next Steps
 
 - None - task complete
+
+
+## Session 38: Strict homepage reference redesign
+
+**Date**: 2026-07-09
+**Task**: Strict homepage reference redesign
+**Branch**: `master`
+
+### Summary
+
+Refactored the homepage into a strict dark terminal cockpit matching the reference image: compact market band, macro/hot-sector/news panels, SVG overview/fund-flow/AI sentiment panels, provider status strip, localized labels, updated tests, type-check, and visual desktop/mobile verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7cc53e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
