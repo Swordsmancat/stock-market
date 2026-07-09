@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 35
+- **Total Sessions**: 36
 - **Last Active**: 2026-07-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1167 | Active |
+| `journal-1.md` | ~1202 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 36 | 2026-07-09 | Frontend redesign parent closeout | `4112eb2`, `b4b7e99`, `11b69aa` | `master` |
 | 35 | 2026-07-09 | Homepage core index preferences validation | `11b69aa`, `b4b7e99` | `master` |
 | 34 | 2026-07-09 | News sources and InStock follow-up slices | `8c25b4d`, `579c530`, `be4ddd3` | `master` |
 | 33 | 2026-07-08 | News providers and InStock analysis slices | `11b69aa`, `25ec818`, `661f6a9` | `master` |

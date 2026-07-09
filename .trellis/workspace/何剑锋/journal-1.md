@@ -1165,3 +1165,38 @@ Revalidated the homepage core-index preference slice: settings storage, Server A
 ### Next Steps
 
 - None - task complete
+
+
+## Session 36: Frontend redesign parent closeout
+
+**Date**: 2026-07-09
+**Task**: Frontend redesign parent closeout
+**Branch**: `master`
+
+### Summary
+
+Closed the frontend-site-redesign parent after the homepage core-index preference child was archived. Reconfirmed current web quality gates: message JSON parse, focused homepage/settings Vitest, full web Vitest, TypeScript, and git diff --check all pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4112eb2` | (see git log) |
+| `b4b7e99` | (see git log) |
+| `11b69aa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
