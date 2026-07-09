@@ -1299,3 +1299,36 @@ Added localized More actions across homepage terminal modules, added macro custo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 40: Entry page terminal visual alignment
+
+**Date**: 2026-07-09
+**Task**: Entry page terminal visual alignment
+**Branch**: `master`
+
+### Summary
+
+Aligned homepage More destination routes with terminal-style shared sections, preserved frontend behavior, validated focused web tests and TypeScript, and captured the reusable terminal entry section convention in frontend specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `78d29ee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
