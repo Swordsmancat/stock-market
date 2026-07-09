@@ -239,7 +239,12 @@ def test_strategy_evaluation_api_returns_research_metrics(monkeypatch):
     assert payload["source"] == "mock"
     assert payload["effective_provider"] == "mock"
     assert payload["benchmark_symbol"] == "SPY"
-    assert payload["metrics"]["volume_price_breakout"]["windows"]["1"]["sample_size"] == 1
+    window_1 = payload["metrics"]["volume_price_breakout"]["windows"]["1"]
+    assert window_1["sample_size"] == 1
+    assert window_1["win_count"] == 1
+    assert window_1["loss_count"] == 0
+    assert window_1["return_stddev"] == 0.0
+    assert window_1["average_win_loss_ratio"] is None
     assert [call["symbol"] for call in service_calls] == ["AAPL", "SPY"]
     assert all(call["provider_name"] == "mock" for call in service_calls)
 

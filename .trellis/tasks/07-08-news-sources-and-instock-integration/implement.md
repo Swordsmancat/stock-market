@@ -93,6 +93,7 @@ git diff --check
 
 - [x] Reuse the strategy screening rules to scan historical strategy snapshots.
 - [x] Add `evaluate_instock_strategy_signals` with sample size, forward-return, hit-rate, drawdown, benchmark-relative, and diagnostics payloads.
+- [x] Add per-window return-distribution diagnostics derived from existing forward returns.
 - [x] Add `GET /strategies/evaluate` with symbol/date/provider/strategy/window/benchmark query parameters.
 - [x] Preserve the research-only disclaimer and add `research_signal_only=true`.
 - [x] Keep provider failures sanitized and avoid database writes, persistence, order intents, or transaction-cost assumptions.

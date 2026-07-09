@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from statistics import median
+from statistics import median, pstdev
 from typing import Any
 
 RULE_SET_ID = "instock_strategy_screening_v1"
@@ -405,6 +405,7 @@ def _evaluate_strategy_snapshots(
         window_metrics[str(window)] = {
             "sample_size": len(evaluated_returns),
             "skipped_count": skipped_count,
+            **_calculate_return_distribution(evaluated_returns),
             "hit_rate": _calculate_hit_rate(evaluated_returns),
             "average_forward_return": _average(evaluated_returns),
             "median_forward_return": median(evaluated_returns) if evaluated_returns else None,
@@ -453,6 +454,29 @@ def _calculate_hit_rate(values: list[float]) -> float | None:
         return None
     positive_count = sum(1 for value in values if value > 0)
     return positive_count / len(values)
+
+
+def _calculate_return_distribution(values: list[float]) -> dict[str, Any]:
+    positive_returns = [value for value in values if value > 0]
+    negative_returns = [value for value in values if value < 0]
+    positive_average = _average(positive_returns)
+    negative_average = _average(negative_returns)
+    average_win_loss_ratio = (
+        positive_average / abs(negative_average)
+        if positive_average is not None and negative_average is not None
+        else None
+    )
+    return {
+        "win_count": len(positive_returns),
+        "loss_count": len(negative_returns),
+        "flat_count": len(values) - len(positive_returns) - len(negative_returns),
+        "best_forward_return": max(values) if values else None,
+        "worst_forward_return": min(values) if values else None,
+        "positive_average_forward_return": positive_average,
+        "negative_average_forward_return": negative_average,
+        "return_stddev": pstdev(values) if values else None,
+        "average_win_loss_ratio": average_win_loss_ratio,
+    }
 
 
 def _average(values: list[float]) -> float | None:

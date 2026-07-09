@@ -237,9 +237,15 @@ GET /strategies/evaluate?symbol=AAPL&start=2026-01-01&end=2026-03-31&strategies=
 ```
 
 It returns snapshots, per-window sample size, hit rate, average/median forward
-return, max drawdown after signal, optional benchmark-relative return, provider
-metadata, sanitized diagnostics, `research_signal_only=true`, and the same
-non-advice disclaimer.
+return, return-distribution diagnostics, max drawdown after signal, optional
+benchmark-relative return, provider metadata, sanitized diagnostics,
+`research_signal_only=true`, and the same non-advice disclaimer.
+
+Per-window return-distribution diagnostics include win/loss/flat counts,
+best/worst forward return, positive/negative average forward return, forward
+return standard deviation, and average win/loss ratio. They are calculated only
+from already evaluated forward returns and do not imply executable backtest
+quality.
 
 This endpoint is not a production backtest. It does not model fills, slippage,
 fees, tax, borrow constraints, portfolio sizing, survivorship assumptions,

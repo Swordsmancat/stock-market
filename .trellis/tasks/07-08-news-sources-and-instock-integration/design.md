@@ -232,9 +232,9 @@ matches and reports bounded outcome diagnostics:
 - add `GET /strategies/evaluate` for one symbol, start/end date, strategy filter,
   forward windows, optional benchmark symbol, and provider;
 - return snapshots, per-window sample size, hit rate, average/median forward
-  return, max drawdown after signal, benchmark-relative return when available,
-  provider metadata, diagnostics, `research_signal_only=true`, and the existing
-  non-advice disclaimer;
+  return, return-distribution diagnostics, max drawdown after signal,
+  benchmark-relative return when available, provider metadata, diagnostics,
+  `research_signal_only=true`, and the existing non-advice disclaimer;
 - keep this as historical diagnostics only, not a production backtest: no fill
   prices, fees, slippage, portfolio simulation, parameter optimization, order
   lifecycle, persistence, or scheduler;

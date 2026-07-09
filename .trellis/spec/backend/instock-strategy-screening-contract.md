@@ -49,9 +49,13 @@
 - Strategy matches may include `confidence` as a static signal-strength score, but must not
   emit buy/sell/hold actions, target prices, position sizes, order intents, or execution
   instructions.
-- Historical evaluation may return sample size, forward return, hit rate, max drawdown, and
-  benchmark-relative return. It must not model fills, fees, slippage, taxes, portfolio sizing,
-  survivorship assumptions, or executable order lifecycle.
+- Historical evaluation may return sample size, forward return, hit rate, return-distribution
+  diagnostics, max drawdown, and benchmark-relative return. Per-window return-distribution
+  diagnostics include `win_count`, `loss_count`, `flat_count`, `best_forward_return`,
+  `worst_forward_return`, `positive_average_forward_return`,
+  `negative_average_forward_return`, `return_stddev`, and `average_win_loss_ratio`.
+  It must not model fills, fees, slippage, taxes, portfolio sizing, survivorship assumptions,
+  or executable order lifecycle.
 - API diagnostics expose provider/category and rule diagnostics only. They must not expose
   provider credentials or raw provider payloads.
 - Strategy screening results are collection/analysis outputs, not stored citations. They become
@@ -104,9 +108,9 @@
   and `research_signal_only=true`.
 - API tests assert market-data service usage, symbol dedupe, date validation, provider-failure
   diagnostics, provider metadata, and no live provider network access.
-- Service tests assert historical evaluation metrics, benchmark-relative return, unknown strategy
-  diagnostics, invalid window diagnostics, insufficient-history behavior, no-signal behavior, and
-  `research_signal_only=true`.
+- Service tests assert historical evaluation metrics, return-distribution diagnostics,
+  benchmark-relative return, unknown strategy diagnostics, invalid window diagnostics,
+  insufficient-history behavior, no-signal behavior, and `research_signal_only=true`.
 - API tests assert `/strategies/evaluate` normalizes symbols, parses windows before provider access,
   fetches optional benchmark bars, returns provider metadata, and maps provider failures to HTTP 502.
 - Focused validation should include strategy service/API tests, ruff on touched Python files, and

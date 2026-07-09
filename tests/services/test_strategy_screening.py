@@ -132,6 +132,22 @@ def build_volume_price_breakout_evaluation_bars() -> list[dict[str, object]]:
     return bars
 
 
+def build_volume_price_breakout_distribution_bars() -> list[dict[str, object]]:
+    bars = build_volume_price_breakout_evaluation_bars()
+    bars.extend(build_bar(day_index, 100.0, volume=1_000_000.0) for day_index in range(8, 13))
+    bars.append(
+        build_bar(
+            13,
+            110.0,
+            open_price=101.0,
+            volume=4_000_000.0,
+            amount=440_000_000.0,
+        )
+    )
+    bars.append(build_bar(14, 100.0, volume=1_000_000.0))
+    return bars
+
+
 def test_evaluates_strategy_signals_with_forward_metrics():
     payload = evaluate_instock_strategy_signals(
         "aapl",
@@ -152,6 +168,29 @@ def test_evaluates_strategy_signals_with_forward_metrics():
     assert window_1["average_forward_return"] > 0
     assert window_1["max_drawdown_after_signal"] is not None
     assert any(diagnostic["code"] == "BENCHMARK_UNAVAILABLE" for diagnostic in payload["diagnostics"])
+
+
+def test_evaluates_strategy_signals_with_return_distribution_metrics():
+    payload = evaluate_instock_strategy_signals(
+        "AAPL",
+        build_volume_price_breakout_distribution_bars(),
+        strategy_codes=["volume_price_breakout"],
+        forward_windows=[1],
+    )
+
+    window_1 = payload["metrics"]["volume_price_breakout"]["windows"]["1"]
+    assert payload["sample_size"] == 2
+    assert window_1["sample_size"] == 2
+    assert window_1["win_count"] == 1
+    assert window_1["loss_count"] == 1
+    assert window_1["flat_count"] == 0
+    assert window_1["hit_rate"] == 0.5
+    assert window_1["best_forward_return"] > 0
+    assert window_1["worst_forward_return"] < 0
+    assert window_1["positive_average_forward_return"] == window_1["best_forward_return"]
+    assert window_1["negative_average_forward_return"] == window_1["worst_forward_return"]
+    assert window_1["return_stddev"] > 0
+    assert window_1["average_win_loss_ratio"] > 0
 
 
 def test_evaluates_strategy_signals_with_benchmark_relative_return():
