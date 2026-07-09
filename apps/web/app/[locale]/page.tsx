@@ -1,18 +1,15 @@
 import { Link } from "@/src/i18n/routing";
 import type { ReactNode } from "react";
-import { TrendingUp, Activity, Newspaper, Bell, Search, Settings2, ShieldCheck, CircleAlert } from "lucide-react";
+import { Activity, Newspaper, Search, Settings2, ShieldCheck, CircleAlert, Plus, BarChart3, Gauge, LineChart } from "lucide-react";
 
 import { FlashBanner } from "@/components/flash-banner";
 import { FinancialDashboardHero } from "@/components/financial-dashboard-hero";
-import { MarketTicker } from "@/components/market-ticker";
-import { HotSectors } from "@/components/hot-sectors";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
-import { getDashboardDateRanges } from "@/lib/dates";
 import { withProviderQuery } from "@/lib/market-data";
-import { getMarketMovementTextClass } from "@/lib/market-color-classes";
+import { getMarketMovementTextClass, type MarketColorScheme } from "@/lib/market-color-classes";
 import {
   DEFAULT_FAVORITE_HOME_INDEX_CODES,
   DEFAULT_FAVORITE_MACRO_INDICATOR_CODES,
@@ -21,10 +18,6 @@ import {
   type NewsSearchProviderCapability,
 } from "@/lib/platform-settings-store";
 import { backendFetch } from "@/lib/backend-api";
-import type {
-  OfficialMacroSourceStatusPayload,
-  OfficialMacroSourceStatusProvider,
-} from "@/lib/market-overview-payload";
 
 type Instrument = {
   symbol: string;
@@ -34,11 +27,6 @@ type Instrument = {
 
 type InstrumentsPayload = {
   items: Instrument[];
-};
-
-type BarsPayload = {
-  source: string;
-  items: Array<{ timestamp: string; close: number; volume?: number }>;
 };
 
 type LatestBarPayload = {
@@ -58,30 +46,11 @@ type NewsPayload = {
   }>;
 };
 
-type TaskRunPayload = {
-  id?: string;
-  status: string;
-  duration_ms?: number;
-  result_json?: {
-    item_count?: number;
-  };
-};
-
 type WatchlistPayload = {
   items: Array<{
     symbol: string;
     market: string;
     alert_status?: { triggered?: boolean };
-  }>;
-};
-
-type AlertTriggersPayload = {
-  items: Array<{
-    symbol: string;
-    market: string;
-    rule_key: string;
-    threshold: number;
-    triggered_at: string;
   }>;
 };
 
@@ -360,19 +329,6 @@ const DASHBOARD_HEALTH_SAMPLE_LIMIT = 25;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const FALLBACK_DASHBOARD_LOCALE = "en-US";
 const OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS = 5000;
-const FRED_OFFICIAL_MACRO_CODES = new Set([
-  "us_10y_yield",
-  "us_2y_yield",
-  "us_10y_2y_spread",
-  "us_cpi_yoy",
-  "us_m2_yoy",
-]);
-const WORLD_BANK_BUFFETT_CODES = new Set([
-  "buffett_indicator_us",
-  "buffett_indicator_cn",
-  "buffett_indicator_hk",
-]);
-
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
 type LatestBarLoadResult =
@@ -489,16 +445,6 @@ function getFreshnessStatus(latestBarResult: LatestBarLoadResult): FreshnessStat
   return daysSinceLatestBar <= 3 ? "fresh" : "stale";
 }
 
-function getFreshnessBadgeVariant(freshnessStatus: FreshnessStatus): "secondary" | "outline" | "destructive" {
-  if (freshnessStatus === "fresh") {
-    return "secondary";
-  }
-  if (freshnessStatus === "stale") {
-    return "outline";
-  }
-  return "destructive";
-}
-
 function buildDashboardHealthInstruments(
   instruments: Instrument[],
   watchlistItems: WatchlistPayload["items"],
@@ -559,6 +505,33 @@ function formatSignedPercent(value: number | null, locale: string, unavailableLa
     return `-${formattedValue}`;
   }
   return formattedValue;
+}
+
+function formatSignedDashboardNumber(value: number | null | undefined, locale: string, unavailableLabel: string): string {
+  if (value === null || value === undefined) {
+    return unavailableLabel;
+  }
+  const formattedValue = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(Math.abs(value));
+  if (value > 0) {
+    return `+${formattedValue}`;
+  }
+  if (value < 0) {
+    return `-${formattedValue}`;
+  }
+  return formattedValue;
+}
+
+function formatCompactDashboardNumber(value: number | null | undefined, locale: string, unavailableLabel: string): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return unavailableLabel;
+  }
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 1,
+    notation: "compact",
+  }).format(value);
 }
 
 async function fetchMarketOverviewResult(provider: string): Promise<MarketOverviewLoadResult> {
@@ -626,18 +599,6 @@ function formatValuationIndicatorValue(
     minimumFractionDigits: 2,
   }).format(item.value);
   return item.unit === "percent" ? `${formattedValue}%` : formattedValue;
-}
-
-function formatIndicatorCategoryLabel(value: string | null | undefined): string {
-  if (!value) {
-    return "Uncategorized";
-  }
-
-  return value
-    .split(/[_\s-]+/)
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
 }
 
 function buildFavoriteMacroIndicatorRows(
@@ -726,7 +687,7 @@ function MiniSparkline({
 
   return (
     <svg
-      className="mt-3 h-11 w-full overflow-visible"
+      className="mt-1.5 h-6 w-full overflow-visible"
       viewBox={`0 0 ${width} ${height}`}
       aria-hidden="true"
       focusable="false"
@@ -753,6 +714,7 @@ function TerminalPanel({
   action,
   children,
   className = "",
+  contentClassName = "",
   titleId,
 }: {
   title: ReactNode;
@@ -761,24 +723,713 @@ function TerminalPanel({
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
   titleId?: string;
 }) {
   return (
-    <Card className={`overflow-hidden rounded-md border bg-card/95 shadow-[0_0_0_1px_hsl(var(--primary)/0.04)] ${className}`}>
-      <CardHeader className="border-b bg-background/55 px-3 py-2.5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <Card className={`overflow-hidden rounded-md border border-border/80 bg-card/95 shadow-[0_0_0_1px_hsl(var(--primary)/0.04)] ${className}`}>
+      <CardHeader className="!space-y-0 border-b border-border/70 bg-background/60 !px-3 !py-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <CardTitle id={titleId} className="flex items-center gap-2 text-base">
+            <CardTitle id={titleId} className="flex items-center gap-2 text-sm">
               {icon}
               <span className="truncate">{title}</span>
             </CardTitle>
-            {description ? <CardDescription className="mt-1 text-xs">{description}</CardDescription> : null}
+            {description ? <CardDescription className="mt-1 text-xs xl:hidden">{description}</CardDescription> : null}
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
       </CardHeader>
-      <CardContent className="p-3">{children}</CardContent>
+      <CardContent className={`p-0 ${contentClassName}`}>{children}</CardContent>
     </Card>
+  );
+}
+
+function getDashboardIndexName(item: DashboardHomeIndexItem, requestedLocale: string): string {
+  return requestedLocale === "zh" ? item.name_zh ?? item.name : item.name;
+}
+
+function IndexTickerCard({
+  item,
+  requestedLocale,
+  locale,
+  unavailableLabel,
+  colorScheme,
+  shouldShowField,
+  missingMessage,
+}: {
+  item: DashboardHomeIndexItem;
+  requestedLocale: string;
+  locale: string;
+  unavailableLabel: string;
+  colorScheme: MarketColorScheme;
+  shouldShowField: (field: HomeIndexDisplayField) => boolean;
+  missingMessage: string;
+}) {
+  const movement = item.latest?.movement ?? null;
+  const movementValue = movement?.absolute_change ?? 0;
+  const movementClassName = getMarketMovementTextClass(colorScheme, movementValue);
+  const indexName = getDashboardIndexName(item, requestedLocale);
+  const providerLabel = item.effective_provider ?? item.provider ?? item.source ?? unavailableLabel;
+
+  return (
+    <div className="min-h-[4.85rem] min-w-[8.4rem] rounded-sm border border-border/70 bg-background/55 p-1.5 font-mono transition-colors hover:border-primary/35 hover:bg-accent/35">
+      <div className="flex items-start justify-between gap-2 font-sans">
+        <div className="min-w-0">
+          <div className="truncate text-xs font-semibold text-foreground">{indexName}</div>
+          {shouldShowField("region") ? (
+            <div className="mt-0.5 text-[10px] text-muted-foreground">{item.region}</div>
+          ) : null}
+        </div>
+        {shouldShowField("freshness") ? (
+          <span className="rounded-sm border border-border/70 px-1 py-0.5 text-[10px] text-muted-foreground">
+            {coerceFreshnessStatus(item.freshness)}
+          </span>
+        ) : null}
+      </div>
+      {shouldShowField("latest_close") ? (
+        <div className="mt-1 text-sm font-semibold leading-none tabular-nums">
+          {formatDashboardNumber(item.latest?.close, locale, unavailableLabel)}
+        </div>
+      ) : null}
+      {shouldShowField("percent_change") ? (
+        <div className={`mt-0.5 text-[10px] tabular-nums ${movementClassName}`}>
+          {movement
+            ? `${formatSignedDashboardNumber(movement.absolute_change, locale, unavailableLabel)} ${formatSignedPercent(movement.percent_change ?? null, locale, unavailableLabel)}`
+            : unavailableLabel}
+        </div>
+      ) : null}
+      <MiniSparkline bars={item.bars} movementValue={movementValue} />
+      <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-1 font-sans text-[10px] text-muted-foreground">
+        {shouldShowField("as_of") ? (
+          <span>{formatDashboardDate(item.latest?.timestamp, locale, unavailableLabel)}</span>
+        ) : null}
+        {shouldShowField("provider") ? <span>{providerLabel}</span> : null}
+      </div>
+      {item.isConfiguredMissing ? (
+        <p className="mt-1 line-clamp-2 font-sans text-[10px] leading-4 text-muted-foreground">{missingMessage}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function HomepageMarketBand({
+  items,
+  requestedLocale,
+  locale,
+  unavailableLabel,
+  colorScheme,
+  shouldShowField,
+  t,
+}: {
+  items: DashboardHomeIndexItem[];
+  requestedLocale: string;
+  locale: string;
+  unavailableLabel: string;
+  colorScheme: MarketColorScheme;
+  shouldShowField: (field: HomeIndexDisplayField) => boolean;
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  const selectedItems = items.slice(0, 5);
+  const cnItems = items.filter((item) => item.region === "CN").slice(0, 5);
+  const aShareItems = cnItems.length > 0 ? cnItems : items.slice(0, 5);
+
+  return (
+    <section className="overflow-hidden rounded-md border border-border/80 bg-card/95 shadow-[0_0_0_1px_hsl(var(--primary)/0.06)]" aria-labelledby="home-market-band-heading">
+      <div className="grid gap-2 border-b border-border/70 bg-background/65 px-3 py-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <Link href="/instruments" className="rounded-sm border border-primary/45 bg-primary/15 px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20">
+            {t("marketFilterAll")}
+          </Link>
+          <Link href="/instruments" className="rounded-sm border border-border/70 bg-background/70 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent">
+            {t("marketFilterCn")}
+          </Link>
+          <Link href="/settings" className="rounded-sm border border-border/70 bg-background/70 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent">
+            {t("homeMarketBandEdit")}
+          </Link>
+        </div>
+        <div className="min-w-0 text-center">
+          <h1 id="home-market-band-heading" className="truncate text-sm font-semibold text-foreground">
+            {t("homeMarketBandTitle")}
+          </h1>
+          <div className="mt-0.5 text-[10px] text-muted-foreground">{t("homeOverviewTitle")}</div>
+        </div>
+        <div className="flex justify-start lg:justify-end">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/settings" className="gap-2">
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("homeAddIndicator")}
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-1.5 p-1.5 xl:grid-cols-2">
+        <TickerLane
+          title={t("homeSelectedMarketGroup")}
+          items={selectedItems}
+          requestedLocale={requestedLocale}
+          locale={locale}
+          unavailableLabel={unavailableLabel}
+          colorScheme={colorScheme}
+          shouldShowField={shouldShowField}
+          getMissingMessage={(code) => t("homeIndexPayloadMissing", { code })}
+        />
+        <TickerLane
+          title={t("homeAshareMarketGroup")}
+          items={aShareItems}
+          requestedLocale={requestedLocale}
+          locale={locale}
+          unavailableLabel={unavailableLabel}
+          colorScheme={colorScheme}
+          shouldShowField={shouldShowField}
+          getMissingMessage={(code) => t("homeIndexPayloadMissing", { code })}
+        />
+      </div>
+    </section>
+  );
+}
+
+function TickerLane({
+  title,
+  items,
+  requestedLocale,
+  locale,
+  unavailableLabel,
+  colorScheme,
+  shouldShowField,
+  getMissingMessage,
+}: {
+  title: string;
+  items: DashboardHomeIndexItem[];
+  requestedLocale: string;
+  locale: string;
+  unavailableLabel: string;
+  colorScheme: MarketColorScheme;
+  shouldShowField: (field: HomeIndexDisplayField) => boolean;
+  getMissingMessage: (code: string) => string;
+}) {
+  return (
+    <div className="min-w-0 rounded-sm border border-border/70 bg-background/35 p-1.5">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-foreground">{title}</div>
+        <div className="text-[10px] text-muted-foreground">{items.length}</div>
+      </div>
+      <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        {items.map((item) => (
+          <IndexTickerCard
+            key={`${title}-${item.code}`}
+            item={item}
+            requestedLocale={requestedLocale}
+            locale={locale}
+            unavailableLabel={unavailableLabel}
+            colorScheme={colorScheme}
+            shouldShowField={shouldShowField}
+            missingMessage={getMissingMessage(item.code)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MacroIndicatorsPanel({
+  rows,
+  locale,
+  unavailableLabel,
+  t,
+}: {
+  rows: DashboardFavoriteMacroIndicatorRow[];
+  locale: string;
+  unavailableLabel: string;
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <TerminalPanel
+      title={t("terminalMacroTitle")}
+      description={t("terminalMacroDesc")}
+      titleId="terminal-macro-heading"
+      icon={<Activity className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
+      className="xl:h-[15.5rem]"
+    >
+      <div className="grid grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground">
+        <span>{t("terminalIndicator")}</span>
+        <span className="text-right">{t("terminalLatestValue")}</span>
+        <span className="text-right">{t("terminalTrend")}</span>
+        <span className="text-right">{t("terminalUpdated")}</span>
+      </div>
+      <div className="divide-y divide-border/65 xl:max-h-[11.25rem] xl:overflow-hidden">
+        {rows.map(({ code, item }) => {
+          const isAvailable = item?.status === "ok";
+          const displayName = item?.name ?? code;
+          return (
+            <div key={code} className="grid min-h-[2.25rem] grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem] items-center gap-2 px-3 py-1.5 text-xs">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-foreground">{displayName}</div>
+                <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{code}</div>
+              </div>
+              <div className="text-right font-mono tabular-nums">
+                {item ? formatValuationIndicatorValue(item, locale, unavailableLabel) : unavailableLabel}
+              </div>
+              <div className={`text-right text-[11px] ${isAvailable ? "text-positive" : "text-warning"}`}>
+                {isAvailable ? t("available") : t("no_data")}
+              </div>
+              <div className="text-right text-[10px] text-muted-foreground">
+                {item ? formatDashboardDate(item.as_of, locale, unavailableLabel) : unavailableLabel}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </TerminalPanel>
+  );
+}
+
+function resolveHotSectorFlowValue(sector: HotSectorItem): number | null {
+  const directValue = sector.net_flow_amount ?? sector.fund_flow_amount;
+  return directValue === null || directValue === undefined || Number.isNaN(directValue) ? null : directValue;
+}
+
+function resolveHotSectorChange(sector: HotSectorItem): number | null {
+  return sector.change_percent === null || sector.change_percent === undefined || Number.isNaN(sector.change_percent)
+    ? null
+    : sector.change_percent;
+}
+
+function HotSectorTablePanel({
+  sectors,
+  locale,
+  colorScheme,
+  unavailableLabel,
+  t,
+}: {
+  sectors: HotSectorItem[];
+  locale: string;
+  colorScheme: MarketColorScheme;
+  unavailableLabel: string;
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <TerminalPanel
+      title={t("terminalHotSectorsTitle")}
+      description={t("terminalHotSectorsDesc")}
+      titleId="terminal-hot-sectors-heading"
+      icon={<BarChart3 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
+      className="xl:h-[15.5rem]"
+    >
+      <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.5rem_5rem_3.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground">
+        <span>{t("terminalRank")}</span>
+        <span>{t("terminalSector")}</span>
+        <span className="text-right">{t("terminalChange")}</span>
+        <span className="text-right">{t("terminalMainFlow")}</span>
+        <span className="text-right">{t("terminalAiHeat")}</span>
+      </div>
+      {sectors.length > 0 ? (
+        <div className="divide-y divide-border/65 xl:max-h-[11.25rem] xl:overflow-hidden">
+          {sectors.map((sector, index) => {
+            const change = resolveHotSectorChange(sector);
+            const flowValue = resolveHotSectorFlowValue(sector);
+            const heat = Math.min(99, Math.max(35, Math.round(Math.abs(change ?? 0) * 12 + (flowValue !== null && flowValue > 0 ? 35 : 28))));
+            const movementClassName = getMarketMovementTextClass(colorScheme, change ?? 0);
+            return (
+              <div key={sector.sector_id ?? `${sector.name}-${index}`} className="grid min-h-[2.25rem] grid-cols-[2.25rem_minmax(0,1fr)_4.5rem_5rem_3.5rem] items-center gap-2 px-3 py-1.5 text-xs">
+                <div className="font-mono text-[11px] text-muted-foreground">{sector.rank ?? index + 1}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-foreground">{sector.name}</div>
+                  <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{sector.leader_symbol ?? sector.leader?.symbol ?? sector.market ?? unavailableLabel}</div>
+                </div>
+                <div className={`text-right font-mono text-[11px] tabular-nums ${movementClassName}`}>
+                  {change === null ? unavailableLabel : formatSignedPercent(change / 100, locale, unavailableLabel)}
+                </div>
+                <div className={`text-right font-mono text-[11px] tabular-nums ${flowValue !== null && flowValue >= 0 ? "text-positive" : "text-negative"}`}>
+                  {formatCompactDashboardNumber(flowValue, locale, unavailableLabel)}
+                </div>
+                <div className="text-right font-mono text-[11px] text-warning tabular-nums">{heat}</div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="p-4 text-sm text-muted-foreground">{t("hotSectorsEmptyLive")}</div>
+      )}
+    </TerminalPanel>
+  );
+}
+
+function LatestNewsSentimentPanel({
+  items,
+  unavailableLabel,
+  t,
+}: {
+  items: NewsPayload["items"];
+  unavailableLabel: string;
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  const newsRows = items.slice(0, 6);
+  return (
+    <TerminalPanel
+      title={t("terminalLatestNewsTitle")}
+      description={t("terminalLatestNewsDesc")}
+      titleId="terminal-latest-news-heading"
+      icon={<Newspaper className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
+      className="xl:h-[15.5rem]"
+    >
+      {newsRows.length > 0 ? (
+        <div className="divide-y divide-border/65 xl:max-h-[11.25rem] xl:overflow-hidden">
+          {newsRows.map((item, index) => {
+            const sentimentClassName =
+              item.sentiment === "positive"
+                ? "border-positive/35 bg-positive/10 text-positive"
+                : item.sentiment === "negative"
+                  ? "border-negative/35 bg-negative/10 text-negative"
+                  : "border-primary/35 bg-primary/10 text-primary";
+            return (
+              <div key={`${item.title}-${index}`} className="grid min-h-[2.65rem] grid-cols-[2rem_minmax(0,1fr)_4.25rem] items-start gap-2 px-3 py-1.5 text-xs">
+                <div className="font-mono text-[11px] font-semibold text-primary">{index + 1}</div>
+                <div className="min-w-0">
+                  <div className="line-clamp-1 font-medium text-foreground">{item.title}</div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    {t("confidence", { score: Math.round(item.confidence * 100) })}
+                  </div>
+                </div>
+                <div className={`rounded-sm border px-1.5 py-1 text-center text-[10px] ${sentimentClassName}`}>
+                  {item.sentiment || unavailableLabel}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="p-4 text-sm text-muted-foreground">{t("noNews")}</div>
+      )}
+    </TerminalPanel>
+  );
+}
+
+function MarketOverviewChartPanel({
+  items,
+  requestedLocale,
+  locale,
+  colorScheme,
+  unavailableLabel,
+  t,
+}: {
+  items: DashboardHomeIndexItem[];
+  requestedLocale: string;
+  locale: string;
+  colorScheme: MarketColorScheme;
+  unavailableLabel: string;
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  const series = items.filter((item) => item.bars.length > 1).slice(0, 3);
+  const width = 420;
+  const height = 142;
+  const chartHeight = 100;
+  const chartTop = 14;
+  const colors = ["text-positive", "text-primary", "text-warning"];
+
+  return (
+    <TerminalPanel
+      title={t("terminalMarketOverviewTitle")}
+      description={t("terminalMarketOverviewDesc")}
+      titleId="terminal-market-overview-heading"
+      icon={<LineChart className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
+      className="xl:h-[14.25rem]"
+      contentClassName="p-3"
+    >
+      {series.length > 0 ? (
+        <>
+          <svg className="h-28 w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("terminalMarketOverviewTitle")}>
+            <path d={`M0,${chartTop + chartHeight} L${width},${chartTop + chartHeight}`} className="stroke-border" strokeWidth="1" strokeDasharray="3 7" />
+            <path d={`M0,${chartTop + chartHeight / 2} L${width},${chartTop + chartHeight / 2}`} className="stroke-border/60" strokeWidth="1" strokeDasharray="2 8" />
+            {series.map((item, index) => {
+              const path = buildSparklinePath(item.bars.map((bar) => bar.close), width, chartHeight);
+              return path ? (
+                <path
+                  key={item.code}
+                  d={path}
+                  className={colors[index] ?? "text-primary"}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  transform={`translate(0 ${chartTop})`}
+                />
+              ) : null;
+            })}
+          </svg>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {series.map((item, index) => {
+              const movement = item.latest?.movement ?? null;
+              const movementValue = movement?.absolute_change ?? 0;
+              const movementClassName = getMarketMovementTextClass(colorScheme, movementValue);
+              return (
+                <div key={item.code} className="rounded-sm border border-border/70 bg-background/45 p-2">
+                  <div className={`truncate text-xs font-medium ${colors[index] ?? "text-primary"}`}>{getDashboardIndexName(item, requestedLocale)}</div>
+                  <div className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+                    {formatDashboardNumber(item.latest?.close, locale, unavailableLabel)}
+                  </div>
+                  <div className={`mt-0.5 font-mono text-[11px] tabular-nums ${movementClassName}`}>
+                    {movement ? formatSignedPercent(movement.percent_change ?? null, locale, unavailableLabel) : unavailableLabel}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="text-sm text-muted-foreground">{t("noMarketChartData")}</div>
+      )}
+    </TerminalPanel>
+  );
+}
+
+function FundFlowPanel({
+  sectors,
+  locale,
+  unavailableLabel,
+  t,
+}: {
+  sectors: HotSectorItem[];
+  locale: string;
+  unavailableLabel: string;
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  const rows = sectors
+    .map((sector) => ({
+      name: sector.name,
+      value: resolveHotSectorFlowValue(sector),
+    }))
+    .filter((row): row is { name: string; value: number } => row.value !== null)
+    .slice(0, 8);
+  const width = 420;
+  const height = 142;
+  const baseline = 72;
+  const maxAbs = Math.max(...rows.map((row) => Math.abs(row.value)), 1);
+  const barWidth = rows.length > 0 ? Math.max(18, Math.floor((width - 32) / rows.length) - 8) : 20;
+
+  return (
+    <TerminalPanel
+      title={t("terminalFundFlowTitle")}
+      description={t("terminalFundFlowDesc")}
+      titleId="terminal-fund-flow-heading"
+      icon={<BarChart3 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
+      className="xl:h-[14.25rem]"
+      contentClassName="p-3"
+    >
+      {rows.length > 0 ? (
+        <>
+          <svg className="h-28 w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("terminalFundFlowTitle")}>
+            <path d={`M0,${baseline} L${width},${baseline}`} className="stroke-border" strokeWidth="1" strokeDasharray="3 7" />
+            {rows.map((row, index) => {
+              const normalizedHeight = Math.max(8, Math.abs(row.value) / maxAbs * 54);
+              const x = 18 + index * ((width - 36) / rows.length);
+              const y = row.value >= 0 ? baseline - normalizedHeight : baseline;
+              return (
+                <g key={`${row.name}-${index}`}>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={barWidth}
+                    height={normalizedHeight}
+                    rx="2"
+                    className={row.value >= 0 ? "fill-positive" : "fill-negative"}
+                    opacity="0.88"
+                  />
+                </g>
+              );
+            })}
+          </svg>
+          <div className="grid gap-1">
+            {rows.slice(0, 4).map((row) => (
+              <div key={row.name} className="flex items-center justify-between gap-3 rounded-sm bg-background/45 px-2 py-1.5 text-xs">
+                <span className="truncate text-muted-foreground">{row.name}</span>
+                <span className={`font-mono tabular-nums ${row.value >= 0 ? "text-positive" : "text-negative"}`}>
+                  {formatCompactDashboardNumber(row.value, locale, unavailableLabel)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="text-sm text-muted-foreground">{t("noFundFlowData")}</div>
+      )}
+    </TerminalPanel>
+  );
+}
+
+function buildAiSentimentSummary({
+  newsItems,
+  healthCounts,
+  checkedInstrumentCount,
+  sectors,
+  providers,
+}: {
+  newsItems: NewsPayload["items"];
+  healthCounts: DashboardHealthCounts;
+  checkedInstrumentCount: number;
+  sectors: HotSectorItem[];
+  providers: NewsSearchProviderCapability[];
+}) {
+  const newsScore = newsItems.length === 0
+    ? 50
+    : newsItems.reduce((total, item) => {
+        if (item.sentiment === "positive") return total + 50 + item.confidence * 45;
+        if (item.sentiment === "negative") return total + 50 - item.confidence * 45;
+        return total + 50;
+      }, 0) / newsItems.length;
+  const sectorChanges = sectors
+    .map((sector) => resolveHotSectorChange(sector))
+    .filter((value): value is number => value !== null);
+  const sectorScore = sectorChanges.length === 0
+    ? 50
+    : Math.min(95, Math.max(5, 50 + sectorChanges.reduce((sum, value) => sum + value, 0) / sectorChanges.length * 4));
+  const dataHealthScore = checkedInstrumentCount === 0
+    ? 50
+    : (healthCounts.fresh * 100 + healthCounts.stale * 55 + healthCounts.no_data * 20) / checkedInstrumentCount;
+  const providerScore = providers.length === 0
+    ? 50
+    : providers.filter((provider) => provider.enabled && (!provider.credential_required || provider.credential_configured)).length / providers.length * 100;
+  const score = Math.round(newsScore * 0.4 + sectorScore * 0.25 + dataHealthScore * 0.2 + providerScore * 0.15);
+  const labelKey = score >= 66 ? "aiSentimentOptimistic" : score <= 42 ? "aiSentimentCautious" : "aiSentimentNeutral";
+  const toneClassName = score >= 66 ? "text-positive" : score <= 42 ? "text-negative" : "text-warning";
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    labelKey,
+    toneClassName,
+    newsScore: Math.round(newsScore),
+    dataHealthScore: Math.round(dataHealthScore),
+    providerScore: Math.round(providerScore),
+  };
+}
+
+function AiSentimentPanel({
+  summary,
+  t,
+}: {
+  summary: ReturnType<typeof buildAiSentimentSummary>;
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <TerminalPanel
+      title={t("terminalAiSentimentTitle")}
+      description={t("terminalAiSentimentDesc")}
+      titleId="terminal-ai-sentiment-heading"
+      icon={<Gauge className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
+      className="xl:h-[14.25rem]"
+      contentClassName="p-3"
+    >
+      <div className="grid gap-3 md:grid-cols-[10rem_minmax(0,1fr)] md:items-center">
+        <div className="relative mx-auto h-32 w-40">
+          <svg className="h-full w-full" viewBox="0 0 200 120" role="img" aria-label={t("terminalAiSentimentTitle")}>
+            <path d="M30 96 A70 70 0 0 1 170 96" className="stroke-muted" fill="none" strokeWidth="18" strokeLinecap="round" pathLength={100} />
+            <path
+              d="M30 96 A70 70 0 0 1 170 96"
+              className={summary.score >= 66 ? "stroke-positive" : summary.score <= 42 ? "stroke-negative" : "stroke-warning"}
+              fill="none"
+              strokeWidth="18"
+              strokeLinecap="round"
+              pathLength={100}
+              strokeDasharray={`${summary.score} 100`}
+            />
+          </svg>
+          <div className="absolute inset-x-0 bottom-4 text-center">
+            <div className="font-mono text-3xl font-semibold tabular-nums text-foreground">{summary.score}</div>
+            <div className={`text-xs font-medium ${summary.toneClassName}`}>{t(summary.labelKey)}</div>
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <SentimentMetric label={t("aiSentimentNewsSignal")} value={summary.newsScore} />
+          <SentimentMetric label={t("aiSentimentDataHealth")} value={summary.dataHealthScore} />
+          <SentimentMetric label={t("aiSentimentProviderReadiness")} value={summary.providerScore} />
+          <div className="rounded-sm border border-border/70 bg-background/45 px-2 py-1.5 text-[10px] text-muted-foreground xl:truncate">
+            {t("aiSentimentResearchOnly")}
+          </div>
+        </div>
+      </div>
+    </TerminalPanel>
+  );
+}
+
+function SentimentMetric({ label, value }: { label: string; value: number }) {
+  const className = value >= 66 ? "text-positive" : value <= 42 ? "text-negative" : "text-warning";
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-sm border border-border/70 bg-background/45 px-2 py-1.5 text-xs">
+      <span className="truncate text-muted-foreground">{label}</span>
+      <span className={`font-mono tabular-nums ${className}`}>{value}</span>
+    </div>
+  );
+}
+
+function NewsProviderStatusStrip({
+  providers,
+  t,
+}: {
+  providers: NewsSearchProviderCapability[];
+  t: (key: any, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <TerminalPanel
+      title={t("newsProviderStripTitle")}
+      description={t("newsProviderStripDesc")}
+      titleId="terminal-news-provider-heading"
+      icon={<Search className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
+      action={
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/settings" className="gap-2">
+            <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("providerSettings")}
+          </Link>
+        </Button>
+      }
+      contentClassName="p-2"
+    >
+      {providers.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+          {providers.map((capability) => {
+            const statusKey = getNewsProviderStatusKey(capability);
+            const statusClassName = getNewsProviderStatusClassName(capability);
+            return (
+              <div
+                key={capability.provider}
+                className={`min-h-[4.75rem] rounded-sm border bg-background/55 p-2 ${statusClassName}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-foreground">{capability.display_name}</div>
+                    <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                      {t("newsProviderPriority", { priority: capability.priority })}
+                    </div>
+                  </div>
+                  {capability.configured ? (
+                    <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                    {t(statusKey as any)}
+                  </Badge>
+                  {capability.enabled ? (
+                    <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                      {t("newsProviderEnabled")}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="mt-1 truncate text-[10px] text-muted-foreground">
+                  {capability.implementation_status}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t("newsProviderStripEmpty")}</p>
+      )}
+    </TerminalPanel>
   );
 }
 
@@ -808,13 +1459,6 @@ function getNewsProviderStatusClassName(capability: NewsSearchProviderCapability
   return "border-primary/35 bg-primary/10 text-primary";
 }
 
-function getOfficialMacroProviderStatus(
-  payload: OfficialMacroSourceStatusPayload | null,
-  provider: "fred" | "world_bank",
-): OfficialMacroSourceStatusProvider | null {
-  return payload?.providers.find((item) => item.provider === provider) ?? null;
-}
-
 export default async function HomePage({
   params,
   searchParams = Promise.resolve({}),
@@ -833,7 +1477,6 @@ export default async function HomePage({
   const { locale: requestedLocale } = await params;
   const locale = getSafeDashboardLocale(requestedLocale);
   const flash = await searchParams;
-  const { recent } = getDashboardDateRanges();
   const platformSettings = await fetchDashboardPlatformSettings();
   const provider = platformSettings.market_data_provider;
   const { getTranslations } = await import("next-intl/server");
@@ -862,27 +1505,11 @@ export default async function HomePage({
 
   const primaryInstrument = instrumentsPayload.items[0];
   const [
-    latestBarPayload,
-    barsPayload,
     newsPayload,
-    taskRunPayload,
     watchlistPayload,
-    alertTriggersPayload,
     marketOverviewResult,
-    officialMacroSourceStatusPayload,
   ] =
     await Promise.all([
-      fetchOptionalJson<LatestBarPayload>(
-        withProviderQuery(`/market-data/${primaryInstrument.symbol}/latest`, provider),
-        { source: "unavailable", item: null },
-      ),
-      fetchOptionalJson<BarsPayload>(
-        withProviderQuery(
-          `/market-data/${primaryInstrument.symbol}/bars?timeframe=1d&start=${recent.start}&end=${recent.end}`,
-          provider,
-        ),
-        { source: "unavailable", items: [] },
-      ),
       fetchOptionalJson<NewsPayload>(
         `/news/${primaryInstrument.symbol}`,
         {
@@ -890,25 +1517,10 @@ export default async function HomePage({
           items: [],
         },
       ),
-      fetchOptionalJson<TaskRunPayload>(
-        "/task-runs/latest?task_name=reports.refresh_daily_watchlist_analysis",
-        { status: "unknown" },
-      ),
       fetchOptionalJson<WatchlistPayload>("/watchlist", { items: [] }),
-      fetchOptionalJson<AlertTriggersPayload>("/alerts/triggers/recent?limit=5", { items: [] }),
       fetchMarketOverviewResult(provider),
-      fetchOptionalJson<OfficialMacroSourceStatusPayload | null>(
-        "/market-indicators/official-sources/status",
-        null,
-      ),
     ]);
 
-  const latestClose =
-    latestBarPayload.item?.close ?? barsPayload.items.at(-1)?.close;
-  const triggeredWatchlistCount = watchlistPayload.items.filter(
-    (item) => item.alert_status?.triggered,
-  ).length;
-  const latestNews = newsPayload.items[0];
   const dashboardHealth = buildDashboardHealthInstruments(instrumentsPayload.items, watchlistPayload.items);
   const marketOverviewPayload = marketOverviewResult.status === "loaded" ? marketOverviewResult.payload : null;
   const marketOverviewIndices = marketOverviewPayload?.indices.items ?? [];
@@ -918,24 +1530,6 @@ export default async function HomePage({
     marketOverviewValuationItems,
     platformSettings.favorite_macro_indicator_codes,
   );
-  const fredOfficialSourceStatus = getOfficialMacroProviderStatus(officialMacroSourceStatusPayload, "fred");
-  const getFavoriteMacroNextAction = (code: string, item: DashboardValuationIndicatorItem | null): string | null => {
-    if (item?.status === "ok") {
-      return null;
-    }
-    if (FRED_OFFICIAL_MACRO_CODES.has(code)) {
-      return fredOfficialSourceStatus?.configured === false
-        ? t("favoriteMacroGuidanceFredConfigure")
-        : t("favoriteMacroGuidanceFredRefresh");
-    }
-    if (WORLD_BANK_BUFFETT_CODES.has(code)) {
-      return t("favoriteMacroGuidanceWorldBankRefresh");
-    }
-    if (code === "cn_m2_yoy") {
-      return t("favoriteMacroGuidanceManualChina");
-    }
-    return t("favoriteMacroGuidanceMacroResearch");
-  };
   const [dashboardHealthLatestBars, hotSectorsPayload] = await Promise.all([
     Promise.all(dashboardHealth.instruments.map((instrument) => fetchLatestBarResult(instrument.symbol, provider))),
     fetchOptionalJson<HotSectorsPayload>(
@@ -951,8 +1545,6 @@ export default async function HomePage({
   ]);
   const dashboardHealthCounts = countFreshnessStatuses(dashboardHealthLatestBars);
   const checkedInstrumentCount = dashboardHealth.instruments.length;
-  const hasMissingOrUnavailableData = dashboardHealthCounts.no_data + dashboardHealthCounts.unavailable > 0;
-  const hasStaleData = dashboardHealthCounts.stale > 0;
   const hotSectors = hotSectorsPayload.items ?? [];
 
   const homeIndexDisplayFields = new Set<HomeIndexDisplayField>(platformSettings.home_index_display_fields);
@@ -962,66 +1554,19 @@ export default async function HomePage({
     platformSettings.favorite_home_index_codes,
   );
 
-  const tickerItems = coreMarketIndexItems.map((item) => ({
-    code: item.code,
-    name: locale === 'zh' ? (item.name_zh || item.name) : item.name,
-    region: item.region,
-    close: item.latest?.close ?? null,
-    change: item.latest?.movement?.absolute_change ?? null,
-    changePercent: item.latest?.movement?.percent_change ?? null,
-    sparkline: item.bars.map((bar) => bar.close),
-    status: item.status,
-    freshness: item.freshness,
-    source: item.source ?? null,
-    provider: item.provider ?? null,
-    requested_provider: item.requested_provider ?? null,
-    effective_provider: item.effective_provider ?? null,
-    generated_at: marketOverviewPayload?.generated_at ?? null,
-    no_data_reason: item.no_data_reason ?? null,
-  }));
-  const availableMacroCount = favoriteMacroIndicatorRows.filter((row) => row.item?.status === "ok").length;
-  const macroTotalCount = favoriteMacroIndicatorRows.length;
-  const missingHealthCount = dashboardHealthCounts.no_data + dashboardHealthCounts.unavailable;
-  const hotSectorItemsForHome = hotSectors.slice(0, 4);
+  const hotSectorItemsForHome = hotSectors.slice(0, 6);
   const newsSearchProviderCapabilities = platformSettings.news_search_provider_capabilities ?? [];
-  const latestNewsConfidence = latestNews ? (latestNews.confidence * 100).toFixed(0) : null;
-  const homepageMetrics = [
-    {
-      label: t("coreIndicesTitle"),
-      value: coreMarketIndexItems.length,
-      description: t("homeCoreIndicesMetricDesc"),
-    },
-    {
-      label: t("favoriteMacroTitle"),
-      value: `${availableMacroCount}/${macroTotalCount}`,
-      description: t("homeMacroMetricDesc", { available: availableMacroCount, total: macroTotalCount }),
-    },
-    {
-      label: t("hotSectorsTitle"),
-      value: hotSectorItemsForHome.length,
-      description: t("homeHotSectorsMetricDesc", { count: hotSectorItemsForHome.length }),
-    },
-    {
-      label: t("latestNews"),
-      value: latestNews ? latestNews.sentiment : t("unavailableShort"),
-      description: latestNewsConfidence ? t("confidence", { score: latestNewsConfidence }) : t("noNews"),
-    },
-  ];
+  const newsItemsForHome = newsPayload.items.slice(0, 6);
+  const aiSentimentSummary = buildAiSentimentSummary({
+    newsItems: newsItemsForHome,
+    healthCounts: dashboardHealthCounts,
+    checkedInstrumentCount,
+    sectors: hotSectorItemsForHome,
+    providers: newsSearchProviderCapabilities,
+  });
 
   return (
     <div className="space-y-3 overflow-x-hidden">
-      {tickerItems.length > 0 && (
-        <MarketTicker
-          items={tickerItems}
-          labels={{
-            allMarkets: t("marketFilterAll"),
-            cnMarket: t("marketFilterCn"),
-            hkMarket: t("marketFilterHk"),
-            usMarket: t("marketFilterUs"),
-          }}
-        />
-      )}
-
       <div className="space-y-3">
         {flash.ingest === "ok" ? (
           <FlashBanner
@@ -1075,36 +1620,6 @@ export default async function HomePage({
           />
         ) : null}
 
-        <FinancialDashboardHero
-          title={t("homeOverviewTitle")}
-          description={t("homeOverviewDesc")}
-          badges={[
-            { label: t("marketDashboardBadge"), variant: "secondary" },
-            { label: t("activeProvider", { provider }) },
-            ...(marketOverviewPayload
-              ? [
-                  {
-                    label: t("marketDashboardRange", {
-                      start: formatDashboardDate(marketOverviewPayload.range.start, locale, t("unavailableShort")),
-                      end: formatDashboardDate(marketOverviewPayload.range.end, locale, t("unavailableShort")),
-                    }),
-                  },
-                ]
-              : []),
-          ]}
-          metrics={homepageMetrics}
-          actions={
-            <>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/settings">{t("providerSettings")}</Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/evidence">{t("favoriteMacroDetailLink")}</Link>
-              </Button>
-            </>
-          }
-        />
-
         {marketOverviewResult.status === "failed" ? (
           <div className="rounded-md border bg-card p-4">
             <div className="font-medium">{t("marketDashboardUnavailableTitle")}</div>
@@ -1112,351 +1627,53 @@ export default async function HomePage({
           </div>
         ) : null}
 
-        <section className="space-y-4" aria-labelledby="core-market-indices-heading">
-          <TerminalPanel
-            title={t("coreIndicesTitle")}
-            titleId="core-market-indices-heading"
-            description={t("homeCoreIndicesDesc")}
-            icon={<TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />}
-            action={
-              <Badge variant="outline" className="w-fit text-[10px]">
-                {t("homePrimaryInstrument", { symbol: primaryInstrument.symbol })}
-              </Badge>
-            }
-          >
-              {coreMarketIndexItems.length > 0 ? (
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  {coreMarketIndexItems.map((item) => {
-                    const movement = item.latest?.movement ?? null;
-                    const movementValue = movement?.absolute_change ?? 0;
-                    const movementClassName = getMarketMovementTextClass(platformSettings.color_scheme, movementValue);
-                    const indexName = locale === "zh" ? item.name_zh ?? item.name : item.name;
-                    const providerLabel = item.effective_provider ?? item.provider ?? item.source ?? t("unavailableShort");
-                    return (
-                      <div key={item.code} className="min-h-[10.5rem] rounded-sm border bg-background/60 p-3 transition-colors hover:border-primary/30 hover:bg-accent/40">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold">{indexName}</div>
-                            {shouldShowHomeIndexField("region") ? (
-                              <div className="mt-1 text-[10px] text-muted-foreground">
-                                {t("homeIndexRegion", { region: item.region })}
-                              </div>
-                            ) : null}
-                          </div>
-                          {shouldShowHomeIndexField("freshness") ? (
-                            <Badge variant={getFreshnessBadgeVariant(coerceFreshnessStatus(item.freshness))} className="text-[10px]">
-                              {t(coerceFreshnessStatus(item.freshness))}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        {shouldShowHomeIndexField("latest_close") ? (
-                          <div className="mt-3 font-mono text-2xl font-semibold tabular-nums">
-                            {formatDashboardNumber(item.latest?.close, locale, t("unavailableShort"))}
-                          </div>
-                        ) : null}
-                        {shouldShowHomeIndexField("percent_change") ? (
-                          <div className={`mt-1 font-mono text-sm tabular-nums ${movementClassName}`}>
-                            {movement
-                              ? formatSignedPercent(movement.percent_change ?? null, locale, t("unavailableShort"))
-                              : t("unavailableShort")}
-                          </div>
-                        ) : null}
-                        {shouldShowHomeIndexField("as_of") ? (
-                          <div className="mt-2 text-[10px] text-muted-foreground">
-                            {t("valuationAsOf", {
-                              date: formatDashboardDate(item.latest?.timestamp, locale, t("unavailableShort")),
-                            })}
-                          </div>
-                        ) : null}
-                        {shouldShowHomeIndexField("provider") ? (
-                          <div className="mt-2 text-[10px] text-muted-foreground">
-                            {t("homeIndexProvider", { provider: providerLabel })}
-                          </div>
-                        ) : null}
-                        <MiniSparkline bars={item.bars} movementValue={movementValue} />
-                        {item.isConfiguredMissing ? (
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {t("homeIndexPayloadMissing", { code: item.code })}
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t("noCoreIndices")}</p>
-              )}
-          </TerminalPanel>
-        </section>
+        <HomepageMarketBand
+          items={coreMarketIndexItems}
+          requestedLocale={requestedLocale}
+          locale={locale}
+          unavailableLabel={t("unavailableShort")}
+          colorScheme={platformSettings.color_scheme}
+          shouldShowField={shouldShowHomeIndexField}
+          t={t}
+        />
 
-        <section className="space-y-4" aria-labelledby="macro-watch-heading">
-          <TerminalPanel
-            title={t("favoriteMacroTitle")}
-            titleId="macro-watch-heading"
-            description={t("favoriteMacroDesc")}
-            icon={<Activity className="h-4 w-4 text-primary" aria-hidden="true" />}
-            action={
-              <div className="flex flex-wrap justify-end gap-2">
-                <Badge variant="outline" className="text-[10px]">
-                  {t("homeMacroMetricDesc", { available: availableMacroCount, total: macroTotalCount })}
-                </Badge>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/settings">{t("favoriteMacroSettingsLink")}</Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/evidence">{t("favoriteMacroDetailLink")}</Link>
-                </Button>
-              </div>
-            }
-          >
-            <div className="overflow-hidden rounded-sm border">
-              {favoriteMacroIndicatorRows.map(({ code, item }) => {
-                const isAvailable = item?.status === "ok";
-                const displayName = item?.name ?? code;
-                const sourceOrGap = item
-                  ? isAvailable
-                    ? t("favoriteMacroSource", { source: item.source ?? t("unavailableShort") })
-                    : t("favoriteMacroSourceGap", {
-                        reason: item.no_data_reason ?? t("indicatorNoData"),
-                      })
-                  : t("favoriteMacroSourceGap", { reason: t("favoriteMacroPayloadMissing") });
-                const nextAction = getFavoriteMacroNextAction(code, item);
-                return (
-                  <div
-                    key={code}
-                    className="grid gap-3 border-b bg-background/50 p-3 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_8rem_minmax(0,1fr)] md:items-center"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{displayName}</div>
-                      <div className="mt-1 text-[10px] text-muted-foreground">
-                        {t("favoriteMacroCode", { code })}
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {item?.region ? (
-                          <Badge variant="outline" className="px-1 py-0 text-[10px]">
-                            {t("favoriteMacroRegion", { region: item.region })}
-                          </Badge>
-                        ) : null}
-                        {item?.category ? (
-                          <Badge variant="outline" className="px-1 py-0 text-[10px]">
-                            {t("favoriteMacroCategory", { category: formatIndicatorCategoryLabel(item.category) })}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-mono text-xl font-semibold tabular-nums">
-                        {item ? formatValuationIndicatorValue(item, locale, t("unavailableShort")) : t("unavailableShort")}
-                      </div>
-                      <div className="mt-1 text-[10px] text-muted-foreground">
-                        {t("valuationAsOf", {
-                          date: item ? formatDashboardDate(item.as_of, locale, t("unavailableShort")) : t("unavailableShort"),
-                        })}
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <Badge variant={isAvailable ? "secondary" : "outline"} className="mb-2 text-[10px]">
-                        {isAvailable ? t("available") : t("no_data")}
-                      </Badge>
-                      <p className="line-clamp-2 text-xs text-muted-foreground">{sourceOrGap}</p>
-                      {nextAction ? (
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                          <span className="font-semibold text-foreground">{t("favoriteMacroNextAction")}</span>{" "}
-                          {nextAction}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </TerminalPanel>
-        </section>
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <HotSectors
-            sectors={hotSectorItemsForHome}
-            status={hotSectorsPayload.status}
-            dataMode={hotSectorsPayload.data_mode}
-            message={hotSectorsPayload.message}
-            provider={hotSectorsPayload.effective_provider ?? hotSectorsPayload.provider ?? null}
-            asOf={hotSectorsPayload.as_of ?? null}
-            isRealtime={hotSectorsPayload.is_realtime ?? false}
-            isDelayed={hotSectorsPayload.is_delayed ?? false}
-            delayMinutes={hotSectorsPayload.delay_minutes ?? null}
-            flowDefinition={hotSectorsPayload.flow_definition ?? null}
-            className="rounded-md bg-card/95"
+        <div className="grid gap-2 xl:grid-cols-3">
+          <MacroIndicatorsPanel
+            rows={favoriteMacroIndicatorRows}
+            locale={locale}
+            unavailableLabel={t("unavailableShort")}
+            t={t}
           />
-
-          <div className="grid gap-4">
-            <TerminalPanel
-              title={t("latestNews")}
-              description={t("latestNewsDesc", { source: newsPayload.source })}
-              icon={<Newspaper className="h-4 w-4 text-primary" aria-hidden="true" />}
-            >
-                {latestNews ? (
-                  <div className="space-y-3 rounded-sm border bg-background/55 p-3">
-                    <p className="text-sm font-medium leading-6">{latestNews.title}</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant={
-                          latestNews.sentiment === "positive"
-                            ? "default"
-                            : latestNews.sentiment === "negative"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {latestNews.sentiment}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {t("confidence", { score: (latestNews.confidence * 100).toFixed(0) })}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t("noNews")}</p>
-                )}
-            </TerminalPanel>
-
-            <TerminalPanel
-              title={t("importantSignalsTitle")}
-              description={t("importantSignalsDesc")}
-              icon={<Activity className="h-4 w-4 text-primary" aria-hidden="true" />}
-            >
-              <div className="space-y-2">
-                <div className="rounded-sm border bg-background/55 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold">{t("dataHealthTitle")}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {t("dataFreshnessSummary", {
-                          fresh: dashboardHealthCounts.fresh,
-                          stale: dashboardHealthCounts.stale,
-                          missing: missingHealthCount,
-                        })}
-                      </div>
-                    </div>
-                    <Badge
-                      variant={hasMissingOrUnavailableData ? "destructive" : hasStaleData ? "outline" : "secondary"}
-                      className="shrink-0 text-[10px]"
-                    >
-                      {checkedInstrumentCount}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="rounded-sm border bg-background/55 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <Bell className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                        {t("activeAlerts")}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {t("triggeredAlertsSummary", { count: triggeredWatchlistCount })}
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href="/alerts">{t("viewAlerts")}</Link>
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-sm border bg-background/55 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold">{t("latestTaskRun")}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {t("taskRunStatusSummary", { status: taskRunPayload.status })}
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={taskRunPayload.id ? (`/task-runs/${taskRunPayload.id}` as any) : "/task-runs"}>
-                        {t("viewTaskRuns")}
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-sm border bg-background/55 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                        {primaryInstrument.symbol}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {t("latestPrice", { symbol: primaryInstrument.symbol })}: {formatDashboardNumber(latestClose, locale, t("unavailableShort"))}
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/instruments/${primaryInstrument.symbol}` as any}>{t("openInstrument")}</Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </TerminalPanel>
-          </div>
+          <HotSectorTablePanel
+            sectors={hotSectorItemsForHome}
+            locale={locale}
+            colorScheme={platformSettings.color_scheme}
+            unavailableLabel={t("unavailableShort")}
+            t={t}
+          />
+          <LatestNewsSentimentPanel
+            items={newsItemsForHome}
+            unavailableLabel={t("unavailableShort")}
+            t={t}
+          />
+          <MarketOverviewChartPanel
+            items={coreMarketIndexItems}
+            requestedLocale={requestedLocale}
+            locale={locale}
+            colorScheme={platformSettings.color_scheme}
+            unavailableLabel={t("unavailableShort")}
+            t={t}
+          />
+          <FundFlowPanel
+            sectors={hotSectorItemsForHome}
+            locale={locale}
+            unavailableLabel={t("unavailableShort")}
+            t={t}
+          />
+          <AiSentimentPanel summary={aiSentimentSummary} t={t} />
         </div>
 
-        <TerminalPanel
-          title={t("newsProviderStripTitle")}
-          description={t("newsProviderStripDesc")}
-          icon={<Search className="h-4 w-4 text-primary" aria-hidden="true" />}
-          action={
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/settings" className="gap-2">
-                <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-                {t("providerSettings")}
-              </Link>
-            </Button>
-          }
-        >
-          {newsSearchProviderCapabilities.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-              {newsSearchProviderCapabilities.map((capability) => {
-                const statusKey = getNewsProviderStatusKey(capability);
-                const statusClassName = getNewsProviderStatusClassName(capability);
-                return (
-                  <div
-                    key={capability.provider}
-                    className={`min-h-[5.75rem] rounded-sm border bg-background/55 p-2.5 ${statusClassName}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-foreground">{capability.display_name}</div>
-                        <div className="mt-1 font-mono text-[10px] text-muted-foreground">
-                          {t("newsProviderPriority", { priority: capability.priority })}
-                        </div>
-                      </div>
-                      {capability.configured ? (
-                        <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      ) : (
-                        <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      )}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      <Badge variant="outline" className="px-1 py-0 text-[10px]">
-                        {t(statusKey as any)}
-                      </Badge>
-                      {capability.enabled ? (
-                        <Badge variant="outline" className="px-1 py-0 text-[10px]">
-                          {t("newsProviderEnabled")}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <div className="mt-2 truncate text-[10px] text-muted-foreground">
-                      {capability.implementation_status}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("newsProviderStripEmpty")}</p>
-          )}
-        </TerminalPanel>
+        <NewsProviderStatusStrip providers={newsSearchProviderCapabilities} t={t} />
       </div>
     </div>
   );
