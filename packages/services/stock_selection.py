@@ -26,6 +26,7 @@ def screen_local_stock_selection(
     session: Session,
     symbols: list[str] | None = None,
     market: str | None = None,
+    asset_type: str | None = None,
     max_pe_ratio: float | None = None,
     min_revenue_growth: float | None = None,
     min_net_margin: float | None = None,
@@ -75,6 +76,7 @@ def screen_local_stock_selection(
             "candidate_scope": _candidate_scope_payload(
                 symbols=symbols,
                 market=market,
+                asset_type=asset_type,
                 watchlist_only=watchlist_only,
             ),
             "criteria": criteria,
@@ -96,6 +98,7 @@ def screen_local_stock_selection(
         session=session,
         symbols=symbols,
         market=market,
+        asset_type=asset_type,
         watchlist_only=watchlist_only,
         limit=MAX_SCREENING_SYMBOLS,
     )
@@ -124,6 +127,7 @@ def screen_local_stock_selection(
         "candidate_scope": _candidate_scope_payload(
             symbols=symbols,
             market=market,
+            asset_type=asset_type,
             watchlist_only=watchlist_only,
         ),
         "criteria": criteria,
@@ -194,6 +198,7 @@ def _candidate_instruments(
     session: Session,
     symbols: list[str] | None,
     market: str | None,
+    asset_type: str | None,
     watchlist_only: bool,
     limit: int,
 ) -> list[Instrument]:
@@ -207,6 +212,10 @@ def _candidate_instruments(
     normalized_market = _normalize_optional_text(market)
     if normalized_market:
         query = query.filter(Market.code == normalized_market)
+
+    normalized_asset_type = _normalize_asset_type(asset_type)
+    if normalized_asset_type:
+        query = query.filter(Instrument.asset_type == normalized_asset_type)
 
     if watchlist_only:
         watchlist_entries = get_active_watchlist_scope(session)
@@ -773,11 +782,13 @@ def _candidate_scope_payload(
     *,
     symbols: list[str] | None,
     market: str | None,
+    asset_type: str | None,
     watchlist_only: bool,
 ) -> dict[str, object]:
     return {
         "symbols": _normalize_symbols(symbols),
         "market": _normalize_optional_text(market),
+        "asset_type": _normalize_asset_type(asset_type),
         "watchlist_only": watchlist_only,
     }
 
@@ -828,6 +839,13 @@ def _normalize_optional_text(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().upper()
+    return normalized or None
+
+
+def _normalize_asset_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
     return normalized or None
 
 

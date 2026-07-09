@@ -21,6 +21,7 @@
   - `symbols`: comma-separated symbols. If omitted, stored active instruments
     are scanned.
   - `market`: market code such as `US`, `CN`, or `HK`.
+  - `asset_type`: stored instrument asset type such as `stock` or `etf`.
   - `max_pe_ratio`
   - `min_revenue_growth`
   - `min_net_margin`
@@ -65,20 +66,23 @@
   `DailyBar.amount` when present and otherwise uses the local `close * volume`
   estimate from the same stored daily bar; it must not call a live provider to
   repair missing values.
-- `watchlist_only` is a candidate-scope control, not a selection criterion and
-  not citable evidence. It must read only active default-watchlist
-  `symbol`/`market` pairs without triggering provider enrichment.
+- `market`, `asset_type`, and `watchlist_only` are candidate-scope controls,
+  not selection criteria and not citable evidence. `watchlist_only` must read
+  only active default-watchlist `symbol`/`market` pairs without triggering
+  provider enrichment.
 - News/sentiment criteria must read only stored local news rows. They must not
   call live search providers, news ingestion, social-candidate persistence, or
   provider fallback while screening.
-- At least one selection criterion is required. Empty criteria returns HTTP 400
-  at the API boundary and an `invalid_request` service payload.
+- At least one selection criterion is required. Scope-only requests, such as
+  only `market`, `asset_type`, or `watchlist_only`, return HTTP 400 at the API
+  boundary and an `invalid_request` service payload.
 - Missing local evidence must produce diagnostics and no fabricated match.
 - Matching items may expose evidence citation IDs for the stored rows used:
   `bars_1d:*`, `technical_indicators:*`, `fundamental_metrics:*`, and
   `news:*` when news criteria are active and stored news exists.
 - Payloads include `candidate_scope` with normalized `symbols`, optional
-  `market`, and `watchlist_only` so callers can audit the scanned universe.
+  `market`, optional `asset_type`, and `watchlist_only` so callers can audit the
+  scanned universe.
 - The stock-selection result itself is a research analysis payload, not a stored
   assistant citation row and not a trading signal.
 - Payloads must include `research_signal_only=true` and the disclaimer:
@@ -90,6 +94,8 @@
 
 - No criteria -> HTTP 400 / `NO_SELECTION_CRITERIA`.
 - Symbol duplicates -> normalize and screen once.
+- `asset_type` filter -> normalize to lowercase and apply to stored
+  `Instrument.asset_type` before criteria evaluation.
 - Fundamental criterion requested but no `FundamentalSnapshot` -> diagnostic
   `MISSING_FUNDAMENTALS`, no match.
 - Technical criterion requested but required indicator is missing -> diagnostic
@@ -135,6 +141,8 @@
   fetching live news inside the screener.
 - Base: scanning by `market=US` without `symbols` uses stored active instruments
   only and does not fetch provider data.
+- Base: scanning by `asset_type=etf` narrows the local candidate universe to
+  stored ETF instruments before criteria evaluation.
 - Base: `watchlist_only=true` narrows the scan to stored active watchlist
   entries but still requires ordinary stored market/fundamental/technical rows
   before a symbol can match.
@@ -153,10 +161,11 @@
   news criteria, duplicate symbol normalization, evidence citations, failed
   criteria diagnostics, missing fundamentals diagnostics, stored news/sentiment
   criteria, missing news diagnostics, watchlist-only candidate scoping, and
-  no-criteria validation.
+  asset-type candidate scoping, and no-criteria validation.
 - API tests assert route registration, query parsing, HTTP 400 for no criteria,
   market-data query fields, news/sentiment query fields,
-  `candidate_scope.watchlist_only`, and `research_signal_only=true`.
+  `candidate_scope.asset_type`, `candidate_scope.watchlist_only`, and
+  `research_signal_only=true`.
 - Focused validation should include:
   `pytest tests/services/test_stock_selection.py tests/api/test_stock_selection_api.py`,
   ruff on touched stock-selection files, full backend pytest, and

@@ -43,6 +43,7 @@ def seed_instrument(
     william_r: float | None = -30.0,
     pattern_codes: list[str] | None = None,
     chip_benefit_ratio: float | None = 0.65,
+    asset_type: str = "stock",
     pe_ratio: float = 25.0,
     revenue_growth: float = 0.12,
     net_margin: float = 0.24,
@@ -56,7 +57,7 @@ def seed_instrument(
         symbol=symbol,
         name=symbol,
         market=market,
-        asset_type="stock",
+        asset_type=asset_type,
         currency="USD",
     )
     session.add(instrument)
@@ -408,6 +409,31 @@ def test_stock_selection_matches_local_market_data_criteria():
     )
 
 
+def test_stock_selection_can_scope_candidates_by_asset_type():
+    session = make_session()
+    seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0, asset_type="stock")
+    seed_instrument(session, "SPY", close=112.0, ma=100.0, rsi=58.0, asset_type="etf")
+
+    payload = screen_local_stock_selection(
+        session=session,
+        market="US",
+        asset_type="ETF",
+        min_rsi=40.0,
+        max_rsi=70.0,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["candidate_scope"] == {
+        "symbols": [],
+        "market": "US",
+        "asset_type": "etf",
+        "watchlist_only": False,
+    }
+    assert payload["count"] == 1
+    assert payload["items"][0]["symbol"] == "SPY"
+    assert payload["items"][0]["asset_type"] == "etf"
+
+
 def test_stock_selection_reports_missing_news_without_fabricating_match():
     session = make_session()
     seed_instrument(session, "AAPL", close=110.0, ma=100.0, rsi=55.0)
@@ -483,6 +509,7 @@ def test_stock_selection_can_scope_candidates_to_active_watchlist_items():
     assert payload["candidate_scope"] == {
         "symbols": [],
         "market": None,
+        "asset_type": None,
         "watchlist_only": True,
     }
     assert payload["count"] == 1

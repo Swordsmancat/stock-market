@@ -379,6 +379,22 @@ dimension into the existing local evidence screener:
 - avoid live provider scans, persistence of selection results, strategy
   execution, order intents, and buy/sell/hold language.
 
+## Follow-Up Slice: Composite Stock Selection Asset-Type Scope
+
+The next incremental stock-selection slice connects the stock/ETF ingestion work
+back into the local screener:
+
+- add an `asset_type` candidate-scope filter to `GET /stock-selection/screen`;
+- normalize `asset_type` to lowercase and filter stored `Instrument.asset_type`
+  before criteria evaluation;
+- include `asset_type` in `candidate_scope` so callers can audit the scanned
+  universe;
+- keep `asset_type` as a scope control, not a criterion or evidence citation;
+- preserve the requirement that at least one real selection criterion is
+  supplied;
+- avoid provider scans, ETF universe crawls, persisted selection results,
+  strategy execution, order intents, and buy/sell/hold language.
+
 ## Follow-Up Slice: Single-Symbol Stock / ETF Daily-Bar Jobs
 
 The next data-job slice adapts InStock's daily stock/ETF job shape to this

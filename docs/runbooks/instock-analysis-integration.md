@@ -19,6 +19,10 @@ runtime dependency.
   default-watchlist entries.
 - Implemented feature: composite stock selection over stored news/sentiment
   evidence: article count, latest sentiment, and sentiment confidence.
+- Implemented feature: composite stock selection over latest stored market-data
+  criteria: volume and traded amount.
+- Implemented feature: composite stock selection can scope candidates by stored
+  asset type such as `stock` or `etf`.
 - Implemented feature: single-symbol daily-bar ingestion can persist stock or
   ETF asset type.
 - Implemented feature: explicit-symbol batch daily-bar ingestion with partial
@@ -183,13 +187,13 @@ These are not executable orders, backtest results, or validated trading strategi
 ## Composite Stock Selection API
 
 `GET /stock-selection/screen` screens local stored instruments against
-fundamental and technical criteria:
+fundamental, technical, market-data, and news criteria:
 
 ```text
-GET /stock-selection/screen?symbols=AAPL,MSFT&watchlist_only=true&max_pe_ratio=30&min_revenue_growth=0.1&min_rsi=40&max_rsi=70&require_price_above_ma=true&required_pattern_codes=hammer&min_mfi=50&min_chip_benefit_ratio=0.6
+GET /stock-selection/screen?symbols=AAPL,MSFT&asset_type=stock&watchlist_only=true&max_pe_ratio=30&min_revenue_growth=0.1&min_rsi=40&max_rsi=70&require_price_above_ma=true&required_pattern_codes=hammer&min_mfi=50&min_chip_benefit_ratio=0.6
 ```
 
-The first criteria are:
+Supported criteria include:
 
 - `max_pe_ratio`
 - `min_revenue_growth`
@@ -209,6 +213,12 @@ The first criteria are:
 - `min_news_article_count`
 - `required_news_sentiment`
 - `min_news_sentiment_confidence`
+
+Scope controls include:
+
+- `symbols`
+- `market`
+- `asset_type`
 - `watchlist_only` to limit candidate instruments to active default-watchlist
   entries before criteria evaluation
 
@@ -219,9 +229,11 @@ criteria read only stored `candlestick_patterns.patterns[]` and
 to stored rows used in the screen, while the selection result itself remains a
 research-only analysis payload.
 
-`watchlist_only` is a candidate-scope flag, not evidence. It reads active
-watchlist `symbol`/`market` pairs without provider-backed watchlist enrichment
-and still requires the ordinary stored evidence rows before a symbol can match.
+`market`, `asset_type`, and `watchlist_only` are candidate-scope flags, not
+evidence or criteria. `asset_type` filters stored `Instrument.asset_type`.
+`watchlist_only` reads active watchlist `symbol`/`market` pairs without
+provider-backed watchlist enrichment. Scope filters still require ordinary
+stored evidence rows and at least one real criterion before a symbol can match.
 
 News/sentiment criteria read only stored `NewsArticle` plus `SentimentSignal`
 rows. They do not call live news/search providers, do not persist social search

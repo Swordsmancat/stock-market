@@ -190,6 +190,7 @@ def test_stock_selection_api_screens_local_composite_criteria():
             params={
                 "symbols": "aapl,AAPL",
                 "market": "US",
+                "asset_type": "stock",
                 "max_pe_ratio": 30,
                 "min_revenue_growth": 0.1,
                 "min_rsi": 40,
@@ -213,6 +214,7 @@ def test_stock_selection_api_screens_local_composite_criteria():
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["research_signal_only"] is True
+    assert payload["candidate_scope"]["asset_type"] == "stock"
     assert payload["candidate_scope"]["watchlist_only"] is True
     assert payload["count"] == 1
     assert payload["items"][0]["symbol"] == "AAPL"

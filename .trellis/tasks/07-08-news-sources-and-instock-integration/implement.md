@@ -172,6 +172,15 @@ git diff --check
 - [x] Keep the response research-only with stored bar evidence citations and the non-advice disclaimer.
 - [x] Add focused service/API tests and backend spec/runbook coverage.
 
+## InStock Composite Stock Selection Asset-Type Scope Slice
+
+- [x] Extend `screen_local_stock_selection` with an `asset_type` candidate-scope filter.
+- [x] Add `GET /stock-selection/screen` query parameter `asset_type`.
+- [x] Return normalized `asset_type` in `candidate_scope` for auditability.
+- [x] Preserve the requirement for at least one real selection criterion; `asset_type` alone is not evidence.
+- [x] Avoid provider scans, ETF universe crawls, selection persistence, order intents, and buy/sell advice.
+- [x] Add focused service/API tests and backend spec/runbook coverage.
+
 ## InStock Single-Symbol Stock / ETF Daily-Bar Job Slice
 
 - [x] Add `asset_type` to `POST /ingestion/symbol-daily-bars`, defaulting to `stock` and supporting `stock` / `etf`.
