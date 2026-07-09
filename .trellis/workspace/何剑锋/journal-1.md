@@ -1266,3 +1266,36 @@ Refactored the homepage into a strict dark terminal cockpit matching the referen
 ### Next Steps
 
 - None - task complete
+
+
+## Session 39: Homepage terminal panel actions and layout polish
+
+**Date**: 2026-07-09
+**Task**: Homepage terminal panel actions and layout polish
+**Branch**: `master`
+
+### Summary
+
+Added localized More actions across homepage terminal modules, added macro custom-indicator entry, fixed middle panel shells and body overflow behavior, updated tests/specs, and verified with Chrome desktop/mobile visual checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `93aedc2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
