@@ -1365,3 +1365,36 @@ Added provider-backed A-share stock fund-flow, industry/concept sector-flow para
 ### Next Steps
 
 - None - task complete
+
+
+## Session 42: InStock Dragon Tiger and Block Trades MVP
+
+**Date**: 2026-07-09
+**Task**: InStock Dragon Tiger and Block Trades MVP
+**Branch**: `master`
+
+### Summary
+
+Added research-only AkShare-backed Dragon Tiger List and block-trade market daily-data endpoints, Next.js proxies, AI Research Desk visibility, focused tests, and updated source/citation boundary docs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d5c1aaa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
