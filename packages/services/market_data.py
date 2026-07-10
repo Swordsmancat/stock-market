@@ -30,12 +30,22 @@ def _provider() -> MockProvider:
 DEFAULT_RSI_WINDOW = 14
 NO_DAILY_BARS_REASON = "No daily bars were available for the requested symbol/date range."
 DEFAULT_INTRADAY_TIMEFRAME = "1m"
-INTRADAY_UNSUPPORTED_REASON = "The selected provider does not support verified minute bars in this backend."
-INTRADAY_NO_DATA_REASON = "No verified minute bars were returned for the requested symbol and trade date."
-INTRADAY_FUTURE_NO_DATA_REASON = "The requested date is in the future; no verified stock-market minute session is available yet."
+INTRADAY_UNSUPPORTED_REASON = (
+    "The selected provider does not support verified minute bars in this backend."
+)
+INTRADAY_NO_DATA_REASON = (
+    "No verified minute bars were returned for the requested symbol and trade date."
+)
+INTRADAY_FUTURE_NO_DATA_REASON = (
+    "The requested date is in the future; no verified stock-market minute session is available yet."
+)
 INTRADAY_KNOWN_HOLIDAY_NO_DATA_REASON = "The requested date is a recognized market holiday for this provider/symbol; no verified stock-market minute session is expected."
-INTRADAY_WEEKEND_NO_DATA_REASON = "The requested date falls on a weekend; no verified stock-market minute session is expected."
-INTRADAY_CACHE_UNAVAILABLE_REASON = "Persistent intraday cache was unavailable; provider data was returned without cache reuse."
+INTRADAY_WEEKEND_NO_DATA_REASON = (
+    "The requested date falls on a weekend; no verified stock-market minute session is expected."
+)
+INTRADAY_CACHE_UNAVAILABLE_REASON = (
+    "Persistent intraday cache was unavailable; provider data was returned without cache reuse."
+)
 INTRADAY_PREVIOUS_CLOSE_LOOKBACK_DAYS = 10
 INTRADAY_CACHE_SOURCE = "provider_verified"
 INTRADAY_MARKET_META = {
@@ -43,9 +53,15 @@ INTRADAY_MARKET_META = {
 }
 DEFAULT_MARKET_DEPTH_LEVELS = 5
 DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT = Decimal("1000000")
-MARKET_DEPTH_UNSUPPORTED_REASON = "The selected provider does not expose verified market depth data in this backend."
-RECENT_TRADES_UNSUPPORTED_REASON = "Recent trades are not normalized or verified by this backend yet."
-LARGE_ORDERS_UNSUPPORTED_REASON = "Large order detection requires verified recent trades, which are unavailable."
+MARKET_DEPTH_UNSUPPORTED_REASON = (
+    "The selected provider does not expose verified market depth data in this backend."
+)
+RECENT_TRADES_UNSUPPORTED_REASON = (
+    "Recent trades are not normalized or verified by this backend yet."
+)
+LARGE_ORDERS_UNSUPPORTED_REASON = (
+    "Large order detection requires verified recent trades, which are unavailable."
+)
 FUND_FLOW_UNSUPPORTED_REASON = "Fund-flow data is not normalized or verified by this backend yet."
 
 MARKET_DEPTH_PROVIDER_CAPABILITIES = {
@@ -164,6 +180,8 @@ def _classify_provider_error(
         return MarketDataProviderTimeoutError(provider_name, operation, original_error)
     if isinstance(original_error, ConnectionError):
         return MarketDataProviderUnavailableError(provider_name, operation, original_error)
+    if isinstance(original_error, (KeyError, TypeError)):
+        return MarketDataProviderPayloadError(provider_name, operation, original_error)
 
     normalized_message = str(original_error).lower()
     if (
@@ -320,7 +338,9 @@ def _serialize_provider_intraday_bars(
     try:
         return [serialize_intraday_bar(bar) for bar in bars]
     except Exception as error:
-        raise MarketDataProviderPayloadError(provider_name, "serializing intraday bars", error) from error
+        raise MarketDataProviderPayloadError(
+            provider_name, "serializing intraday bars", error
+        ) from error
 
 
 def serialize_order_book_level(level: ProviderOrderBookLevel) -> dict[str, float | int | None]:
@@ -356,8 +376,12 @@ def serialize_fund_flow(fund_flow: ProviderFundFlow | None) -> dict[str, float |
     return {
         "currency": fund_flow.currency,
         "net_inflow": float(fund_flow.net_inflow) if fund_flow.net_inflow is not None else None,
-        "main_net_inflow": float(fund_flow.main_net_inflow) if fund_flow.main_net_inflow is not None else None,
-        "retail_net_inflow": float(fund_flow.retail_net_inflow) if fund_flow.retail_net_inflow is not None else None,
+        "main_net_inflow": float(fund_flow.main_net_inflow)
+        if fund_flow.main_net_inflow is not None
+        else None,
+        "retail_net_inflow": float(fund_flow.retail_net_inflow)
+        if fund_flow.retail_net_inflow is not None
+        else None,
         "source_definition": fund_flow.source_definition,
     }
 
@@ -374,7 +398,9 @@ def _serialize_provider_market_depth_snapshot(
             "fund_flow": serialize_fund_flow(snapshot.fund_flow),
         }
     except Exception as error:
-        raise MarketDataProviderPayloadError(provider_name, "serializing market depth", error) from error
+        raise MarketDataProviderPayloadError(
+            provider_name, "serializing market depth", error
+        ) from error
 
 
 def _serialize_provider_bars(
@@ -572,8 +598,12 @@ def get_intraday_bars_payload(
             freshness_status="closed",
             freshness_reason=None,
             cache_status="hit",
-            fetched_at=cache_lookup.entry.fetched_at.isoformat() if cache_lookup.entry is not None else None,
-            cached_at=cache_lookup.entry.cached_at.isoformat() if cache_lookup.entry is not None else None,
+            fetched_at=cache_lookup.entry.fetched_at.isoformat()
+            if cache_lookup.entry is not None
+            else None,
+            cached_at=cache_lookup.entry.cached_at.isoformat()
+            if cache_lookup.entry is not None
+            else None,
             session_status=session_status,
         )
 
@@ -590,7 +620,9 @@ def get_intraday_bars_payload(
         trade_date,
         timeframe,
     )
-    serialized_intraday_bars = _serialize_provider_intraday_bars(intraday_bars, effective_provider_name)
+    serialized_intraday_bars = _serialize_provider_intraday_bars(
+        intraday_bars, effective_provider_name
+    )
     if not serialized_intraday_bars:
         return _build_intraday_no_data_payload(
             symbol=symbol,
@@ -624,7 +656,9 @@ def get_intraday_bars_payload(
         source="provider",
         freshness_status="fresh",
         freshness_reason=cache_write.reason,
-        cache_status=_provider_intraday_cache_status(cache_lookup.status, cache_write.status, session_status),
+        cache_status=_provider_intraday_cache_status(
+            cache_lookup.status, cache_write.status, session_status
+        ),
         fetched_at=cache_write.fetched_at,
         cached_at=cache_write.cached_at,
         session_status=session_status,
@@ -805,7 +839,9 @@ def _easter_sunday(year: int) -> date:
     epact = (19 * golden_year + century - skipped_leap_years - moon_correction + 15) % 30
     year_in_century_leaps = year_in_century // 4
     year_in_century_remainder = year_in_century % 4
-    weekday_correction = (32 + 2 * century_remainder + 2 * year_in_century_leaps - epact - year_in_century_remainder) % 7
+    weekday_correction = (
+        32 + 2 * century_remainder + 2 * year_in_century_leaps - epact - year_in_century_remainder
+    ) % 7
     month_offset = (golden_year + 11 * epact + 22 * weekday_correction) // 451
     month = (epact + weekday_correction - 7 * month_offset + 114) // 31
     day = ((epact + weekday_correction - 7 * month_offset + 114) % 31) + 1
@@ -912,7 +948,9 @@ def _get_intraday_cache_lookup(
     if session_status != "closed_session":
         return IntradayCacheLookup(status="skipped", items=[], reason=None)
     if session is None or not _can_use_persistent_intraday_cache(provider_name, symbol):
-        return IntradayCacheLookup(status="unavailable", items=[], reason=INTRADAY_CACHE_UNAVAILABLE_REASON)
+        return IntradayCacheLookup(
+            status="unavailable", items=[], reason=INTRADAY_CACHE_UNAVAILABLE_REASON
+        )
 
     normalized_symbol = _normalize_intraday_cache_symbol(symbol)
     try:
@@ -937,7 +975,9 @@ def _get_intraday_cache_lookup(
         )
     except SQLAlchemyError:
         session.rollback()
-        return IntradayCacheLookup(status="unavailable", items=[], reason=INTRADAY_CACHE_UNAVAILABLE_REASON)
+        return IntradayCacheLookup(
+            status="unavailable", items=[], reason=INTRADAY_CACHE_UNAVAILABLE_REASON
+        )
 
     if len(cached_bars) < cache_entry.row_count:
         return IntradayCacheLookup(status="miss", items=[])
@@ -964,7 +1004,11 @@ def _persist_intraday_cache_bars(
     fetched_at_iso = fetched_at.isoformat()
     if session_status != "closed_session":
         return IntradayCacheWriteResult(status="skipped", fetched_at=fetched_at_iso, cached_at=None)
-    if session is None or cache_lookup_status == "unavailable" or not _can_use_persistent_intraday_cache(provider_name, symbol):
+    if (
+        session is None
+        or cache_lookup_status == "unavailable"
+        or not _can_use_persistent_intraday_cache(provider_name, symbol)
+    ):
         return IntradayCacheWriteResult(
             status="unavailable",
             fetched_at=fetched_at_iso,
@@ -1031,7 +1075,9 @@ def _persist_intraday_cache_bars(
             reason=INTRADAY_CACHE_UNAVAILABLE_REASON,
         )
 
-    return IntradayCacheWriteResult(status="stored", fetched_at=fetched_at_iso, cached_at=cached_at.isoformat())
+    return IntradayCacheWriteResult(
+        status="stored", fetched_at=fetched_at_iso, cached_at=cached_at.isoformat()
+    )
 
 
 def _can_use_persistent_intraday_cache(provider_name: str, symbol: str) -> bool:
@@ -1082,7 +1128,9 @@ def _get_or_create_intraday_cache_instrument(
     return instrument
 
 
-def _provider_intraday_cache_status(cache_lookup_status: str, cache_write_status: str, session_status: str) -> str:
+def _provider_intraday_cache_status(
+    cache_lookup_status: str, cache_write_status: str, session_status: str
+) -> str:
     if session_status != "closed_session":
         return "skipped"
     if cache_lookup_status == "unavailable" or cache_write_status == "unavailable":
@@ -1354,7 +1402,9 @@ def _build_provider_market_depth_payload(
     threshold_amount: Decimal,
     snapshot: ProviderMarketDepthSnapshot,
 ) -> dict[str, object]:
-    serialized_snapshot = _serialize_provider_market_depth_snapshot(snapshot, effective_provider_name)
+    serialized_snapshot = _serialize_provider_market_depth_snapshot(
+        snapshot, effective_provider_name
+    )
     bids = list(serialized_snapshot["bids"])
     asks = list(serialized_snapshot["asks"])
     recent_trades = list(serialized_snapshot["recent_trades"])
@@ -1364,14 +1414,18 @@ def _build_provider_market_depth_payload(
     has_recent_trades = bool(recent_trades)
     has_large_orders = bool(large_orders)
     has_fund_flow = _fund_flow_has_values(fund_flow)
-    has_any_verified_section = has_order_book or has_recent_trades or has_large_orders or has_fund_flow
+    has_any_verified_section = (
+        has_order_book or has_recent_trades or has_large_orders or has_fund_flow
+    )
     capabilities = {
         "order_book": has_order_book,
         "recent_trades": has_recent_trades,
         "large_orders": has_large_orders,
         "fund_flow": has_fund_flow,
     }
-    partial_reason = snapshot.availability.get("reason") if isinstance(snapshot.availability, dict) else None
+    partial_reason = (
+        snapshot.availability.get("reason") if isinstance(snapshot.availability, dict) else None
+    )
     availability_reason = str(partial_reason) if partial_reason else None
     as_of = snapshot.as_of.isoformat() if snapshot.as_of is not None else None
 
@@ -1435,7 +1489,9 @@ def _derive_large_orders_from_recent_trades(
         if not isinstance(amount, int | float):
             continue
         if Decimal(str(amount)) >= threshold_amount:
-            large_orders.append({**trade, "threshold_amount": float(threshold_amount), "threshold_volume": None})
+            large_orders.append(
+                {**trade, "threshold_amount": float(threshold_amount), "threshold_volume": None}
+            )
     return large_orders
 
 
@@ -1545,7 +1601,9 @@ def get_latest_bar_payload(
         "effective_provider": fallback.get("effective_provider"),
         "item": latest_item,
         "status": "ok" if latest_item is not None else "no_data",
-        "no_data_reason": None if latest_item is not None else fallback.get("no_data_reason", NO_DAILY_BARS_REASON),
+        "no_data_reason": None
+        if latest_item is not None
+        else fallback.get("no_data_reason", NO_DAILY_BARS_REASON),
     }
 
 

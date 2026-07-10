@@ -94,6 +94,37 @@ def test_task_run_service_persists_bounded_progress_payload():
     assert progress["current"] == 2
     assert progress["total"] == 2
     assert progress["updated_at"]
+    assert payload["heartbeat_at"] == progress["updated_at"]
+
+
+def test_task_run_heartbeat_prevents_healthy_long_run_from_expiring():
+    session = make_session()
+    task_run = start_task_run(
+        "ingestion.backfill_a_share_research_evidence",
+        {"market": "CN", "provider": "akshare"},
+        session=session,
+    )
+    task_run.started_at = task_run.started_at.replace(year=2020)
+    session.commit()
+
+    update_task_run_progress(
+        task_run,
+        phase="daily_bars",
+        current=25,
+        total=5000,
+        message="Processed one bounded batch.",
+        session=session,
+    )
+
+    expired_count = expire_stale_task_runs(session, timeout_minutes=30)
+    latest = get_latest_task_run_payload(
+        session,
+        "ingestion.backfill_a_share_research_evidence",
+    )
+
+    assert expired_count == 0
+    assert latest["status"] == "running"
+    assert latest["heartbeat_at"] is not None
 
 
 def test_recent_task_runs_can_filter_by_status():
@@ -113,6 +144,7 @@ def test_expire_stale_task_runs_marks_old_running_tasks_failed():
     session = make_session()
     task_run = start_task_run("ingestion.ingest_market_data", {"market": "US"}, session=session)
     task_run.started_at = task_run.started_at.replace(year=2020)
+    task_run.heartbeat_at = None
     session.commit()
 
     expired_count = expire_stale_task_runs(session, timeout_minutes=30)

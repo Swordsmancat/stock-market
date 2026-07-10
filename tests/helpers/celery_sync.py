@@ -138,5 +138,16 @@ def dispatch_task_run_sync(
             ),
         )
 
+    if task_name == "ingestion.backfill_a_share_research_evidence":
+        from apps.worker.tasks.ingestion import backfill_a_share_research_evidence_task
+
+        return _run_with_session(
+            session,
+            lambda: backfill_a_share_research_evidence_task.run(
+                backfill_run_id=input_json["backfill_run_id"],
+                task_run_id=task_run_id,
+            ),
+        )
+
     msg = f"Unsupported task for sync dispatch: {task_name}"
     raise ValueError(msg)

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from packages.services.instrument_universe import get_instrument_universe_status
+from packages.services.research_evidence_backfill import get_evidence_coverage
 from packages.services.stock_discovery import discover_local_stocks
 from packages.services.stock_selection import screen_local_stock_selection
 from packages.services.stock_selection_profiles import get_stock_selection_profiles_payload
@@ -48,6 +49,22 @@ class StockDiscoveryRequest(BaseModel):
 @router.get("/profiles")
 def get_stock_selection_profiles() -> dict[str, object]:
     return get_stock_selection_profiles_payload()
+
+
+@router.get("/evidence-coverage")
+def get_stock_selection_evidence_coverage(
+    market: str = Query(default="CN"),
+    provider: str = Query(default="akshare"),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        return get_evidence_coverage(
+            session=session,
+            market=market,
+            provider=provider,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/universe-status")

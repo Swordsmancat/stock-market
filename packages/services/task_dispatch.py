@@ -108,6 +108,19 @@ def _dispatch_symbol_daily_bars_batch_ingestion(
     return async_result.id
 
 
+def _dispatch_research_evidence_backfill(
+    input_json: dict[str, Any],
+    task_run_id: str,
+) -> str:
+    from apps.worker.tasks.ingestion import backfill_a_share_research_evidence_task
+
+    async_result = backfill_a_share_research_evidence_task.delay(
+        backfill_run_id=input_json["backfill_run_id"],
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
 def _dispatch_alert_evaluation(input_json: dict[str, Any], task_run_id: str) -> str:
     from apps.worker.tasks.alerts import evaluate_watchlist_alerts
 
@@ -126,6 +139,7 @@ _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "ingestion.sync_corporate_actions": _dispatch_corporate_action_sync,
     "ingestion.ingest_symbol_daily_bars": _dispatch_symbol_daily_bars_ingestion,
     "ingestion.ingest_symbol_daily_bars_batch": _dispatch_symbol_daily_bars_batch_ingestion,
+    "ingestion.backfill_a_share_research_evidence": _dispatch_research_evidence_backfill,
     "alerts.evaluate_watchlist_alerts": _dispatch_alert_evaluation,
 }
 

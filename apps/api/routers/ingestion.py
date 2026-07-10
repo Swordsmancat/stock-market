@@ -6,6 +6,17 @@ from sqlalchemy.orm import Session
 
 from packages.services.ingestion import normalize_symbol_list
 from packages.services.instrument_universe import get_instrument_universe_status
+from packages.services.research_evidence_backfill import (
+    BACKFILL_TASK_NAME,
+    BackfillRequest,
+    create_backfill_run,
+    create_resume_backfill_run,
+    create_retry_failed_backfill_run,
+    fail_backfill_run,
+    get_backfill_payload,
+    link_backfill_task_run,
+    request_cancel_backfill,
+)
 from packages.services.task_runs import enqueue_task_run
 from packages.shared.database import get_session
 
@@ -30,6 +41,27 @@ class CorporateActionSyncRequest(BaseModel):
     )
     cursor: int = Field(default=0, ge=0)
     batch_size: int = Field(default=50, ge=1, le=100)
+
+
+class ResearchEvidenceBackfillRequest(BaseModel):
+    run_kind: str = Field(default="baseline", min_length=1, max_length=32)
+    market: str = Field(default="CN", min_length=1, max_length=32)
+    provider: str = Field(default="akshare", min_length=1, max_length=64)
+    evidence_kinds: list[str] = Field(
+        default_factory=lambda: [
+            "daily_bars",
+            "fundamentals",
+            "technical_indicators",
+        ],
+        min_length=1,
+        max_length=3,
+    )
+    start_date: date | None = None
+    end_date: date | None = None
+    batch_size: int = Field(default=25, ge=1, le=100)
+    cohort_size: int | None = Field(default=None, ge=3, le=100)
+    shard_index: int | None = Field(default=None, ge=0)
+    shard_count: int | None = Field(default=None, ge=1, le=31)
 
 
 def _enqueue_market_snapshot_ingestion(
@@ -95,6 +127,35 @@ def _enqueue_corporate_action_sync(
         },
         session=session,
     )
+
+
+def _dispatch_research_evidence_backfill(
+    created: dict[str, object],
+    *,
+    session: Session,
+) -> dict[str, object]:
+    if created["status"] != "created":
+        return created
+    item = created["item"]
+    if not isinstance(item, dict):
+        raise RuntimeError("Created backfill payload is invalid.")
+    run_id = str(item["id"])
+    task_input = {
+        "backfill_run_id": run_id,
+        "market": item["market"],
+        "provider": item["provider"],
+        "run_kind": item["run_kind"],
+    }
+    dispatched = enqueue_task_run(BACKFILL_TASK_NAME, task_input, session=session)
+    task_run = dispatched.get("task_run")
+    if isinstance(task_run, dict) and task_run.get("id"):
+        link_backfill_task_run(run_id, str(task_run["id"]), session=session)
+    if dispatched["status"] != "dispatched":
+        fail_backfill_run(run_id, session=session, code="BACKFILL_DISPATCH_FAILED")
+    return {
+        **dispatched,
+        "backfill": get_backfill_payload(run_id, session=session)["item"],
+    }
 
 
 def _enqueue_symbol_daily_bars_ingestion(
@@ -222,6 +283,88 @@ def sync_corporate_actions(
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return _enqueue_corporate_action_sync(request=request, session=session)
+
+
+@router.post("/a-share-evidence-backfills")
+def start_a_share_evidence_backfill(
+    request: ResearchEvidenceBackfillRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        created = create_backfill_run(
+            BackfillRequest(
+                run_kind=request.run_kind,
+                market=request.market,
+                provider=request.provider,
+                evidence_kinds=tuple(request.evidence_kinds),
+                start_date=request.start_date,
+                end_date=request.end_date,
+                batch_size=request.batch_size,
+                cohort_size=request.cohort_size,
+                shard_index=request.shard_index,
+                shard_count=request.shard_count,
+            ),
+            session=session,
+        )
+        return _dispatch_research_evidence_backfill(created, session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/a-share-evidence-backfills/{run_id}")
+def get_a_share_evidence_backfill(
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    payload = get_backfill_payload(run_id, session=session)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Research evidence backfill not found")
+    return payload
+
+
+@router.post("/a-share-evidence-backfills/{run_id}/resume")
+def resume_a_share_evidence_backfill(
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    if get_backfill_payload(run_id, session=session) is None:
+        raise HTTPException(status_code=404, detail="Research evidence backfill not found")
+    try:
+        return _dispatch_research_evidence_backfill(
+            create_resume_backfill_run(run_id, session=session),
+            session=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/a-share-evidence-backfills/{run_id}/retry-failed")
+def retry_failed_a_share_evidence_backfill(
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    if get_backfill_payload(run_id, session=session) is None:
+        raise HTTPException(status_code=404, detail="Research evidence backfill not found")
+    try:
+        return _dispatch_research_evidence_backfill(
+            create_retry_failed_backfill_run(run_id, session=session),
+            session=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/a-share-evidence-backfills/{run_id}/cancel")
+def cancel_a_share_evidence_backfill(
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    if get_backfill_payload(run_id, session=session) is None:
+        raise HTTPException(status_code=404, detail="Research evidence backfill not found")
+    try:
+        return request_cancel_backfill(run_id, session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/mock-snapshot")

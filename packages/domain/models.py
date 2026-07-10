@@ -3,7 +3,18 @@ from decimal import Decimal
 from uuid import UUID as PythonUUID
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,7 +60,9 @@ class Instrument(Base):
     currency: Mapped[str] = mapped_column(String(8))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     universe_provider: Mapped[str | None] = mapped_column(String(64), default=None)
-    universe_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    universe_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
 
     market: Mapped[Market | None] = relationship("Market")
     exchange: Mapped[Exchange | None] = relationship("Exchange")
@@ -96,10 +109,90 @@ class InstrumentUniverseSync(Base):
     )
 
 
+class ResearchEvidenceBackfill(Base):
+    __tablename__ = "research_evidence_backfills"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    task_run_id: Mapped[PythonUUID | None] = mapped_column(
+        ForeignKey("task_runs.id"),
+        unique=True,
+        default=None,
+    )
+    parent_run_id: Mapped[PythonUUID | None] = mapped_column(
+        ForeignKey("research_evidence_backfills.id"),
+        default=None,
+    )
+    market: Mapped[str] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(64))
+    run_kind: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32))
+    universe_sync_id: Mapped[PythonUUID | None] = mapped_column(
+        ForeignKey("instrument_universe_syncs.id"),
+        default=None,
+    )
+    universe_as_of: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+    evidence_kinds_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    scope_symbols_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    batch_size: Mapped[int] = mapped_column(Integer, default=25)
+    cohort_size: Mapped[int | None] = mapped_column(Integer, default=None)
+    shard_index: Mapped[int | None] = mapped_column(Integer, default=None)
+    shard_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    phase: Mapped[str] = mapped_column(String(32))
+    cursor: Mapped[int] = mapped_column(Integer, default=0)
+    phase_total: Mapped[int] = mapped_column(Integer, default=0)
+    processed_count: Mapped[int] = mapped_column(Integer, default=0)
+    counters_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    retry_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    diagnostics_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+
+
 class DailyBar(Base):
     __tablename__ = "bars_1d"
 
-    instrument_id: Mapped[PythonUUID] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    instrument_id: Mapped[PythonUUID] = mapped_column(
+        ForeignKey("instruments.id"), primary_key=True
+    )
     trade_date: Mapped[date] = mapped_column(Date, primary_key=True)
     open: Mapped[Decimal] = mapped_column(Numeric(20, 6))
     high: Mapped[Decimal] = mapped_column(Numeric(20, 6))
@@ -112,7 +205,9 @@ class DailyBar(Base):
 class MinuteBar(Base):
     __tablename__ = "bars_1m"
 
-    instrument_id: Mapped[PythonUUID] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    instrument_id: Mapped[PythonUUID] = mapped_column(
+        ForeignKey("instruments.id"), primary_key=True
+    )
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     open: Mapped[Decimal] = mapped_column(Numeric(20, 6))
     high: Mapped[Decimal] = mapped_column(Numeric(20, 6))
@@ -164,7 +259,9 @@ class TechnicalIndicator(Base):
 
 class FundamentalSnapshot(Base):
     __tablename__ = "fundamental_snapshots"
-    __table_args__ = (UniqueConstraint("symbol", "as_of", name="uq_fundamental_snapshots_symbol_as_of"),)
+    __table_args__ = (
+        UniqueConstraint("symbol", "as_of", name="uq_fundamental_snapshots_symbol_as_of"),
+    )
 
     id: Mapped[PythonUUID] = uuid_pk()
     symbol: Mapped[str] = mapped_column(String(64))
@@ -220,7 +317,9 @@ class MarketIndicatorObservation(Base):
     as_of: Mapped[date] = mapped_column(Date)
     value: Mapped[Decimal] = mapped_column(Numeric(20, 6))
     source: Mapped[str] = mapped_column(String(512))
-    components_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    components_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -248,7 +347,9 @@ class Watchlist(Base):
 
 class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
-    __table_args__ = (UniqueConstraint("watchlist_id", "symbol", "market", name="uq_watchlist_items_identity"),)
+    __table_args__ = (
+        UniqueConstraint("watchlist_id", "symbol", "market", name="uq_watchlist_items_identity"),
+    )
 
     id: Mapped[PythonUUID] = uuid_pk()
     watchlist_id: Mapped[PythonUUID] = mapped_column(ForeignKey("watchlists.id"))
@@ -256,7 +357,9 @@ class WatchlistItem(Base):
     market: Mapped[str] = mapped_column(String(32))
     name: Mapped[str] = mapped_column(String(256))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    alert_rules: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    alert_rules: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -288,7 +391,9 @@ class Portfolio(Base):
 class PortfolioPosition(Base):
     __tablename__ = "portfolio_positions"
     __table_args__ = (
-        UniqueConstraint("portfolio_id", "symbol", "market", name="uq_portfolio_positions_identity"),
+        UniqueConstraint(
+            "portfolio_id", "symbol", "market", name="uq_portfolio_positions_identity"
+        ),
     )
 
     id: Mapped[PythonUUID] = uuid_pk()
@@ -365,7 +470,9 @@ class ResearchSourceNote(Base):
     source_url: Mapped[str | None] = mapped_column(String(1024), default=None)
     source_name: Mapped[str] = mapped_column(String(256))
     source_type: Mapped[str] = mapped_column(String(64))
-    symbols_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    symbols_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=list
+    )
     tags_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     as_of: Mapped[date | None] = mapped_column(Date, default=None)
@@ -378,7 +485,9 @@ class ResearchSourceNote(Base):
     ai_follow_up: Mapped[str | None] = mapped_column(Text, default=None)
     review_status: Mapped[str] = mapped_column(String(32), default="draft")
     is_citable: Mapped[bool] = mapped_column(Boolean, default=False)
-    metadata_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    metadata_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -398,11 +507,19 @@ class ResearchBrief(Base):
     brief_type: Mapped[str] = mapped_column(String(64), default="evidence_center")
     scope_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
     content_markdown: Mapped[str] = mapped_column(Text)
-    citations_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
-    source_summary_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
-    diagnostics_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    citations_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=list
+    )
+    source_summary_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
+    diagnostics_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=list
+    )
     model_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
-    safety_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    safety_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -433,13 +550,19 @@ class MarketDailyEvidenceEvent(Base):
     as_of: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     status: Mapped[str] = mapped_column(String(32), default="verified")
     is_citable: Mapped[bool] = mapped_column(Boolean, default=True)
-    payload_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
-    availability_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    payload_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
+    availability_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
     provider_capabilities_json: Mapped[dict] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         default=dict,
     )
-    diagnostics_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    diagnostics_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=list
+    )
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -483,6 +606,10 @@ class TaskRun(Base):
     )
     error_message: Mapped[str | None] = mapped_column(Text, default=None)
     celery_task_id: Mapped[str | None] = mapped_column(String(128), default=None)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

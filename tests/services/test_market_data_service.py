@@ -126,7 +126,10 @@ def test_get_bars_payload_marks_empty_provider_results_as_no_data():
 
     assert payload["items"] == []
     assert payload["status"] == "no_data"
-    assert payload["no_data_reason"] == "No daily bars were available for the requested symbol/date range."
+    assert (
+        payload["no_data_reason"]
+        == "No daily bars were available for the requested symbol/date range."
+    )
 
 
 def test_get_intraday_bars_payload_returns_verified_provider_minutes(monkeypatch):
@@ -134,7 +137,9 @@ def test_get_intraday_bars_payload_returns_verified_provider_minutes(monkeypatch
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             assert timeframe == "1d"
             return [
                 ProviderBar(
@@ -148,7 +153,9 @@ def test_get_intraday_bars_payload_returns_verified_provider_minutes(monkeypatch
                 )
             ]
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
             assert symbol == "AAPL"
             assert trade_date == date(2026, 7, 2)
             assert timeframe == "1m"
@@ -164,7 +171,9 @@ def test_get_intraday_bars_payload_returns_verified_provider_minutes(monkeypatch
                 )
             ]
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: FakeIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: FakeIntradayProvider()
+    )
 
     payload = get_intraday_bars_payload(
         "AAPL",
@@ -215,11 +224,15 @@ def test_get_intraday_bars_payload_reuses_persistent_cache_without_provider_call
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             self.daily_calls += 1
             raise AssertionError("cache-covered previous close should be read from the database")
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
             self.intraday_calls += 1
             return [
                 ProviderIntradayBar(
@@ -268,17 +281,23 @@ def test_get_intraday_bars_payload_reuses_persistent_cache_without_provider_call
     assert cache_entry.row_count == 1
 
 
-def test_get_intraday_bars_payload_returns_provider_data_when_cache_write_is_unavailable(monkeypatch):
+def test_get_intraday_bars_payload_returns_provider_data_when_cache_write_is_unavailable(
+    monkeypatch,
+):
     session = make_session()
 
     class FakeIntradayProvider:
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             return []
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
             return [
                 ProviderIntradayBar(
                     symbol=symbol,
@@ -291,7 +310,9 @@ def test_get_intraday_bars_payload_returns_provider_data_when_cache_write_is_una
                 )
             ]
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: FakeIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: FakeIntradayProvider()
+    )
     monkeypatch.setattr(
         market_data_service,
         "_persist_intraday_cache_bars",
@@ -322,13 +343,19 @@ def test_get_intraday_bars_payload_returns_no_data_for_empty_verified_provider(m
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             return []
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
             return []
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: EmptyIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: EmptyIntradayProvider()
+    )
 
     payload = get_intraday_bars_payload(
         "AAPL",
@@ -347,18 +374,26 @@ def test_get_intraday_bars_payload_returns_no_data_for_empty_verified_provider(m
     assert payload["session"]["status"] == "closed_session"
 
 
-def test_get_intraday_bars_payload_returns_weekend_no_data_without_minute_provider_call(monkeypatch):
+def test_get_intraday_bars_payload_returns_weekend_no_data_without_minute_provider_call(
+    monkeypatch,
+):
     class WeekendIntradayProvider:
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             raise AssertionError("weekend no-data should not call daily provider data")
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
             raise AssertionError("weekend no-data should not call the provider minute endpoint")
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: WeekendIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: WeekendIntradayProvider()
+    )
 
     payload = get_intraday_bars_payload(
         "AAPL",
@@ -382,13 +417,19 @@ def test_get_intraday_bars_payload_returns_future_no_data_without_minute_provide
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             raise AssertionError("future no-data should not call daily provider data")
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
             raise AssertionError("future no-data should not call the provider minute endpoint")
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: FutureIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: FutureIntradayProvider()
+    )
 
     future_trade_date = date.today() + market_data_service.timedelta(days=1)
     payload = get_intraday_bars_payload(
@@ -408,18 +449,28 @@ def test_get_intraday_bars_payload_returns_future_no_data_without_minute_provide
     assert payload["session"]["status"] == "future_date"
 
 
-def test_get_intraday_bars_payload_returns_known_us_holiday_no_data_without_minute_provider_call(monkeypatch):
+def test_get_intraday_bars_payload_returns_known_us_holiday_no_data_without_minute_provider_call(
+    monkeypatch,
+):
     class HolidayIntradayProvider:
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             raise AssertionError("known holiday no-data should not call daily provider data")
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
-            raise AssertionError("known holiday no-data should not call the provider minute endpoint")
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
+            raise AssertionError(
+                "known holiday no-data should not call the provider minute endpoint"
+            )
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: HolidayIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: HolidayIntradayProvider()
+    )
 
     payload = get_intraday_bars_payload(
         "AAPL",
@@ -432,21 +483,36 @@ def test_get_intraday_bars_payload_returns_known_us_holiday_no_data_without_minu
     assert payload["previous_close"] is None
     assert payload["items"] == []
     assert payload["availability"]["status"] == "no_data"
-    assert payload["availability"]["reason"] == market_data_service.INTRADAY_KNOWN_HOLIDAY_NO_DATA_REASON
+    assert (
+        payload["availability"]["reason"]
+        == market_data_service.INTRADAY_KNOWN_HOLIDAY_NO_DATA_REASON
+    )
 
 
-def test_get_intraday_bars_payload_returns_movable_us_holiday_no_data_without_minute_provider_call(monkeypatch):
+def test_get_intraday_bars_payload_returns_movable_us_holiday_no_data_without_minute_provider_call(
+    monkeypatch,
+):
     class MovableHolidayIntradayProvider:
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             raise AssertionError("movable holiday no-data should not call daily provider data")
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
-            raise AssertionError("movable holiday no-data should not call the provider minute endpoint")
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
+            raise AssertionError(
+                "movable holiday no-data should not call the provider minute endpoint"
+            )
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: MovableHolidayIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None: MovableHolidayIntradayProvider(),
+    )
 
     payload = get_intraday_bars_payload(
         "AAPL",
@@ -459,21 +525,32 @@ def test_get_intraday_bars_payload_returns_movable_us_holiday_no_data_without_mi
     assert payload["previous_close"] is None
     assert payload["items"] == []
     assert payload["availability"]["status"] == "no_data"
-    assert payload["availability"]["reason"] == market_data_service.INTRADAY_KNOWN_HOLIDAY_NO_DATA_REASON
+    assert (
+        payload["availability"]["reason"]
+        == market_data_service.INTRADAY_KNOWN_HOLIDAY_NO_DATA_REASON
+    )
 
 
-def test_get_intraday_bars_payload_keeps_unsupported_provider_degraded_without_daily_minute_call(monkeypatch):
+def test_get_intraday_bars_payload_keeps_unsupported_provider_degraded_without_daily_minute_call(
+    monkeypatch,
+):
     requested_timeframes: list[str] = []
 
     class UnsupportedIntradayProvider:
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             requested_timeframes.append(timeframe)
             return []
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: UnsupportedIntradayProvider())
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None: UnsupportedIntradayProvider(),
+    )
 
     payload = get_intraday_bars_payload(
         "AAPL",
@@ -493,7 +570,9 @@ def test_get_market_depth_payload_returns_verified_provider_sections(monkeypatch
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             raise AssertionError("Daily bars must not be used for market depth")
 
         def fetch_market_depth(self, symbol: str, depth_levels: int) -> ProviderMarketDepthSnapshot:
@@ -506,8 +585,22 @@ def test_get_market_depth_payload_returns_verified_provider_sections(monkeypatch
                 is_realtime=False,
                 is_delayed=True,
                 delay_minutes=15,
-                bids=[ProviderOrderBookLevel(price=Decimal("101.20"), volume=Decimal("1000"), amount=Decimal("101200"), order_count=5)],
-                asks=[ProviderOrderBookLevel(price=Decimal("101.30"), volume=Decimal("800"), amount=Decimal("81040"), order_count=4)],
+                bids=[
+                    ProviderOrderBookLevel(
+                        price=Decimal("101.20"),
+                        volume=Decimal("1000"),
+                        amount=Decimal("101200"),
+                        order_count=5,
+                    )
+                ],
+                asks=[
+                    ProviderOrderBookLevel(
+                        price=Decimal("101.30"),
+                        volume=Decimal("800"),
+                        amount=Decimal("81040"),
+                        order_count=4,
+                    )
+                ],
                 recent_trades=[
                     ProviderRecentTrade(
                         timestamp=datetime(2026, 7, 3, 13, 31, tzinfo=timezone.utc),
@@ -527,7 +620,9 @@ def test_get_market_depth_payload_returns_verified_provider_sections(monkeypatch
                 availability={"reason": "Depth snapshot from fixture provider."},
             )
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: FakeDepthProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: FakeDepthProvider()
+    )
 
     payload = market_data_service.get_market_depth_payload(
         "AAPL",
@@ -564,7 +659,9 @@ def test_get_market_depth_payload_keeps_partial_sections_degraded(monkeypatch):
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             raise AssertionError("Daily bars must not be used for market depth")
 
         def fetch_market_depth(self, symbol: str, depth_levels: int) -> ProviderMarketDepthSnapshot:
@@ -581,7 +678,9 @@ def test_get_market_depth_payload_keeps_partial_sections_degraded(monkeypatch):
                 fund_flow=None,
             )
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: PartialDepthProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: PartialDepthProvider()
+    )
 
     payload = market_data_service.get_market_depth_payload("AAPL", provider_name="akshare")
 
@@ -598,22 +697,30 @@ def test_get_market_depth_payload_keeps_partial_sections_degraded(monkeypatch):
     }
 
 
-def test_get_market_depth_payload_keeps_unsupported_provider_degraded_without_bar_fabrication(monkeypatch):
+def test_get_market_depth_payload_keeps_unsupported_provider_degraded_without_bar_fabrication(
+    monkeypatch,
+):
     called_operations: list[str] = []
 
     class UnsupportedDepthProvider:
         def fetch_instruments(self, market: str, exchange: str | None = None) -> list:
             return []
 
-        def fetch_bars(self, symbol: str, timeframe: str, start: date, end: date) -> list[ProviderBar]:
+        def fetch_bars(
+            self, symbol: str, timeframe: str, start: date, end: date
+        ) -> list[ProviderBar]:
             called_operations.append(f"fetch_bars:{timeframe}")
             return []
 
-        def fetch_intraday_bars(self, symbol: str, trade_date: date, timeframe: str) -> list[ProviderIntradayBar]:
+        def fetch_intraday_bars(
+            self, symbol: str, trade_date: date, timeframe: str
+        ) -> list[ProviderIntradayBar]:
             called_operations.append(f"fetch_intraday_bars:{timeframe}")
             return []
 
-    monkeypatch.setattr(market_data_service, "get_provider", lambda provider_name=None: UnsupportedDepthProvider())
+    monkeypatch.setattr(
+        market_data_service, "get_provider", lambda provider_name=None: UnsupportedDepthProvider()
+    )
 
     payload = market_data_service.get_market_depth_payload("AAPL", provider_name="mock")
 
@@ -727,13 +834,19 @@ def test_get_bars_payload_preserves_provider_value_errors(monkeypatch):
     ("provider_exception", "expected_error_type", "expected_category", "expected_status_code"),
     [
         (TimeoutError("request timed out"), MarketDataProviderTimeoutError, "timeout", 504),
-        (ConnectionError("connection refused"), MarketDataProviderUnavailableError, "unavailable", 503),
+        (
+            ConnectionError("connection refused"),
+            MarketDataProviderUnavailableError,
+            "unavailable",
+            503,
+        ),
         (
             RuntimeError("upstream rate limit exceeded"),
             MarketDataProviderRateLimitError,
             "rate_limited",
             429,
         ),
+        (KeyError("close"), MarketDataProviderPayloadError, "malformed_payload", 502),
     ],
 )
 def test_get_bars_payload_classifies_provider_failures(

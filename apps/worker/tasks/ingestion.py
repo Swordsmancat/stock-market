@@ -1,5 +1,6 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from apps.worker.celery_app import celery_app
 from packages.domain.models import TaskRun
@@ -14,7 +15,16 @@ from packages.services.ingestion import (
     normalize_symbol_list,
 )
 from packages.services.instrument_universe import sync_instrument_universe
+from packages.services.research_evidence_backfill import (
+    BACKFILL_TASK_NAME,
+    BackfillRequest,
+    create_backfill_run,
+    execute_backfill_run,
+    fail_backfill_run,
+    link_backfill_task_run,
+)
 from packages.services.task_runs import (
+    enqueue_task_run,
     fail_task_run,
     finish_task_run,
     start_task_run,
@@ -412,5 +422,109 @@ def ingest_symbol_daily_bars_batch_task(
     except Exception as exc:
         fail_task_run(task_run, str(exc), session=session)
         raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name=BACKFILL_TASK_NAME)
+def backfill_a_share_research_evidence_task(
+    backfill_run_id: str,
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    session = SessionLocal()
+    if task_run_id:
+        task_run = session.get(TaskRun, UUID(task_run_id))
+        if task_run is None:
+            session.close()
+            raise ValueError(f"Task run not found: {task_run_id}")
+    else:
+        task_run = start_task_run(
+            BACKFILL_TASK_NAME,
+            {"backfill_run_id": backfill_run_id},
+            session=session,
+        )
+
+    try:
+        link_backfill_task_run(backfill_run_id, str(task_run.id), session=session)
+
+        def report_progress(phase: str, current: int, total: int, message: str) -> None:
+            update_task_run_progress(
+                task_run,
+                phase=phase,
+                current=current,
+                total=total,
+                message=message,
+                session=session,
+            )
+
+        result = execute_backfill_run(
+            backfill_run_id,
+            session=session,
+            progress_callback=report_progress,
+            request_delay_seconds=max(
+                0.0,
+                settings.a_share_backfill_request_delay_ms / 1000,
+            ),
+            max_transient_attempts=settings.a_share_backfill_max_transient_attempts,
+            retry_base_seconds=settings.a_share_backfill_retry_base_seconds,
+        )
+        finish_task_run(task_run, result, session=session)
+        return result
+    except Exception as exc:
+        try:
+            fail_backfill_run(backfill_run_id, session=session)
+        finally:
+            fail_task_run(task_run, str(exc), session=session)
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="ingestion.schedule_a_share_evidence_backfill")
+def schedule_a_share_evidence_backfill_task(
+    run_kind: str,
+    evidence_kinds: list[str],
+    shard_index: int | None = None,
+    shard_count: int | None = None,
+) -> dict[str, object]:
+    session = SessionLocal()
+    try:
+        if run_kind == "fundamental_shard" and shard_index is None:
+            local_date = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+            shard_index = local_date.toordinal() % (shard_count or 5)
+        created = create_backfill_run(
+            BackfillRequest(
+                run_kind=run_kind,
+                evidence_kinds=tuple(evidence_kinds),
+                shard_index=shard_index,
+                shard_count=shard_count,
+            ),
+            session=session,
+        )
+        if created["status"] != "created":
+            return created
+        item = created["item"]
+        if not isinstance(item, dict):
+            raise RuntimeError("Created scheduled backfill payload is invalid.")
+        dispatched = enqueue_task_run(
+            BACKFILL_TASK_NAME,
+            {
+                "backfill_run_id": item["id"],
+                "market": item["market"],
+                "provider": item["provider"],
+                "run_kind": item["run_kind"],
+            },
+            session=session,
+        )
+        task_run = dispatched.get("task_run")
+        if isinstance(task_run, dict) and task_run.get("id"):
+            link_backfill_task_run(str(item["id"]), str(task_run["id"]), session=session)
+        if dispatched["status"] != "dispatched":
+            fail_backfill_run(
+                str(item["id"]),
+                session=session,
+                code="BACKFILL_DISPATCH_FAILED",
+            )
+        return {**dispatched, "backfill": item}
     finally:
         session.close()

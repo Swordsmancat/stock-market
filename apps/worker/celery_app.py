@@ -8,6 +8,8 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
 )
+celery_app.conf.timezone = "Asia/Shanghai"
+celery_app.conf.enable_utc = True
 celery_app.conf.beat_schedule = {
     "daily-watchlist-analysis-report": {
         "task": "reports.refresh_daily_watchlist_analysis",
@@ -61,6 +63,23 @@ celery_app.conf.beat_schedule = {
         "kwargs": {
             "market": "CN",
             "provider": "akshare",
+        },
+    },
+    "daily-a-share-evidence-incremental": {
+        "task": "ingestion.schedule_a_share_evidence_backfill",
+        "schedule": crontab(hour=18, minute=30, day_of_week="1-5"),
+        "kwargs": {
+            "run_kind": "incremental",
+            "evidence_kinds": ["daily_bars", "technical_indicators"],
+        },
+    },
+    "daily-a-share-fundamental-shard": {
+        "task": "ingestion.schedule_a_share_evidence_backfill",
+        "schedule": crontab(hour=20, minute=30, day_of_week="1-5"),
+        "kwargs": {
+            "run_kind": "fundamental_shard",
+            "evidence_kinds": ["fundamentals"],
+            "shard_count": 5,
         },
     },
     "watchlist-alert-evaluation": {

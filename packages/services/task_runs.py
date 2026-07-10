@@ -39,6 +39,9 @@ def _serialize_task_run(task_run: TaskRun) -> dict[str, object]:
         "result_json": task_run.result_json,
         "error_message": task_run.error_message,
         "celery_task_id": task_run.celery_task_id,
+        "heartbeat_at": _as_utc(task_run.heartbeat_at).isoformat()
+        if task_run.heartbeat_at is not None
+        else None,
         "created_at": created_at.isoformat() if created_at is not None else None,
     }
 
@@ -50,6 +53,7 @@ def start_task_run(task_name: str, input_json: dict, session: Session) -> TaskRu
         status="running",
         started_at=now,
         input_json=input_json,
+        heartbeat_at=now,
         created_at=now,
     )
     session.add(task_run)
@@ -82,6 +86,8 @@ def update_task_run_progress(
         raise ValueError("Task run progress can only be updated while the task is running.")
     bounded_total = max(0, total)
     bounded_current = max(0, min(current, bounded_total)) if bounded_total else 0
+    updated_at = _utc_now()
+    task_run.heartbeat_at = updated_at
     task_run.result_json = {
         **(task_run.result_json or {}),
         "progress": {
@@ -89,7 +95,7 @@ def update_task_run_progress(
             "current": bounded_current,
             "total": bounded_total,
             "message": message,
-            "updated_at": _utc_now().isoformat(),
+            "updated_at": updated_at.isoformat(),
         },
     }
     session.commit()
@@ -113,7 +119,10 @@ def expire_stale_task_runs(session: Session, timeout_minutes: int | None = None)
     stale_runs = (
         session.query(TaskRun)
         .filter(TaskRun.status == "running")
-        .filter(TaskRun.started_at < cutoff)
+        .filter(
+            ((TaskRun.heartbeat_at.is_(None)) & (TaskRun.started_at < cutoff))
+            | (TaskRun.heartbeat_at < cutoff)
+        )
         .all()
     )
     for task_run in stale_runs:

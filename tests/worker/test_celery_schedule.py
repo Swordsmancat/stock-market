@@ -1,6 +1,11 @@
 from apps.worker.celery_app import celery_app
 
 
+def test_celery_uses_explicit_shanghai_timezone():
+    assert celery_app.conf.timezone == "Asia/Shanghai"
+    assert celery_app.conf.enable_utc is True
+
+
 def test_celery_beat_schedules_daily_watchlist_analysis_report():
     schedule = celery_app.conf.beat_schedule["daily-watchlist-analysis-report"]
 
@@ -39,3 +44,20 @@ def test_celery_beat_schedules_watchlist_alert_evaluation():
 
     assert schedule["task"] == "alerts.evaluate_watchlist_alerts"
     assert schedule["kwargs"] == {"provider": "yfinance"}
+
+
+def test_celery_beat_schedules_a_share_incremental_evidence_refreshes():
+    incremental = celery_app.conf.beat_schedule["daily-a-share-evidence-incremental"]
+    fundamentals = celery_app.conf.beat_schedule["daily-a-share-fundamental-shard"]
+
+    assert incremental["task"] == "ingestion.schedule_a_share_evidence_backfill"
+    assert incremental["kwargs"] == {
+        "run_kind": "incremental",
+        "evidence_kinds": ["daily_bars", "technical_indicators"],
+    }
+    assert fundamentals["task"] == "ingestion.schedule_a_share_evidence_backfill"
+    assert fundamentals["kwargs"] == {
+        "run_kind": "fundamental_shard",
+        "evidence_kinds": ["fundamentals"],
+        "shard_count": 5,
+    }

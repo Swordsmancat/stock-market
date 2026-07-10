@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     daily_report_cron_minute: int = 30
     market_data_provider: str = "yfinance"
     task_run_stale_minutes: int = 30
+    a_share_backfill_request_delay_ms: int = 250
+    a_share_backfill_max_transient_attempts: int = 3
+    a_share_backfill_retry_base_seconds: float = 1.0
     fred_api_key: str | None = None
     fred_api_base_url: str = "https://api.stlouisfed.org/fred"
     world_bank_api_base_url: str = "https://api.worldbank.org/v2"

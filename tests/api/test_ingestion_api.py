@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
+from packages.domain.models import Exchange, Instrument, InstrumentUniverseSync, Market
 from packages.providers.base import ProviderInstrument, ProviderInstrumentUniverseSnapshot
 from packages.services import instrument_universe as instrument_universe_service
 from packages.shared.database import Base, get_session
@@ -364,7 +365,10 @@ def test_symbol_daily_bars_batch_ingestion_rejects_empty_symbols():
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "At least one symbol is required for batch daily bar ingestion."
+    assert (
+        response.json()["detail"]
+        == "At least one symbol is required for batch daily bar ingestion."
+    )
 
 
 def test_legacy_mock_snapshot_endpoint_remains_compatible(monkeypatch):
@@ -401,3 +405,110 @@ def test_legacy_mock_snapshot_endpoint_remains_compatible(monkeypatch):
     payload = response.json()
     assert payload["status"] == "dispatched"
     assert payload["task_run"]["task_name"] == "ingestion.ingest_market_data"
+
+
+def test_research_evidence_backfill_api_dispatches_and_reports_coverage(monkeypatch):
+    session = make_session()
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    session.add(market)
+    session.flush()
+    for exchange_code, symbol in (("SSE", "600000"), ("SZSE", "000001"), ("BSE", "830001")):
+        exchange = Exchange(market_id=market.id, code=exchange_code, name=exchange_code)
+        session.add(exchange)
+        session.flush()
+        session.add(
+            Instrument(
+                symbol=symbol,
+                name=symbol,
+                market_id=market.id,
+                exchange_id=exchange.id,
+                asset_type="stock",
+                currency="CNY",
+                is_active=True,
+                universe_provider="akshare",
+            )
+        )
+    session.add(
+        InstrumentUniverseSync(
+            market="CN",
+            provider="akshare",
+            source="akshare.stock_info_a_code_name",
+            as_of=datetime(2026, 7, 10, tzinfo=timezone.utc),
+            status="ok",
+            total_count=3,
+            inserted_count=3,
+            updated_count=0,
+            unchanged_count=0,
+            reactivated_count=0,
+            deactivated_count=0,
+            skipped_count=0,
+            availability_json={"status": "ok"},
+            diagnostics_json=[],
+        )
+    )
+    session.commit()
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        lambda task_name, input_json, task_run_id: dispatch_task_run_sync(
+            task_name,
+            input_json,
+            task_run_id,
+            session,
+        ),
+    )
+    monkeypatch.setattr(
+        "apps.worker.tasks.ingestion.settings.a_share_backfill_request_delay_ms",
+        0,
+    )
+    monkeypatch.setattr(
+        "apps.worker.tasks.ingestion.settings.a_share_backfill_max_transient_attempts",
+        1,
+    )
+    monkeypatch.setattr(
+        "packages.services.research_evidence_backfill.ingest_symbol_daily_bars",
+        lambda **kwargs: {"status": "no_data", "bar_count": 0},
+    )
+    monkeypatch.setattr(
+        "packages.services.research_evidence_backfill.ingest_fundamentals",
+        lambda *args, **kwargs: {"status": "empty"},
+    )
+    monkeypatch.setattr(
+        "packages.services.research_evidence_backfill.calculate_and_store_daily_indicators",
+        lambda *args, **kwargs: {"status": "no_data", "indicator_count": 0},
+    )
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/ingestion/a-share-evidence-backfills",
+            json={
+                "run_kind": "canary",
+                "start_date": date(2025, 1, 1).isoformat(),
+                "end_date": date(2026, 7, 10).isoformat(),
+                "cohort_size": 3,
+                "batch_size": 2,
+            },
+        )
+        coverage_response = client.get("/stock-selection/evidence-coverage")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "dispatched"
+    assert payload["task_run"]["status"] == "succeeded"
+    assert payload["backfill"]["status"] == "succeeded"
+    assert payload["backfill"]["processed_count"] == 9
+    assert coverage_response.status_code == 200
+    coverage = coverage_response.json()
+    assert coverage["universe"]["exchange_counts"] == {"BSE": 1, "SSE": 1, "SZSE": 1}
+    assert coverage["status"] == "needs_attention"

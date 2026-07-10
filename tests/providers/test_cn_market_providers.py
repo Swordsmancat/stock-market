@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pandas as pd
+import pytest
 
 from packages.providers.akshare_provider import AkShareProvider
 from packages.providers.tushare_provider import TushareProvider
@@ -29,6 +30,16 @@ def test_akshare_provider_fetch_bars_with_mock_downloader():
     assert len(bars) == 2
     assert bars[0].symbol == "600519"
     assert float(bars[0].close) == 1815.0
+
+
+def test_akshare_provider_does_not_convert_provider_failure_into_no_data():
+    def fail_download(_symbol, _start, _end):
+        raise TimeoutError("upstream timeout")
+
+    provider = AkShareProvider(downloader=fail_download)
+
+    with pytest.raises(TimeoutError, match="upstream timeout"):
+        provider.fetch_bars("600519", "1d", date(2026, 1, 1), date(2026, 1, 10))
 
 
 def test_akshare_provider_fetches_market_depth_from_injected_payload():
@@ -73,7 +84,9 @@ def test_akshare_provider_fetches_market_depth_from_injected_payload():
         }
 
     provider = AkShareProvider(
-        downloader=lambda _symbol, _start, _end: (_ for _ in ()).throw(AssertionError("daily bars must not be used")),
+        downloader=lambda _symbol, _start, _end: (_ for _ in ()).throw(
+            AssertionError("daily bars must not be used")
+        ),
         market_depth_downloader=fake_market_depth_downloader,
     )
 

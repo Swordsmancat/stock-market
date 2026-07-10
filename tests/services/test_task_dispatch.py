@@ -217,3 +217,27 @@ def test_dispatch_task_run_enqueues_symbol_daily_bars_batch(mock_task):
         asset_type="etf",
         task_run_id="task-run-id",
     )
+
+
+@patch("apps.worker.tasks.ingestion.backfill_a_share_research_evidence_task")
+def test_dispatch_task_run_enqueues_research_evidence_backfill(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-evidence-backfill"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.backfill_a_share_research_evidence",
+        {
+            "backfill_run_id": "backfill-run-id",
+            "market": "CN",
+            "provider": "akshare",
+            "run_kind": "baseline",
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-evidence-backfill"
+    mock_task.delay.assert_called_once_with(
+        backfill_run_id="backfill-run-id",
+        task_run_id="task-run-id",
+    )

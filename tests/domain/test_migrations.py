@@ -48,7 +48,9 @@ def load_task_runs_migration():
 
 def load_fundamentals_watchlists_migration():
     migration_path = Path("alembic/versions/0005_fundamentals_watchlists.py")
-    spec = importlib.util.spec_from_file_location("fundamentals_watchlists_migration", migration_path)
+    spec = importlib.util.spec_from_file_location(
+        "fundamentals_watchlists_migration", migration_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -99,6 +101,19 @@ def load_market_daily_evidence_migration():
 def load_instrument_universe_migration():
     migration_path = Path("alembic/versions/0014_instrument_universe_sync.py")
     spec = importlib.util.spec_from_file_location("instrument_universe_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_research_evidence_backfill_migration():
+    migration_path = Path("alembic/versions/0015_research_evidence_backfills.py")
+    spec = importlib.util.spec_from_file_location(
+        "research_evidence_backfill_migration",
+        migration_path,
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -215,7 +230,9 @@ def test_intraday_minute_cache_migration_creates_cache_metadata_table():
 
         inspector = inspect(connection)
         tables = set(inspector.get_table_names())
-        columns = {column["name"] for column in inspector.get_columns("intraday_minute_cache_entries")}
+        columns = {
+            column["name"] for column in inspector.get_columns("intraday_minute_cache_entries")
+        }
 
     assert "intraday_minute_cache_entries" in tables
     assert {
@@ -300,8 +317,7 @@ def test_market_daily_evidence_migration_creates_persisted_event_table():
         inspector = inspect(connection)
         tables = set(inspector.get_table_names())
         columns = {
-            column["name"]
-            for column in inspector.get_columns("market_daily_evidence_events")
+            column["name"] for column in inspector.get_columns("market_daily_evidence_events")
         }
         unique_constraints = {
             constraint["name"]
@@ -341,12 +357,9 @@ def test_instrument_universe_migration_adds_provenance_and_sync_history():
 
         inspector = inspect(connection)
         tables = set(inspector.get_table_names())
-        instrument_columns = {
-            column["name"] for column in inspector.get_columns("instruments")
-        }
+        instrument_columns = {column["name"] for column in inspector.get_columns("instruments")}
         sync_columns = {
-            column["name"]
-            for column in inspector.get_columns("instrument_universe_syncs")
+            column["name"] for column in inspector.get_columns("instrument_universe_syncs")
         }
 
     assert "instrument_universe_syncs" in tables
@@ -368,3 +381,57 @@ def test_instrument_universe_migration_adds_provenance_and_sync_history():
         "diagnostics_json",
         "created_at",
     }.issubset(sync_columns)
+
+
+def test_research_evidence_backfill_migration_adds_run_state_and_task_heartbeat():
+    initial_migration = load_initial_migration()
+    task_runs_migration = load_task_runs_migration()
+    universe_migration = load_instrument_universe_migration()
+    migration = load_research_evidence_backfill_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(task_runs_migration, connection)
+        run_migration(universe_migration, connection)
+        run_migration(migration, connection)
+
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        task_run_columns = {column["name"] for column in inspector.get_columns("task_runs")}
+        backfill_columns = {
+            column["name"] for column in inspector.get_columns("research_evidence_backfills")
+        }
+
+    assert "research_evidence_backfills" in tables
+    assert "heartbeat_at" in task_run_columns
+    assert {
+        "task_run_id",
+        "parent_run_id",
+        "market",
+        "provider",
+        "run_kind",
+        "status",
+        "universe_sync_id",
+        "universe_as_of",
+        "evidence_kinds_json",
+        "scope_symbols_json",
+        "start_date",
+        "end_date",
+        "batch_size",
+        "cohort_size",
+        "shard_index",
+        "shard_count",
+        "phase",
+        "cursor",
+        "phase_total",
+        "processed_count",
+        "counters_json",
+        "retry_json",
+        "diagnostics_json",
+        "cancel_requested_at",
+        "heartbeat_at",
+        "created_at",
+        "updated_at",
+        "finished_at",
+    }.issubset(backfill_columns)

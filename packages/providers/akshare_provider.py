@@ -242,10 +242,8 @@ class AkShareProvider:
                 df["amount"] = 0
             df = df.dropna(subset=numeric_cols)
             return df
-        except ImportError:
-            return pd.DataFrame()
-        except Exception:
-            return pd.DataFrame()
+        except ImportError as exc:
+            raise RuntimeError("AkShare dependency is unavailable.") from exc
 
     @staticmethod
     def _download_market_depth(symbol: str, depth_levels: int) -> dict[str, object]:
