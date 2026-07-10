@@ -7,6 +7,8 @@ def test_is_dispatchable_task_supports_registered_tasks():
     assert is_dispatchable_task("reports.refresh_daily_watchlist_analysis") is True
     assert is_dispatchable_task("reports.refresh_daily_stock_analysis") is True
     assert is_dispatchable_task("ingestion.ingest_market_data") is True
+    assert is_dispatchable_task("ingestion.sync_instrument_universe") is True
+    assert is_dispatchable_task("ingestion.sync_corporate_actions") is True
     assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars") is True
     assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars_batch") is True
     assert is_dispatchable_task("alerts.evaluate_watchlist_alerts") is True
@@ -90,6 +92,59 @@ def test_dispatch_task_run_enqueues_market_ingestion(mock_task):
         start="2026-01-01",
         end="2026-01-02",
         provider="yfinance",
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.ingestion.sync_instrument_universe_task")
+def test_dispatch_task_run_enqueues_instrument_universe_sync(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-universe"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.sync_instrument_universe",
+        {"market": "CN", "provider": "akshare"},
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-universe"
+    mock_task.delay.assert_called_once_with(
+        market="CN",
+        provider="akshare",
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.ingestion.sync_corporate_actions_task")
+def test_dispatch_task_run_enqueues_corporate_action_sync(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-corporate-actions"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.sync_corporate_actions",
+        {
+            "report_period": "2025-12-31",
+            "market": "CN",
+            "provider": "akshare",
+            "symbols": ["600519"],
+            "event_types": ["dividend_bonus", "rights_allotment"],
+            "cursor": 0,
+            "batch_size": 50,
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-corporate-actions"
+    mock_task.delay.assert_called_once_with(
+        report_period="2025-12-31",
+        market="CN",
+        provider="akshare",
+        symbols=["600519"],
+        event_types=["dividend_bonus", "rights_allotment"],
+        cursor=0,
+        batch_size=50,
         task_run_id="task-run-id",
     )
 

@@ -3,13 +3,23 @@ from uuid import UUID
 
 from apps.worker.celery_app import celery_app
 from packages.domain.models import TaskRun
+from packages.services.corporate_actions import (
+    CorporateActionSyncInput,
+    sync_corporate_action_evidence,
+)
 from packages.services.ingestion import (
     ingest_market_snapshot,
     ingest_symbol_daily_bars,
     ingest_symbol_daily_bars_batch,
     normalize_symbol_list,
 )
-from packages.services.task_runs import fail_task_run, finish_task_run, start_task_run
+from packages.services.instrument_universe import sync_instrument_universe
+from packages.services.task_runs import (
+    fail_task_run,
+    finish_task_run,
+    start_task_run,
+    update_task_run_progress,
+)
 from packages.shared.config import settings
 from packages.shared.database import SessionLocal
 
@@ -171,6 +181,149 @@ def ingest_symbol_daily_bars_task(
             "end": end_date.isoformat(),
             "no_data_reason": ingestion_result.get("no_data_reason"),
             "quality_diagnostics": _extract_quality_diagnostics(ingestion_result),
+        }
+        finish_task_run(task_run, result_payload, session=session)
+        return result_payload
+    except Exception as exc:
+        fail_task_run(task_run, str(exc), session=session)
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="ingestion.sync_instrument_universe")
+def sync_instrument_universe_task(
+    market: str = "CN",
+    provider: str = "akshare",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    normalized_market = market.strip().upper()
+    normalized_provider = provider.strip().lower()
+    session = SessionLocal()
+
+    if task_run_id:
+        task_run = session.get(TaskRun, UUID(task_run_id))
+        if task_run is None:
+            session.close()
+            msg = f"Task run not found: {task_run_id}"
+            raise ValueError(msg)
+    else:
+        task_run = start_task_run(
+            "ingestion.sync_instrument_universe",
+            {"market": normalized_market, "provider": normalized_provider},
+            session=session,
+        )
+
+    try:
+        update_task_run_progress(
+            task_run,
+            phase="fetching",
+            current=0,
+            total=2,
+            message="Fetching the provider instrument universe.",
+            session=session,
+        )
+        result = sync_instrument_universe(
+            session=session,
+            market=normalized_market,
+            provider_name=normalized_provider,
+        )
+        if result["status"] == "failed":
+            msg = "Instrument universe refresh failed; the last good universe was preserved."
+            raise RuntimeError(msg)
+        result_payload = {
+            **result,
+            "progress": {
+                "phase": "completed",
+                "current": 2,
+                "total": 2,
+                "message": "Instrument universe synchronization completed.",
+            },
+        }
+        finish_task_run(task_run, result_payload, session=session)
+        return result_payload
+    except Exception as exc:
+        fail_task_run(task_run, str(exc), session=session)
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="ingestion.sync_corporate_actions")
+def sync_corporate_actions_task(
+    report_period: str,
+    market: str = "CN",
+    provider: str = "akshare",
+    symbols: list[str] | None = None,
+    event_types: list[str] | None = None,
+    cursor: int = 0,
+    batch_size: int = 50,
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    normalized_market = market.strip().upper()
+    normalized_provider = provider.strip().lower()
+    normalized_symbols = sorted(
+        {symbol.strip().upper() for symbol in symbols or [] if symbol.strip()}
+    )
+    normalized_event_types = event_types or ["dividend_bonus", "rights_allotment"]
+    session = SessionLocal()
+
+    if task_run_id:
+        task_run = session.get(TaskRun, UUID(task_run_id))
+        if task_run is None:
+            session.close()
+            msg = f"Task run not found: {task_run_id}"
+            raise ValueError(msg)
+    else:
+        task_run = start_task_run(
+            "ingestion.sync_corporate_actions",
+            {
+                "report_period": report_period,
+                "market": normalized_market,
+                "provider": normalized_provider,
+                "symbols": normalized_symbols,
+                "event_types": normalized_event_types,
+                "cursor": cursor,
+                "batch_size": batch_size,
+            },
+            session=session,
+        )
+
+    def report_progress(phase: str, current: int, total: int, message: str) -> None:
+        update_task_run_progress(
+            task_run,
+            phase=phase,
+            current=current,
+            total=total,
+            message=message,
+            session=session,
+        )
+
+    try:
+        result = sync_corporate_action_evidence(
+            CorporateActionSyncInput(
+                report_period=date.fromisoformat(report_period),
+                market=normalized_market,
+                provider_name=normalized_provider,
+                symbols=tuple(normalized_symbols),
+                event_types=tuple(normalized_event_types),
+                cursor=cursor,
+                batch_size=batch_size,
+            ),
+            session=session,
+            progress_callback=report_progress,
+        )
+        if result["status"] == "failed":
+            msg = "Corporate-action provider refresh failed for the requested batch."
+            raise RuntimeError(msg)
+        result_payload = {
+            **result,
+            "progress": {
+                "phase": "completed",
+                "current": len(normalized_event_types) + 1,
+                "total": len(normalized_event_types) + 1,
+                "message": "Corporate-action evidence batch completed.",
+            },
         }
         finish_task_run(task_run, result_payload, session=session)
         return result_payload

@@ -73,6 +73,35 @@ def dispatch_task_run_sync(
             ),
         )
 
+    if task_name == "ingestion.sync_instrument_universe":
+        from apps.worker.tasks.ingestion import sync_instrument_universe_task
+
+        return _run_with_session(
+            session,
+            lambda: sync_instrument_universe_task.run(
+                market=input_json.get("market", "CN"),
+                provider=input_json.get("provider", "akshare"),
+                task_run_id=task_run_id,
+            ),
+        )
+
+    if task_name == "ingestion.sync_corporate_actions":
+        from apps.worker.tasks.ingestion import sync_corporate_actions_task
+
+        return _run_with_session(
+            session,
+            lambda: sync_corporate_actions_task.run(
+                report_period=input_json["report_period"],
+                market=input_json.get("market", "CN"),
+                provider=input_json.get("provider", "akshare"),
+                symbols=input_json.get("symbols"),
+                event_types=input_json.get("event_types"),
+                cursor=input_json.get("cursor", 0),
+                batch_size=input_json.get("batch_size", 50),
+                task_run_id=task_run_id,
+            ),
+        )
+
     if task_name == "ingestion.ingest_symbol_daily_bars":
         from apps.worker.tasks.ingestion import ingest_symbol_daily_bars_task
 

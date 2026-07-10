@@ -96,6 +96,16 @@ def load_market_daily_evidence_migration():
     return module
 
 
+def load_instrument_universe_migration():
+    migration_path = Path("alembic/versions/0014_instrument_universe_sync.py")
+    spec = importlib.util.spec_from_file_location("instrument_universe_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -318,3 +328,43 @@ def test_market_daily_evidence_migration_creates_persisted_event_table():
         "updated_at",
     }.issubset(columns)
     assert "uq_market_daily_evidence_event_identity" in unique_constraints
+
+
+def test_instrument_universe_migration_adds_provenance_and_sync_history():
+    initial_migration = load_initial_migration()
+    migration = load_instrument_universe_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(migration, connection)
+
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        instrument_columns = {
+            column["name"] for column in inspector.get_columns("instruments")
+        }
+        sync_columns = {
+            column["name"]
+            for column in inspector.get_columns("instrument_universe_syncs")
+        }
+
+    assert "instrument_universe_syncs" in tables
+    assert {"universe_provider", "universe_synced_at"}.issubset(instrument_columns)
+    assert {
+        "market",
+        "provider",
+        "source",
+        "as_of",
+        "status",
+        "total_count",
+        "inserted_count",
+        "updated_count",
+        "unchanged_count",
+        "reactivated_count",
+        "deactivated_count",
+        "skipped_count",
+        "availability_json",
+        "diagnostics_json",
+        "created_at",
+    }.issubset(sync_columns)

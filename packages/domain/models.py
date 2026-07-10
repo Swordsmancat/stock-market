@@ -48,6 +48,8 @@ class Instrument(Base):
     asset_type: Mapped[str] = mapped_column(String(32))
     currency: Mapped[str] = mapped_column(String(8))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    universe_provider: Mapped[str | None] = mapped_column(String(64), default=None)
+    universe_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     market: Mapped[Market | None] = relationship("Market")
     exchange: Mapped[Exchange | None] = relationship("Exchange")
@@ -62,6 +64,36 @@ class DataSource(Base):
     priority: Mapped[int] = mapped_column(default=100)
     license_scope: Mapped[str | None] = mapped_column(Text, default=None)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class InstrumentUniverseSync(Base):
+    __tablename__ = "instrument_universe_syncs"
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    market: Mapped[str] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(512))
+    as_of: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    status: Mapped[str] = mapped_column(String(32))
+    total_count: Mapped[int] = mapped_column(Integer, default=0)
+    inserted_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, default=0)
+    unchanged_count: Mapped[int] = mapped_column(Integer, default=0)
+    reactivated_count: Mapped[int] = mapped_column(Integer, default=0)
+    deactivated_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    availability_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    diagnostics_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
 
 
 class DailyBar(Base):

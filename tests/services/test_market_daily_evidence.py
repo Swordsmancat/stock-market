@@ -254,3 +254,60 @@ def test_import_rejects_unknown_event_types(session):
         )
 
     assert "not_supported" in str(error.value)
+
+
+def test_import_preserves_multiple_citable_corporate_actions_for_one_symbol_and_date(session):
+    payloads = {
+        "dividend_bonus": _provider_payload(
+            items=[
+                {
+                    "symbol": "600519",
+                    "name": "Kweichow Moutai",
+                    "report_period": "2025-12-31",
+                    "trade_date": "2026-06-26",
+                    "announcement_date": "2026-03-20",
+                    "cash_dividend_per_10": 276.65,
+                },
+                {
+                    "symbol": "600519",
+                    "name": "Kweichow Moutai",
+                    "report_period": "2025-12-31",
+                    "trade_date": "2026-06-26",
+                    "announcement_date": "2026-04-01",
+                    "bonus_shares_per_10": 1.0,
+                },
+            ]
+        ),
+        "rights_allotment": _provider_payload(
+            items=[
+                {
+                    "symbol": "000001",
+                    "name": "Ping An Bank",
+                    "report_period": "2025-12-31",
+                    "trade_date": "2026-05-01",
+                    "rights_code": "080001",
+                    "rights_ratio": 0.3,
+                    "rights_price": 8.5,
+                }
+            ]
+        ),
+    }
+
+    result = import_market_daily_evidence(
+        _import_input("dividend_bonus", "rights_allotment"),
+        session=session,
+        normalized_payloads=payloads,
+    )
+
+    assert result["inserted"] == 3
+    dividend_rows = (
+        session.query(MarketDailyEvidenceEvent)
+        .filter_by(event_type="dividend_bonus")
+        .order_by(MarketDailyEvidenceEvent.identity)
+        .all()
+    )
+    assert len({row.identity for row in dividend_rows}) == 2
+    listing = list_market_daily_evidence(session=session, symbol="600519")
+    assert listing["summary"]["counts_by_event_type"] == {"dividend_bonus": 2}
+    assert len(listing["citations"]) == 2
+    assert all("dividend/bonus context" in citation["excerpt"] for citation in listing["citations"])

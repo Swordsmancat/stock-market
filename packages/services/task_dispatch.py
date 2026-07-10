@@ -44,6 +44,33 @@ def _dispatch_market_ingestion(input_json: dict[str, Any], task_run_id: str) -> 
     return async_result.id
 
 
+def _dispatch_instrument_universe_sync(input_json: dict[str, Any], task_run_id: str) -> str:
+    from apps.worker.tasks.ingestion import sync_instrument_universe_task
+
+    async_result = sync_instrument_universe_task.delay(
+        market=input_json.get("market", "CN"),
+        provider=input_json.get("provider", "akshare"),
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
+def _dispatch_corporate_action_sync(input_json: dict[str, Any], task_run_id: str) -> str:
+    from apps.worker.tasks.ingestion import sync_corporate_actions_task
+
+    async_result = sync_corporate_actions_task.delay(
+        report_period=input_json["report_period"],
+        market=input_json.get("market", "CN"),
+        provider=input_json.get("provider", "akshare"),
+        symbols=input_json.get("symbols"),
+        event_types=input_json.get("event_types"),
+        cursor=input_json.get("cursor", 0),
+        batch_size=input_json.get("batch_size", 50),
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
 def _dispatch_symbol_daily_bars_ingestion(input_json: dict[str, Any], task_run_id: str) -> str:
     from apps.worker.tasks.ingestion import ingest_symbol_daily_bars_task
 
@@ -95,6 +122,8 @@ _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "reports.refresh_daily_watchlist_analysis": _dispatch_watchlist_analysis,
     "reports.refresh_daily_stock_analysis": _dispatch_stock_analysis,
     "ingestion.ingest_market_data": _dispatch_market_ingestion,
+    "ingestion.sync_instrument_universe": _dispatch_instrument_universe_sync,
+    "ingestion.sync_corporate_actions": _dispatch_corporate_action_sync,
     "ingestion.ingest_symbol_daily_bars": _dispatch_symbol_daily_bars_ingestion,
     "ingestion.ingest_symbol_daily_bars_batch": _dispatch_symbol_daily_bars_batch_ingestion,
     "alerts.evaluate_watchlist_alerts": _dispatch_alert_evaluation,

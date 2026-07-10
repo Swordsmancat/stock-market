@@ -29,12 +29,22 @@ DEFAULT_MARKET_DAILY_EVIDENCE_EVENT_TYPES = (
     "block_trade",
     "hot_sector",
 )
+CORPORATE_ACTION_EVENT_TYPES = (
+    "dividend_bonus",
+    "rights_allotment",
+)
+SUPPORTED_MARKET_DAILY_EVIDENCE_EVENT_TYPES = (
+    *DEFAULT_MARKET_DAILY_EVIDENCE_EVENT_TYPES,
+    *CORPORATE_ACTION_EVENT_TYPES,
+)
 EVENT_TYPE_LABELS = {
     "stock_fund_flow": "Stock fund flow",
     "limit_up_reason": "Limit-up context",
     "dragon_tiger_list": "Dragon Tiger List",
     "block_trade": "Block trade",
     "hot_sector": "Hot sector",
+    "dividend_bonus": "Dividend / bonus transfer",
+    "rights_allotment": "Rights allotment",
 }
 IMPORTABLE_DATA_MODES = {"live", "delayed"}
 NON_CITABLE_PROVIDERS = {"", "none", "mock", "static", "fixture"}
@@ -249,6 +259,10 @@ def load_market_daily_evidence_payload(
             sector_type="industry",
             window="today",
         )
+    if event_type in CORPORATE_ACTION_EVENT_TYPES:
+        raise MarketDailyEvidenceValidationError(
+            [f"Event type {event_type} must be loaded through the corporate-action batch job."]
+        )
     raise MarketDailyEvidenceValidationError([f"Unsupported market daily evidence event type: {event_type}."])
 
 
@@ -460,7 +474,7 @@ def _normalize_optional_event_type(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower()
-    if normalized not in DEFAULT_MARKET_DAILY_EVIDENCE_EVENT_TYPES:
+    if normalized not in SUPPORTED_MARKET_DAILY_EVIDENCE_EVENT_TYPES:
         raise MarketDailyEvidenceValidationError([f"Unsupported market daily evidence event type: {value}."])
     return normalized
 
@@ -500,7 +514,11 @@ def _build_event_values(
 ) -> dict[str, object] | None:
     identity = _build_event_identity(event_type, item)
     trade_date_value = _parse_date(item.get("trade_date")) or _parse_date(provider_payload.get("trade_date"))
-    if trade_date_value is None and event_type in {"stock_fund_flow", "hot_sector"}:
+    if trade_date_value is None and event_type in {
+        "stock_fund_flow",
+        "hot_sector",
+        *CORPORATE_ACTION_EVENT_TYPES,
+    }:
         trade_date_value = requested_trade_date
     if not identity or trade_date_value is None:
         return None
@@ -555,7 +573,28 @@ def _build_event_identity(event_type: str, item: dict[str, object]) -> str | Non
     if not symbol:
         return None
     if event_type != "block_trade":
-        return symbol
+        if event_type not in CORPORATE_ACTION_EVENT_TYPES:
+            return symbol
+        fingerprint_source = "|".join(
+            str(item.get(key) or "")
+            for key in (
+                "report_period",
+                "trade_date",
+                "announcement_date",
+                "record_date",
+                "ex_date",
+                "cash_dividend_per_10",
+                "bonus_shares_per_10",
+                "transfer_shares_per_10",
+                "payment_start_date",
+                "payment_end_date",
+                "rights_code",
+                "rights_ratio",
+                "rights_price",
+            )
+        )
+        fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+        return f"{symbol}-{fingerprint}"
 
     rank = item.get("rank")
     if isinstance(rank, int | float | str) and str(rank).strip():
@@ -680,6 +719,21 @@ def _build_citation_excerpt(event: MarketDailyEvidenceEvent) -> str:
     if event.event_type == "block_trade":
         return _clip_text(
             f"{label} block-trade context on {event.trade_date.isoformat()}; amount {payload.get('amount', 'unavailable')}.",
+            500,
+        )
+    if event.event_type == "dividend_bonus":
+        return _clip_text(
+            f"{label} dividend/bonus context on {event.trade_date.isoformat()}; cash per 10 shares "
+            f"{payload.get('cash_dividend_per_10', 'unavailable')}, bonus shares "
+            f"{payload.get('bonus_shares_per_10', 'unavailable')}, transfer shares "
+            f"{payload.get('transfer_shares_per_10', 'unavailable')}.",
+            500,
+        )
+    if event.event_type == "rights_allotment":
+        return _clip_text(
+            f"{label} rights-allotment context on {event.trade_date.isoformat()}; ratio "
+            f"{payload.get('rights_ratio', 'unavailable')}, price "
+            f"{payload.get('rights_price', 'unavailable')}.",
             500,
         )
     return _clip_text(

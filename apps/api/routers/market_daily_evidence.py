@@ -8,6 +8,7 @@ from packages.services.market_daily_evidence import (
     DEFAULT_MARKET_DAILY_EVIDENCE_EVENT_TYPES,
     MarketDailyEvidenceImportInput,
     MarketDailyEvidenceValidationError,
+    SUPPORTED_MARKET_DAILY_EVIDENCE_EVENT_TYPES,
     import_market_daily_evidence,
     list_market_daily_evidence,
 )
@@ -25,7 +26,7 @@ class MarketDailyEvidenceImportRequest(BaseModel):
     event_types: list[str] = Field(
         default_factory=lambda: list(DEFAULT_MARKET_DAILY_EVIDENCE_EVENT_TYPES),
         min_length=1,
-        max_length=len(DEFAULT_MARKET_DAILY_EVIDENCE_EVENT_TYPES),
+        max_length=len(SUPPORTED_MARKET_DAILY_EVIDENCE_EVENT_TYPES),
     )
     limit: int = Field(default=20, ge=1, le=100)
 

@@ -69,6 +69,34 @@ def finish_task_run(task_run: TaskRun, result_json: dict, session: Session) -> d
     return _serialize_task_run(task_run)
 
 
+def update_task_run_progress(
+    task_run: TaskRun,
+    *,
+    phase: str,
+    current: int,
+    total: int,
+    message: str,
+    session: Session,
+) -> dict[str, object]:
+    if task_run.status != "running":
+        raise ValueError("Task run progress can only be updated while the task is running.")
+    bounded_total = max(0, total)
+    bounded_current = max(0, min(current, bounded_total)) if bounded_total else 0
+    task_run.result_json = {
+        **(task_run.result_json or {}),
+        "progress": {
+            "phase": phase,
+            "current": bounded_current,
+            "total": bounded_total,
+            "message": message,
+            "updated_at": _utc_now().isoformat(),
+        },
+    }
+    session.commit()
+    session.refresh(task_run)
+    return _serialize_task_run(task_run)
+
+
 def fail_task_run(task_run: TaskRun, error_message: str, session: Session) -> dict[str, object]:
     finished_at = _utc_now()
     started_at = _as_utc(task_run.started_at) or finished_at

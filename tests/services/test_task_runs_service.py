@@ -13,6 +13,7 @@ from packages.services.task_runs import (
     get_recent_task_runs_payload,
     retry_task_run_payload,
     start_task_run,
+    update_task_run_progress,
 )
 from packages.shared.database import Base
 
@@ -69,6 +70,30 @@ def test_task_run_service_records_failure_and_recent_payload():
     assert failed["error_message"] == "provider timeout"
     assert recent["items"][0]["status"] == "failed"
     assert recent["items"][0]["input_json"] == {"watchlist": "0700:HK"}
+
+
+def test_task_run_service_persists_bounded_progress_payload():
+    session = make_session()
+    task_run = start_task_run(
+        "ingestion.sync_instrument_universe",
+        {"market": "CN", "provider": "akshare"},
+        session=session,
+    )
+
+    payload = update_task_run_progress(
+        task_run,
+        phase="fetching",
+        current=4,
+        total=2,
+        message="Fetching the provider instrument universe.",
+        session=session,
+    )
+
+    progress = payload["result_json"]["progress"]
+    assert progress["phase"] == "fetching"
+    assert progress["current"] == 2
+    assert progress["total"] == 2
+    assert progress["updated_at"]
 
 
 def test_recent_task_runs_can_filter_by_status():

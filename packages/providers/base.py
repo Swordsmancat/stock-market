@@ -15,6 +15,31 @@ class ProviderInstrument:
 
 
 @dataclass(frozen=True)
+class ProviderInstrumentUniverseSnapshot:
+    provider: str
+    source: str
+    as_of: datetime | None
+    status: str
+    items: list[ProviderInstrument] = field(default_factory=list)
+    is_complete: bool = False
+    availability: dict[str, object] = field(default_factory=dict)
+    diagnostics: list[dict[str, object]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ProviderCorporateActionSnapshot:
+    provider: str
+    source: str
+    event_type: str
+    report_period: date
+    as_of: datetime | None
+    status: str
+    items: list[dict[str, object]] = field(default_factory=list)
+    availability: dict[str, object] = field(default_factory=dict)
+    diagnostics: list[dict[str, object]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ProviderBar:
     symbol: str
     timestamp: datetime | date
@@ -95,6 +120,24 @@ class ProviderAdapter(Protocol):
         start: date,
         end: date,
     ) -> list[ProviderBar]:
+        ...
+
+
+class InstrumentUniverseProvider(Protocol):
+    def fetch_instrument_universe(
+        self,
+        market: str,
+    ) -> ProviderInstrumentUniverseSnapshot:
+        ...
+
+
+class CorporateActionProvider(Protocol):
+    def fetch_corporate_actions(
+        self,
+        event_type: str,
+        report_period: date,
+        symbols: list[str],
+    ) -> ProviderCorporateActionSnapshot:
         ...
 
 

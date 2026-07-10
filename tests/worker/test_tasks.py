@@ -47,6 +47,101 @@ def test_ingest_market_data_records_succeeded_task_run(monkeypatch):
     assert latest_run["result_json"]["bar_count"] == 2
 
 
+def test_sync_instrument_universe_task_records_progress_and_success(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "sync_instrument_universe",
+        lambda **_kwargs: {
+            "status": "ok",
+            "market": "CN",
+            "provider": "akshare",
+            "source": "akshare.fixture",
+            "is_complete": True,
+            "counts": {"total_count": 3},
+            "diagnostics": [],
+            "sync": {"status": "ok"},
+            "safety": {"failed_refresh_preserves_last_good_universe": True},
+        },
+    )
+
+    result = ingestion_tasks.sync_instrument_universe_task()
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.sync_instrument_universe",
+    )
+
+    assert result["status"] == "ok"
+    assert result["progress"]["phase"] == "completed"
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"] == result
+
+
+def test_sync_instrument_universe_task_marks_provider_failure(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "sync_instrument_universe",
+        lambda **_kwargs: {
+            "status": "failed",
+            "market": "CN",
+            "provider": "akshare",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="last good universe was preserved"):
+        ingestion_tasks.sync_instrument_universe_task()
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.sync_instrument_universe",
+    )
+
+    assert latest_run["status"] == "failed"
+    assert "last good universe was preserved" in latest_run["error_message"]
+
+
+def test_sync_corporate_actions_task_records_partial_batch_and_progress(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    def fake_sync(payload, *, session, progress_callback):
+        assert payload.report_period == date(2025, 12, 31)
+        assert payload.symbols == ("600519",)
+        progress_callback("preparing", 0, 3, "Preparing batch.")
+        progress_callback("persisted", 3, 3, "Persisted batch.")
+        return {
+            "status": "partial",
+            "symbols": ["600519"],
+            "event_types": ["dividend_bonus", "rights_allotment"],
+            "next_cursor": None,
+            "retry": {"failed_event_types": ["rights_allotment"]},
+        }
+
+    monkeypatch.setattr(ingestion_tasks, "sync_corporate_action_evidence", fake_sync)
+
+    result = ingestion_tasks.sync_corporate_actions_task(
+        report_period="2025-12-31",
+        symbols=["600519"],
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.sync_corporate_actions",
+    )
+
+    assert result["status"] == "partial"
+    assert result["progress"]["phase"] == "completed"
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"] == result
+
+
 @pytest.mark.parametrize("quality_status", ["WARN", "FAIL"])
 def test_ingest_market_data_persists_quality_diagnostics_without_failing_task_run(
     monkeypatch,

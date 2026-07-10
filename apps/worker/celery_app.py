@@ -55,6 +55,14 @@ celery_app.conf.beat_schedule = {
             "provider": settings.market_data_provider,
         },
     },
+    "daily-a-share-instrument-universe-sync": {
+        "task": "ingestion.sync_instrument_universe",
+        "schedule": crontab(hour=6, minute=30),
+        "kwargs": {
+            "market": "CN",
+            "provider": "akshare",
+        },
+    },
     "watchlist-alert-evaluation": {
         "task": "alerts.evaluate_watchlist_alerts",
         "schedule": crontab(minute="*/15"),
@@ -66,4 +74,4 @@ celery_app.conf.beat_schedule = {
 celery_app.autodiscover_tasks(["apps.worker.tasks"], force=True)
 
 # Manually import tasks to ensure they are registered
-from apps.worker.tasks import ingestion, reports, alerts, indicators  # noqa: F401
+from apps.worker.tasks import alerts, indicators, ingestion, reports  # noqa: E402, F401

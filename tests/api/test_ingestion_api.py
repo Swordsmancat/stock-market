@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -5,6 +7,8 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
+from packages.providers.base import ProviderInstrument, ProviderInstrumentUniverseSnapshot
+from packages.services import instrument_universe as instrument_universe_service
 from packages.shared.database import Base, get_session
 from tests.helpers.celery_sync import dispatch_task_run_sync
 
@@ -69,6 +73,147 @@ def test_ingestion_api_dispatches_task_run_and_writes_database(monkeypatch):
     assert bars_payload["source"] == "database"
     assert len(bars_payload["items"]) == 2
     assert bars_payload["items"][-1]["close"] == 102.0
+
+
+def test_instrument_universe_api_dispatches_sync_and_reports_coverage(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        lambda task_name, input_json, task_run_id: dispatch_task_run_sync(
+            task_name,
+            input_json,
+            task_run_id,
+            session,
+        ),
+    )
+
+    class FakeUniverseProvider:
+        def fetch_instrument_universe(self, market: str) -> ProviderInstrumentUniverseSnapshot:
+            assert market == "CN"
+            return ProviderInstrumentUniverseSnapshot(
+                provider="akshare",
+                source="akshare.fixture",
+                as_of=datetime(2026, 7, 10, tzinfo=timezone.utc),
+                status="ok",
+                items=[
+                    ProviderInstrument(
+                        symbol="600519",
+                        name="Kweichow Moutai",
+                        market="CN",
+                        exchange="SSE",
+                        asset_type="stock",
+                        currency="CNY",
+                    )
+                ],
+                is_complete=True,
+                availability={"status": "ok", "row_count": 1},
+            )
+
+    def fake_sync(**kwargs):
+        return instrument_universe_service.sync_instrument_universe(
+            session=kwargs["session"],
+            market=kwargs["market"],
+            provider_name=kwargs["provider_name"],
+            provider=FakeUniverseProvider(),
+        )
+
+    monkeypatch.setattr(
+        "apps.worker.tasks.ingestion.sync_instrument_universe",
+        fake_sync,
+    )
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        sync_response = client.post("/ingestion/instrument-universe")
+        status_response = client.get("/ingestion/instrument-universe/status")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert sync_response.status_code == 200
+    task_run = sync_response.json()["task_run"]
+    assert task_run["task_name"] == "ingestion.sync_instrument_universe"
+    assert task_run["status"] == "succeeded"
+    assert task_run["result_json"]["counts"]["inserted_count"] == 1
+    assert task_run["result_json"]["progress"]["phase"] == "completed"
+
+    assert status_response.status_code == 200
+    status = status_response.json()
+    assert status["status"] == "ok"
+    assert status["active_instrument_count"] == 1
+    assert status["managed_instrument_count"] == 1
+
+
+def test_instrument_universe_status_api_rejects_unsupported_market():
+    client = TestClient(app)
+
+    response = client.get(
+        "/ingestion/instrument-universe/status",
+        params={"market": "US"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported instrument universe market: US"
+
+
+def test_corporate_action_api_dispatches_normalized_batch_task(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        lambda task_name, input_json, task_run_id: dispatch_task_run_sync(
+            task_name,
+            input_json,
+            task_run_id,
+            session,
+        ),
+    )
+
+    def fake_sync(payload, *, session, progress_callback):
+        progress_callback("persisted", 3, 3, "Persisted batch.")
+        return {
+            "status": "ok",
+            "report_period": payload.report_period.isoformat(),
+            "symbols": list(payload.symbols),
+            "event_types": list(payload.event_types),
+            "next_cursor": None,
+            "retry": {"failed_event_types": []},
+        }
+
+    monkeypatch.setattr(
+        "apps.worker.tasks.ingestion.sync_corporate_action_evidence",
+        fake_sync,
+    )
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/ingestion/corporate-actions",
+            json={
+                "report_period": "2025-12-31",
+                "symbols": ["600519", "600519"],
+                "event_types": ["dividend_bonus", "rights_allotment"],
+                "cursor": 0,
+                "batch_size": 50,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "dispatched"
+    task_run = payload["task_run"]
+    assert task_run["task_name"] == "ingestion.sync_corporate_actions"
+    assert task_run["input_json"]["symbols"] == ["600519"]
+    assert task_run["status"] == "succeeded"
+    assert task_run["result_json"]["progress"]["phase"] == "completed"
 
 
 def test_symbol_daily_bars_ingestion_dispatches_task_run_and_writes_database(monkeypatch):
