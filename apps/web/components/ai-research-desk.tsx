@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Activity, FileSearch, Plus, Sparkles, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -269,6 +269,25 @@ export function AiResearchDesk({
   );
   const [manualSymbol, setManualSymbol] = useState("");
 
+  useEffect(() => {
+    function useDiscoveredSymbol(event: Event) {
+      const symbol = normalizeSymbol(
+        String((event as CustomEvent<{ symbol?: string }>).detail?.symbol ?? ""),
+      );
+      if (!symbol) {
+        return;
+      }
+      setSelectedSymbols((currentSymbols) =>
+        currentSymbols.includes(symbol)
+          ? currentSymbols
+          : [...currentSymbols, symbol].slice(0, SELECTED_SYMBOL_LIMIT),
+      );
+      setActiveSymbol(symbol);
+    }
+    window.addEventListener("stock-discovery:select-symbol", useDiscoveredSymbol);
+    return () => window.removeEventListener("stock-discovery:select-symbol", useDiscoveredSymbol);
+  }, []);
+
   const activeSelectedSymbol = selectedSymbols.includes(activeSymbol)
     ? activeSymbol
     : (selectedSymbols[0] ?? "");
@@ -347,7 +366,7 @@ export function AiResearchDesk({
   }
 
   return (
-    <div className="space-y-6">
+    <div id="ai-research-desk" className="space-y-6">
       <FinancialPageHeader
         title={t("title")}
         description={t("description")}

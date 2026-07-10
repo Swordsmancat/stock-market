@@ -12,6 +12,11 @@ import {
   type AiResearchStockFundFlowItem,
   type AiResearchWatchlistItem,
 } from "@/components/ai-research-desk";
+import {
+  StockDiscoveryPanel,
+  type StockSelectionProfilesPayload,
+  type StockUniverseStatusPayload,
+} from "@/components/stock-discovery-panel";
 import { backendFetch } from "@/lib/backend-api";
 import { withProviderQuery } from "@/lib/market-data";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
@@ -74,6 +79,8 @@ export default async function AiResearchPage({
     limitUpReasonsResult,
     dragonTigerResult,
     blockTradesResult,
+    stockSelectionProfilesResult,
+    stockUniverseStatusResult,
   ] = await Promise.all([
     fetchOptionalJson<WatchlistPayload>("/watchlist"),
     fetchOptionalJson<MarketOverviewPayload>(withProviderQuery("/dashboard/market-overview", provider)),
@@ -90,6 +97,8 @@ export default async function AiResearchPage({
     fetchOptionalJson<BlockTradesPayload>(
       "/market-daily-data/block-trades?market=CN&limit=6&provider=akshare",
     ),
+    fetchOptionalJson<StockSelectionProfilesPayload>("/stock-selection/profiles"),
+    fetchOptionalJson<StockUniverseStatusPayload>("/stock-selection/universe-status"),
   ]);
 
   const watchlistItems = watchlistResult.status === "loaded" ? watchlistResult.payload.items ?? [] : [];
@@ -106,7 +115,20 @@ export default async function AiResearchPage({
   const recommendationsPayload = recommendationsResult.status === "loaded" ? recommendationsResult.payload : null;
 
   return (
-    <AiResearchDesk
+    <div className="space-y-6">
+      <StockDiscoveryPanel
+        initialProfiles={
+          stockSelectionProfilesResult.status === "loaded"
+            ? stockSelectionProfilesResult.payload
+            : null
+        }
+        initialUniverseStatus={
+          stockUniverseStatusResult.status === "loaded"
+            ? stockUniverseStatusResult.payload
+            : null
+        }
+      />
+      <AiResearchDesk
       locale={locale}
       provider={marketOverviewPayload?.provider ?? provider}
       generatedAt={marketOverviewPayload?.generated_at ?? null}
@@ -146,7 +168,8 @@ export default async function AiResearchPage({
         ...(marketOverviewPayload?.dashboard_brief?.diagnostics ?? []),
         ...(marketOverviewPayload?.diagnostics ?? []),
       ]}
-    />
+      />
+    </div>
   );
 }
 

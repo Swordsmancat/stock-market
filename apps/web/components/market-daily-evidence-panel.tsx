@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 type MarketDailyEvidenceDiagnostic = {
   source?: string;
@@ -90,6 +91,11 @@ export type MarketDailyEvidencePanelLabels = {
   diagnosticsEmpty: string;
   refreshFailed: string;
   unavailableShort: string;
+  corporateReportPeriod: string;
+  refreshCorporateActions: string;
+  refreshingCorporateActions: string;
+  corporateActionQueued: string;
+  openTaskRun: string;
   eventTypeLabels: Record<string, string>;
 };
 
@@ -149,6 +155,11 @@ export function MarketDailyEvidencePanel({
   const [payload, setPayload] = React.useState<MarketDailyEvidencePayload | null>(initialPayload);
   const [result, setResult] = React.useState<MarketDailyEvidenceImportResult | null>(null);
   const [pending, setPending] = React.useState(false);
+  const [corporatePending, setCorporatePending] = React.useState(false);
+  const [corporateReportPeriod, setCorporateReportPeriod] = React.useState(
+    `${new Date().getUTCFullYear() - 1}-12-31`,
+  );
+  const [corporateTaskRunId, setCorporateTaskRunId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const router = useRouter();
 
@@ -189,6 +200,40 @@ export function MarketDailyEvidencePanel({
     }
   }
 
+  async function refreshCorporateActions() {
+    setCorporatePending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/ingestion/corporate-actions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          report_period: corporateReportPeriod,
+          market: "CN",
+          provider: "akshare",
+          event_types: ["dividend_bonus", "rights_allotment"],
+          cursor: 0,
+          batch_size: 50,
+        }),
+      });
+      const responsePayload = await readJsonSafe(response);
+      if (!response.ok) {
+        setError(readErrorMessage(responsePayload, labels.refreshFailed));
+        return;
+      }
+      const taskRun = responsePayload.task_run;
+      if (taskRun && typeof taskRun === "object" && !Array.isArray(taskRun)) {
+        const taskRunId = (taskRun as { id?: unknown }).id;
+        setCorporateTaskRunId(typeof taskRunId === "string" ? taskRunId : null);
+      }
+      router.refresh();
+    } catch {
+      setError(labels.refreshFailed);
+    } finally {
+      setCorporatePending(false);
+    }
+  }
+
   const summary = payload?.summary;
   const total = numberValue(summary?.total);
   const counts = Object.entries(summary?.counts_by_event_type ?? {});
@@ -208,10 +253,34 @@ export function MarketDailyEvidencePanel({
             </CardTitle>
             <CardDescription className="mt-1">{labels.description}</CardDescription>
           </div>
-          <Button type="button" onClick={() => void refreshEvidence()} disabled={pending}>
-            <RefreshCw className={pending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            {pending ? labels.refreshing : labels.refreshAction}
-          </Button>
+          <div className="flex flex-col gap-2 sm:items-end">
+            <Button type="button" onClick={() => void refreshEvidence()} disabled={pending}>
+              <RefreshCw className={pending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              {pending ? labels.refreshing : labels.refreshAction}
+            </Button>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="space-y-1 text-xs text-muted-foreground">
+                <span>{labels.corporateReportPeriod}</span>
+                <Input
+                  type="date"
+                  className="h-9 w-[160px]"
+                  value={corporateReportPeriod}
+                  onChange={(event) => setCorporateReportPeriod(event.target.value)}
+                />
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void refreshCorporateActions()}
+                disabled={corporatePending || !corporateReportPeriod}
+              >
+                <RefreshCw className={corporatePending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                {corporatePending
+                  ? labels.refreshingCorporateActions
+                  : labels.refreshCorporateActions}
+              </Button>
+            </div>
+          </div>
         </div>
       </FinancialTerminalCardHeader>
       <FinancialTerminalCardContent className="space-y-4">
@@ -288,6 +357,15 @@ export function MarketDailyEvidencePanel({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
+        ) : null}
+
+        {corporateTaskRunId ? (
+          <FinancialTerminalSurface className="flex flex-wrap items-center justify-between gap-2 border-primary/30 bg-primary/5 p-3 text-sm">
+            <span>{labels.corporateActionQueued}</span>
+            <Button size="sm" variant="outline" asChild>
+              <a href={`/task-runs/${corporateTaskRunId}`}>{labels.openTaskRun}</a>
+            </Button>
+          </FinancialTerminalSurface>
         ) : null}
 
         {result ? (

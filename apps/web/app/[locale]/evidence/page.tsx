@@ -1462,12 +1462,19 @@ function buildMarketDailyEvidenceLabels(
     diagnosticsEmpty: t("diagnosticsEmpty"),
     refreshFailed: t("refreshFailed"),
     unavailableShort: t("unavailableShort"),
+    corporateReportPeriod: t("corporateReportPeriod"),
+    refreshCorporateActions: t("refreshCorporateActions"),
+    refreshingCorporateActions: t("refreshingCorporateActions"),
+    corporateActionQueued: t("corporateActionQueued"),
+    openTaskRun: t("openTaskRun"),
     eventTypeLabels: {
       stock_fund_flow: t("eventStockFundFlow"),
       limit_up_reason: t("eventLimitUpReason"),
       dragon_tiger_list: t("eventDragonTigerList"),
       block_trade: t("eventBlockTrade"),
       hot_sector: t("eventHotSector"),
+      dividend_bonus: t("eventDividendBonus"),
+      rights_allotment: t("eventRightsAllotment"),
     },
   };
 }

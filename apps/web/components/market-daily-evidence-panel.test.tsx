@@ -38,9 +38,16 @@ const labels: MarketDailyEvidencePanelLabels = {
   diagnosticsEmpty: "No import diagnostics.",
   refreshFailed: "Market evidence refresh failed.",
   unavailableShort: "N/A",
+  corporateReportPeriod: "Corporate-action report period",
+  refreshCorporateActions: "Refresh corporate actions",
+  refreshingCorporateActions: "Refreshing corporate actions...",
+  corporateActionQueued: "Corporate-action batch queued",
+  openTaskRun: "Open task run",
   eventTypeLabels: {
     stock_fund_flow: "Stock fund flow",
     hot_sector: "Hot sector",
+    dividend_bonus: "Dividend / bonus transfer",
+    rights_allotment: "Rights allotment",
   },
 };
 
@@ -144,4 +151,42 @@ it("shows sanitized import errors without replacing stored evidence", async () =
   expect(await screen.findByText("Provider is not configured.")).toBeInTheDocument();
   expect(screen.getByText("2")).toBeInTheDocument();
   expect(routerRefreshMock).not.toHaveBeenCalled();
+});
+
+it("queues a report-period corporate-action batch and exposes its task run", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        status: "dispatched",
+        task_run: { id: "task-run-corporate", status: "running" },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  );
+
+  render(<MarketDailyEvidencePanel initialPayload={payload()} loadFailed={false} labels={labels} />);
+  fireEvent.change(screen.getByLabelText("Corporate-action report period"), {
+    target: { value: "2025-12-31" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Refresh corporate actions" }));
+
+  await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith("/api/ingestion/corporate-actions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        report_period: "2025-12-31",
+        market: "CN",
+        provider: "akshare",
+        event_types: ["dividend_bonus", "rights_allotment"],
+        cursor: 0,
+        batch_size: 50,
+      }),
+    });
+  });
+  expect(await screen.findByText("Corporate-action batch queued")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open task run" })).toHaveAttribute(
+    "href",
+    "/task-runs/task-run-corporate",
+  );
 });
