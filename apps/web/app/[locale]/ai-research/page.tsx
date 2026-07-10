@@ -17,6 +17,10 @@ import {
   type StockSelectionProfilesPayload,
   type StockUniverseStatusPayload,
 } from "@/components/stock-discovery-panel";
+import {
+  AshareEvidenceCoveragePanel,
+  type EvidenceCoveragePayload,
+} from "@/components/ashare-evidence-coverage-panel";
 import { backendFetch } from "@/lib/backend-api";
 import { withProviderQuery } from "@/lib/market-data";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
@@ -81,6 +85,7 @@ export default async function AiResearchPage({
     blockTradesResult,
     stockSelectionProfilesResult,
     stockUniverseStatusResult,
+    evidenceCoverageResult,
   ] = await Promise.all([
     fetchOptionalJson<WatchlistPayload>("/watchlist"),
     fetchOptionalJson<MarketOverviewPayload>(withProviderQuery("/dashboard/market-overview", provider)),
@@ -99,6 +104,9 @@ export default async function AiResearchPage({
     ),
     fetchOptionalJson<StockSelectionProfilesPayload>("/stock-selection/profiles"),
     fetchOptionalJson<StockUniverseStatusPayload>("/stock-selection/universe-status"),
+    fetchOptionalJson<EvidenceCoveragePayload>(
+      "/stock-selection/evidence-coverage?market=CN&provider=akshare",
+    ),
   ]);
 
   const watchlistItems = watchlistResult.status === "loaded" ? watchlistResult.payload.items ?? [] : [];
@@ -116,6 +124,11 @@ export default async function AiResearchPage({
 
   return (
     <div className="space-y-6">
+      <AshareEvidenceCoveragePanel
+        initialCoverage={
+          evidenceCoverageResult.status === "loaded" ? evidenceCoverageResult.payload : null
+        }
+      />
       <StockDiscoveryPanel
         initialProfiles={
           stockSelectionProfilesResult.status === "loaded"

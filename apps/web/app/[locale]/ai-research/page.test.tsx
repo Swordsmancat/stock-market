@@ -355,6 +355,35 @@ function createBlockTradesPayload() {
   };
 }
 
+function createEvidenceCoveragePayload() {
+  const dimension = {
+    ready_count: 5000,
+    missing_count: 200,
+    total_count: 5200,
+    coverage_ratio: 0.962,
+    threshold: 0.95,
+    passes_threshold: true,
+    by_exchange: {
+      SSE: { ready_count: 2200, total_count: 2300, coverage_ratio: 0.957 },
+      SZSE: { ready_count: 2550, total_count: 2650, coverage_ratio: 0.962 },
+      BSE: { ready_count: 250, total_count: 250, coverage_ratio: 1 },
+    },
+  };
+  return {
+    status: "ok",
+    market: "CN",
+    provider: "akshare",
+    as_of: "2026-07-10",
+    universe: { active_count: 5200, exchange_counts: { SSE: 2300, SZSE: 2650, BSE: 250 } },
+    evidence: {
+      daily_bars: dimension,
+      technical_indicators: { ...dimension, threshold: 0.9 },
+      fundamentals: { ...dimension, threshold: 0.8 },
+    },
+    latest_run: null,
+  };
+}
+
 async function renderAiResearchPage() {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
@@ -414,6 +443,9 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
     if (url.endsWith("/market-daily-data/block-trades?market=CN&limit=6&provider=akshare")) {
       return Promise.resolve(new Response(JSON.stringify(createBlockTradesPayload())));
     }
+    if (url.endsWith("/stock-selection/evidence-coverage?market=CN&provider=akshare")) {
+      return Promise.resolve(new Response(JSON.stringify(createEvidenceCoveragePayload())));
+    }
     if (url.includes("/recommendations?symbols=AAPL%2C0700&limit=6")) {
       return Promise.resolve(
         new Response(
@@ -450,6 +482,8 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   await renderAiResearchPage();
 
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "A-share evidence coverage" })).toBeInTheDocument();
+  expect(screen.getByText("Coverage ready")).toBeInTheDocument();
   expect(screen.getByText(/Research only: this desk summarizes evidence/)).toBeInTheDocument();
   expect(screen.getByText("Provider: yfinance")).toBeInTheDocument();
   expect(screen.getAllByText("AAPL").length).toBeGreaterThan(0);
