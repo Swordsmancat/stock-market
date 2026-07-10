@@ -32,6 +32,8 @@ from packages.services.ingestion import build_daily_bar_fetch_coordinator  # noq
 
 ACCEPTANCE_DATABASE_NAME = "stock_acceptance"
 TERMINAL_TASK_STATUSES = {"succeeded", "failed"}
+BASELINE_RUN_KINDS = ("baseline", "fundamental_shard")
+EVIDENCE_KINDS = ("daily_bars", "fundamentals", "technical_indicators")
 SECRET_KEY_PATTERN = re.compile(
     r"(authorization|cookie|password|secret|token|api[_-]?key|database[_-]?url|redis[_-]?url)",
     re.I,
@@ -60,6 +62,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=STRICT_POLICY,
     )
     parser.add_argument("--confirm-acceptance-writes", action="store_true")
+    parser.add_argument(
+        "--baseline-run-kind",
+        choices=BASELINE_RUN_KINDS,
+        default="baseline",
+        help="Backfill run kind used by --phase baseline.",
+    )
+    parser.add_argument(
+        "--evidence-kinds",
+        nargs="+",
+        choices=EVIDENCE_KINDS,
+        default=list(EVIDENCE_KINDS),
+        help="Evidence phases used by a baseline run.",
+    )
+    parser.add_argument("--shard-index", type=int)
+    parser.add_argument("--shard-count", type=int, default=5)
     parser.add_argument("--timeout-seconds", type=int, default=7_200)
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--report-period", type=date.fromisoformat, default=date(2026, 6, 30))
@@ -333,17 +350,11 @@ def run_canary(args: argparse.Namespace, preflight: dict[str, object]) -> dict[s
 
 def run_baseline(args: argparse.Namespace, preflight: dict[str, object]) -> dict[str, object]:
     runtime = verify_runtime_identity(args.api_base_url)
+    payload = build_baseline_payload(args)
     dispatched, task_run = dispatch_and_poll(
         args.api_base_url,
         "/ingestion/a-share-evidence-backfills",
-        payload={
-            "run_kind": "baseline",
-            "market": "CN",
-            "provider": "akshare",
-            "daily_bar_policy": args.daily_bar_policy,
-            "evidence_kinds": ["daily_bars", "fundamentals", "technical_indicators"],
-            "batch_size": 25,
-        },
+        payload=payload,
         timeout_seconds=args.timeout_seconds,
         poll_seconds=args.poll_seconds,
     )
@@ -356,6 +367,37 @@ def run_baseline(args: argparse.Namespace, preflight: dict[str, object]) -> dict
         "task_run": task_run,
         "coverage": summarize_coverage(coverage),
     }
+
+
+def build_baseline_payload(args: argparse.Namespace) -> dict[str, object]:
+    if args.baseline_run_kind == "fundamental_shard":
+        if args.shard_index is None:
+            raise AcceptanceFailure(
+                "FAIL baseline: --shard-index is required for a fundamental shard."
+            )
+        if args.shard_count < 1 or not 0 <= args.shard_index < args.shard_count:
+            raise AcceptanceFailure(
+                "FAIL baseline: --shard-index must be within --shard-count."
+            )
+        evidence_kinds = ["fundamentals"]
+    else:
+        if args.shard_index is not None:
+            raise AcceptanceFailure(
+                "FAIL baseline: --shard-index is only valid for a fundamental shard."
+            )
+        evidence_kinds = list(dict.fromkeys(args.evidence_kinds))
+
+    payload: dict[str, object] = {
+        "run_kind": args.baseline_run_kind,
+        "market": "CN",
+        "provider": "akshare",
+        "daily_bar_policy": args.daily_bar_policy,
+        "evidence_kinds": evidence_kinds,
+        "batch_size": 25,
+    }
+    if args.baseline_run_kind == "fundamental_shard":
+        payload.update(shard_index=args.shard_index, shard_count=args.shard_count)
+    return payload
 
 
 def run_discovery_replay(api_base_url: str) -> list[dict[str, object]]:

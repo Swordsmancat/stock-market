@@ -72,16 +72,52 @@ python scripts/a_share_live_acceptance.py \
   --database-url postgresql+psycopg://stock:stock@127.0.0.1:55432/stock_acceptance
 ```
 
-Only after the canary is usable should an operator start the 18-month baseline:
+Only after the canary is usable should an operator start the 18-month baseline.
+For a large universe, run the network and local phases separately so source
+health can be evaluated before more provider traffic is created. Start daily
+bars first:
 
 ```bash
 python scripts/a_share_live_acceptance.py \
   --phase baseline \
   --real-network \
   --confirm-acceptance-writes \
+  --daily-bar-policy cn_resilient \
+  --evidence-kinds daily_bars \
   --timeout-seconds 21600 \
   --database-url postgresql+psycopg://stock:stock@127.0.0.1:55432/stock_acceptance
 ```
+
+After the daily-bar run is terminal, calculate indicators from stored bars:
+
+```bash
+python scripts/a_share_live_acceptance.py \
+  --phase baseline \
+  --real-network \
+  --confirm-acceptance-writes \
+  --evidence-kinds technical_indicators \
+  --timeout-seconds 21600 \
+  --database-url postgresql+psycopg://stock:stock@127.0.0.1:55432/stock_acceptance
+```
+
+Finally, run fundamentals as five deterministic, non-overlapping shards. Run
+indices `0` through `4` sequentially, changing only `--shard-index`:
+
+```bash
+python scripts/a_share_live_acceptance.py \
+  --phase baseline \
+  --baseline-run-kind fundamental_shard \
+  --shard-index 0 \
+  --shard-count 5 \
+  --real-network \
+  --confirm-acceptance-writes \
+  --timeout-seconds 21600 \
+  --database-url postgresql+psycopg://stock:stock@127.0.0.1:55432/stock_acceptance
+```
+
+Do not start the next phase or shard while another AkShare backfill is active.
+For daily bars, inspect the checkpoint, retry set, diagnostics, and source mix
+after the first 250 symbols before allowing the run to continue unattended.
 
 The runner writes bounded, sanitized JSON evidence under the active Trellis
 task's `evidence/` directory. It redacts connection URLs, authorization/cookie

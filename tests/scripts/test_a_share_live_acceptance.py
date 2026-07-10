@@ -178,3 +178,57 @@ def test_resilient_preflight_records_explicit_selected_source(monkeypatch) -> No
         "attempt=akshare.stock_zh_a_hist:failed",
         "attempt=akshare.stock_zh_a_daily:selected",
     ]
+
+
+def test_baseline_payload_supports_one_evidence_phase() -> None:
+    args = SimpleNamespace(
+        baseline_run_kind="baseline",
+        daily_bar_policy="cn_resilient",
+        evidence_kinds=["daily_bars"],
+        shard_index=None,
+        shard_count=5,
+    )
+
+    payload = acceptance.build_baseline_payload(args)
+
+    assert payload["run_kind"] == "baseline"
+    assert payload["evidence_kinds"] == ["daily_bars"]
+    assert "shard_index" not in payload
+    assert "shard_count" not in payload
+
+
+def test_baseline_payload_builds_a_fundamental_shard() -> None:
+    args = SimpleNamespace(
+        baseline_run_kind="fundamental_shard",
+        daily_bar_policy="cn_resilient",
+        evidence_kinds=["daily_bars"],
+        shard_index=3,
+        shard_count=5,
+    )
+
+    payload = acceptance.build_baseline_payload(args)
+
+    assert payload["run_kind"] == "fundamental_shard"
+    assert payload["evidence_kinds"] == ["fundamentals"]
+    assert payload["shard_index"] == 3
+    assert payload["shard_count"] == 5
+
+
+@pytest.mark.parametrize(
+    ("shard_index", "shard_count"),
+    [(None, 5), (-1, 5), (5, 5), (0, 0)],
+)
+def test_baseline_payload_rejects_invalid_fundamental_shards(
+    shard_index: int | None,
+    shard_count: int,
+) -> None:
+    args = SimpleNamespace(
+        baseline_run_kind="fundamental_shard",
+        daily_bar_policy="cn_resilient",
+        evidence_kinds=["fundamentals"],
+        shard_index=shard_index,
+        shard_count=shard_count,
+    )
+
+    with pytest.raises(acceptance.AcceptanceFailure, match="shard"):
+        acceptance.build_baseline_payload(args)
