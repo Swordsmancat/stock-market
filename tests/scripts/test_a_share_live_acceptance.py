@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -109,3 +110,20 @@ def test_failed_readiness_record_drops_raw_exception_message() -> None:
     assert record["message"] == "provider readiness failed; see classified details and suggestions."
     assert record["attempt"] == 2
     assert "private upstream" not in json.dumps(record)
+
+
+def test_acceptance_build_context_recursively_ignores_generated_dependencies() -> None:
+    patterns = set(Path(".dockerignore").read_text(encoding="utf-8").splitlines())
+
+    assert {"**/.next", "**/node_modules", "**/.env*"}.issubset(patterns)
+
+
+def test_web_acceptance_image_uses_the_locked_package_manager_version() -> None:
+    package_manager = json.loads(Path("package.json").read_text(encoding="utf-8"))[
+        "packageManager"
+    ]
+    npm_version = package_manager.removeprefix("npm@")
+    dockerfile = Path("Dockerfile.web.acceptance").read_text(encoding="utf-8")
+
+    assert f"ARG NPM_VERSION={npm_version}" in dockerfile
+    assert 'npm install --global "npm@${NPM_VERSION}"' in dockerfile

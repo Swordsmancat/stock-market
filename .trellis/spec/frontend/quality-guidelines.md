@@ -18,6 +18,20 @@ Frontend quality is enforced mainly through Vitest, Testing Library, and focused
 - Use `cleanup()` and mock restoration when a test file renders multiple components/pages.
 - Prefer focused assertions on visible behavior and request calls over snapshot-like tests.
 
+### Keep clean-install images reproducible
+
+- Declare the package-manager version in the root `package.json` and use the
+  same version in container builds that run `npm ci`. A lock file accepted by a
+  newer npm release may be rejected by the npm release bundled with the base
+  image, especially around optional peer dependencies.
+- Root Docker ignore rules for generated frontend directories must match nested
+  workspaces recursively (for example, `**/.next` and `**/node_modules`).
+- Validate an acceptance image with a clean build before starting its Compose
+  stack. Building images is non-mutating; starting a database-backed acceptance
+  stack must still respect that stack's explicit write gates.
+- Add a focused configuration regression when changing these rules so a local
+  warm install cannot hide a broken clean build.
+
 ---
 
 ## Forbidden Patterns
