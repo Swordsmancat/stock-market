@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -127,3 +128,53 @@ def test_web_acceptance_image_uses_the_locked_package_manager_version() -> None:
 
     assert f"ARG NPM_VERSION={npm_version}" in dockerfile
     assert 'npm install --global "npm@${NPM_VERSION}"' in dockerfile
+
+
+def test_resilient_preflight_records_explicit_selected_source(monkeypatch) -> None:
+    monkeypatch.setattr(
+        acceptance,
+        "check_provider_readiness",
+        lambda **_kwargs: [
+            ProviderReadinessResult(
+                status=ReadinessStatus.OK,
+                name="akshare CN universe",
+                message="ok",
+                details=[],
+                suggestions=[],
+            )
+        ],
+    )
+    coordinator = SimpleNamespace(
+        fetch=lambda *_args, **_kwargs: SimpleNamespace(
+            status="ok",
+            effective_provider="akshare",
+            source="akshare.stock_zh_a_daily",
+            bars=[object()],
+            fallback_used=True,
+            attempts=[
+                {"source": "akshare.stock_zh_a_hist", "status": "failed"},
+                {"source": "akshare.stock_zh_a_daily", "status": "selected"},
+            ],
+        )
+    )
+    monkeypatch.setattr(
+        acceptance,
+        "build_daily_bar_fetch_coordinator",
+        lambda _provider: coordinator,
+    )
+
+    payload = acceptance.run_preflight(
+        real_network=True,
+        daily_bar_policy="cn_resilient",
+    )
+
+    assert payload["status"] == "passed"
+    assert payload["daily_bar_policy"] == "cn_resilient"
+    assert payload["checks"][-1]["details"] == [
+        "effective_provider=akshare",
+        "source=akshare.stock_zh_a_daily",
+        "row_count=1",
+        "fallback_used=true",
+        "attempt=akshare.stock_zh_a_hist:failed",
+        "attempt=akshare.stock_zh_a_daily:selected",
+    ]

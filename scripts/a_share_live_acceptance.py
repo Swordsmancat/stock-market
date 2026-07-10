@@ -24,6 +24,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.provider_readiness import ReadinessStatus  # noqa: E402
 from scripts.provider_readiness import check_provider_readiness  # noqa: E402
+from packages.services.daily_bar_sources import (  # noqa: E402
+    CN_RESILIENT_POLICY,
+    STRICT_POLICY,
+)
+from packages.services.ingestion import build_daily_bar_fetch_coordinator  # noqa: E402
 
 ACCEPTANCE_DATABASE_NAME = "stock_acceptance"
 TERMINAL_TASK_STATUSES = {"succeeded", "failed"}
@@ -49,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--database-url", default=os.getenv("ACCEPTANCE_DATABASE_URL", ""))
     parser.add_argument("--artifact-dir", type=Path, default=PROJECT_ROOT / ".trellis" / "tasks" / "07-10-a-share-live-acceptance" / "evidence")
     parser.add_argument("--real-network", action="store_true")
+    parser.add_argument(
+        "--daily-bar-policy",
+        choices=(STRICT_POLICY, CN_RESILIENT_POLICY),
+        default=STRICT_POLICY,
+    )
     parser.add_argument("--confirm-acceptance-writes", action="store_true")
     parser.add_argument("--timeout-seconds", type=int, default=7_200)
     parser.add_argument("--poll-seconds", type=float, default=5.0)
@@ -75,7 +85,11 @@ def require_acceptance_database(database_url: str) -> None:
         )
 
 
-def run_preflight(*, real_network: bool) -> dict[str, object]:
+def run_preflight(
+    *,
+    real_network: bool,
+    daily_bar_policy: str = STRICT_POLICY,
+) -> dict[str, object]:
     if not real_network:
         raise AcceptanceFailure("FAIL preflight: --real-network is required for live AkShare checks.")
     universe_results = check_provider_readiness(
@@ -85,26 +99,69 @@ def run_preflight(*, real_network: bool) -> dict[str, object]:
         real_network=True,
         check_universe=True,
     )
-    bar_attempts = []
-    for attempt in range(1, 4):
-        bar_results = check_provider_readiness(
-            provider_name="akshare",
-            market="CN",
-            symbol="600519",
-            real_network=True,
-        )
-        bar_attempts.extend(readiness_record(item, attempt=attempt) for item in bar_results)
-        if all(item.status == ReadinessStatus.OK for item in bar_results):
-            break
-        if attempt < 3:
-            time.sleep(2 ** (attempt - 1))
-    results = [*universe_results, *bar_results]
+    if daily_bar_policy == CN_RESILIENT_POLICY:
+        bar_attempts, bars_ok = _run_resilient_bar_preflight()
+    else:
+        bar_attempts = []
+        for attempt in range(1, 4):
+            bar_results = check_provider_readiness(
+                provider_name="akshare",
+                market="CN",
+                symbol="600519",
+                real_network=True,
+            )
+            bar_attempts.extend(readiness_record(item, attempt=attempt) for item in bar_results)
+            if all(item.status == ReadinessStatus.OK for item in bar_results):
+                break
+            if attempt < 3:
+                time.sleep(2 ** (attempt - 1))
+        bars_ok = all(item.status == ReadinessStatus.OK for item in bar_results)
+    universe_ok = all(item.status == ReadinessStatus.OK for item in universe_results)
     payload = {
-        "status": "passed" if all(item.status == ReadinessStatus.OK for item in results) else "failed",
+        "status": "passed" if universe_ok and bars_ok else "failed",
+        "daily_bar_policy": daily_bar_policy,
         "database_writes": "none",
         "checks": [*(readiness_record(item) for item in universe_results), *bar_attempts],
     }
     return payload
+
+
+def _run_resilient_bar_preflight() -> tuple[list[dict[str, object]], bool]:
+    try:
+        result = build_daily_bar_fetch_coordinator("akshare").fetch(
+            "600519",
+            "1d",
+            date.today().fromordinal(date.today().toordinal() - 14),
+            date.today(),
+            policy=CN_RESILIENT_POLICY,
+        )
+    except Exception as exc:
+        return ([{
+            "status": "FAIL",
+            "name": "akshare CN resilient daily bars",
+            "message": "Resilient daily-bar preflight failed; see classified details.",
+            "details": [f"exception_type={type(exc).__name__}"],
+            "suggestions": ["Inspect the explicit source-attempt diagnostics and retry later."],
+        }], False)
+    record = {
+        "status": "OK" if result.status == "ok" else "FAIL",
+        "name": "akshare CN resilient daily bars",
+        "message": "Explicit daily-bar source policy returned usable rows."
+        if result.status == "ok"
+        else "Explicit daily-bar sources returned no usable rows.",
+        "details": [
+            f"effective_provider={result.effective_provider or 'none'}",
+            f"source={result.source or 'none'}",
+            f"row_count={len(result.bars)}",
+            f"fallback_used={str(result.fallback_used).lower()}",
+            *[
+                f"attempt={attempt.get('source')}:{attempt.get('status')}"
+                for attempt in result.attempts
+            ],
+        ],
+        "suggestions": [],
+    }
+    return [record], result.status == "ok"
 
 
 def readiness_record(item: Any, *, attempt: int | None = None) -> dict[str, object]:
@@ -247,6 +304,7 @@ def run_canary(args: argparse.Namespace, preflight: dict[str, object]) -> dict[s
             "run_kind": "canary",
             "market": "CN",
             "provider": "akshare",
+            "daily_bar_policy": args.daily_bar_policy,
             "evidence_kinds": ["daily_bars", "fundamentals", "technical_indicators"],
             "batch_size": 25,
             "cohort_size": 50,
@@ -282,6 +340,7 @@ def run_baseline(args: argparse.Namespace, preflight: dict[str, object]) -> dict
             "run_kind": "baseline",
             "market": "CN",
             "provider": "akshare",
+            "daily_bar_policy": args.daily_bar_policy,
             "evidence_kinds": ["daily_bars", "fundamentals", "technical_indicators"],
             "batch_size": 25,
         },
@@ -470,7 +529,10 @@ def display_artifact_path(path: Path) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        preflight = run_preflight(real_network=args.real_network)
+        preflight = run_preflight(
+            real_network=args.real_network,
+            daily_bar_policy=args.daily_bar_policy,
+        )
         if preflight["status"] != "passed":
             result = {
                 "status": "failed",
