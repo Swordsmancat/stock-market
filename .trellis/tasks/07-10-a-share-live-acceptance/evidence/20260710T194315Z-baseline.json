@@ -1,0 +1,340 @@
+{
+  "baseline_run_id": "3ee59c41-8803-4d1e-b415-b6702afb781b",
+  "coverage": {
+    "as_of": "2026-07-10",
+    "evidence": {
+      "daily_bars": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.963302752293578,
+            "ready_count": 315,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.9978336221837089,
+            "ready_count": 2303,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.9979274611398964,
+            "ready_count": 2889,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.9958408679927667,
+        "missing_count": 23,
+        "passes_threshold": true,
+        "ready_count": 5507,
+        "source_distribution": [
+          {
+            "instrument_count": 5528,
+            "provider": "akshare",
+            "row_count": 1954200,
+            "source": "akshare.stock_zh_a_daily"
+          }
+        ],
+        "threshold": 0.95,
+        "total_count": 5530
+      },
+      "fundamentals": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.2415902140672783,
+            "ready_count": 79,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.20537261698440207,
+            "ready_count": 474,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.20345423143350605,
+            "ready_count": 589,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.2065099457504521,
+        "missing_count": 4388,
+        "passes_threshold": false,
+        "ready_count": 1142,
+        "threshold": 0.8,
+        "total_count": 5530
+      },
+      "technical_indicators": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.9785932721712538,
+            "ready_count": 320,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.9982668977469671,
+            "ready_count": 2304,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.998272884283247,
+            "ready_count": 2890,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.9971066907775769,
+        "missing_count": 16,
+        "passes_threshold": true,
+        "ready_count": 5514,
+        "threshold": 0.9,
+        "total_count": 5530
+      }
+    },
+    "latest_run": {
+      "cursor": 1106,
+      "daily_bar_policy": "cn_resilient",
+      "diagnostics": [],
+      "finished_at": "2026-07-10T19:43:09.421129+00:00",
+      "heartbeat_at": "2026-07-10T19:43:09.421129+00:00",
+      "id": "3ee59c41-8803-4d1e-b415-b6702afb781b",
+      "phase": "completed",
+      "phase_total": 1106,
+      "processed_count": 1106,
+      "retry": {
+        "fundamentals": {
+          "count": 0,
+          "preview": []
+        }
+      },
+      "run_kind": "fundamental_shard",
+      "source_stats": {},
+      "status": "succeeded",
+      "task_run_id": "4e1b97f5-ae98-4a60-b57b-b6586d0863d1"
+    },
+    "market": "CN",
+    "provider": "akshare",
+    "status": "needs_attention",
+    "thresholds": {
+      "daily_bars": 0.95,
+      "fundamentals": 0.8,
+      "technical_indicators": 0.9
+    },
+    "universe": {
+      "active_count": 5530,
+      "exchange_counts": {
+        "BSE": 327,
+        "SSE": 2308,
+        "SZSE": 2895
+      }
+    }
+  },
+  "metadata": {
+    "akshare": "1.18.64",
+    "alembic_head": "0016_daily_bar_provenance (head)",
+    "commit": "3512ceee2e25ebfdbc925457c913ce6ba7029824",
+    "git_status": "clean",
+    "market": "CN",
+    "provider": "akshare",
+    "python": "3.13.7",
+    "recorded_at": "2026-07-10T19:43:14.900699+00:00"
+  },
+  "preflight": {
+    "checks": [
+      {
+        "details": [
+          "provider=akshare",
+          "market=CN",
+          "instrument_count=5530",
+          "exchange_counts=BSE:327,SSE:2308,SZSE:2895",
+          "database_writes=none"
+        ],
+        "message": "akshare returned a complete CN universe with 5530 instruments.",
+        "name": "provider universe readiness",
+        "status": "OK",
+        "suggestions": []
+      },
+      {
+        "details": [
+          "effective_provider=akshare",
+          "source=akshare.stock_zh_a_daily",
+          "row_count=10",
+          "fallback_used=true",
+          "attempt=akshare.stock_zh_a_hist:failed",
+          "attempt=akshare.stock_zh_a_daily:selected"
+        ],
+        "message": "Explicit daily-bar source policy returned usable rows.",
+        "name": "akshare CN resilient daily bars",
+        "status": "OK",
+        "suggestions": []
+      }
+    ],
+    "daily_bar_policy": "cn_resilient",
+    "database_writes": "none",
+    "status": "passed"
+  },
+  "runtime": {
+    "app_env": "acceptance",
+    "celery_timezone": "Asia/Shanghai",
+    "database_name": "stock_acceptance",
+    "status": "ok"
+  },
+  "status": "passed",
+  "task_run": {
+    "duration_ms": 877109,
+    "error_type": null,
+    "finished_at": "2026-07-10T19:43:09.423660+00:00",
+    "heartbeat_at": "2026-07-10T19:43:09.418465+00:00",
+    "id": "4e1b97f5-ae98-4a60-b57b-b6586d0863d1",
+    "result_json": {
+      "batch_size": 25,
+      "cancel_requested_at": null,
+      "cohort_size": null,
+      "counters": {
+        "fundamentals": {
+          "attempted": 1106,
+          "failed": 0,
+          "insufficient_data": 0,
+          "no_data": 1,
+          "succeeded": 1105
+        }
+      },
+      "created_at": "2026-07-10T19:28:32.308679+00:00",
+      "cursor": 1106,
+      "daily_bar_policy": "cn_resilient",
+      "diagnostics": [],
+      "end_date": "2026-07-10",
+      "evidence_kinds": [
+        "fundamentals"
+      ],
+      "finished_at": "2026-07-10T19:43:09.421129+00:00",
+      "heartbeat_at": "2026-07-10T19:43:09.421129+00:00",
+      "id": "3ee59c41-8803-4d1e-b415-b6702afb781b",
+      "market": "CN",
+      "parent_run_id": null,
+      "phase": "completed",
+      "phase_total": 1106,
+      "processed_count": 1106,
+      "provider": "akshare",
+      "retry": {
+        "fundamentals": []
+      },
+      "run_kind": "fundamental_shard",
+      "safety": {
+        "no_automated_trading": true,
+        "no_silent_provider_fallback": true,
+        "research_signal_only": true
+      },
+      "scope_symbols": [
+        "920000",
+        "920006",
+        "920011",
+        "920017",
+        "920022",
+        "920029",
+        "920037",
+        "920050",
+        "920060",
+        "920069",
+        "920078",
+        "920086",
+        "920091",
+        "920100",
+        "920111",
+        "920121",
+        "920126",
+        "920139",
+        "920156",
+        "920163",
+        "920171",
+        "920179",
+        "920185",
+        "920190",
+        "920199",
+        "920208",
+        "920221",
+        "920230",
+        "920247",
+        "920262",
+        "920271",
+        "920284",
+        "920339",
+        "920363",
+        "920374",
+        "920395",
+        "920407",
+        "920422",
+        "920436",
+        "920469",
+        "920489",
+        "920505",
+        "920522",
+        "920541",
+        "920566",
+        "920578",
+        "920599",
+        "920640",
+        "920662",
+        "920679",
+        "920693",
+        "920706",
+        "920725",
+        "920751",
+        "920779",
+        "920799",
+        "920809",
+        "920832",
+        "920855",
+        "920871",
+        "920892",
+        "920924",
+        "920942",
+        "920957",
+        "920974",
+        "920985",
+        "600007",
+        "600012",
+        "600019",
+        "600025",
+        "600030",
+        "600036",
+        "600050",
+        "600055",
+        "600060",
+        "600066",
+        "600075",
+        "600081",
+        "600089",
+        "600098",
+        "600104",
+        "600109",
+        "600115",
+        "600120",
+        "600127",
+        "600132",
+        "600138",
+        "600150",
+        "600156",
+        "600161",
+        "600167",
+        "600172",
+        "600179",
+        "600185",
+        "600191",
+        "600198",
+        "600206",
+        "600212",
+        "600219",
+        "600227"
+      ],
+      "shard_count": 5,
+      "shard_index": 0,
+      "source_stats": {},
+      "start_date": "2025-01-10",
+      "status": "succeeded",
+      "task_run_id": "4e1b97f5-ae98-4a60-b57b-b6586d0863d1",
+      "universe_as_of": "2026-07-10T15:04:47.723438+00:00",
+      "universe_sync_id": "dec5deeb-a977-4443-8c8d-b2616035ebf0",
+      "updated_at": "2026-07-10T19:43:09.421129+00:00"
+    },
+    "started_at": "2026-07-10T19:28:32.314582+00:00",
+    "status": "succeeded",
+    "task_name": "ingestion.backfill_a_share_research_evidence"
+  }
+}
