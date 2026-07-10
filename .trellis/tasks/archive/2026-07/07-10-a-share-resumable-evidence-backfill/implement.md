@@ -13,7 +13,7 @@
 - [x] Update backend contracts and runbook notes owned by this child.
 - [x] Run focused tests and touched Ruff.
 - [x] Run full backend tests, migration checks, Trellis validation, and `git diff --check`.
-- [ ] Commit logically and archive this child before starting the UI child.
+- [x] Commit logically and archive this child before starting the UI child.
 
 ## Validation Results
 
