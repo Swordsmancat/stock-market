@@ -1534,3 +1534,39 @@ Added authoritative A-share evidence coverage metrics, exchange breakdowns, guar
 ### Next Steps
 
 - None - task complete
+
+
+## Session 47: A-share multi-source daily-bar resilience
+
+**Date**: 2026-07-10
+**Task**: A-share multi-source daily-bar resilience
+**Branch**: `master`
+
+### Summary
+
+Added explicit strict/cn_resilient daily-bar policies, row-level source provenance, priority-aware persistence, run-local circuits, source-aware coverage/UI, fresh PostgreSQL Alembic bootstrap protection, and passed an isolated 50-symbol SSE/SZSE/BSE canary using Sina after Eastmoney failure.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1d34b63` | (see git log) |
+| `1ed960f` | (see git log) |
+| `58e8a91` | (see git log) |
+| `f668aee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

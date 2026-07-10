@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 46
+- **Total Sessions**: 47
 - **Last Active**: 2026-07-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1536 | Active |
+| `journal-1.md` | ~1572 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 47 | 2026-07-10 | A-share multi-source daily-bar resilience | `1d34b63`, `1ed960f`, `58e8a91`, `f668aee` | `master` |
 | 46 | 2026-07-10 | A-share backfill operations UI | `25fa543` | `master` |
 | 45 | 2026-07-10 | Resumable A-share evidence backfill | `bc69487`, `014b2cf` | `master` |
 | 44 | 2026-07-10 | Comprehensive A-share research coverage | `9a3848a`, `2e9ea74`, `d90e35a`, `484c522` | `master` |
