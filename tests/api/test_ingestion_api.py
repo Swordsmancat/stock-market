@@ -492,6 +492,7 @@ def test_research_evidence_backfill_api_dispatches_and_reports_coverage(monkeypa
             "/ingestion/a-share-evidence-backfills",
             json={
                 "run_kind": "canary",
+                "daily_bar_policy": "cn_resilient",
                 "start_date": date(2025, 1, 1).isoformat(),
                 "end_date": date(2026, 7, 10).isoformat(),
                 "cohort_size": 3,
@@ -507,6 +508,7 @@ def test_research_evidence_backfill_api_dispatches_and_reports_coverage(monkeypa
     assert payload["status"] == "dispatched"
     assert payload["task_run"]["status"] == "succeeded"
     assert payload["backfill"]["status"] == "succeeded"
+    assert payload["backfill"]["daily_bar_policy"] == "cn_resilient"
     assert payload["backfill"]["processed_count"] == 9
     assert coverage_response.status_code == 200
     coverage = coverage_response.json()

@@ -47,6 +47,7 @@ class ResearchEvidenceBackfillRequest(BaseModel):
     run_kind: str = Field(default="baseline", min_length=1, max_length=32)
     market: str = Field(default="CN", min_length=1, max_length=32)
     provider: str = Field(default="akshare", min_length=1, max_length=64)
+    daily_bar_policy: str = Field(default="strict", min_length=1, max_length=32)
     evidence_kinds: list[str] = Field(
         default_factory=lambda: [
             "daily_bars",
@@ -296,6 +297,7 @@ def start_a_share_evidence_backfill(
                 run_kind=request.run_kind,
                 market=request.market,
                 provider=request.provider,
+                daily_bar_policy=request.daily_bar_policy,
                 evidence_kinds=tuple(request.evidence_kinds),
                 start_date=request.start_date,
                 end_date=request.end_date,

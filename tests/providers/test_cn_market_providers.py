@@ -1,5 +1,7 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import sys
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -40,6 +42,48 @@ def test_akshare_provider_does_not_convert_provider_failure_into_no_data():
 
     with pytest.raises(TimeoutError, match="upstream timeout"):
         provider.fetch_bars("600519", "1d", date(2026, 1, 1), date(2026, 1, 10))
+
+
+def test_akshare_sina_daily_downloader_prefixes_symbol_and_normalizes_frame(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def stock_zh_a_daily(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame(
+            {
+                "date": ["2026-07-09"],
+                "open": [100],
+                "high": [102],
+                "low": [99],
+                "close": [101],
+                "volume": [1000],
+                "amount": [101000],
+            }
+        )
+
+    monkeypatch.setitem(sys.modules, "akshare", SimpleNamespace(stock_zh_a_daily=stock_zh_a_daily))
+
+    frame = AkShareProvider.download_sina_daily_bars(
+        "600519", date(2026, 7, 1), date(2026, 7, 10)
+    )
+
+    assert captured == {
+        "symbol": "sh600519",
+        "start_date": "20260701",
+        "end_date": "20260710",
+        "adjust": "qfq",
+    }
+    assert frame.to_dict("records") == [
+        {
+            "timestamp": pd.Timestamp("2026-07-09"),
+            "open": 100,
+            "high": 102,
+            "low": 99,
+            "close": 101,
+            "volume": 1000,
+            "amount": 101000,
+        }
+    ]
 
 
 def test_akshare_provider_fetches_market_depth_from_injected_payload():

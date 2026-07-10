@@ -14,6 +14,11 @@ from packages.shared.database import Base
 from packages.services.ingestion import ingest_market_snapshot, ingest_mock_market_snapshot
 from packages.services.ingestion import ingest_symbol_daily_bars_batch
 from packages.services.ingestion import ingest_symbol_daily_bars
+from packages.services.daily_bar_sources import (
+    CN_RESILIENT_POLICY,
+    DailyBarFetchCoordinator,
+    DailyBarSource,
+)
 
 
 @pytest.fixture
@@ -472,6 +477,136 @@ def test_symbol_daily_bar_ingestion_returns_no_data_without_daily_rows(
     assert result["bar_count"] == 0
     assert result["no_data_reason"] == "Provider returned no daily bars for the requested symbol/date range."
     assert sqlite_session.query(DailyBar).count() == 0
+
+
+def test_resilient_daily_bar_ingestion_persists_selected_source_provenance(
+    sqlite_session: Session,
+):
+    coordinator = DailyBarFetchCoordinator(
+        [
+            DailyBarSource(
+                provider="akshare",
+                source="akshare.stock_zh_a_hist",
+                adjustment="qfq",
+                priority=0,
+                fetch=lambda *_args: (_ for _ in ()).throw(ConnectionError("unavailable")),
+            ),
+            DailyBarSource(
+                provider="akshare",
+                source="akshare.stock_zh_a_daily",
+                adjustment="qfq",
+                priority=1,
+                fetch=lambda *_args: [
+                    _provider_bar("600519", date(2026, 1, 5), Decimal("123.45"))
+                ],
+            ),
+        ]
+    )
+
+    result = ingest_symbol_daily_bars(
+        "600519",
+        "CN",
+        date(2026, 1, 5),
+        date(2026, 1, 5),
+        session=sqlite_session,
+        provider_name="akshare",
+        daily_bar_policy=CN_RESILIENT_POLICY,
+        fetch_coordinator=coordinator,
+    )
+
+    database_bar = sqlite_session.query(DailyBar).one()
+    assert result["effective_provider"] == "akshare"
+    assert result["source"] == "akshare.stock_zh_a_daily"
+    assert result["fallback_used"] is True
+    assert database_bar.provider == "akshare"
+    assert database_bar.source == "akshare.stock_zh_a_daily"
+    assert database_bar.adjustment == "qfq"
+    assert database_bar.source_priority == 1
+
+
+def test_lower_priority_daily_bar_source_cannot_overwrite_primary(
+    sqlite_session: Session,
+):
+    primary = DailyBarFetchCoordinator(
+        [
+            DailyBarSource(
+                provider="akshare",
+                source="akshare.stock_zh_a_hist",
+                adjustment="qfq",
+                priority=0,
+                fetch=lambda *_args: [
+                    _provider_bar("600519", date(2026, 1, 5), Decimal("100"))
+                ],
+            )
+        ]
+    )
+    fallback = DailyBarFetchCoordinator(
+        [
+            DailyBarSource(
+                provider="akshare",
+                source="akshare.stock_zh_a_daily",
+                adjustment="qfq",
+                priority=1,
+                fetch=lambda *_args: [
+                    _provider_bar("600519", date(2026, 1, 5), Decimal("200"))
+                ],
+            )
+        ]
+    )
+
+    for coordinator in (primary, fallback):
+        ingest_symbol_daily_bars(
+            "600519",
+            "CN",
+            date(2026, 1, 5),
+            date(2026, 1, 5),
+            session=sqlite_session,
+            provider_name="akshare",
+            fetch_coordinator=coordinator,
+        )
+
+    database_bar = sqlite_session.query(DailyBar).one()
+    assert database_bar.close == Decimal("100")
+    assert database_bar.source == "akshare.stock_zh_a_hist"
+    assert database_bar.source_priority == 0
+
+
+def test_recovered_primary_source_replaces_fallback_daily_bar(
+    sqlite_session: Session,
+):
+    def coordinator(source: str, priority: int, close: str) -> DailyBarFetchCoordinator:
+        return DailyBarFetchCoordinator(
+            [
+                DailyBarSource(
+                    provider="akshare",
+                    source=source,
+                    adjustment="qfq",
+                    priority=priority,
+                    fetch=lambda *_args: [
+                        _provider_bar("600519", date(2026, 1, 5), Decimal(close))
+                    ],
+                )
+            ]
+        )
+
+    for fetch_coordinator in (
+        coordinator("akshare.stock_zh_a_daily", 1, "200"),
+        coordinator("akshare.stock_zh_a_hist", 0, "100"),
+    ):
+        ingest_symbol_daily_bars(
+            "600519",
+            "CN",
+            date(2026, 1, 5),
+            date(2026, 1, 5),
+            session=sqlite_session,
+            provider_name="akshare",
+            fetch_coordinator=fetch_coordinator,
+        )
+
+    database_bar = sqlite_session.query(DailyBar).one()
+    assert database_bar.close == Decimal("100")
+    assert database_bar.source == "akshare.stock_zh_a_hist"
+    assert database_bar.source_priority == 0
 
 
 def test_symbol_daily_bar_batch_ingestion_dedupes_and_preserves_partial_results(

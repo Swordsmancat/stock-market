@@ -368,3 +368,122 @@ record = {"message": "provider readiness failed", "exception_type": type(exc).__
 
 The runner proves both caller intent and runtime identity, then records only a
 bounded classification.
+
+## Scenario: Explicit Multi-Source Daily-Bar Resilience
+
+### 1. Scope / Trigger
+
+- Trigger: a configured A-share daily-bar endpoint can fail provider-wide while
+  another verified endpoint remains usable, and AI coverage must retain the
+  effective source of every canonical row.
+- Scope: Alembic revision `0016`, `DailyBar` provenance,
+  `DailyBarFetchCoordinator`, explicit backfill policy, source distribution,
+  and the AI Research coverage panel.
+- Non-goals: fundamentals/corporate-action fallback, parallel fan-out, price
+  blending, provider procurement, ranking changes, or trading.
+
+### 2. Signatures
+
+- DB `bars_1d`: `provider`, `source`, `adjustment`, `source_priority`,
+  `ingested_at`.
+- DB `research_evidence_backfills`: `daily_bar_policy`, `source_stats_json`.
+- Service: `ingest_symbol_daily_bars(..., daily_bar_policy="strict",
+  fetch_coordinator=None)`.
+- Backfill input/API: `daily_bar_policy`, supported values `strict` and
+  `cn_resilient`.
+- Coverage: `evidence.daily_bars.source_distribution[]` with `provider`,
+  `source`, `row_count`, and `instrument_count`; latest run adds policy and
+  source stats.
+
+### 3. Contracts
+
+- `strict` remains the default and invokes only the requested provider source.
+- `cn_resilient` is explicit and fixed-order:
+  `akshare.stock_zh_a_hist` (priority 0),
+  `akshare.stock_zh_a_daily` (priority 1), then configured
+  `tushare.pro.daily` (priority 2).
+- Tushare without a token is `skipped_unconfigured`; yfinance, mock, and static
+  fixtures are never eligible.
+- Attempts contain source, provider, status, row count or exception type only;
+  raw exception text and upstream payloads are excluded.
+- Bars are selected only after date/symbol/duplicate/finite/OHLC/volume
+  validation. Calls stay sequential and each source has bounded pacing.
+- Three consecutive retrieval/validation failures open a run-local circuit.
+  Circuit skips retain failure semantics; they must not become valid no-data.
+- Canonical upserts allow the same or a better (lower numeric) priority to
+  write. A lower-priority replay preserves the existing row. Existing rows are
+  migrated as `legacy_unknown` priority 99.
+- Resume/retry copies the policy. One coordinator is shared for a complete
+  worker execution so pacing, circuits, and source counters span symbols.
+- Readiness thresholds remain 95/90/80 percent; source distribution explains
+  evidence quality but does not silently relax coverage.
+
+### 4. Validation & Error Matrix
+
+- Unknown policy -> `ValueError` / HTTP 400 before dispatch.
+- `start_date > end_date` -> `ValueError` before provider access.
+- Strict source exception -> original exception behavior; no fallback call.
+- Resilient source exception -> sanitized failed attempt, then next eligible
+  source.
+- Empty source -> explicit `no_data` attempt; the next eligible resilient source
+  may be checked.
+- Invalid OHLC/date/symbol/duplicate/non-finite/negative-volume row -> invalid
+  attempt and no persistence.
+- All sources failed or were circuit-skipped -> provider failure/retry, never
+  no-data.
+- All configured sources returned valid empty data -> `no_data`.
+- Lower-priority replay -> existing canonical value/source preserved.
+
+### 5. Good / Base / Bad Cases
+
+- Good: Eastmoney raises `ConnectionError`, Sina returns valid qfq bars, the
+  bars persist as source `akshare.stock_zh_a_daily`, and coverage shows the
+  fallback instrument count.
+- Good: a recovered Eastmoney row replaces a prior Sina row; a later Sina replay
+  cannot overwrite it.
+- Base: Tushare is unconfigured; its fetcher is not called and the diagnostic
+  says `skipped_unconfigured`.
+- Bad: a circuit-open provider is reported as stock-level no-data.
+- Bad: a worker silently tries yfinance/mock, or a fallback overwrites a
+  higher-priority canonical row.
+
+### 6. Tests Required
+
+- Coordinator tests assert strict isolation, fixed fallback order, sanitized
+  attempts, configured-only Tushare, validation, and circuit behavior.
+- Provider tests assert Sina exchange prefix/date/OHLCV normalization without
+  live network.
+- Ingestion tests assert provenance persistence, downgrade protection, and
+  primary recovery.
+- Migration tests execute revision `0016` on SQLite-compatible history and
+  assert all additive columns.
+- Backfill/API/worker tests assert policy round-trip, source stats, resume/retry,
+  and preserved TaskRun semantics.
+- Coverage tests assert source row/instrument distribution and the existing
+  constant query bound.
+- Web tests assert explicit `cn_resilient` mutation input, visible controlled-
+  fallback state, localized source mix, full Vitest, and TypeScript.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+try:
+    bars = eastmoney.fetch_bars(...)
+except Exception:
+    bars = yfinance.fetch_bars(...)  # silent and untraceable
+```
+
+#### Correct
+
+```python
+result = coordinator.fetch(
+    symbol,
+    "1d",
+    start,
+    end,
+    policy="cn_resilient",
+)
+# result.source, result.source_priority, and result.attempts persist visibly.
+```

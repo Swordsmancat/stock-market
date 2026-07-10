@@ -30,6 +30,12 @@ type CoverageDimension = {
   threshold: number;
   passes_threshold: boolean;
   by_exchange: Record<string, { ready_count: number; total_count: number; coverage_ratio: number }>;
+  source_distribution?: Array<{
+    provider: string;
+    source: string;
+    row_count: number;
+    instrument_count: number;
+  }>;
 };
 
 type LatestRun = {
@@ -37,6 +43,8 @@ type LatestRun = {
   task_run_id?: string | null;
   run_kind: string;
   status: string;
+  daily_bar_policy?: string;
+  source_stats?: Record<string, Record<string, number>>;
   phase?: string | null;
   cursor: number;
   phase_total: number;
@@ -115,6 +123,7 @@ export function AshareEvidenceCoveragePanel({
       run_kind: runKind,
       market: "CN",
       provider: "akshare",
+      daily_bar_policy: "cn_resilient",
       evidence_kinds: EVIDENCE_KINDS,
       batch_size: 25,
       ...(runKind === "canary" ? { cohort_size: 50 } : {}),
@@ -167,6 +176,7 @@ export function AshareEvidenceCoveragePanel({
   }
 
   const exchanges = Object.keys(coverage.universe.exchange_counts).sort();
+  const dailyBarSources = coverage.evidence.daily_bars.source_distribution ?? [];
 
   return (
     <FinancialTerminalCard>
@@ -269,6 +279,22 @@ export function AshareEvidenceCoveragePanel({
           </Table>
         </FinancialTerminalSurface>
 
+        <FinancialTerminalSurface className="space-y-2 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">{t("sourceMix")}</h3>
+            <Badge variant="outline">{t("controlledFallback")}</Badge>
+          </div>
+          {dailyBarSources.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {dailyBarSources.map((item) => (
+                <Badge key={`${item.provider}:${item.source}`} variant="secondary">
+                  {item.source}: {formatInteger(item.instrument_count, locale)} / {formatInteger(item.row_count, locale)}
+                </Badge>
+              ))}
+            </div>
+          ) : <p className="text-xs text-muted-foreground">{t("sourceMixEmpty")}</p>}
+        </FinancialTerminalSurface>
+
         {latestRun ? (
           <LatestRunPanel
             run={latestRun}
@@ -305,6 +331,7 @@ function LatestRunPanel({ run, locale, pending, onAction, t }: {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">{run.run_kind}</Badge>
+          <Badge variant="outline">{t("policy", { policy: run.daily_bar_policy ?? "strict" })}</Badge>
           <Badge variant={ACTIVE_STATUSES.has(run.status) ? "secondary" : "outline"}>{runStatusLabel(run.status, t)}</Badge>
           {run.task_run_id ? <Button asChild size="sm" variant="outline"><Link href={`/task-runs/${run.task_run_id}`}>{t("openTaskRun")}</Link></Button> : null}
         </div>

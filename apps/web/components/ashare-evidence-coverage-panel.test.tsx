@@ -22,6 +22,10 @@ const coverage: EvidenceCoveragePayload = {
       ready_count: 5000, missing_count: 200, total_count: 5200, coverage_ratio: 0.962,
       threshold: 0.95, passes_threshold: true,
       by_exchange: { BSE: { ready_count: 230, total_count: 250, coverage_ratio: 0.92 }, SSE: { ready_count: 2250, total_count: 2300, coverage_ratio: 0.978 }, SZSE: { ready_count: 2520, total_count: 2650, coverage_ratio: 0.951 } },
+      source_distribution: [
+        { provider: "akshare", source: "akshare.stock_zh_a_hist", row_count: 120000, instrument_count: 4800 },
+        { provider: "akshare", source: "akshare.stock_zh_a_daily", row_count: 5000, instrument_count: 200 },
+      ],
     },
     technical_indicators: {
       ready_count: 4800, missing_count: 400, total_count: 5200, coverage_ratio: 0.923,
@@ -56,6 +60,8 @@ it("shows evidence and exchange coverage, then starts a fixed canary", async () 
   expect(screen.getByRole("progressbar", { name: "Coverage for Daily bars" })).toHaveAttribute("aria-valuenow", "96");
   expect(screen.getByText("75% / 80%")).toBeInTheDocument();
   expect(screen.getByText("92% (230/250)")).toBeInTheDocument();
+  expect(screen.getByText(/akshare\.stock_zh_a_daily: 200 \/ 5,000/)).toBeInTheDocument();
+  expect(screen.getByText("Controlled fallback enabled")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Start 50-stock canary" }));
 
@@ -63,6 +69,7 @@ it("shows evidence and exchange coverage, then starts a fixed canary", async () 
   expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/ingestion/a-share-evidence-backfills", expect.objectContaining({ method: "POST" }));
   expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
     run_kind: "canary", market: "CN", provider: "akshare",
+    daily_bar_policy: "cn_resilient",
     evidence_kinds: ["daily_bars", "technical_indicators", "fundamentals"],
     batch_size: 25, cohort_size: 50,
   });

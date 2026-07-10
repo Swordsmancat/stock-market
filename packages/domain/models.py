@@ -124,6 +124,11 @@ class ResearchEvidenceBackfill(Base):
     )
     market: Mapped[str] = mapped_column(String(32))
     provider: Mapped[str] = mapped_column(String(64))
+    daily_bar_policy: Mapped[str] = mapped_column(String(32), default="strict")
+    source_stats_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
     run_kind: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32))
     universe_sync_id: Mapped[PythonUUID | None] = mapped_column(
@@ -200,6 +205,14 @@ class DailyBar(Base):
     close: Mapped[Decimal] = mapped_column(Numeric(20, 6))
     volume: Mapped[Decimal] = mapped_column(Numeric(24, 4))
     amount: Mapped[Decimal | None] = mapped_column(Numeric(24, 4), default=None)
+    provider: Mapped[str] = mapped_column(String(64), default="legacy_unknown")
+    source: Mapped[str] = mapped_column(String(128), default="legacy_unknown")
+    adjustment: Mapped[str] = mapped_column(String(32), default="legacy_unknown")
+    source_priority: Mapped[int] = mapped_column(Integer, default=99)
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
 
 
 class MinuteBar(Base):

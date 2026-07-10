@@ -1135,6 +1135,10 @@
     "unavailable": "N/A"
   },
   "AshareEvidenceCoverage": {
+    "policy": "Policy: {policy}",
+    "sourceMix": "Daily-bar source mix",
+    "sourceMixEmpty": "No source-attributed daily bars are stored yet.",
+    "controlledFallback": "Controlled fallback enabled",
     "title": "A-share evidence coverage",
     "description": "Monitor stored daily bars, technical indicators, and fundamentals used by full-universe stock discovery and AI analysis.",
     "safety": "Research evidence only. Provider failures stay visible; this workflow never places trades.",

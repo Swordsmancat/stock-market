@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -25,6 +26,8 @@ from packages.services.research_evidence_backfill import (
     get_evidence_coverage,
     request_cancel_backfill,
 )
+from packages.providers.base import ProviderBar
+from packages.services.daily_bar_sources import DailyBarFetchCoordinator, DailyBarSource
 from packages.shared.database import Base
 
 
@@ -127,6 +130,8 @@ def test_create_canary_freezes_deterministic_multi_exchange_scope(session: Sessi
         "000001",
     ]
     assert payload["item"]["universe_sync_id"]
+    assert payload["item"]["daily_bar_policy"] == "strict"
+    assert payload["item"]["source_stats"] == {}
     assert duplicate["status"] == "already_running"
     assert duplicate["item"]["id"] == payload["item"]["id"]
 
@@ -182,6 +187,88 @@ def test_execute_backfill_classifies_partial_success_and_keeps_retry_sets(
     assert result["retry"]["daily_bars"] == [failing_symbol]
     assert result["diagnostics"][0]["code"] == "TIMEOUT"
     assert "upstream timed out" not in str(result["diagnostics"])
+
+
+def test_resilient_policy_is_preserved_in_created_run(session: Session):
+    seed_universe(session)
+
+    payload = create_backfill_run(
+        BackfillRequest(
+            run_kind="canary",
+            daily_bar_policy="cn_resilient",
+            start_date=date(2025, 1, 1),
+            end_date=date(2026, 7, 10),
+            cohort_size=3,
+        ),
+        session=session,
+    )
+
+    assert payload["item"]["daily_bar_policy"] == "cn_resilient"
+
+
+def test_resilient_backfill_persists_source_stats_across_symbols(
+    session: Session,
+    monkeypatch,
+):
+    seed_universe(session, symbols_per_exchange=1)
+    payload = create_backfill_run(
+        BackfillRequest(
+            run_kind="canary",
+            daily_bar_policy="cn_resilient",
+            evidence_kinds=("daily_bars",),
+            start_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 10),
+            cohort_size=3,
+        ),
+        session=session,
+    )
+
+    def fallback_bars(symbol, _timeframe, _start, _end):
+        return [
+            ProviderBar(
+                symbol=symbol,
+                timestamp=date(2026, 7, 9),
+                open=Decimal("10"),
+                high=Decimal("11"),
+                low=Decimal("9"),
+                close=Decimal("10"),
+                volume=Decimal("1000"),
+                amount=Decimal("10000"),
+            )
+        ]
+
+    coordinator = DailyBarFetchCoordinator(
+        [
+            DailyBarSource(
+                provider="akshare",
+                source="akshare.stock_zh_a_hist",
+                adjustment="qfq",
+                priority=0,
+                fetch=lambda *_args: (_ for _ in ()).throw(ConnectionError("unavailable")),
+            ),
+            DailyBarSource(
+                provider="akshare",
+                source="akshare.stock_zh_a_daily",
+                adjustment="qfq",
+                priority=1,
+                fetch=fallback_bars,
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        "packages.services.research_evidence_backfill.build_daily_bar_fetch_coordinator",
+        lambda _provider: coordinator,
+    )
+
+    result = execute_backfill_run(payload["item"]["id"], session=session)
+
+    assert result["status"] == "succeeded"
+    assert result["source_stats"]["akshare.stock_zh_a_hist"]["failed"] == 3
+    assert result["source_stats"]["akshare.stock_zh_a_daily"]["selected"] == 3
+    assert session.query(DailyBar).count() == 3
+    assert {bar.source for bar in session.query(DailyBar).all()} == {
+        "akshare.stock_zh_a_daily"
+    }
 
 
 def test_cancelled_run_stops_before_processing_and_preserves_checkpoint(
@@ -355,6 +442,14 @@ def test_evidence_coverage_reports_thresholds_and_exchange_breakdown(session: Se
     assert payload["evidence"]["fundamentals"]["ready_count"] == 2
     assert payload["evidence"]["daily_bars"]["passes_threshold"] is False
     assert payload["evidence"]["daily_bars"]["by_exchange"]["SZSE"]["ready_count"] == 0
+    assert payload["evidence"]["daily_bars"]["source_distribution"] == [
+        {
+            "provider": "legacy_unknown",
+            "source": "legacy_unknown",
+            "row_count": 70,
+            "instrument_count": 2,
+        }
+    ]
     assert payload["status"] == "needs_attention"
 
 

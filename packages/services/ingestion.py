@@ -1,14 +1,21 @@
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy.orm import Session
 
 from packages.domain.models import DailyBar, Instrument, Market
-from packages.services.data_quality import DataQualityStatus, check_daily_bar_quality
+from packages.providers.akshare_provider import AkShareProvider
 from packages.providers.base import ProviderBar
+from packages.services.daily_bar_sources import (
+    STRICT_POLICY,
+    DailyBarFetchCoordinator,
+    DailyBarSource,
+)
+from packages.services.data_quality import DataQualityStatus, check_daily_bar_quality
 from packages.services.market_data import get_market_snapshot, get_provider, resolve_market_data_provider_name
 from packages.services.market_data import serialize_bar
+from packages.services.platform_settings import get_platform_settings
 
 
 MARKET_META = {
@@ -210,6 +217,12 @@ def _build_symbol_daily_bars_snapshot(
     end: date,
     requested_provider: str | None,
     effective_provider: str,
+    source: str,
+    adjustment: str,
+    source_priority: int,
+    daily_bar_policy: str,
+    fallback_used: bool,
+    source_attempts: list[dict[str, object]],
     bars: list[ProviderBar],
 ) -> dict[str, object]:
     serialized_bars = [serialize_bar(bar) for bar in bars]
@@ -218,6 +231,12 @@ def _build_symbol_daily_bars_snapshot(
         "provider": effective_provider,
         "requested_provider": requested_provider,
         "effective_provider": effective_provider,
+        "source": source,
+        "adjustment": adjustment,
+        "source_priority": source_priority,
+        "daily_bar_policy": daily_bar_policy,
+        "fallback_used": fallback_used,
+        "source_attempts": source_attempts,
         "timeframe": timeframe,
         "start": start.isoformat(),
         "end": end.isoformat(),
@@ -243,6 +262,10 @@ def _write_serialized_snapshot_to_database(
     market = _get_or_create_market(session, market_code)
     daily_bars_by_key: dict[tuple[int, date], DailyBar] = {}
     bar_count = 0
+    incoming_provider = str(snapshot.get("effective_provider") or "legacy_unknown")
+    incoming_source = str(snapshot.get("source") or "legacy_unknown")
+    incoming_adjustment = str(snapshot.get("adjustment") or "legacy_unknown")
+    incoming_priority = int(snapshot.get("source_priority", 99))
     for serialized_instrument in _get_serialized_instruments(snapshot):
         instrument = _get_or_create_instrument(
             session=session,
@@ -262,6 +285,12 @@ def _write_serialized_snapshot_to_database(
                 daily_bar = DailyBar(instrument_id=instrument.id, trade_date=trade_date)
                 session.add(daily_bar)
             daily_bars_by_key[daily_bar_key] = daily_bar
+            existing_priority = (
+                int(daily_bar.source_priority) if daily_bar.source_priority is not None else 99
+            )
+            if daily_bar.open is not None and existing_priority < incoming_priority:
+                bar_count += 1
+                continue
             daily_bar.open = _parse_serialized_decimal(serialized_bar.get("open"), "open")
             daily_bar.high = _parse_serialized_decimal(serialized_bar.get("high"), "high")
             daily_bar.low = _parse_serialized_decimal(serialized_bar.get("low"), "low")
@@ -271,6 +300,11 @@ def _write_serialized_snapshot_to_database(
                 serialized_bar.get("amount"),
                 "amount",
             )
+            daily_bar.provider = incoming_provider
+            daily_bar.source = incoming_source
+            daily_bar.adjustment = incoming_adjustment
+            daily_bar.source_priority = incoming_priority
+            daily_bar.ingested_at = datetime.now(timezone.utc)
             bar_count += 1
     session.commit()
     return bar_count
@@ -378,6 +412,8 @@ def ingest_symbol_daily_bars(
     exchange: str | None = None,
     timeframe: str = "1d",
     asset_type: str | None = "stock",
+    daily_bar_policy: str = STRICT_POLICY,
+    fetch_coordinator: DailyBarFetchCoordinator | None = None,
 ) -> dict[str, object]:
     normalized_symbol = symbol.strip().upper()
     normalized_market = market.strip().upper()
@@ -389,8 +425,17 @@ def ingest_symbol_daily_bars(
     requested_provider_name = _normalize_optional_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
     normalized_asset_type = _normalize_asset_type(asset_type)
-    provider = get_provider(effective_provider_name)
-    bars = provider.fetch_bars(normalized_symbol, normalized_timeframe, start, end)
+    coordinator = fetch_coordinator or build_daily_bar_fetch_coordinator(effective_provider_name)
+    fetch_result = coordinator.fetch(
+        normalized_symbol,
+        normalized_timeframe,
+        start,
+        end,
+        policy=daily_bar_policy,
+    )
+    if fetch_result.status == "failed":
+        raise ConnectionError("All eligible daily-bar sources failed validation or retrieval.")
+    bars = fetch_result.bars
     snapshot = _build_symbol_daily_bars_snapshot(
         symbol=normalized_symbol,
         market=normalized_market,
@@ -400,7 +445,13 @@ def ingest_symbol_daily_bars(
         start=start,
         end=end,
         requested_provider=requested_provider_name,
-        effective_provider=effective_provider_name,
+        effective_provider=fetch_result.effective_provider or effective_provider_name,
+        source=fetch_result.source or "none",
+        adjustment=fetch_result.adjustment or "unknown",
+        source_priority=fetch_result.source_priority if fetch_result.source_priority is not None else 99,
+        daily_bar_policy=fetch_result.policy,
+        fallback_used=fetch_result.fallback_used,
+        source_attempts=fetch_result.attempts,
         bars=bars,
     )
     bar_count = (
@@ -417,6 +468,52 @@ def ingest_symbol_daily_bars(
         "status": "ingested" if bars else "no_data",
         "no_data_reason": no_data_reason,
     }
+
+
+def build_daily_bar_fetch_coordinator(provider_name: str) -> DailyBarFetchCoordinator:
+    normalized_provider = resolve_market_data_provider_name(provider_name)
+    primary = get_provider(normalized_provider)
+    primary_source = {
+        "akshare": "akshare.stock_zh_a_hist",
+        "tushare": "tushare.pro.daily",
+    }.get(normalized_provider, f"{normalized_provider}.fetch_bars")
+    sources = [
+        DailyBarSource(
+            provider=normalized_provider,
+            source=primary_source,
+            adjustment="qfq" if normalized_provider in {"akshare", "tushare"} else "provider_default",
+            priority=0,
+            fetch=primary.fetch_bars,
+            min_interval_seconds=0.25 if normalized_provider == "akshare" else 0.0,
+        )
+    ]
+    if normalized_provider == "akshare":
+        sina = AkShareProvider(downloader=AkShareProvider.download_sina_daily_bars)
+        settings_payload = get_platform_settings()
+        tushare_configured = bool(str(settings_payload.get("tushare_token", "") or "").strip())
+        tushare = get_provider("tushare")
+        sources.extend(
+            [
+                DailyBarSource(
+                    provider="akshare",
+                    source="akshare.stock_zh_a_daily",
+                    adjustment="qfq",
+                    priority=1,
+                    fetch=sina.fetch_bars,
+                    min_interval_seconds=0.5,
+                ),
+                DailyBarSource(
+                    provider="tushare",
+                    source="tushare.pro.daily",
+                    adjustment="qfq",
+                    priority=2,
+                    fetch=tushare.fetch_bars,
+                    configured=tushare_configured,
+                    min_interval_seconds=0.25,
+                ),
+            ]
+        )
+    return DailyBarFetchCoordinator(sources)
 
 
 def _build_batch_status(

@@ -21,7 +21,15 @@ from packages.domain.models import (
 )
 from packages.services.fundamentals import ingest_fundamentals
 from packages.services.indicators import calculate_and_store_daily_indicators
-from packages.services.ingestion import ingest_symbol_daily_bars
+from packages.services.daily_bar_sources import (
+    STRICT_POLICY,
+    SUPPORTED_DAILY_BAR_POLICIES,
+    DailyBarFetchCoordinator,
+)
+from packages.services.ingestion import (
+    build_daily_bar_fetch_coordinator,
+    ingest_symbol_daily_bars,
+)
 
 
 BACKFILL_TASK_NAME = "ingestion.backfill_a_share_research_evidence"
@@ -56,6 +64,7 @@ class BackfillRequest:
     run_kind: str = "baseline"
     market: str = SUPPORTED_MARKET
     provider: str = SUPPORTED_PROVIDER
+    daily_bar_policy: str = STRICT_POLICY
     evidence_kinds: tuple[str, ...] = SUPPORTED_EVIDENCE_KINDS
     start_date: date | None = None
     end_date: date | None = None
@@ -104,6 +113,8 @@ def create_backfill_run(
     run = ResearchEvidenceBackfill(
         market=normalized.market,
         provider=normalized.provider,
+        daily_bar_policy=normalized.daily_bar_policy,
+        source_stats_json={},
         run_kind=normalized.run_kind,
         status="queued",
         universe_sync_id=sync.id if sync is not None else None,
@@ -150,6 +161,8 @@ def create_resume_backfill_run(
         parent_run_id=original.id,
         market=original.market,
         provider=original.provider,
+        daily_bar_policy=original.daily_bar_policy,
+        source_stats_json=dict(original.source_stats_json or {}),
         run_kind=original.run_kind,
         status="queued",
         universe_sync_id=original.universe_sync_id,
@@ -204,6 +217,8 @@ def create_retry_failed_backfill_run(
         parent_run_id=original.id,
         market=original.market,
         provider=original.provider,
+        daily_bar_policy=original.daily_bar_policy,
+        source_stats_json={},
         run_kind="retry_failed",
         status="queued",
         universe_sync_id=original.universe_sync_id,
@@ -339,26 +354,56 @@ def get_evidence_coverage(
         exchange_counts[exchange] = exchange_counts.get(exchange, 0) + 1
 
     bar_ready: set = set()
+    bar_source_distribution: list[dict[str, object]] = []
     indicator_ready: set = set()
     fundamental_ready: set[str] = set()
     if instrument_ids:
         bar_rows = (
             session.query(
                 DailyBar.instrument_id,
+                DailyBar.provider,
+                DailyBar.source,
                 func.count(DailyBar.trade_date),
                 func.max(DailyBar.trade_date),
             )
             .filter(DailyBar.instrument_id.in_(instrument_ids))
             .filter(DailyBar.trade_date >= horizon_start)
             .filter(DailyBar.trade_date <= effective_as_of)
-            .group_by(DailyBar.instrument_id)
+            .group_by(DailyBar.instrument_id, DailyBar.provider, DailyBar.source)
             .all()
         )
+        bar_totals: dict[object, tuple[int, date]] = {}
+        source_totals: dict[tuple[str, str], dict[str, object]] = {}
+        for instrument_id, source_provider, source, row_count, latest_date in bar_rows:
+            prior_count, prior_latest = bar_totals.get(instrument_id, (0, latest_date))
+            bar_totals[instrument_id] = (
+                prior_count + int(row_count),
+                max(prior_latest, latest_date),
+            )
+            source_key = (
+                str(source_provider or "legacy_unknown"),
+                str(source or "legacy_unknown"),
+            )
+            source_total = source_totals.setdefault(
+                source_key,
+                {"row_count": 0, "instrument_ids": set()},
+            )
+            source_total["row_count"] = int(source_total["row_count"]) + int(row_count)
+            source_total["instrument_ids"].add(instrument_id)
         bar_ready = {
             instrument_id
-            for instrument_id, row_count, latest_date in bar_rows
+            for instrument_id, (row_count, latest_date) in bar_totals.items()
             if int(row_count) >= 35 and latest_date >= freshness_cutoff
         }
+        bar_source_distribution = [
+            {
+                "provider": source_provider,
+                "source": source,
+                "row_count": int(values["row_count"]),
+                "instrument_count": len(values["instrument_ids"]),
+            }
+            for (source_provider, source), values in sorted(source_totals.items())
+        ]
 
         latest_indicator_subquery = (
             session.query(
@@ -449,6 +494,7 @@ def get_evidence_coverage(
             threshold=EVIDENCE_THRESHOLDS["fundamentals"],
         ),
     }
+    evidence["daily_bars"]["source_distribution"] = bar_source_distribution
     latest_run = (
         session.query(ResearchEvidenceBackfill)
         .filter(ResearchEvidenceBackfill.market == normalized_market)
@@ -506,6 +552,9 @@ def execute_backfill_run(
     session.commit()
 
     evidence_kinds = [kind for kind in run.evidence_kinds_json if kind in SUPPORTED_EVIDENCE_KINDS]
+    bar_fetch_coordinator = (
+        build_daily_bar_fetch_coordinator(run.provider) if "daily_bars" in evidence_kinds else None
+    )
     counters = _copy_counters(run.counters_json, evidence_kinds)
     retry = {
         kind: _normalized_symbols(dict(run.retry_json or {}).get(kind, []))
@@ -552,6 +601,7 @@ def execute_backfill_run(
                         max_attempts=max_transient_attempts,
                         retry_base_seconds=retry_base_seconds,
                         sleep_fn=sleep_fn,
+                        bar_fetch_coordinator=bar_fetch_coordinator,
                     )
                     batch_outcomes.append((symbol, outcome, None))
                 except Exception as exc:
@@ -581,6 +631,8 @@ def execute_backfill_run(
             run.counters_json = counters
             run.retry_json = retry
             run.diagnostics_json = diagnostics
+            if bar_fetch_coordinator is not None:
+                run.source_stats_json = bar_fetch_coordinator.stats()
             run.heartbeat_at = now
             run.updated_at = now
             session.commit()
@@ -602,6 +654,8 @@ def execute_backfill_run(
     run.counters_json = counters
     run.retry_json = retry
     run.diagnostics_json = diagnostics
+    if bar_fetch_coordinator is not None:
+        run.source_stats_json = bar_fetch_coordinator.stats()
     session.commit()
     session.refresh(run)
     return serialize_backfill(run)
@@ -614,6 +668,8 @@ def serialize_backfill(run: ResearchEvidenceBackfill) -> dict[str, object]:
         "parent_run_id": str(run.parent_run_id) if run.parent_run_id else None,
         "market": run.market,
         "provider": run.provider,
+        "daily_bar_policy": run.daily_bar_policy,
+        "source_stats": dict(run.source_stats_json or {}),
         "run_kind": run.run_kind,
         "status": run.status,
         "universe_sync_id": str(run.universe_sync_id) if run.universe_sync_id else None,
@@ -649,11 +705,14 @@ def serialize_backfill(run: ResearchEvidenceBackfill) -> dict[str, object]:
 def _normalize_request(request: BackfillRequest) -> BackfillRequest:
     market = request.market.strip().upper()
     provider = request.provider.strip().lower()
+    daily_bar_policy = request.daily_bar_policy.strip().lower()
     run_kind = request.run_kind.strip().lower()
     if market != SUPPORTED_MARKET:
         raise ValueError(f"Unsupported backfill market: {request.market}")
     if provider != SUPPORTED_PROVIDER:
         raise ValueError(f"Unsupported backfill provider: {request.provider}")
+    if daily_bar_policy not in SUPPORTED_DAILY_BAR_POLICIES:
+        raise ValueError(f"Unsupported daily-bar policy: {request.daily_bar_policy}")
     if run_kind not in SUPPORTED_RUN_KINDS:
         raise ValueError(f"Unsupported backfill run kind: {request.run_kind}")
     evidence_kinds = tuple(
@@ -689,6 +748,7 @@ def _normalize_request(request: BackfillRequest) -> BackfillRequest:
         run_kind=run_kind,
         market=market,
         provider=provider,
+        daily_bar_policy=daily_bar_policy,
         evidence_kinds=evidence_kinds,
         start_date=start_date,
         end_date=end_date,
@@ -804,6 +864,7 @@ def _process_symbol(
     phase: str,
     symbol: str,
     session: Session,
+    bar_fetch_coordinator: DailyBarFetchCoordinator | None = None,
 ) -> str:
     if phase == "daily_bars":
         result = ingest_symbol_daily_bars(
@@ -814,6 +875,8 @@ def _process_symbol(
             session=session,
             provider_name=run.provider,
             asset_type="stock",
+            daily_bar_policy=run.daily_bar_policy,
+            fetch_coordinator=bar_fetch_coordinator,
         )
         return "succeeded" if result.get("status") == "ingested" else "no_data"
     if phase == "fundamentals":
@@ -856,11 +919,18 @@ def _process_symbol_with_retry(
     max_attempts: int,
     retry_base_seconds: float,
     sleep_fn: Callable[[float], None],
+    bar_fetch_coordinator: DailyBarFetchCoordinator | None = None,
 ) -> str:
     bounded_attempts = max(1, min(int(max_attempts), 5))
     for attempt in range(1, bounded_attempts + 1):
         try:
-            return _process_symbol(run, phase, symbol, session)
+            return _process_symbol(
+                run,
+                phase,
+                symbol,
+                session,
+                bar_fetch_coordinator=bar_fetch_coordinator,
+            )
         except Exception as exc:
             if attempt >= bounded_attempts or not _is_transient_error(exc):
                 raise
@@ -999,6 +1069,8 @@ def _compact_run_summary(run: ResearchEvidenceBackfill) -> dict[str, object]:
         "id": str(run.id),
         "task_run_id": str(run.task_run_id) if run.task_run_id else None,
         "run_kind": run.run_kind,
+        "daily_bar_policy": run.daily_bar_policy,
+        "source_stats": dict(run.source_stats_json or {}),
         "status": run.status,
         "phase": run.phase,
         "cursor": run.cursor,

@@ -121,6 +121,16 @@ def load_research_evidence_backfill_migration():
     return module
 
 
+def load_daily_bar_provenance_migration():
+    migration_path = Path("alembic/versions/0016_daily_bar_provenance.py")
+    spec = importlib.util.spec_from_file_location("daily_bar_provenance_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -435,3 +445,30 @@ def test_research_evidence_backfill_migration_adds_run_state_and_task_heartbeat(
         "updated_at",
         "finished_at",
     }.issubset(backfill_columns)
+
+
+def test_daily_bar_provenance_migration_adds_source_and_policy_fields():
+    initial_migration = load_initial_migration()
+    task_runs_migration = load_task_runs_migration()
+    universe_migration = load_instrument_universe_migration()
+    backfill_migration = load_research_evidence_backfill_migration()
+    migration = load_daily_bar_provenance_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(task_runs_migration, connection)
+        run_migration(universe_migration, connection)
+        run_migration(backfill_migration, connection)
+        run_migration(migration, connection)
+
+        inspector = inspect(connection)
+        bar_columns = {column["name"] for column in inspector.get_columns("bars_1d")}
+        backfill_columns = {
+            column["name"] for column in inspector.get_columns("research_evidence_backfills")
+        }
+
+    assert {"provider", "source", "adjustment", "source_priority", "ingested_at"}.issubset(
+        bar_columns
+    )
+    assert {"daily_bar_policy", "source_stats_json"}.issubset(backfill_columns)

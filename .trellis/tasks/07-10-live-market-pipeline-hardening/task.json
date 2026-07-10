@@ -21,7 +21,8 @@
   "children": [
     "07-10-a-share-resumable-evidence-backfill",
     "07-10-a-share-backfill-operations-ui",
-    "07-10-a-share-live-acceptance"
+    "07-10-a-share-live-acceptance",
+    "07-10-a-share-multi-provider-bars"
   ],
   "parent": null,
   "relatedFiles": [],

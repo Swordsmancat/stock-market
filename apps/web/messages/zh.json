@@ -1142,6 +1142,10 @@
     "unavailable": "暂无"
   },
   "AshareEvidenceCoverage": {
+    "policy": "策略：{policy}",
+    "sourceMix": "日线来源分布",
+    "sourceMixEmpty": "尚无带来源归属的日线数据。",
+    "controlledFallback": "已启用受控降级",
     "title": "A 股研究证据覆盖率",
     "description": "监控全市场选股和 AI 分析所依赖的本地日线、技术指标与基本面证据。",
     "safety": "仅用于研究证据补采。数据源失败会明确展示，流程不会执行交易。",

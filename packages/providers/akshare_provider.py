@@ -246,6 +246,42 @@ class AkShareProvider:
             raise RuntimeError("AkShare dependency is unavailable.") from exc
 
     @staticmethod
+    def download_sina_daily_bars(symbol: str, start: date, end: date) -> pd.DataFrame:
+        try:
+            import akshare as ak
+
+            if symbol.startswith(("4", "8", "9")):
+                prefixed_symbol = f"bj{symbol}"
+            elif symbol.startswith("6"):
+                prefixed_symbol = f"sh{symbol}"
+            else:
+                prefixed_symbol = f"sz{symbol}"
+            frame = ak.stock_zh_a_daily(
+                symbol=prefixed_symbol,
+                start_date=start.isoformat().replace("-", ""),
+                end_date=end.isoformat().replace("-", ""),
+                adjust="qfq",
+            )
+            if frame is None or frame.empty:
+                return pd.DataFrame()
+            if "timestamp" not in frame.columns and "date" not in frame.columns:
+                frame = frame.reset_index()
+            frame = frame.rename(columns={"date": "timestamp", "index": "timestamp"})
+            if "timestamp" not in frame.columns:
+                frame = frame.rename(columns={frame.columns[0]: "timestamp"})
+            frame["timestamp"] = pd.to_datetime(frame["timestamp"])
+            numeric_cols = ["open", "high", "low", "close", "volume"]
+            for column in numeric_cols:
+                frame[column] = pd.to_numeric(frame[column], errors="coerce")
+            if "amount" in frame.columns:
+                frame["amount"] = pd.to_numeric(frame["amount"], errors="coerce").fillna(0)
+            else:
+                frame["amount"] = 0
+            return frame.dropna(subset=numeric_cols)
+        except ImportError as exc:
+            raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+    @staticmethod
     def _download_market_depth(symbol: str, depth_levels: int) -> dict[str, object]:
         try:
             import akshare as ak
