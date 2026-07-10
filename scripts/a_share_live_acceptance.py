@@ -278,15 +278,61 @@ def dispatch_and_poll(
 ) -> tuple[dict[str, Any], dict[str, object]]:
     dispatched = request_json(api_base_url, path, method="POST", payload=payload)
     task_run = dispatched.get("task_run")
-    if not isinstance(task_run, dict) or not task_run.get("id"):
+    task_run_id = task_run.get("id") if isinstance(task_run, dict) else None
+    if dispatched.get("status") == "already_running":
+        active_run = dispatched.get("item")
+        if not isinstance(active_run, Mapping) or not active_backfill_matches_payload(
+            active_run,
+            payload,
+        ):
+            raise AcceptanceFailure(
+                f"FAIL dispatch: {path} has a different active backfill run."
+            )
+        task_run_id = active_run.get("task_run_id")
+    if not task_run_id:
         raise AcceptanceFailure(f"FAIL dispatch: {path} did not return a TaskRun ID.")
     completed = poll_task_run(
         api_base_url,
-        str(task_run["id"]),
+        str(task_run_id),
         timeout_seconds=timeout_seconds,
         poll_seconds=poll_seconds,
     )
     return dispatched, completed
+
+
+def active_backfill_matches_payload(
+    active_run: Mapping[str, object],
+    payload: Mapping[str, object] | None,
+) -> bool:
+    if payload is None:
+        return False
+    scalar_keys = (
+        "run_kind",
+        "market",
+        "provider",
+        "daily_bar_policy",
+        "shard_index",
+        "shard_count",
+    )
+    for key in scalar_keys:
+        if key in payload and active_run.get(key) != payload.get(key):
+            return False
+    requested_kinds = payload.get("evidence_kinds")
+    if isinstance(requested_kinds, Sequence) and not isinstance(requested_kinds, str):
+        active_kinds = active_run.get("evidence_kinds")
+        if not isinstance(active_kinds, Sequence) or isinstance(active_kinds, str):
+            return False
+        if list(active_kinds) != list(requested_kinds):
+            return False
+    return True
+
+
+def backfill_run_id(dispatched: Mapping[str, object]) -> object | None:
+    for key in ("backfill", "item"):
+        item = dispatched.get(key)
+        if isinstance(item, Mapping) and item.get("id"):
+            return item["id"]
+    return None
 
 
 def run_canary(args: argparse.Namespace, preflight: dict[str, object]) -> dict[str, object]:
@@ -339,7 +385,7 @@ def run_canary(args: argparse.Namespace, preflight: dict[str, object]) -> dict[s
         "universe_task": universe_task,
         "universe": {**summarize_universe(universe), "exchange_counts": sanitize(exchange_counts)},
         "canary": {
-            "backfill_run_id": ((dispatched.get("backfill") or {}).get("id") if isinstance(dispatched.get("backfill"), dict) else None),
+            "backfill_run_id": backfill_run_id(dispatched),
             "task_run": canary_task,
         },
         "coverage": summarize_coverage(coverage),
@@ -363,7 +409,7 @@ def run_baseline(args: argparse.Namespace, preflight: dict[str, object]) -> dict
         "status": "passed" if task_run["status"] == "succeeded" else "needs_attention",
         "runtime": runtime,
         "preflight": preflight,
-        "baseline_run_id": ((dispatched.get("backfill") or {}).get("id") if isinstance(dispatched.get("backfill"), dict) else None),
+        "baseline_run_id": backfill_run_id(dispatched),
         "task_run": task_run,
         "coverage": summarize_coverage(coverage),
     }

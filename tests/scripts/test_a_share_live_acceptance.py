@@ -73,6 +73,86 @@ def test_poll_task_run_unwraps_and_sanitizes_terminal_payload(monkeypatch) -> No
     assert result["result_json"] == {"provider": "akshare"}
 
 
+def test_dispatch_attaches_to_matching_active_backfill(monkeypatch) -> None:
+    monkeypatch.setattr(
+        acceptance,
+        "request_json",
+        lambda *_args, **_kwargs: {
+            "status": "already_running",
+            "item": {
+                "id": "backfill-1",
+                "task_run_id": "task-1",
+                "run_kind": "baseline",
+                "market": "CN",
+                "provider": "akshare",
+                "daily_bar_policy": "cn_resilient",
+                "evidence_kinds": ["daily_bars"],
+            },
+        },
+    )
+    monkeypatch.setattr(
+        acceptance,
+        "poll_task_run",
+        lambda _base_url, task_run_id, **_kwargs: {
+            "id": task_run_id,
+            "status": "succeeded",
+        },
+    )
+    payload = {
+        "run_kind": "baseline",
+        "market": "CN",
+        "provider": "akshare",
+        "daily_bar_policy": "cn_resilient",
+        "evidence_kinds": ["daily_bars"],
+    }
+
+    dispatched, task_run = acceptance.dispatch_and_poll(
+        "http://api.test",
+        "/ingestion/a-share-evidence-backfills",
+        payload=payload,
+        timeout_seconds=2,
+        poll_seconds=0.01,
+    )
+
+    assert dispatched["status"] == "already_running"
+    assert task_run == {"id": "task-1", "status": "succeeded"}
+    assert acceptance.backfill_run_id(dispatched) == "backfill-1"
+
+
+def test_dispatch_rejects_a_different_active_backfill(monkeypatch) -> None:
+    monkeypatch.setattr(
+        acceptance,
+        "request_json",
+        lambda *_args, **_kwargs: {
+            "status": "already_running",
+            "item": {
+                "id": "backfill-1",
+                "task_run_id": "task-1",
+                "run_kind": "baseline",
+                "market": "CN",
+                "provider": "akshare",
+                "daily_bar_policy": "cn_resilient",
+                "evidence_kinds": ["daily_bars"],
+            },
+        },
+    )
+
+    with pytest.raises(acceptance.AcceptanceFailure, match="different active"):
+        acceptance.dispatch_and_poll(
+            "http://api.test",
+            "/ingestion/a-share-evidence-backfills",
+            payload={
+                "run_kind": "baseline",
+                "market": "CN",
+                "provider": "akshare",
+                "daily_bar_policy": "cn_resilient",
+                "evidence_kinds": ["technical_indicators"],
+            },
+            timeout_seconds=2,
+            poll_seconds=0.01,
+        )
+
+
 def test_sanitized_artifact_redacts_urls_headers_and_secret_keys(tmp_path) -> None:
     path = acceptance.write_artifact(
         tmp_path,
