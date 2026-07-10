@@ -1570,3 +1570,47 @@ Added explicit strict/cn_resilient daily-bar policies, row-level source provenan
 ### Next Steps
 
 - None - task complete
+
+
+## Session 48: Complete A-share full-market live acceptance
+
+**Date**: 2026-07-11
+**Task**: Complete A-share full-market live acceptance
+**Branch**: `master`
+
+### Summary
+
+Completed isolated 5,530-symbol A-share baseline, retry lineage, deterministic discovery, desktop/mobile browser acceptance, full quality gates, sanitized reporting, and child/parent archival. Final coverage: daily bars 99.60%, indicators 99.71%, fundamentals 99.87%.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `31883a4` | (see git log) |
+| `435aa8f` | (see git log) |
+| `5f08233` | (see git log) |
+| `3512cee` | (see git log) |
+| `66116b3` | (see git log) |
+| `3904a94` | (see git log) |
+| `dbd2bb2` | (see git log) |
+| `b1a6389` | (see git log) |
+| `86fbef3` | (see git log) |
+| `bb729fe` | (see git log) |
+| `7ad089d` | (see git log) |
+| `efcb746` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
