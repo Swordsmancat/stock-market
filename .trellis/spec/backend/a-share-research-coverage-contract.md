@@ -153,3 +153,119 @@ evidence = _load_selection_evidence(session=session, instruments=candidates, inc
 
 All in-scope candidates are evaluated against bulk-loaded local evidence; only
 the final ranked response is bounded.
+
+## Scenario: Resumable Full-Market Evidence Backfill
+
+### 1. Scope / Trigger
+
+- Trigger: the synchronized A-share identity universe must receive enough stored
+  daily bars, fundamentals, and technical indicators for full-scope discovery.
+- Scope: `ResearchEvidenceBackfill`, TaskRun heartbeat, AkShare phase batches,
+  coverage projection, FastAPI routes, Celery dispatch/Beat, and focused tests.
+- Non-goals: Web controls, live acceptance execution, multi-provider merge,
+  filings, backtests, or trading.
+
+### 2. Signatures
+
+- DB: `research_evidence_backfills` and nullable `task_runs.heartbeat_at` from
+  Alembic revision `0015`.
+- Service: `BackfillRequest`, `create_backfill_run(...)`,
+  `execute_backfill_run(...)`, `create_resume_backfill_run(...)`,
+  `create_retry_failed_backfill_run(...)`, `request_cancel_backfill(...)`, and
+  `get_evidence_coverage(...)`.
+- Task: `ingestion.backfill_a_share_research_evidence`.
+- API: `POST /ingestion/a-share-evidence-backfills`, get/resume/retry-failed/
+  cancel routes by run ID, and `GET /stock-selection/evidence-coverage`.
+- Schedule task: `ingestion.schedule_a_share_evidence_backfill`.
+- Settings: `A_SHARE_BACKFILL_REQUEST_DELAY_MS` (default 250),
+  `A_SHARE_BACKFILL_MAX_TRANSIENT_ATTEMPTS` (default 3), and
+  `A_SHARE_BACKFILL_RETRY_BASE_SECONDS` (default 1.0).
+
+### 3. Contracts
+
+- A run freezes its normalized `(exchange, symbol)` scope in
+  `scope_symbols_json`; a later universe sync cannot reinterpret its cursor.
+- Network phases `daily_bars` and `fundamentals` are separate from local
+  `technical_indicators`. Default batch size is 25 and public bounds are 1-100.
+- Baselines default to 18 calendar months; incrementals default to a 10-day
+  overlap. Canary cohorts include SSE/SZSE/BSE; fundamental shards use stable
+  ordinal modulo five.
+- Cursor/counters/retry sets/diagnostics/heartbeat commit after every bounded
+  batch. Replaying an interrupted batch is safe through existing evidence
+  identities.
+- Provider phases are sequential by default, apply configured pacing, and retry
+  only transient timeout/rate-limit/unavailable failures with bounded
+  exponential backoff. Valid no-data is not retried in-place.
+- AkShare is explicit. Valid empty results, provider errors, schema errors,
+  timeouts/rate limits, and insufficient local bars remain distinct; no other
+  provider is selected automatically.
+- Coverage uses a bounded number of aggregate queries. Ready means at least 35
+  fresh bars, latest-date `ma`/`rsi`/`mfi`, or a recent complete PE/revenue-
+  growth/net-margin snapshot. Gates are 95%, 90%, and 80%, respectively.
+- TaskRun stale detection uses `heartbeat_at` with `started_at` fallback for old
+  rows. Cooperative cancellation stops at a checkpoint and preserves writes.
+- Celery timezone is `Asia/Shanghai`; weekday 18:30 refreshes bars/indicators,
+  and a later weekday schedule rotates fundamental shards. Active-run overlap
+  returns `already_running` rather than duplicating work.
+
+### 4. Validation & Error Matrix
+
+- Market other than CN, provider other than AkShare, unsupported kind/run kind,
+  invalid dates, or batch outside 1-100 -> `ValueError` / HTTP 400.
+- No active instruments -> no dispatch and HTTP 400.
+- Unknown run ID -> HTTP 404.
+- Active same-market/provider run -> `already_running`; no second task.
+- Provider exception -> sanitized failed outcome plus retry symbol; prior rows
+  and checkpoint remain.
+- Valid empty provider response -> `no_data`, never a provider failure or pass.
+- Indicator history too short -> `insufficient_data`, not fabricated output.
+- Healthy heartbeat newer than cutoff -> running TaskRun remains active; null or
+  stale heartbeat falls back/expires as documented.
+
+### 5. Good / Base / Bad Cases
+
+- Good: a worker commits 25 symbols, updates heartbeat/cursor, crashes, and a
+  lineage-linked resume safely replays at most the uncheckpointed batch.
+- Good: 5,000 instruments produce coverage with constant aggregate queries and
+  exchange-level gaps.
+- Base: some new listings have no 35-row history; the run completes with an
+  explicit gap and thresholds decide readiness.
+- Bad: a provider timeout is converted to `no_data`, removing it from retry.
+- Bad: the cursor is recomputed from the current active universe after sync.
+- Bad: coverage loads every DailyBar row or queries once per instrument.
+
+### 6. Tests Required
+
+- Migration/model tests assert revision `0015`, frozen scope JSON, and heartbeat.
+- Service tests assert deterministic canary/shards, partial success, resume,
+  retry sets, cancellation, idempotent replay boundaries, and sanitized errors.
+- Coverage tests assert field/date readiness, exchange breakdown, thresholds,
+  and no more than five SELECTs for a 150-instrument fixture.
+- API/dispatch/worker tests assert TaskRun linkage and synchronous completion.
+- Schedule tests assert `Asia/Shanghai`, 18:30 incrementals, and shard kwargs.
+- Full backend pytest, touched Ruff, Trellis validation, and `git diff --check`
+  are required.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+for instrument in instruments:
+    bars = session.query(DailyBar).filter_by(instrument_id=instrument.id).all()
+```
+
+This creates N+1 queries and loads the full history to calculate coverage.
+
+#### Correct
+
+```python
+rows = (
+    session.query(DailyBar.instrument_id, func.count(), func.max(DailyBar.trade_date))
+    .filter(DailyBar.instrument_id.in_(instrument_ids))
+    .group_by(DailyBar.instrument_id)
+    .all()
+)
+```
+
+One aggregate query returns the readiness inputs for the complete scope.

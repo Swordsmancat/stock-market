@@ -233,3 +233,8 @@ storage contract.
   service result replaces it with a completed progress payload.
 - See [Comprehensive A-share Research Coverage Contract](./a-share-research-coverage-contract.md)
   for validation/error cases and end-to-end test assertions.
+- Full-universe evidence population is a separate resumable task named
+  `ingestion.backfill_a_share_research_evidence`; do not extend the explicit-
+  symbol batch endpoint into a hidden universe crawler. Its checkpoint,
+  heartbeat, error, coverage, and scheduling contract is defined in the linked
+  comprehensive A-share spec.

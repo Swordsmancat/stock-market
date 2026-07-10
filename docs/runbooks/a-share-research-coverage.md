@@ -61,6 +61,49 @@ An empty `symbols` list uses sorted active CN stock instruments. Repeat with the
 returned `next_cursor`. Keep the same report period, event types, and batch size
 for deterministic continuation.
 
+### Research evidence backfill
+
+After a successful universe sync, start a bounded canary before the baseline:
+
+```json
+POST /ingestion/a-share-evidence-backfills
+{
+  "run_kind": "canary",
+  "market": "CN",
+  "provider": "akshare",
+  "cohort_size": 50,
+  "batch_size": 25,
+  "evidence_kinds": ["daily_bars", "fundamentals", "technical_indicators"]
+}
+```
+
+Use the returned backfill ID with the get, `resume`, `retry-failed`, or `cancel`
+routes under `/ingestion/a-share-evidence-backfills/{run_id}`. Cancellation is
+cooperative and preserves completed batches. A baseline without explicit dates
+uses 18 calendar months; an incremental uses a 10-day overlap. Check current
+stored readiness with:
+
+```text
+GET /stock-selection/evidence-coverage?market=CN&provider=akshare
+```
+
+The readiness gates are 95% daily bars, 90% critical indicators, and 80%
+critical fundamentals, with non-empty SSE/SZSE/BSE coverage. A completed worker
+run can still leave the research store below these gates; the coverage response
+then remains `needs_attention`.
+
+Celery runs in `Asia/Shanghai`. Weekday bars/indicators are scheduled at 18:30
+with a 10-day overlap, and fundamentals rotate through deterministic fifths of
+the universe. If another AkShare backfill is active, the schedule reports
+`already_running` instead of creating overlapping provider load.
+
+Provider pacing defaults to 250 ms between network symbols with at most three
+transient attempts and a 1-second exponential-backoff base. Operators can tune
+`A_SHARE_BACKFILL_REQUEST_DELAY_MS`,
+`A_SHARE_BACKFILL_MAX_TRANSIENT_ATTEMPTS`, and
+`A_SHARE_BACKFILL_RETRY_BASE_SECONDS`; lowering pacing can increase provider
+throttling and must not change valid no-data into a retryable failure.
+
 ## Completeness and failure semantics
 
 - Universe source: `akshare.stock_info_a_code_name`.
