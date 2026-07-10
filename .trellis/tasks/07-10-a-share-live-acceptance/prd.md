@@ -24,7 +24,7 @@ Prove the complete AkShare-backed A-share research pipeline in an isolated, repr
 - [x] A deterministic 50-symbol canary records bars/fundamentals/indicators, classified gaps/retries, coverage, and TaskRun lineage.
 - [x] Corporate-action batches and replay evidence show deterministic cursor/idempotency behavior, or a classified provider limitation blocks the slice.
 - [x] All discovery profiles are replayed over unchanged stored evidence with full stored scope, stable ranking, timing, coverage, and deterministic LLM fallback.
-- [ ] AI Research, Evidence Center, and TaskRun routes are checked at desktop/mobile sizes with sanitized console/network observations.
+- [x] AI Research, Evidence Center, and TaskRun routes are checked at desktop/mobile sizes with sanitized console/network observations.
 - [x] A full baseline is completed or left in an explicit resumable/partial state with checkpoint, retry set, threshold evaluation, and an honest blocking classification.
 - [x] A sanitized Markdown/JSON report and operator runbook document setup, abort conditions, resume/retry/cancel, schedules, cleanup, and retained evidence.
 - [x] Focused/full backend and Web gates, TypeScript, touched-file Ruff, migration head, locale parse, Trellis validation, and `git diff --check` pass for any code changes.

@@ -86,10 +86,12 @@ shortlists could not be expanded, reordered, or assigned invented citations.
 - Final TaskRun: PASS. Inputs, terminal status, counters, safety flags, shard
   identity, and empty diagnostics were visible.
 - Console: zero warnings/errors on all three routes.
-- Mobile viewport: PENDING ENVIRONMENT RECHECK. The in-app Browser advertised a
-  390x844 override but continued reporting a 1280px page viewport. This is
-  classified as `environment_configuration`; it is not reported as a product
-  pass or failure. Web component tests and TypeScript still pass.
+- Mobile viewport: PASS after a clean browser session set 390x844 before tab
+  creation. AI Research rendered at `innerWidth=390`, `clientWidth=375`, and
+  `scrollWidth=375`; Evidence Center and retry TaskRun each rendered at
+  `innerWidth=390`, `clientWidth=390`, and `scrollWidth=390`. Required headings,
+  coverage/retry states, and source status remained visible with zero
+  warnings/errors.
 
 ## Finding Classification
 
@@ -98,7 +100,7 @@ shortlists could not be expanded, reordered, or assigned invented citations.
 | Eastmoney reset/provider-wide failures | `provider_limitation` | Explicit Sina fallback selected; provenance retained |
 | One persistent symbol bar failure (`689009`) | `accepted_data_gap` | Retry retained; thresholds still pass |
 | Runner could not reattach to active backfill | `product_defect` | Fixed and regression-tested in `435aa8f` |
-| Mobile viewport override did not change page width | `environment_configuration` | Pending one clean browser-session recheck |
+| Initial mobile viewport override did not change an existing tab | `environment_configuration` | Clean-session retry passed when the override was set before tab creation |
 | FRED key and audited macro observations absent | `environment_configuration` | Remains visible and non-citable; outside this A-share baseline |
 
 ## Quality Gates

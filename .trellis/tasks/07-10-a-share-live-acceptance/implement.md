@@ -9,7 +9,7 @@
 - [x] Run read-only AkShare preflight; record classified output (universe passed; bars blocked writes after three `ConnectionError` attempts).
 - [x] Build both isolated acceptance images reproducibly without starting the write stack.
 - [x] Start the isolated stack and verify database name, migration head, API, worker registration, beat timezone, and Web.
-- [x] Execute universe, preservation, canary, corporate-action, discovery, retry/resume, and desktop browser acceptance slices.
+- [x] Execute universe, preservation, canary, corporate-action, discovery, retry/resume, and desktop/mobile browser acceptance slices.
 - [x] Start/monitor the full baseline only after canary success; retain partial/checkpoint evidence on stop.
 - [x] Classify findings and fix only demonstrated in-scope product defects with regression tests.
-- [ ] Write sanitized report, update runbook/specs as needed, run full gates, commit, archive child and parent.
+- [x] Write sanitized report, update runbook/specs as needed, run full gates, commit, archive child and parent.
