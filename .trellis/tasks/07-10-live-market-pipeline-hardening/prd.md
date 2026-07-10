@@ -113,25 +113,25 @@ Prove that the newly integrated full A-share research workflow operates safely a
 
 ## Acceptance Criteria
 
-- [ ] AC1: A reproducible acceptance record identifies commit, environment, migration head, provider, execution window, and sanitized commands.
-- [ ] AC2: The non-mutating AkShare preflight produces a classified pass/fail result before database writes.
-- [ ] AC3: A public API request reaches a real Celery worker, completes a real universe sync, and records TaskRun progress/result metadata.
-- [ ] AC4: The stored active universe has non-empty SSE/SZSE/BSE coverage, unique normalized symbols, and an auditable reconciliation history.
-- [ ] AC5: A failed/empty/incomplete follow-up cannot erase the last good universe or manual instruments.
-- [ ] AC6: Two or more real corporate-action cursor batches persist eligible data, continue deterministically, surface partial failures, and remain idempotent on replay.
-- [ ] AC7: Each named discovery profile evaluates the full stored scope and reports timing, coverage, shortlist counts, and compact missing-evidence diagnostics.
-- [ ] AC8: Repeated discovery over unchanged evidence preserves deterministic membership/ranking, and AI/fallback output cannot introduce unknown citations or symbols.
-- [ ] AC9: Desktop/mobile browser evidence covers the AI Research, Evidence Center, and TaskRun flows with no uncaught console errors or misleading source state.
-- [ ] AC10: Any in-scope fixes have focused regression tests; backend, Web, type, migration, and Trellis checks pass.
-- [ ] AC11: The operator runbook documents setup, safe execution, abort/rollback, retry, evidence capture, and cleanup.
-- [ ] AC12: Findings that require new paid providers, credentials, broad corpus ingestion, or unrelated professional-terminal features are documented as follow-up work rather than silently expanded into this task.
-- [ ] AC13: A 50-100 symbol SSE/SZSE/BSE canary cohort completes the daily-bar, fundamental, indicator, screening, and retry path with recorded coverage.
-- [ ] AC14: The full-market backfill can process bounded deterministic batches, resume from a stored checkpoint, retry failed symbols, and replay completed work idempotently.
-- [ ] AC15: Full-market coverage reports separate daily bars, fundamentals, indicators, no-data, provider failures, and exchange distribution rather than reporting one ambiguous success count.
-- [ ] AC16: Asia/Shanghai schedules refresh daily bars/indicators with a 10-day overlap and rotate fundamentals through deterministic daily shards without rerunning the full baseline.
-- [ ] AC17: Scheduled overlap protection prevents duplicate active runs and records whether a run was started, skipped, resumed, or retried.
-- [ ] AC18: `/ai-research` exposes tested coverage, progress, resume, and retry-failed controls with desktop/mobile states and links to the authoritative TaskRun details.
-- [ ] AC19: The first run is explicitly AkShare-backed, every result exposes provider/source provenance, and provider failure cannot trigger a silent fallback.
+- [x] AC1: A reproducible acceptance record identifies commit, environment, migration head, provider, execution window, and sanitized commands.
+- [x] AC2: The non-mutating AkShare preflight produces a classified pass/fail result before database writes.
+- [x] AC3: A public API request reaches a real Celery worker, completes a real universe sync, and records TaskRun progress/result metadata.
+- [x] AC4: The stored active universe has non-empty SSE/SZSE/BSE coverage, unique normalized symbols, and an auditable reconciliation history.
+- [x] AC5: A failed/empty/incomplete follow-up cannot erase the last good universe or manual instruments.
+- [x] AC6: Two or more real corporate-action cursor batches persist eligible data, continue deterministically, surface partial failures, and remain idempotent on replay.
+- [x] AC7: Each named discovery profile evaluates the full stored scope and reports timing, coverage, shortlist counts, and compact missing-evidence diagnostics.
+- [x] AC8: Repeated discovery over unchanged evidence preserves deterministic membership/ranking, and AI/fallback output cannot introduce unknown citations or symbols.
+- [x] AC9: Desktop/mobile browser evidence covers the AI Research, Evidence Center, and TaskRun flows with no uncaught console errors or misleading source state.
+- [x] AC10: Any in-scope fixes have focused regression tests; backend, Web, type, migration, and Trellis checks pass.
+- [x] AC11: The operator runbook documents setup, safe execution, abort/rollback, retry, evidence capture, and cleanup.
+- [x] AC12: Findings that require new paid providers, credentials, broad corpus ingestion, or unrelated professional-terminal features are documented as follow-up work rather than silently expanded into this task.
+- [x] AC13: A 50-100 symbol SSE/SZSE/BSE canary cohort completes the daily-bar, fundamental, indicator, screening, and retry path with recorded coverage.
+- [x] AC14: The full-market backfill can process bounded deterministic batches, resume from a stored checkpoint, retry failed symbols, and replay completed work idempotently.
+- [x] AC15: Full-market coverage reports separate daily bars, fundamentals, indicators, no-data, provider failures, and exchange distribution rather than reporting one ambiguous success count.
+- [x] AC16: Asia/Shanghai schedules refresh daily bars/indicators with a 10-day overlap and rotate fundamentals through deterministic daily shards without rerunning the full baseline.
+- [x] AC17: Scheduled overlap protection prevents duplicate active runs and records whether a run was started, skipped, resumed, or retried.
+- [x] AC18: `/ai-research` exposes tested coverage, progress, resume, and retry-failed controls with desktop/mobile states and links to the authoritative TaskRun details.
+- [x] AC19: The first run is explicitly AkShare-backed, every result exposes provider/source provenance, and provider failure cannot trigger a silent fallback.
 
 ## Out of Scope
 

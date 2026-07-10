@@ -1,5 +1,17 @@
 # Live Full-Market Pipeline Acceptance and Production Hardening Plan
 
+## Integration Completion Record
+
+- [x] All four child tasks are archived with focused implementation evidence.
+- [x] All 19 parent acceptance criteria pass the cross-child review.
+- [x] Final live coverage passes 95% / 90% / 80% without threshold changes.
+- [x] Full backend, Web, type, migration, Trellis, and browser gates pass.
+
+The unchecked child-owned items below are preserved as the original execution
+map. Their authoritative completion checklists and evidence live in the four
+archived child task directories; `integration-review.md` records the parent
+cross-child decision.
+
 ## Planning and Task Split
 
 - [ ] Review and approve the parent PRD/design/plan.
