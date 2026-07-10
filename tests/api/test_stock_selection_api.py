@@ -299,3 +299,53 @@ def test_stock_selection_api_rejects_empty_criteria():
         response.json()["detail"]
         == "At least one fundamental, technical, market-data, or news selection criterion is required."
     )
+
+
+def test_stock_selection_profiles_api_lists_transparent_named_profiles():
+    client = TestClient(app)
+
+    response = client.get("/stock-selection/profiles")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [
+        "balanced_research",
+        "quality_value",
+        "trend_liquidity",
+    ]
+    assert payload["items"][0]["criteria"]["max_pe_ratio"] == 35.0
+    assert payload["safety"]["parameters_visible_and_editable"] is True
+
+
+def test_stock_discovery_api_returns_deterministic_profile_shortlist():
+    session = make_session()
+    seed_selection_fixture(session)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/stock-selection/discover",
+            json={
+                "profile_id": "balanced_research",
+                "market": "US",
+                "locale": "en",
+                "use_llm": False,
+                "shortlist_limit": 5,
+                "overrides": {"max_pe_ratio": 30},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["profile"]["id"] == "balanced_research"
+    assert payload["effective_criteria"]["max_pe_ratio"] == 30.0
+    assert payload["shortlist_count"] == 1
+    assert payload["shortlist"][0]["symbol"] == "AAPL"
+    assert payload["model"]["used_llm"] is False
+    assert payload["safety"]["deterministic_shortlist"] is True

@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -551,3 +551,48 @@ def test_stock_selection_reports_missing_fundamentals_without_fabricating_match(
             "message": "Fundamental criteria were requested but no stored snapshot is available.",
         }
     ]
+
+
+def test_stock_selection_evaluates_candidates_after_position_100_with_bulk_queries():
+    session = make_session()
+    for index in range(105):
+        seed_instrument(
+            session,
+            f"T{index:03d}",
+            close=110.0,
+            ma=100.0,
+            rsi=90.0 if index == 104 else 10.0,
+        )
+
+    statements: list[str] = []
+    engine = session.get_bind()
+
+    def record_statement(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record_statement)
+    try:
+        payload = screen_local_stock_selection(
+            session=session,
+            market="US",
+            min_rsi=80.0,
+            limit=5,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record_statement)
+
+    assert payload["count"] == 1
+    assert payload["items"][0]["symbol"] == "T104"
+    assert payload["coverage"]["candidate_count"] == 105
+    assert payload["coverage"]["evaluated_count"] == 105
+    assert payload["diagnostics"] == [
+        {
+            "code": "SELECTION_RULE_NOT_MATCHED",
+            "dimension": "min_rsi",
+            "count": 104,
+            "message": (
+                "Stock-selection diagnostics were aggregated for the full candidate universe."
+            ),
+        }
+    ]
+    assert len(statements) <= 5

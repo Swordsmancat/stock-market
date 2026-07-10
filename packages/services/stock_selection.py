@@ -1,8 +1,10 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+from uuid import UUID
 
-from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session, joinedload
 
 from packages.domain.models import (
     DailyBar,
@@ -18,7 +20,14 @@ from packages.services.watchlists import get_active_watchlist_scope
 
 RULE_SET_ID = "instock_composite_selection_v1"
 DISCLAIMER = "Composite stock selection is a research aid only and is not investment advice."
-MAX_SCREENING_SYMBOLS = 100
+
+
+@dataclass(frozen=True)
+class SelectionEvidence:
+    latest_bars: dict[UUID, DailyBar]
+    latest_indicators: dict[UUID, dict[str, object]]
+    latest_fundamentals: dict[str, FundamentalSnapshot]
+    latest_news_sentiment: dict[str, dict[str, object]]
 
 
 def screen_local_stock_selection(
@@ -100,14 +109,23 @@ def screen_local_stock_selection(
         market=market,
         asset_type=asset_type,
         watchlist_only=watchlist_only,
-        limit=MAX_SCREENING_SYMBOLS,
     )
+    evidence = _load_selection_evidence(
+        session=session,
+        instruments=instruments,
+        include_news=_news_criteria_requested(criteria),
+    )
+    detailed_diagnostics = bool(_normalize_symbols(symbols)) or watchlist_only or len(instruments) <= 100
     diagnostics: list[dict[str, object]] = []
+    diagnostic_counts: dict[tuple[str, str], int] = {}
     items: list[dict[str, object]] = []
 
     for instrument in instruments:
-        evaluation = _evaluate_instrument(instrument, criteria, session=session)
-        diagnostics.extend(evaluation["diagnostics"])
+        evaluation = _evaluate_instrument(instrument, criteria, evidence=evidence)
+        evaluation_diagnostics = evaluation["diagnostics"]
+        _accumulate_diagnostic_counts(diagnostic_counts, evaluation_diagnostics)
+        if detailed_diagnostics:
+            diagnostics.extend(evaluation_diagnostics)
         if evaluation["matched"]:
             items.append(evaluation["item"])
 
@@ -119,6 +137,8 @@ def screen_local_stock_selection(
         ),
         reverse=True,
     )[: max(1, min(limit, 100))]
+    if not detailed_diagnostics:
+        diagnostics = _compact_diagnostics(diagnostic_counts)
 
     return {
         "status": "ok",
@@ -133,6 +153,14 @@ def screen_local_stock_selection(
         "criteria": criteria,
         "count": len(ranked_items),
         "items": ranked_items,
+        "coverage": _selection_coverage(
+            instruments=instruments,
+            evidence=evidence,
+            matched_count=len(items),
+            returned_count=len(ranked_items),
+            news_required=_news_criteria_requested(criteria),
+        ),
+        "diagnostics_summary": _serialize_diagnostic_counts(diagnostic_counts),
         "diagnostics": diagnostics,
         "disclaimer": DISCLAIMER,
     }
@@ -200,9 +228,12 @@ def _candidate_instruments(
     market: str | None,
     asset_type: str | None,
     watchlist_only: bool,
-    limit: int,
 ) -> list[Instrument]:
-    query = session.query(Instrument).outerjoin(Market, Instrument.market_id == Market.id)
+    query = (
+        session.query(Instrument)
+        .options(joinedload(Instrument.market))
+        .outerjoin(Market, Instrument.market_id == Market.id)
+    )
     query = query.filter(Instrument.is_active.is_(True))
 
     normalized_symbols = _normalize_symbols(symbols)
@@ -227,18 +258,18 @@ def _candidate_instruments(
         ]
         query = query.filter(or_(*pair_filters))
 
-    return query.order_by(Instrument.symbol).limit(limit).all()
+    return query.order_by(Instrument.symbol).all()
 
 
 def _evaluate_instrument(
     instrument: Instrument,
     criteria: dict[str, object],
     *,
-    session: Session,
+    evidence: SelectionEvidence,
 ) -> dict[str, object]:
     symbol = instrument.symbol.upper()
     diagnostics: list[dict[str, object]] = []
-    latest_bar = _latest_daily_bar(instrument, session=session)
+    latest_bar = evidence.latest_bars.get(instrument.id)
     if latest_bar is None:
         return _failed_evaluation(
             symbol=symbol,
@@ -251,8 +282,11 @@ def _evaluate_instrument(
             ],
         )
 
-    latest_indicators = _latest_indicator_payload(instrument, session=session)
-    latest_fundamentals = _latest_fundamental_snapshot(symbol, session=session)
+    latest_indicators = evidence.latest_indicators.get(
+        instrument.id,
+        {"as_of": None, "values": {}},
+    )
+    latest_fundamentals = evidence.latest_fundamentals.get(symbol)
     matched_rules: list[dict[str, object]] = []
 
     market_data_result = _evaluate_market_data_rules(
@@ -288,7 +322,10 @@ def _evaluate_instrument(
 
     news_sentiment = None
     if _news_criteria_requested(criteria):
-        news_sentiment = _latest_news_sentiment_payload(symbol, session=session)
+        news_sentiment = evidence.latest_news_sentiment.get(
+            symbol,
+            _empty_news_sentiment_payload(),
+        )
         news_result = _evaluate_news_rules(
             symbol=symbol,
             news_sentiment=news_sentiment,
@@ -649,83 +686,284 @@ def _sentiment_rule(
     }
 
 
-def _latest_daily_bar(instrument: Instrument, *, session: Session) -> DailyBar | None:
-    return (
-        session.query(DailyBar)
-        .filter(DailyBar.instrument_id == instrument.id)
-        .order_by(DailyBar.trade_date.desc())
-        .first()
+def _load_selection_evidence(
+    *,
+    session: Session,
+    instruments: list[Instrument],
+    include_news: bool,
+) -> SelectionEvidence:
+    instrument_ids = [instrument.id for instrument in instruments]
+    symbols = sorted({instrument.symbol.upper() for instrument in instruments})
+    if not instrument_ids:
+        return SelectionEvidence({}, {}, {}, {})
+    return SelectionEvidence(
+        latest_bars=_bulk_latest_daily_bars(session, instrument_ids),
+        latest_indicators=_bulk_latest_indicators(session, instrument_ids),
+        latest_fundamentals=_bulk_latest_fundamentals(session, symbols),
+        latest_news_sentiment=(
+            _bulk_latest_news_sentiment(session, symbols) if include_news else {}
+        ),
     )
 
 
-def _latest_indicator_payload(instrument: Instrument, *, session: Session) -> dict[str, object]:
-    latest = (
-        session.query(TechnicalIndicator)
-        .filter(TechnicalIndicator.instrument_id == instrument.id)
-        .filter(TechnicalIndicator.timeframe == "1d")
-        .order_by(TechnicalIndicator.as_of.desc())
-        .first()
+def _bulk_latest_daily_bars(
+    session: Session,
+    instrument_ids: list[UUID],
+) -> dict[UUID, DailyBar]:
+    latest_dates = (
+        session.query(
+            DailyBar.instrument_id.label("instrument_id"),
+            func.max(DailyBar.trade_date).label("trade_date"),
+        )
+        .filter(DailyBar.instrument_id.in_(instrument_ids))
+        .group_by(DailyBar.instrument_id)
+        .subquery()
     )
-    if latest is None:
-        return {"as_of": None, "values": {}}
-
     rows = (
-        session.query(TechnicalIndicator)
-        .filter(TechnicalIndicator.instrument_id == instrument.id)
-        .filter(TechnicalIndicator.timeframe == "1d")
-        .filter(TechnicalIndicator.as_of == latest.as_of)
+        session.query(DailyBar)
+        .join(
+            latest_dates,
+            and_(
+                DailyBar.instrument_id == latest_dates.c.instrument_id,
+                DailyBar.trade_date == latest_dates.c.trade_date,
+            ),
+        )
         .all()
     )
+    return {row.instrument_id: row for row in rows}
+
+
+def _bulk_latest_indicators(
+    session: Session,
+    instrument_ids: list[UUID],
+) -> dict[UUID, dict[str, object]]:
+    latest_times = (
+        session.query(
+            TechnicalIndicator.instrument_id.label("instrument_id"),
+            func.max(TechnicalIndicator.as_of).label("as_of"),
+        )
+        .filter(TechnicalIndicator.instrument_id.in_(instrument_ids))
+        .filter(TechnicalIndicator.timeframe == "1d")
+        .group_by(TechnicalIndicator.instrument_id)
+        .subquery()
+    )
+    rows = (
+        session.query(TechnicalIndicator)
+        .join(
+            latest_times,
+            and_(
+                TechnicalIndicator.instrument_id == latest_times.c.instrument_id,
+                TechnicalIndicator.as_of == latest_times.c.as_of,
+            ),
+        )
+        .filter(TechnicalIndicator.timeframe == "1d")
+        .all()
+    )
+    payloads: dict[UUID, dict[str, object]] = {}
+    for row in rows:
+        payload = payloads.setdefault(
+            row.instrument_id,
+            {"as_of": _isoformat_utc(row.as_of), "values": {}},
+        )
+        values = payload["values"]
+        if isinstance(values, dict) and isinstance(row.value_json, dict) and "value" in row.value_json:
+            values[row.indicator_code] = _serialize_indicator_value(row.value_json["value"])
+    return payloads
+
+
+def _bulk_latest_fundamentals(
+    session: Session,
+    symbols: list[str],
+) -> dict[str, FundamentalSnapshot]:
+    latest_dates = (
+        session.query(
+            FundamentalSnapshot.symbol.label("symbol"),
+            func.max(FundamentalSnapshot.as_of).label("as_of"),
+        )
+        .filter(FundamentalSnapshot.symbol.in_(symbols))
+        .group_by(FundamentalSnapshot.symbol)
+        .subquery()
+    )
+    rows = (
+        session.query(FundamentalSnapshot)
+        .join(
+            latest_dates,
+            and_(
+                FundamentalSnapshot.symbol == latest_dates.c.symbol,
+                FundamentalSnapshot.as_of == latest_dates.c.as_of,
+            ),
+        )
+        .all()
+    )
+    return {row.symbol.upper(): row for row in rows}
+
+
+def _bulk_latest_news_sentiment(
+    session: Session,
+    symbols: list[str],
+) -> dict[str, dict[str, object]]:
+    payloads = {symbol: _empty_news_sentiment_payload() for symbol in symbols}
+    count_rows = (
+        session.query(
+            NewsArticle.symbol,
+            func.count(func.distinct(NewsArticle.id)),
+        )
+        .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
+        .filter(NewsArticle.symbol.in_(symbols))
+        .group_by(NewsArticle.symbol)
+        .all()
+    )
+    for symbol, article_count in count_rows:
+        payloads[symbol.upper()]["article_count"] = int(article_count)
+
+    latest_published = (
+        session.query(
+            NewsArticle.symbol.label("symbol"),
+            func.max(NewsArticle.published_at).label("published_at"),
+        )
+        .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
+        .filter(NewsArticle.symbol.in_(symbols))
+        .group_by(NewsArticle.symbol)
+        .subquery()
+    )
+    rows = (
+        session.query(NewsArticle, SentimentSignal)
+        .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
+        .join(
+            latest_published,
+            and_(
+                NewsArticle.symbol == latest_published.c.symbol,
+                NewsArticle.published_at == latest_published.c.published_at,
+            ),
+        )
+        .order_by(
+            NewsArticle.symbol,
+            SentimentSignal.created_at.desc(),
+            NewsArticle.id.desc(),
+        )
+        .all()
+    )
+    populated: set[str] = set()
+    for article, signal in rows:
+        symbol = article.symbol.upper()
+        if symbol in populated:
+            continue
+        payloads[symbol].update(
+            {
+                "latest_sentiment": signal.sentiment,
+                "latest_confidence": _numeric_value(signal.confidence),
+                "latest_published_at": _isoformat_utc(article.published_at),
+                "latest_title": article.title,
+                "latest_source": article.source,
+                "latest_url": article.url,
+                "citation_id": f"news:{symbol}:{article.id}",
+            }
+        )
+        populated.add(symbol)
+    return payloads
+
+
+def _empty_news_sentiment_payload() -> dict[str, object]:
     return {
-        "as_of": _isoformat_utc(latest.as_of),
-        "values": {
-            row.indicator_code: _serialize_indicator_value(row.value_json["value"])
-            for row in rows
-            if isinstance(row.value_json, dict) and "value" in row.value_json
+        "article_count": 0,
+        "latest_sentiment": None,
+        "latest_confidence": None,
+        "latest_published_at": None,
+        "latest_title": None,
+        "latest_source": None,
+        "latest_url": None,
+        "citation_id": None,
+    }
+
+
+def _selection_coverage(
+    *,
+    instruments: list[Instrument],
+    evidence: SelectionEvidence,
+    matched_count: int,
+    returned_count: int,
+    news_required: bool,
+) -> dict[str, object]:
+    candidate_count = len(instruments)
+    instrument_ids = {instrument.id for instrument in instruments}
+    symbols = {instrument.symbol.upper() for instrument in instruments}
+    indicator_count = sum(
+        1
+        for instrument_id in instrument_ids
+        if evidence.latest_indicators.get(instrument_id, {}).get("values")
+    )
+    news_count = sum(
+        1
+        for symbol in symbols
+        if int(evidence.latest_news_sentiment.get(symbol, {}).get("article_count", 0)) > 0
+    )
+    return {
+        "candidate_count": candidate_count,
+        "evaluated_count": candidate_count,
+        "matched_count": matched_count,
+        "returned_count": returned_count,
+        "evidence": {
+            "daily_bars": _coverage_counter(candidate_count, len(evidence.latest_bars), True),
+            "technical_indicators": _coverage_counter(candidate_count, indicator_count, True),
+            "fundamentals": _coverage_counter(
+                candidate_count,
+                len(symbols & set(evidence.latest_fundamentals)),
+                True,
+            ),
+            "news_sentiment": _coverage_counter(candidate_count, news_count, news_required),
         },
     }
 
 
-def _latest_fundamental_snapshot(symbol: str, *, session: Session) -> FundamentalSnapshot | None:
-    return (
-        session.query(FundamentalSnapshot)
-        .filter(FundamentalSnapshot.symbol == symbol)
-        .order_by(FundamentalSnapshot.as_of.desc())
-        .first()
-    )
-
-
-def _latest_news_sentiment_payload(symbol: str, *, session: Session) -> dict[str, object]:
-    rows = (
-        session.query(NewsArticle, SentimentSignal)
-        .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
-        .filter(NewsArticle.symbol == symbol)
-        .order_by(NewsArticle.published_at.desc(), SentimentSignal.created_at.desc())
-        .all()
-    )
-    if not rows:
-        return {
-            "article_count": 0,
-            "latest_sentiment": None,
-            "latest_confidence": None,
-            "latest_published_at": None,
-            "latest_title": None,
-            "latest_source": None,
-            "latest_url": None,
-            "citation_id": None,
-        }
-
-    latest_article, latest_signal = rows[0]
+def _coverage_counter(total: int, available: int, required: bool) -> dict[str, object]:
+    bounded_available = min(max(0, available), total)
     return {
-        "article_count": len({article.id for article, _signal in rows}),
-        "latest_sentiment": latest_signal.sentiment,
-        "latest_confidence": _numeric_value(latest_signal.confidence),
-        "latest_published_at": _isoformat_utc(latest_article.published_at),
-        "latest_title": latest_article.title,
-        "latest_source": latest_article.source,
-        "latest_url": latest_article.url,
-        "citation_id": f"news:{symbol}:{latest_article.id}",
+        "required": required,
+        "available_count": bounded_available,
+        "missing_count": max(0, total - bounded_available),
+        "coverage_ratio": round(bounded_available / total, 4) if total else 0.0,
     }
+
+
+def _accumulate_diagnostic_counts(
+    counts: dict[tuple[str, str], int],
+    diagnostics: list[dict[str, object]],
+) -> None:
+    for diagnostic in diagnostics:
+        code = str(diagnostic.get("code") or "UNKNOWN")
+        dimension = str(diagnostic.get("rule") or _diagnostic_source(code))
+        key = (code, dimension)
+        counts[key] = counts.get(key, 0) + 1
+
+
+def _diagnostic_source(code: str) -> str:
+    return {
+        "MISSING_DAILY_BAR": "daily_bars",
+        "MISSING_FUNDAMENTALS": "fundamentals",
+    }.get(code, "selection")
+
+
+def _serialize_diagnostic_counts(
+    counts: dict[tuple[str, str], int],
+) -> list[dict[str, object]]:
+    return [
+        {"code": code, "dimension": dimension, "count": count}
+        for (code, dimension), count in sorted(counts.items())
+    ]
+
+
+def _compact_diagnostics(
+    counts: dict[tuple[str, str], int],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "code": code,
+            "dimension": dimension,
+            "count": count,
+            "message": "Stock-selection diagnostics were aggregated for the full candidate universe.",
+        }
+        for (code, dimension), count in sorted(counts.items())
+    ]
 
 
 def _serialize_daily_bar(row: DailyBar) -> dict[str, object]:
