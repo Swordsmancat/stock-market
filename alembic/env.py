@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from packages.domain import models  # noqa: F401
 from packages.shared.config import settings
 from packages.shared.database import Base
+from packages.shared.alembic_compat import ensure_alembic_version_capacity
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
@@ -36,6 +37,9 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        with connection.begin():
+            ensure_alembic_version_capacity(connection)
+
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():

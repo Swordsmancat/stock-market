@@ -125,3 +125,30 @@ Examples:
 - Do not bypass service-owned commits for existing write flows unless the surrounding service is redesigned. Current write services commit internally.
 - Do not assume PostgreSQL-only types in migrations without a SQLite-compatible path; tests and some migrations already support SQLite.
 - Do not add database-backed tests that touch the real `settings.database_url` when nearby tests use SQLite/`StaticPool`.
+
+### Alembic revision identifier capacity
+
+PostgreSQL enforces the declared length of `alembic_version.version_num`.
+Alembic creates legacy version tables as `VARCHAR(32)`, while this repository
+uses descriptive revision identifiers such as
+`0010_intraday_minute_cache_entries` that exceed 32 characters. A lagging
+database can therefore run a migration's DDL and then fail when Alembic writes
+the new revision identifier; transactional DDL rolls the migration back and the
+application starts against missing tables.
+
+`packages/shared/alembic_compat.py` owns the compatibility guard.
+`alembic/env.py` runs it in a dedicated transaction before configuring the
+migration context. For an existing PostgreSQL `alembic_version` table it widens
+`version_num` to `VARCHAR(128)` when needed. Fresh databases and non-PostgreSQL
+dialects remain unchanged.
+
+Required checks:
+
+- `tests/shared/test_alembic_compat.py` must assert the PostgreSQL widening SQL,
+  no-op behavior for current/SQLite schemas, and that every revision identifier
+  fits the 128-character capacity.
+- When diagnosing an application that starts but reports missing new tables,
+  run `alembic current` and inspect both the version-column length and actual
+  table presence; `alembic heads` only reports repository state.
+- Do not shorten or rewrite applied revision identifiers to work around this
+  failure. Preserve history and fix the version-table compatibility boundary.
