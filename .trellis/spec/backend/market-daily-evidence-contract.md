@@ -148,3 +148,20 @@ citations = list_citable_market_daily_evidence_citations(
 
 The import service owns provider validation and storage; citation consumers read
 only persisted, citable rows.
+
+## Corporate-Action Evidence Addendum
+
+- Supported evidence types now also include `dividend_bonus` and
+  `rights_allotment`; the ordinary daily-import defaults remain the original
+  five event types.
+- Corporate-action provider loading must use the report-period/symbol batch job.
+  Supplying normalized payloads to `import_market_daily_evidence(...)` reuses
+  the same persisted-only citation gate.
+- Corporate-action identity is `<SYMBOL>-<12-char fingerprint>`, derived from
+  report/date/action fields. This preserves distinct events for the same symbol
+  and date under the existing uniqueness constraint.
+- Excerpts expose normalized dividend/bonus/transfer or rights ratio/price
+  values. Mock/static/unavailable/provider-error rows remain non-citable.
+- Symbol filters continue to match both exact identities and `<SYMBOL>-%`, so
+  assistant/dashboard consumers receive corporate-action citations without a
+  new citation prefix.

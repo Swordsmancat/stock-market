@@ -215,3 +215,21 @@ for symbol in normalize_symbol_list(symbols):
 
 Only user-requested symbols are ingested, through the existing single-symbol
 storage contract.
+
+## Universe and Corporate-Action Job Addendum
+
+- `ingestion.sync_instrument_universe` calls the separate
+  `fetch_instrument_universe("CN")` provider path, records TaskRun progress, and
+  never routes the full universe through snapshot-plus-bars ingestion.
+- A complete universe snapshot may deactivate missing rows managed by the same
+  provider. Empty, incomplete, provider-failed, or schema-failed snapshots
+  deactivate nothing and preserve manual rows.
+- `ingestion.sync_corporate_actions` accepts ISO `report_period`, normalized
+  symbols/event types, `cursor>=0`, and `batch_size=1..100`.
+- Corporate-action batches preserve partial success, expose `next_cursor`, and
+  store `failed_event_types`, `degraded_event_types`, and `failed_symbols` for
+  deterministic retry.
+- TaskRun progress lives in `result_json.progress` while running and the final
+  service result replaces it with a completed progress payload.
+- See [Comprehensive A-share Research Coverage Contract](./a-share-research-coverage-contract.md)
+  for validation/error cases and end-to-end test assertions.

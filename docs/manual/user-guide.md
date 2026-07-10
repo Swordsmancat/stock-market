@@ -24,6 +24,7 @@
 | P1 | 可审计宏观 seed 导入 | Review + import MVP | `/evidence` 已支持粘贴 JSON/CSV 或通过浏览器选择本地 `.json`/`.csv` 文件，先预览校验和 insert/update 状态，再确认写入；CLI 文件导入仍可用于维护流程。 |
 | P1 | Hard-to-find source notebook | Reviewed-source MVP | `/evidence` 已支持保存用户复核过的链接、浏览器上传文本摘录、计算备注、标签/标的和 AI follow-up。草稿只作为收集记录；只有 `reviewed` 且明确允许 AI 引用的条目才会进入 dashboard brief 和 AI 助手的 citation 列表。 |
 | P1 | 已保存研究摘要收件箱 | LLM+fallback history MVP | `/evidence` 已支持把当前证据中心上下文生成并保存为可回看的研究摘要，包含 markdown 内容、允许引用、来源缺口、follow-up 上下文、诊断、模型元数据和安全边界。 |
+| P1 | 全 A 股研究覆盖 | Breadth-first MVP | `/ai-research` 可刷新并审计 SSE/SZSE/BSE 标的全集，使用透明预设评估全部本地活跃 A 股，再由 AI 或确定性 fallback 解释固定 shortlist；Evidence Center 可按报告期和游标导入分红送转、配股证据。 |
 
 ## 首页市场看板
 
@@ -71,6 +72,10 @@
 证据中心还提供“已保存研究摘要收件箱”。当你完成来源复核、seed 准备或 follow-up 问题整理后，可以点击生成并保存摘要。系统会基于当前 Evidence Center 上下文生成一条持久研究记录，保存 markdown 摘要、允许引用的本地 citation、来源缺口、follow-up 摘要、diagnostics、model metadata 和 safety flags。该摘要与个股 `GeneratedReport` 分开存储，定位是宏观/来源/证据研究记录，而不是单标的交易报告。
 
 证据中心现在也提供“已存储的每日市场证据”。点击“刷新今日市场证据”后，系统会尝试导入个股资金流、涨停背景、龙虎榜、大宗交易和热门板块数据，并显示新增、更新、跳过数量以及经过清洗的诊断信息。只有成功落库的 `live` / `delayed` 供应商标准化记录会生成 `market_daily_event:<event_type>:<identity>:<trade_date>` 引用；实时接口响应、mock/static 数据、空结果和失败结果都不会直接变成 AI 证据。该入口仅用于研究证据整理，不是定时任务、历史回填、交易信号或自动交易功能。
+
+AI Research 现在还提供“全 A 股智能发现”。请先查看标的全集状态、活跃数量、供应商管理数量和最近同步时间；需要更新时点击“刷新全 A 股标的全集”，并通过链接进入 TaskRun 查看进度或失败诊断。然后选择 `balanced_research`、`quality_value` 或 `trend_liquidity`，检查并按需编辑页面上可见的条件，再运行全市场选股。系统会评估当前范围内的全部本地活跃标的，只限制最终返回的候选数量；证据覆盖率和缺失数量会明确显示。AI 只能解释由规则引擎确定的候选和顺序，不能新增、删除或重排标的；如果模型提到未知标的或引用，会自动回退到确定性解释。
+
+Evidence Center 的“公司行动报告期”入口用于分批补充 `dividend_bonus`（分红送转）和 `rights_allotment`（配股）证据。默认每批处理最多 50 个按代码排序的标的；任务结果中的 `next_cursor` 可用于继续下一批。某个标的或某类公司行动失败时，其他成功记录仍会保留，并在 retry diagnostics 中列出失败事件或标的。只有落库后的真实供应商记录可以生成引用；该流程仍然不构成投资建议，也不会触发自动交易。详细运行方式见 [A-share Research Coverage Runbook](../runbooks/a-share-research-coverage.md)。
 
 如果已配置 OpenAI-compatible LLM 和 API key，研究摘要会调用模型；如果未配置、调用失败、返回空内容或引用了未知 citation ID，系统会保存 deterministic fallback。无论哪种模式，摘要只能引用已存在的本地 allowed citation；source-readiness 链接、seed 模板、草稿笔记、浏览器上传建议和未导入 observation 仍然只能作为数据缺口或研究问题。
 

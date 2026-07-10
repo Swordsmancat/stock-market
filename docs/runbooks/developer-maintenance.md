@@ -2,6 +2,8 @@
 
 本手册面向维护者，集中说明 Phase 2 / Phase 3 功能、API 入口、降级数据契约、provider 能力和验证命令。基础本地启动流程仍以 [local-development.md](./local-development.md) 为准。
 
+全 A 股标的全集、批量选股、AI shortlist 解释和公司行动证据的完整接口、游标续跑和失败语义见 [A-share Research Coverage Runbook](./a-share-research-coverage.md)。维护这些能力时必须保留三条边界：全集同步失败不能清空上一次有效标的；选股只能限制最终返回项，不能在评估前截断候选；AI 只能解释确定性 shortlist，不能修改候选或排序。
+
 ## 快速验证命令
 
 常规回归：
@@ -9,6 +11,14 @@
 ```bash
 python -m pytest -v
 npm run test:web
+```
+
+全 A 股研究覆盖聚焦检查：
+
+```bash
+python -m pytest tests/providers/test_cn_market_providers.py tests/services/test_instrument_universe.py tests/services/test_stock_selection.py tests/services/test_stock_discovery.py tests/services/test_corporate_actions.py tests/services/test_market_daily_evidence.py tests/api/test_ingestion_api.py tests/api/test_stock_selection_api.py -q
+npx vitest run "apps/web/components/stock-discovery-panel.test.tsx" "apps/web/components/market-daily-evidence-panel.test.tsx" "apps/web/app/[locale]/ai-research/page.test.tsx" "apps/web/app/[locale]/evidence/page.test.tsx"
+npx tsc -p apps/web/tsconfig.json --noEmit
 ```
 
 证据中心聚焦检查：

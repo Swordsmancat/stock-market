@@ -170,3 +170,20 @@
   `pytest tests/services/test_stock_selection.py tests/api/test_stock_selection_api.py`,
   ruff on touched stock-selection files, full backend pytest, and
   `git diff --check`.
+
+## Full-Universe and Discovery Addendum
+
+- Candidate loading must not apply a pre-evaluation cap. The service bulk-loads
+  latest bars, indicators, fundamentals, and conditional news; only final
+  ranked items are limited.
+- Responses expose `coverage` and `diagnostics_summary`. Scans above 100
+  candidates aggregate diagnostics to avoid multi-thousand-row payloads;
+  explicit/small scans preserve detailed diagnostics for compatibility.
+- `GET /stock-selection/profiles` exposes the three named transparent profiles.
+- `POST /stock-selection/discover` resolves visible overrides, runs the same
+  deterministic screener, bounds the shortlist to 20, and optionally generates
+  an explanation. AI cannot add/remove/reorder candidates.
+- Unknown inline citation IDs or backtick symbols in generated text produce
+  deterministic fallback diagnostics without changing shortlist data.
+- The complete cross-layer matrix, cases, and required tests are in
+  [Comprehensive A-share Research Coverage Contract](./a-share-research-coverage-contract.md).

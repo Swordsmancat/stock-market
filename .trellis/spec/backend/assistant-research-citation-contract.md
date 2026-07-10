@@ -683,3 +683,18 @@ The saved brief stores only the assembled, validated local citations and keeps s
 - API tests assert `seed_template` is additive and dashboard citations exclude source/template IDs.
 - Frontend tests assert template label, target codes, required fields, JSON/CSV previews, placeholder value, checklist, warnings, and citation boundary render.
 - Docs/spec updates must preserve no-fetch/no-scrape/no-advice/no-citation-until-imported boundaries.
+
+## Deterministic Stock-Discovery Explanation Addendum
+
+- Stock discovery uses its own prompt/fallback module in
+  `packages/ai/stock_discovery.py`; it does not replace the single-symbol market
+  assistant contract.
+- The deterministic screener owns shortlist membership and ranking. The model
+  receives a bounded already-ranked list and may explain it only.
+- Allowed inline citation IDs come from each shortlist item's stored
+  `evidence_citations`. Unknown IDs produce `CITATION_UNKNOWN_ID` and fallback.
+- Candidate symbols in model output must be backticked. Any backtick symbol not
+  in the deterministic shortlist produces `SHORTLIST_UNKNOWN_SYMBOL` and
+  fallback.
+- Provider missing/disabled/failure/empty-output and empty-shortlist cases use
+  deterministic explanations with explicit evidence and no-trading boundaries.
