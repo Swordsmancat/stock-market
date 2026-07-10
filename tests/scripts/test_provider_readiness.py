@@ -6,6 +6,7 @@ import pytest
 
 from packages.providers.base import ProviderBar
 from packages.providers.base import ProviderInstrument
+from packages.providers.base import ProviderInstrumentUniverseSnapshot
 from packages.providers.base import ProviderIntradayBar
 from packages.providers.base import ProviderMarketDepthSnapshot
 from packages.providers.base import ProviderOrderBookLevel
@@ -50,6 +51,22 @@ class FakeSuccessfulProvider:
                 amount=Decimal("100500000"),
             )
         ]
+
+
+class FakeUniverseProvider(FakeSuccessfulProvider):
+    def fetch_instrument_universe(self, market: str) -> ProviderInstrumentUniverseSnapshot:
+        return ProviderInstrumentUniverseSnapshot(
+            provider="akshare",
+            source="akshare.fixture",
+            as_of=datetime(2026, 7, 10, tzinfo=timezone.utc),
+            status="ok",
+            is_complete=True,
+            items=[
+                ProviderInstrument("600000", "SSE stock", market, "SSE", "stock", "CNY"),
+                ProviderInstrument("000001", "SZSE stock", market, "SZSE", "stock", "CNY"),
+                ProviderInstrument("920001", "BSE stock", market, "BSE", "stock", "CNY"),
+            ],
+        )
 
 
 class FakeMarketDepthProvider(FakeSuccessfulProvider):
@@ -436,6 +453,39 @@ def test_yfinance_intraday_with_fake_provider_returns_ok(
     assert "bars=1" in output
     assert "database_writes=none" in output
     assert "Summary: OK=1 WARN=0 FAIL=0" in output
+
+
+def test_akshare_full_universe_requires_real_network_opt_in(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = provider_readiness.main(
+        ["--provider", "akshare", "--market", "CN", "--check-universe"]
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "WARN provider readiness" in output
+    assert "instrument-universe readiness requires explicit real-network opt-in" in output
+    assert "--check-universe" in output
+    assert "--real-network" in output
+
+
+def test_akshare_full_universe_reports_exchange_distribution_without_writes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setitem(provider_readiness.PROVIDER_FACTORIES, "akshare", FakeUniverseProvider)
+
+    exit_code = provider_readiness.main(
+        ["--provider", "akshare", "--market", "CN", "--check-universe", "--real-network"]
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "OK provider universe readiness" in output
+    assert "complete CN universe with 3 instruments" in output
+    assert "exchange_counts=BSE:1,SSE:1,SZSE:1" in output
+    assert "database_writes=none" in output
 
 
 def test_yfinance_intraday_known_us_holiday_returns_warn_without_provider_call(

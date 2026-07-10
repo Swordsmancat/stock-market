@@ -1,0 +1,88 @@
+{
+  "findings": [
+    {
+      "classification": "provider_limitation_or_environment_configuration",
+      "code": "AKSHARE_DAILY_BAR_CONNECTION_ERROR",
+      "database_writes": "none",
+      "message": "The full universe was usable, but the daily-bar endpoint failed after three bounded attempts. Acceptance writes were not started."
+    }
+  ],
+  "metadata": {
+    "akshare": "1.18.64",
+    "alembic_head": "0015_research_evidence_backfills (head)",
+    "commit": "8d99577902d13045ddab658b8aed9e2742841cbf",
+    "git_status": "dirty",
+    "market": "CN",
+    "provider": "akshare",
+    "python": "3.13.7",
+    "recorded_at": "2026-07-10T11:25:24.730774+00:00"
+  },
+  "preflight": {
+    "checks": [
+      {
+        "details": [
+          "provider=akshare",
+          "market=CN",
+          "instrument_count=5530",
+          "exchange_counts=BSE:327,SSE:2308,SZSE:2895",
+          "database_writes=none"
+        ],
+        "message": "akshare returned a complete CN universe with 5530 instruments.",
+        "name": "provider universe readiness",
+        "status": "OK",
+        "suggestions": []
+      },
+      {
+        "attempt": 1,
+        "details": [
+          "provider=akshare",
+          "market=CN",
+          "symbol=600519",
+          "date_range=2026-06-30..2026-07-10",
+          "ConnectionError"
+        ],
+        "message": "provider readiness failed; see classified details and suggestions.",
+        "name": "provider readiness",
+        "status": "FAIL",
+        "suggestions": [
+          "Verify provider credentials, dependencies, and symbol mapping."
+        ]
+      },
+      {
+        "attempt": 2,
+        "details": [
+          "provider=akshare",
+          "market=CN",
+          "symbol=600519",
+          "date_range=2026-06-30..2026-07-10",
+          "ConnectionError"
+        ],
+        "message": "provider readiness failed; see classified details and suggestions.",
+        "name": "provider readiness",
+        "status": "FAIL",
+        "suggestions": [
+          "Verify provider credentials, dependencies, and symbol mapping."
+        ]
+      },
+      {
+        "attempt": 3,
+        "details": [
+          "provider=akshare",
+          "market=CN",
+          "symbol=600519",
+          "date_range=2026-06-30..2026-07-10",
+          "ConnectionError"
+        ],
+        "message": "provider readiness failed; see classified details and suggestions.",
+        "name": "provider readiness",
+        "status": "FAIL",
+        "suggestions": [
+          "Verify provider credentials, dependencies, and symbol mapping."
+        ]
+      }
+    ],
+    "database_writes": "none",
+    "status": "failed"
+  },
+  "status": "failed"
+}

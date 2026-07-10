@@ -118,6 +118,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Opt in to real network access for live providers such as yfinance.",
     )
     parser.add_argument(
+        "--check-universe",
+        action="store_true",
+        help="Smoke-check the explicit full instrument-universe endpoint instead of fixture instruments.",
+    )
+    parser.add_argument(
         "--check-depth",
         action="store_true",
         help="Smoke-check explicit market-depth support instead of daily bars.",
@@ -161,6 +166,7 @@ def check_provider_readiness(
     trade_date: date | None = None,
     intraday_lookback_days: int = DEFAULT_INTRADAY_LOOKBACK_DAYS,
     depth_levels: int = DEFAULT_DEPTH_LEVELS,
+    check_universe: bool = False,
 ) -> list[ProviderReadinessResult]:
     normalized_provider_name = provider_name.strip().lower()
     normalized_market = market.strip().upper()
@@ -179,7 +185,11 @@ def check_provider_readiness(
         ]
 
     if normalized_provider_name in NETWORK_OPT_IN_PROVIDERS and not real_network:
-        check_label = _readiness_check_label(check_depth=check_depth, check_intraday=check_intraday)
+        check_label = _readiness_check_label(
+            check_depth=check_depth,
+            check_intraday=check_intraday,
+            check_universe=check_universe,
+        )
         return [
             ProviderReadinessResult(
                 status=ReadinessStatus.WARN,
@@ -199,6 +209,7 @@ def check_provider_readiness(
                         trade_date,
                         intraday_lookback_days,
                         depth_levels,
+                        check_universe,
                     )
                 ],
             )
@@ -214,6 +225,15 @@ def check_provider_readiness(
                 message=f"failed to create provider {normalized_provider_name}: {exc}",
                 details=[type(exc).__name__],
                 suggestions=["Check provider dependencies and local environment configuration."],
+            )
+        ]
+
+    if check_universe:
+        return [
+            check_instrument_universe_readiness(
+                provider=provider,
+                provider_name=normalized_provider_name,
+                market=normalized_market,
             )
         ]
 
@@ -556,6 +576,84 @@ def check_market_depth_readiness(
     )
 
 
+def check_instrument_universe_readiness(
+    *,
+    provider: Provider,
+    provider_name: str,
+    market: str,
+) -> ProviderReadinessResult:
+    fetch_instrument_universe = getattr(provider, "fetch_instrument_universe", None)
+    if not callable(fetch_instrument_universe):
+        return ProviderReadinessResult(
+            status=ReadinessStatus.FAIL,
+            name="provider universe readiness",
+            message=f"{provider_name} does not expose explicit full-universe support.",
+            details=[f"provider={provider_name}", f"market={market}", "database_writes=none"],
+            suggestions=["Use a provider with an explicit fetch_instrument_universe contract."],
+        )
+
+    try:
+        snapshot = fetch_instrument_universe(market)
+    except Exception as exc:
+        return ProviderReadinessResult(
+            status=ReadinessStatus.FAIL,
+            name="provider universe readiness",
+            message=f"{provider_name} failed to fetch the {market} instrument universe.",
+            details=[
+                f"provider={provider_name}",
+                f"market={market}",
+                f"exception_type={type(exc).__name__}",
+                "database_writes=none",
+            ],
+            suggestions=["Verify provider dependency, network access, and upstream universe schema."],
+        )
+
+    items = list(getattr(snapshot, "items", []) or [])
+    exchange_counts: dict[str, int] = {}
+    for item in items:
+        exchange = str(getattr(item, "exchange", "") or "UNKNOWN").upper()
+        exchange_counts[exchange] = exchange_counts.get(exchange, 0) + 1
+    required_exchanges = {"SSE", "SZSE", "BSE"} if market == "CN" else set()
+    missing_exchanges = sorted(required_exchanges - set(exchange_counts))
+    status = str(getattr(snapshot, "status", "unavailable"))
+    is_complete = bool(getattr(snapshot, "is_complete", False))
+    if not items or status != "ok" or not is_complete or missing_exchanges:
+        return ProviderReadinessResult(
+            status=ReadinessStatus.FAIL,
+            name="provider universe readiness",
+            message=f"{provider_name} returned an unusable {market} instrument universe.",
+            details=[
+                f"provider={provider_name}",
+                f"market={market}",
+                f"status={status}",
+                f"is_complete={str(is_complete).lower()}",
+                f"instrument_count={len(items)}",
+                f"exchange_counts={_format_exchange_counts(exchange_counts)}",
+                f"missing_exchanges={','.join(missing_exchanges) if missing_exchanges else 'none'}",
+                "database_writes=none",
+            ],
+            suggestions=["Stop acceptance writes and inspect the sanitized provider-universe diagnostics."],
+        )
+
+    return ProviderReadinessResult(
+        status=ReadinessStatus.OK,
+        name="provider universe readiness",
+        message=f"{provider_name} returned a complete {market} universe with {len(items)} instruments.",
+        details=[
+            f"provider={provider_name}",
+            f"market={market}",
+            f"instrument_count={len(items)}",
+            f"exchange_counts={_format_exchange_counts(exchange_counts)}",
+            "database_writes=none",
+        ],
+        suggestions=[],
+    )
+
+
+def _format_exchange_counts(exchange_counts: dict[str, int]) -> str:
+    return ",".join(f"{exchange}:{exchange_counts[exchange]}" for exchange in sorted(exchange_counts))
+
+
 def _availability_diagnostic_details(availability: object) -> list[str]:
     if not isinstance(availability, dict):
         return []
@@ -584,6 +682,7 @@ def _provider_network_opt_in_suggestion(
     trade_date: date | None,
     intraday_lookback_days: int,
     depth_levels: int,
+    check_universe: bool,
 ) -> str:
     command_parts = [
         "python scripts/provider_readiness.py",
@@ -592,6 +691,8 @@ def _provider_network_opt_in_suggestion(
     ]
     if symbol is not None:
         command_parts.append(f"--symbol {symbol}")
+    if check_universe:
+        command_parts.append("--check-universe")
     if check_depth:
         command_parts.append("--check-depth")
         command_parts.append(f"--depth-levels {depth_levels}")
@@ -605,7 +706,14 @@ def _provider_network_opt_in_suggestion(
     return " ".join(command_parts)
 
 
-def _readiness_check_label(*, check_depth: bool, check_intraday: bool) -> str:
+def _readiness_check_label(
+    *,
+    check_depth: bool,
+    check_intraday: bool,
+    check_universe: bool,
+) -> str:
+    if check_universe:
+        return "instrument-universe"
     if check_depth:
         return "market-depth"
     if check_intraday:
@@ -720,13 +828,6 @@ def _easter_sunday(year: int) -> date:
     return date(year, month, day)
 
 
-def resolve_default_intraday_trade_date(today: date | None = None) -> date:
-    candidate_date = today or date.today()
-    while candidate_date.weekday() >= 5:
-        candidate_date -= timedelta(days=1)
-    return candidate_date
-
-
 def select_default_symbol(
     provider: Provider,
     market: str,
@@ -801,6 +902,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         trade_date=args.trade_date,
         intraday_lookback_days=args.intraday_lookback_days,
         depth_levels=args.depth_levels,
+        check_universe=args.check_universe,
     )
     render_results(results)
     return 1 if has_failures(results) else 0

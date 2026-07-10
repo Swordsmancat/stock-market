@@ -269,3 +269,102 @@ rows = (
 ```
 
 One aggregate query returns the readiness inputs for the complete scope.
+
+## Scenario: Isolated Live A-share Acceptance
+
+### 1. Scope / Trigger
+
+- Trigger: real AkShare behavior must be proven without risking the normal local
+  `stock` database or committing provider payloads/secrets.
+- Scope: `docker-compose.acceptance.yml`, acceptance Dockerfiles,
+  `scripts/a_share_live_acceptance.py`, `/health/runtime`, the explicit
+  full-universe readiness check, sanitized evidence, and operator runbook.
+
+### 2. Signatures
+
+- Read-only preflight:
+  `python scripts/a_share_live_acceptance.py --phase preflight --real-network`.
+- Mutating phases: `--phase canary|baseline --real-network
+  --confirm-acceptance-writes --database-url <stock_acceptance URL>`.
+- Runtime identity: `GET /health/runtime` returns `status`, `app_env`,
+  `database_name`, and `celery_timezone`; it never returns hosts, users,
+  passwords, or full connection URLs.
+- Provider diagnostic: `scripts/provider_readiness.py --provider akshare
+  --market CN --check-universe --real-network`.
+
+### 3. Contracts
+
+- Compose project name is `stock-acceptance`; PostgreSQL database name is
+  exactly `stock_acceptance`, Redis and volumes are project-isolated, and host
+  ports do not overlap the normal stack defaults.
+- Mutations require both write flags, a parsed database URL whose path is
+  `stock_acceptance`, and runtime identity reporting `APP_ENV=acceptance`,
+  `stock_acceptance`, and `Asia/Shanghai`.
+- Preflight runs before Compose migrations and again before API mutations. It
+  requires a complete non-empty SSE/SZSE/BSE universe and a successful real
+  AkShare daily-bar request. Three bounded read-only attempts may classify a
+  transient bar failure; no alternate provider is selected.
+- Evidence artifacts redact secret-like keys, database/Redis URLs,
+  authorization/cookie values, bearer tokens, and URL credentials. Failed
+  provider checks store a generic message plus exception type, never raw
+  upstream exception text or response bodies.
+- A failed preflight writes a sanitized failure artifact and aborts all writes.
+
+### 4. Validation & Error Matrix
+
+- Missing `--real-network` -> fail before live provider access/writes.
+- Missing `--confirm-acceptance-writes` -> fail before API mutation.
+- Database path other than `stock_acceptance` -> refuse the target.
+- Runtime `app_env` or database mismatch -> refuse the API even if CLI flags
+  and the supplied URL appear safe.
+- Missing SSE/SZSE/BSE, incomplete/empty universe, or provider exception ->
+  failed preflight and no write phase.
+- Repeated daily-bar `ConnectionError` -> `provider_limitation` or
+  `environment_configuration`; do not call it `no_data`.
+- TaskRun deadline -> retain the recorded ID/checkpoint and report timeout; do
+  not delete partial evidence.
+
+### 5. Good / Base / Bad Cases
+
+- Good: the universe and bars pass, isolated runtime identity matches, a
+  50-symbol canary completes through API/worker, and sanitized evidence records
+  coverage, TaskRun IDs, profiles, and corporate-action replay.
+- Base: universe returns 5,530 instruments across three exchanges but the bar
+  endpoint repeatedly resets; the report records counts and `ConnectionError`,
+  and the database remains untouched.
+- Bad: start Compose/migrations after a failed preflight, point the runner at
+  port 8000/the normal database, silently use yfinance, or persist `str(exc)`.
+
+### 6. Tests Required
+
+- Script tests assert both flags, exact database-name validation, runtime
+  identity rejection, bounded TaskRun polling, and recursive redaction.
+- Provider readiness tests assert explicit network opt-in, complete universe
+  exchange counts, failure classification, and `database_writes=none`.
+- API tests assert `/health/runtime` returns only non-secret identity fields.
+- Compose config validation, focused/full pytest, touched Ruff, migration head,
+  Web/TypeScript gates for UI changes, Trellis validation, and
+  `git diff --check` remain required.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+print(f"provider failed: {exc}")
+post("http://127.0.0.1:8000/ingestion/instrument-universe")
+```
+
+This can leak raw upstream text and mutate whichever runtime happens to own the
+normal port.
+
+#### Correct
+
+```python
+require_write_guards(real_network=True, confirm_acceptance_writes=True, database_url=url)
+verify_runtime_identity("http://127.0.0.1:18000")
+record = {"message": "provider readiness failed", "exception_type": type(exc).__name__}
+```
+
+The runner proves both caller intent and runtime identity, then records only a
+bounded classification.

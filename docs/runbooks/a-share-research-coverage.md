@@ -35,6 +35,77 @@ Run migrations before the first universe sync:
 alembic upgrade head
 ```
 
+### Isolated real-provider acceptance
+
+Never run mutating acceptance against the normal `stock` database. The
+acceptance stack uses Compose project `stock-acceptance`, database
+`stock_acceptance`, isolated volumes, API port `18000`, Web port `13000`,
+PostgreSQL port `55432`, and Redis port `56379`.
+
+Run the read-only AkShare universe and daily-bar preflight before starting the
+stack (and therefore before migrations can write):
+
+```bash
+python scripts/a_share_live_acceptance.py --phase preflight --real-network
+```
+
+Abort when either preflight check fails. Provider-wide network, empty-universe,
+schema, or missing-exchange failures must not be reclassified as valid no-data.
+
+Validate and start the isolated runtime:
+
+```bash
+docker compose -p stock-acceptance -f docker-compose.acceptance.yml config
+docker compose -p stock-acceptance -f docker-compose.acceptance.yml up -d --build
+docker compose -p stock-acceptance -f docker-compose.acceptance.yml ps
+```
+
+Run the guarded 50-symbol canary. Both write guards and the exact database name
+are mandatory; the runner also verifies `/health/runtime` reports
+`APP_ENV=acceptance`, `stock_acceptance`, and `Asia/Shanghai` before dispatch:
+
+```bash
+python scripts/a_share_live_acceptance.py \
+  --phase canary \
+  --real-network \
+  --confirm-acceptance-writes \
+  --database-url postgresql+psycopg://stock:stock@127.0.0.1:55432/stock_acceptance
+```
+
+Only after the canary is usable should an operator start the 18-month baseline:
+
+```bash
+python scripts/a_share_live_acceptance.py \
+  --phase baseline \
+  --real-network \
+  --confirm-acceptance-writes \
+  --timeout-seconds 21600 \
+  --database-url postgresql+psycopg://stock:stock@127.0.0.1:55432/stock_acceptance
+```
+
+The runner writes bounded, sanitized JSON evidence under the active Trellis
+task's `evidence/` directory. It redacts connection URLs, authorization/cookie
+fields, token/secret-like keys, and bearer values; it never writes raw provider
+payloads or exception text.
+
+Stop services while retaining checkpoints/evidence:
+
+```bash
+docker compose -p stock-acceptance -f docker-compose.acceptance.yml down
+```
+
+Destructive cleanup is a separate, explicit action and removes only
+project-prefixed acceptance volumes:
+
+```bash
+docker compose -p stock-acceptance -f docker-compose.acceptance.yml down --volumes
+```
+
+Use `cancel`, `resume`, and `retry-failed` on the recorded backfill ID instead
+of deleting partial evidence. On a provider-wide schema/rate failure, cancel at
+the next checkpoint, retain the retry set, and stop rather than flooding
+retries.
+
 Start API, worker, and Redis, then enqueue the universe:
 
 ```text

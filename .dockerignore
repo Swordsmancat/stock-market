@@ -1,0 +1,12 @@
+.git
+.next
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.trellis/workspace
+node_modules
+data
+**/__pycache__
+**/*.pyc
+**/*.sqlite*
+**/.env*
