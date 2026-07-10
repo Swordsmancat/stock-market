@@ -139,14 +139,18 @@ application starts against missing tables.
 `packages/shared/alembic_compat.py` owns the compatibility guard.
 `alembic/env.py` runs it in a dedicated transaction before configuring the
 migration context. For an existing PostgreSQL `alembic_version` table it widens
-`version_num` to `VARCHAR(128)` when needed. Fresh databases and non-PostgreSQL
-dialects remain unchanged.
+`version_num` to `VARCHAR(128)` when needed. For a fresh PostgreSQL database it
+pre-creates the same version table at `VARCHAR(128)` before Alembic can create
+its default 32-character table. Non-PostgreSQL dialects remain unchanged.
 
 Required checks:
 
 - `tests/shared/test_alembic_compat.py` must assert the PostgreSQL widening SQL,
-  no-op behavior for current/SQLite schemas, and that every revision identifier
-  fits the 128-character capacity.
+  fresh-database creation SQL, no-op behavior for current/SQLite schemas, and
+  that every revision identifier fits the 128-character capacity.
+- A fresh isolated PostgreSQL Compose start must migrate from an empty database
+  through every descriptive revision identifier; testing only an already-
+  stamped development database does not cover this boundary.
 - When diagnosing an application that starts but reports missing new tables,
   run `alembic current` and inspect both the version-column length and actual
   table presence; `alembic heads` only reports repository state.

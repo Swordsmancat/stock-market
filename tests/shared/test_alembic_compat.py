@@ -29,6 +29,20 @@ def test_postgresql_legacy_alembic_version_column_is_widened(monkeypatch) -> Non
     assert "ALTER COLUMN version_num TYPE VARCHAR(128)" in str(connection.executed[0])
 
 
+def test_fresh_postgresql_database_creates_wide_alembic_version_table(monkeypatch) -> None:
+    connection = FakeConnection("postgresql")
+    inspector = Mock()
+    inspector.has_table.return_value = False
+    monkeypatch.setattr("packages.shared.alembic_compat.inspect", lambda _connection: inspector)
+
+    changed = ensure_alembic_version_capacity(connection)
+
+    assert changed is True
+    assert len(connection.executed) == 1
+    assert "CREATE TABLE alembic_version" in str(connection.executed[0])
+    assert "VARCHAR(128)" in str(connection.executed[0])
+
+
 def test_current_or_non_postgresql_version_columns_are_unchanged(monkeypatch) -> None:
     inspector = Mock()
     inspector.has_table.return_value = True

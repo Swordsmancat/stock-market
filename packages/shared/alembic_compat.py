@@ -7,13 +7,21 @@ ALEMBIC_VERSION_LENGTH = 128
 
 
 def ensure_alembic_version_capacity(connection: Connection) -> bool:
-    """Widen PostgreSQL's legacy 32-character revision column when needed."""
+    """Create or widen PostgreSQL's revision column for descriptive identifiers."""
     if connection.dialect.name != "postgresql":
         return False
 
     inspector = inspect(connection)
     if not inspector.has_table("alembic_version"):
-        return False
+        connection.execute(
+            text(
+                "CREATE TABLE alembic_version ("
+                f"version_num VARCHAR({ALEMBIC_VERSION_LENGTH}) NOT NULL, "
+                "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)"
+                ")"
+            )
+        )
+        return True
 
     version_column = next(
         (
