@@ -1501,3 +1501,36 @@ Implemented durable full-market A-share evidence backfills with TaskRun heartbea
 ### Next Steps
 
 - None - task complete
+
+
+## Session 46: A-share backfill operations UI
+
+**Date**: 2026-07-10
+**Task**: A-share backfill operations UI
+**Branch**: `master`
+
+### Summary
+
+Added authoritative A-share evidence coverage metrics, exchange breakdowns, guarded canary/baseline/resume/retry/cancel controls, active polling, TaskRun links, no-store proxies, bilingual messages, and focused/full Web validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `25fa543` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
