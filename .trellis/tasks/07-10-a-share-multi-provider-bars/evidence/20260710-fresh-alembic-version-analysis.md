@@ -21,7 +21,7 @@
 |---|---|---|---|
 | P0 | Runtime guard | Pre-create a 128-character version table on fresh PostgreSQL | DONE |
 | P0 | Regression | Assert fresh-table creation and legacy widening separately | DONE |
-| P1 | Integration | Start an empty isolated PostgreSQL stack through Alembic head | IN PROGRESS |
+| P1 | Integration | Start an empty isolated PostgreSQL stack through Alembic head | DONE |
 | P1 | Documentation | Update backend database migration guidance | DONE |
 
 ## 4. Systematic Expansion
@@ -37,4 +37,4 @@
 
 - [x] Added fresh PostgreSQL regression coverage.
 - [x] Updated `.trellis/spec/backend/database-guidelines.md`.
-- [ ] Record successful empty-stack migration after rebuild.
+- [x] Recorded successful empty-stack migration to revision `0016`.

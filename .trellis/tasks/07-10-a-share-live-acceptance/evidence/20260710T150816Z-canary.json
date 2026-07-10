@@ -1,0 +1,1010 @@
+{
+  "canary": {
+    "backfill_run_id": "229a2a94-a8d1-4b15-8368-6fae49d57bd7",
+    "task_run": {
+      "duration_ms": 189806,
+      "error_type": null,
+      "finished_at": "2026-07-10T15:08:00.182505+00:00",
+      "heartbeat_at": "2026-07-10T15:08:00.175953+00:00",
+      "id": "7e3482dc-f9c1-447b-9aca-675ba49c28e0",
+      "result_json": {
+        "batch_size": 25,
+        "cancel_requested_at": null,
+        "cohort_size": 50,
+        "counters": {
+          "daily_bars": {
+            "attempted": 50,
+            "failed": 0,
+            "insufficient_data": 0,
+            "no_data": 0,
+            "succeeded": 50
+          },
+          "fundamentals": {
+            "attempted": 50,
+            "failed": 0,
+            "insufficient_data": 0,
+            "no_data": 2,
+            "succeeded": 48
+          },
+          "technical_indicators": {
+            "attempted": 50,
+            "failed": 0,
+            "insufficient_data": 0,
+            "no_data": 0,
+            "succeeded": 50
+          }
+        },
+        "created_at": "2026-07-10T15:04:50.370596+00:00",
+        "cursor": 50,
+        "daily_bar_policy": "cn_resilient",
+        "diagnostics": [],
+        "end_date": "2026-07-10",
+        "evidence_kinds": [
+          "daily_bars",
+          "fundamentals",
+          "technical_indicators"
+        ],
+        "finished_at": "2026-07-10T15:08:00.179492+00:00",
+        "heartbeat_at": "2026-07-10T15:08:00.179492+00:00",
+        "id": "229a2a94-a8d1-4b15-8368-6fae49d57bd7",
+        "market": "CN",
+        "parent_run_id": null,
+        "phase": "completed",
+        "phase_total": 50,
+        "processed_count": 150,
+        "provider": "akshare",
+        "retry": {
+          "daily_bars": [],
+          "fundamentals": [],
+          "technical_indicators": []
+        },
+        "run_kind": "canary",
+        "safety": {
+          "no_automated_trading": true,
+          "no_silent_provider_fallback": true,
+          "research_signal_only": true
+        },
+        "scope_symbols": [
+          "920000",
+          "920001",
+          "920002",
+          "920003",
+          "920005",
+          "920006",
+          "920007",
+          "920008",
+          "920009",
+          "920010",
+          "920011",
+          "920012",
+          "920014",
+          "920015",
+          "920016",
+          "920017",
+          "920018",
+          "600000",
+          "600004",
+          "600006",
+          "600007",
+          "600008",
+          "600009",
+          "600010",
+          "600011",
+          "600012",
+          "600015",
+          "600016",
+          "600017",
+          "600018",
+          "600019",
+          "600020",
+          "600021",
+          "600022",
+          "000001",
+          "000002",
+          "000004",
+          "000006",
+          "000007",
+          "000008",
+          "000009",
+          "000010",
+          "000011",
+          "000012",
+          "000014",
+          "000016",
+          "000017",
+          "000019",
+          "000020",
+          "000021"
+        ],
+        "shard_count": null,
+        "shard_index": null,
+        "source_stats": {
+          "akshare.stock_zh_a_daily": {
+            "attempted": 50,
+            "selected": 50
+          },
+          "akshare.stock_zh_a_hist": {
+            "attempted": 3,
+            "failed": 3,
+            "skipped_circuit_open": 47
+          }
+        },
+        "start_date": "2025-01-10",
+        "status": "succeeded",
+        "task_run_id": "7e3482dc-f9c1-447b-9aca-675ba49c28e0",
+        "universe_as_of": "2026-07-10T15:04:47.723438+00:00",
+        "universe_sync_id": "dec5deeb-a977-4443-8c8d-b2616035ebf0",
+        "updated_at": "2026-07-10T15:08:00.179492+00:00"
+      },
+      "started_at": "2026-07-10T15:04:50.376105+00:00",
+      "status": "succeeded",
+      "task_name": "ingestion.backfill_a_share_research_evidence"
+    }
+  },
+  "corporate_actions": {
+    "batches": [
+      {
+        "duration_ms": 2730,
+        "error_type": null,
+        "finished_at": "2026-07-10T15:08:06.989291+00:00",
+        "heartbeat_at": "2026-07-10T15:08:06.986239+00:00",
+        "id": "c2ddb12f-98ac-4a79-9b71-4e8a5ed09a99",
+        "result_json": {
+          "batch_size": 25,
+          "complete": false,
+          "cursor": 0,
+          "diagnostics": [
+            {
+              "code": "RIGHTS_ALLOTMENT_SYMBOL_FAILED",
+              "details": {
+                "exception_type": "KeyError",
+                "symbol": "000030"
+              },
+              "message": "A symbol-level rights-allotment provider request failed."
+            }
+          ],
+          "event_results": [
+            {
+              "diagnostics": [],
+              "event_type": "dividend_bonus",
+              "item_count": 0,
+              "source": "akshare.stock_fhps_em",
+              "status": "ok"
+            },
+            {
+              "diagnostics": [
+                {
+                  "code": "RIGHTS_ALLOTMENT_SYMBOL_FAILED",
+                  "details": {
+                    "exception_type": "KeyError",
+                    "symbol": "000030"
+                  },
+                  "message": "A symbol-level rights-allotment provider request failed."
+                }
+              ],
+              "event_type": "rights_allotment",
+              "item_count": 0,
+              "source": "akshare.stock_allotment_cninfo",
+              "status": "unavailable"
+            }
+          ],
+          "event_types": [
+            "dividend_bonus",
+            "rights_allotment"
+          ],
+          "evidence": {
+            "diagnostics": [
+              {
+                "code": "RIGHTS_ALLOTMENT_SYMBOL_FAILED",
+                "details": {
+                  "exception_type": "KeyError",
+                  "symbol": "000030"
+                },
+                "message": "A symbol-level rights-allotment provider request failed."
+              }
+            ],
+            "event_results": [
+              {
+                "data_mode": "delayed",
+                "event_type": "dividend_bonus",
+                "inserted": 0,
+                "provider_status": "ok",
+                "skipped": 0,
+                "source_count": 0,
+                "status": "skipped",
+                "updated": 0
+              },
+              {
+                "data_mode": "delayed",
+                "event_type": "rights_allotment",
+                "inserted": 0,
+                "provider_status": "unavailable",
+                "skipped": 0,
+                "source_count": 0,
+                "status": "skipped",
+                "updated": 0
+              }
+            ],
+            "event_types": [
+              "dividend_bonus",
+              "rights_allotment"
+            ],
+            "imported_at": "2026-07-10T15:08:06.985007+00:00",
+            "inserted": 0,
+            "market": "CN",
+            "provider": "akshare",
+            "safety": {
+              "no_automated_trading": true,
+              "no_buy_sell_hold": true,
+              "not_investment_advice": true,
+              "persisted_rows_only": true
+            },
+            "skipped": 0,
+            "status": "degraded",
+            "trade_date": "2026-06-30",
+            "updated": 0
+          },
+          "market": "CN",
+          "next_cursor": 25,
+          "processed_symbol_count": 25,
+          "progress": {
+            "current": 3,
+            "message": "Corporate-action evidence batch completed.",
+            "phase": "completed",
+            "total": 3
+          },
+          "provider": "akshare",
+          "report_period": "2026-06-30",
+          "retry": {
+            "cursor": 0,
+            "degraded_event_types": [],
+            "failed_event_types": [
+              "rights_allotment"
+            ],
+            "failed_symbols": [
+              "000030"
+            ],
+            "next_cursor": 25
+          },
+          "safety": {
+            "no_automated_trading": true,
+            "not_investment_advice": true,
+            "persisted_rows_only": true
+          },
+          "status": "partial",
+          "symbols": [
+            "000001",
+            "000002",
+            "000004",
+            "000006",
+            "000007",
+            "000008",
+            "000009",
+            "000010",
+            "000011",
+            "000012",
+            "000014",
+            "000016",
+            "000017",
+            "000019",
+            "000020",
+            "000021",
+            "000025",
+            "000026",
+            "000027",
+            "000028",
+            "000029",
+            "000030",
+            "000031",
+            "000032",
+            "000034"
+          ],
+          "total_symbols": 5530
+        },
+        "started_at": "2026-07-10T15:08:04.258310+00:00",
+        "status": "succeeded",
+        "task_name": "ingestion.sync_corporate_actions"
+      },
+      {
+        "duration_ms": 2602,
+        "error_type": null,
+        "finished_at": "2026-07-10T15:08:10.921798+00:00",
+        "heartbeat_at": "2026-07-10T15:08:10.918778+00:00",
+        "id": "26d2f6cf-4439-4904-8a38-c74ef5ccf702",
+        "result_json": {
+          "batch_size": 25,
+          "complete": false,
+          "cursor": 25,
+          "diagnostics": [],
+          "event_results": [
+            {
+              "diagnostics": [],
+              "event_type": "dividend_bonus",
+              "item_count": 0,
+              "source": "akshare.stock_fhps_em",
+              "status": "ok"
+            },
+            {
+              "diagnostics": [],
+              "event_type": "rights_allotment",
+              "item_count": 0,
+              "source": "akshare.stock_allotment_cninfo",
+              "status": "ok"
+            }
+          ],
+          "event_types": [
+            "dividend_bonus",
+            "rights_allotment"
+          ],
+          "evidence": {
+            "diagnostics": [],
+            "event_results": [
+              {
+                "data_mode": "delayed",
+                "event_type": "dividend_bonus",
+                "inserted": 0,
+                "provider_status": "ok",
+                "skipped": 0,
+                "source_count": 0,
+                "status": "skipped",
+                "updated": 0
+              },
+              {
+                "data_mode": "delayed",
+                "event_type": "rights_allotment",
+                "inserted": 0,
+                "provider_status": "ok",
+                "skipped": 0,
+                "source_count": 0,
+                "status": "skipped",
+                "updated": 0
+              }
+            ],
+            "event_types": [
+              "dividend_bonus",
+              "rights_allotment"
+            ],
+            "imported_at": "2026-07-10T15:08:10.917638+00:00",
+            "inserted": 0,
+            "market": "CN",
+            "provider": "akshare",
+            "safety": {
+              "no_automated_trading": true,
+              "no_buy_sell_hold": true,
+              "not_investment_advice": true,
+              "persisted_rows_only": true
+            },
+            "skipped": 0,
+            "status": "degraded",
+            "trade_date": "2026-06-30",
+            "updated": 0
+          },
+          "market": "CN",
+          "next_cursor": 50,
+          "processed_symbol_count": 25,
+          "progress": {
+            "current": 3,
+            "message": "Corporate-action evidence batch completed.",
+            "phase": "completed",
+            "total": 3
+          },
+          "provider": "akshare",
+          "report_period": "2026-06-30",
+          "retry": {
+            "cursor": 25,
+            "degraded_event_types": [],
+            "failed_event_types": [],
+            "failed_symbols": [],
+            "next_cursor": 50
+          },
+          "safety": {
+            "no_automated_trading": true,
+            "not_investment_advice": true,
+            "persisted_rows_only": true
+          },
+          "status": "degraded",
+          "symbols": [
+            "000035",
+            "000036",
+            "000037",
+            "000039",
+            "000042",
+            "000045",
+            "000048",
+            "000049",
+            "000050",
+            "000055",
+            "000056",
+            "000058",
+            "000059",
+            "000060",
+            "000061",
+            "000062",
+            "000063",
+            "000065",
+            "000066",
+            "000068",
+            "000069",
+            "000070",
+            "000078",
+            "000088",
+            "000089"
+          ],
+          "total_symbols": 5530
+        },
+        "started_at": "2026-07-10T15:08:08.319249+00:00",
+        "status": "succeeded",
+        "task_name": "ingestion.sync_corporate_actions"
+      }
+    ],
+    "replay": {
+      "duration_ms": 3029,
+      "error_type": null,
+      "finished_at": "2026-07-10T15:08:15.433943+00:00",
+      "heartbeat_at": "2026-07-10T15:08:15.431175+00:00",
+      "id": "4fa616d3-611f-4d8c-b2ba-2a439499c598",
+      "result_json": {
+        "batch_size": 25,
+        "complete": false,
+        "cursor": 0,
+        "diagnostics": [],
+        "event_results": [
+          {
+            "diagnostics": [],
+            "event_type": "dividend_bonus",
+            "item_count": 0,
+            "source": "akshare.stock_fhps_em",
+            "status": "ok"
+          },
+          {
+            "diagnostics": [],
+            "event_type": "rights_allotment",
+            "item_count": 0,
+            "source": "akshare.stock_allotment_cninfo",
+            "status": "ok"
+          }
+        ],
+        "event_types": [
+          "dividend_bonus",
+          "rights_allotment"
+        ],
+        "evidence": {
+          "diagnostics": [],
+          "event_results": [
+            {
+              "data_mode": "delayed",
+              "event_type": "dividend_bonus",
+              "inserted": 0,
+              "provider_status": "ok",
+              "skipped": 0,
+              "source_count": 0,
+              "status": "skipped",
+              "updated": 0
+            },
+            {
+              "data_mode": "delayed",
+              "event_type": "rights_allotment",
+              "inserted": 0,
+              "provider_status": "ok",
+              "skipped": 0,
+              "source_count": 0,
+              "status": "skipped",
+              "updated": 0
+            }
+          ],
+          "event_types": [
+            "dividend_bonus",
+            "rights_allotment"
+          ],
+          "imported_at": "2026-07-10T15:08:15.430327+00:00",
+          "inserted": 0,
+          "market": "CN",
+          "provider": "akshare",
+          "safety": {
+            "no_automated_trading": true,
+            "no_buy_sell_hold": true,
+            "not_investment_advice": true,
+            "persisted_rows_only": true
+          },
+          "skipped": 0,
+          "status": "degraded",
+          "trade_date": "2026-06-30",
+          "updated": 0
+        },
+        "market": "CN",
+        "next_cursor": 25,
+        "processed_symbol_count": 25,
+        "progress": {
+          "current": 3,
+          "message": "Corporate-action evidence batch completed.",
+          "phase": "completed",
+          "total": 3
+        },
+        "provider": "akshare",
+        "report_period": "2026-06-30",
+        "retry": {
+          "cursor": 0,
+          "degraded_event_types": [],
+          "failed_event_types": [],
+          "failed_symbols": [],
+          "next_cursor": 25
+        },
+        "safety": {
+          "no_automated_trading": true,
+          "not_investment_advice": true,
+          "persisted_rows_only": true
+        },
+        "status": "degraded",
+        "symbols": [
+          "000001",
+          "000002",
+          "000004",
+          "000006",
+          "000007",
+          "000008",
+          "000009",
+          "000010",
+          "000011",
+          "000012",
+          "000014",
+          "000016",
+          "000017",
+          "000019",
+          "000020",
+          "000021",
+          "000025",
+          "000026",
+          "000027",
+          "000028",
+          "000029",
+          "000030",
+          "000031",
+          "000032",
+          "000034"
+        ],
+        "total_symbols": 5530
+      },
+      "started_at": "2026-07-10T15:08:12.404530+00:00",
+      "status": "succeeded",
+      "task_name": "ingestion.sync_corporate_actions"
+    },
+    "report_period": "2026-06-30"
+  },
+  "coverage": {
+    "as_of": "2026-07-10",
+    "evidence": {
+      "daily_bars": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.05198776758409786,
+            "ready_count": 17,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.007365684575389948,
+            "ready_count": 17,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.005526770293609672,
+            "ready_count": 16,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.009041591320072333,
+        "missing_count": 5480,
+        "passes_threshold": false,
+        "ready_count": 50,
+        "source_distribution": [
+          {
+            "instrument_count": 50,
+            "provider": "akshare",
+            "row_count": 16424,
+            "source": "akshare.stock_zh_a_daily"
+          }
+        ],
+        "threshold": 0.95,
+        "total_count": 5530
+      },
+      "fundamentals": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.05198776758409786,
+            "ready_count": 17,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.007365684575389948,
+            "ready_count": 17,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.004835924006908463,
+            "ready_count": 14,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.00867992766726944,
+        "missing_count": 5482,
+        "passes_threshold": false,
+        "ready_count": 48,
+        "threshold": 0.8,
+        "total_count": 5530
+      },
+      "technical_indicators": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.05198776758409786,
+            "ready_count": 17,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.007365684575389948,
+            "ready_count": 17,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.005526770293609672,
+            "ready_count": 16,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.009041591320072333,
+        "missing_count": 5480,
+        "passes_threshold": false,
+        "ready_count": 50,
+        "threshold": 0.9,
+        "total_count": 5530
+      }
+    },
+    "latest_run": {
+      "cursor": 50,
+      "daily_bar_policy": "cn_resilient",
+      "diagnostics": [],
+      "finished_at": "2026-07-10T15:08:00.179492+00:00",
+      "heartbeat_at": "2026-07-10T15:08:00.179492+00:00",
+      "id": "229a2a94-a8d1-4b15-8368-6fae49d57bd7",
+      "phase": "completed",
+      "phase_total": 50,
+      "processed_count": 150,
+      "retry": {
+        "daily_bars": {
+          "count": 0,
+          "preview": []
+        },
+        "fundamentals": {
+          "count": 0,
+          "preview": []
+        },
+        "technical_indicators": {
+          "count": 0,
+          "preview": []
+        }
+      },
+      "run_kind": "canary",
+      "source_stats": {
+        "akshare.stock_zh_a_daily": {
+          "attempted": 50,
+          "selected": 50
+        },
+        "akshare.stock_zh_a_hist": {
+          "attempted": 3,
+          "failed": 3,
+          "skipped_circuit_open": 47
+        }
+      },
+      "status": "succeeded",
+      "task_run_id": "7e3482dc-f9c1-447b-9aca-675ba49c28e0"
+    },
+    "market": "CN",
+    "provider": "akshare",
+    "status": "needs_attention",
+    "thresholds": {
+      "daily_bars": 0.95,
+      "fundamentals": 0.8,
+      "technical_indicators": 0.9
+    },
+    "universe": {
+      "active_count": 5530,
+      "exchange_counts": {
+        "BSE": 327,
+        "SSE": 2308,
+        "SZSE": 2895
+      }
+    }
+  },
+  "discoveries": [
+    {
+      "coverage": {
+        "candidate_count": 5530,
+        "evaluated_count": 5530,
+        "evidence": {
+          "daily_bars": {
+            "available_count": 50,
+            "coverage_ratio": 0.009,
+            "missing_count": 5480,
+            "required": true
+          },
+          "fundamentals": {
+            "available_count": 48,
+            "coverage_ratio": 0.0087,
+            "missing_count": 5482,
+            "required": true
+          },
+          "news_sentiment": {
+            "available_count": 0,
+            "coverage_ratio": 0.0,
+            "missing_count": 5530,
+            "required": false
+          },
+          "technical_indicators": {
+            "available_count": 50,
+            "coverage_ratio": 0.009,
+            "missing_count": 5480,
+            "required": true
+          }
+        },
+        "matched_count": 4,
+        "returned_count": 4
+      },
+      "model": {
+        "fallback_reason": "LLM explanation was disabled for this request.",
+        "name": "deterministic-stock-discovery-v1",
+        "provider": "deterministic",
+        "used_llm": false
+      },
+      "profile_id": "balanced_research",
+      "stable": true,
+      "symbols": [
+        "920017",
+        "920002",
+        "600018",
+        "000021"
+      ]
+    },
+    {
+      "coverage": {
+        "candidate_count": 5530,
+        "evaluated_count": 5530,
+        "evidence": {
+          "daily_bars": {
+            "available_count": 50,
+            "coverage_ratio": 0.009,
+            "missing_count": 5480,
+            "required": true
+          },
+          "fundamentals": {
+            "available_count": 48,
+            "coverage_ratio": 0.0087,
+            "missing_count": 5482,
+            "required": true
+          },
+          "news_sentiment": {
+            "available_count": 0,
+            "coverage_ratio": 0.0,
+            "missing_count": 5530,
+            "required": false
+          },
+          "technical_indicators": {
+            "available_count": 50,
+            "coverage_ratio": 0.009,
+            "missing_count": 5480,
+            "required": true
+          }
+        },
+        "matched_count": 6,
+        "returned_count": 6
+      },
+      "model": {
+        "fallback_reason": "LLM explanation was disabled for this request.",
+        "name": "deterministic-stock-discovery-v1",
+        "provider": "deterministic",
+        "used_llm": false
+      },
+      "profile_id": "quality_value",
+      "stable": true,
+      "symbols": [
+        "920017",
+        "920005",
+        "920002",
+        "600020",
+        "600018",
+        "000010"
+      ]
+    },
+    {
+      "coverage": {
+        "candidate_count": 5530,
+        "evaluated_count": 5530,
+        "evidence": {
+          "daily_bars": {
+            "available_count": 50,
+            "coverage_ratio": 0.009,
+            "missing_count": 5480,
+            "required": true
+          },
+          "fundamentals": {
+            "available_count": 48,
+            "coverage_ratio": 0.0087,
+            "missing_count": 5482,
+            "required": true
+          },
+          "news_sentiment": {
+            "available_count": 0,
+            "coverage_ratio": 0.0,
+            "missing_count": 5530,
+            "required": false
+          },
+          "technical_indicators": {
+            "available_count": 50,
+            "coverage_ratio": 0.009,
+            "missing_count": 5480,
+            "required": true
+          }
+        },
+        "matched_count": 8,
+        "returned_count": 8
+      },
+      "model": {
+        "fallback_reason": "LLM explanation was disabled for this request.",
+        "name": "deterministic-stock-discovery-v1",
+        "provider": "deterministic",
+        "used_llm": false
+      },
+      "profile_id": "trend_liquidity",
+      "stable": true,
+      "symbols": [
+        "920017",
+        "920015",
+        "600018",
+        "600015",
+        "600012",
+        "000021",
+        "000017",
+        "000002"
+      ]
+    }
+  ],
+  "metadata": {
+    "akshare": "1.18.64",
+    "alembic_head": "0016_daily_bar_provenance (head)",
+    "commit": "58e8a9158cd94381c19274d085623367b6b2b25c",
+    "git_status": "clean",
+    "market": "CN",
+    "provider": "akshare",
+    "python": "3.13.7",
+    "recorded_at": "2026-07-10T15:08:16.515792+00:00"
+  },
+  "preflight": {
+    "checks": [
+      {
+        "details": [
+          "provider=akshare",
+          "market=CN",
+          "instrument_count=5530",
+          "exchange_counts=BSE:327,SSE:2308,SZSE:2895",
+          "database_writes=none"
+        ],
+        "message": "akshare returned a complete CN universe with 5530 instruments.",
+        "name": "provider universe readiness",
+        "status": "OK",
+        "suggestions": []
+      },
+      {
+        "details": [
+          "effective_provider=akshare",
+          "source=akshare.stock_zh_a_daily",
+          "row_count=11",
+          "fallback_used=true",
+          "attempt=akshare.stock_zh_a_hist:failed",
+          "attempt=akshare.stock_zh_a_daily:selected"
+        ],
+        "message": "Explicit daily-bar source policy returned usable rows.",
+        "name": "akshare CN resilient daily bars",
+        "status": "OK",
+        "suggestions": []
+      }
+    ],
+    "daily_bar_policy": "cn_resilient",
+    "database_writes": "none",
+    "status": "passed"
+  },
+  "runtime": {
+    "app_env": "acceptance",
+    "celery_timezone": "Asia/Shanghai",
+    "database_name": "stock_acceptance",
+    "status": "ok"
+  },
+  "status": "passed",
+  "universe": {
+    "active_instrument_count": 5530,
+    "exchange_counts": {
+      "BSE": 327,
+      "SSE": 2308,
+      "SZSE": 2895
+    },
+    "latest_sync": {
+      "as_of": "2026-07-10T15:04:47.723438+00:00",
+      "availability": {
+        "reason": null,
+        "row_count": 5530,
+        "status": "ok"
+      },
+      "created_at": "2026-07-10T15:04:47.943059+00:00",
+      "deactivated_count": 0,
+      "diagnostics": [],
+      "id": "dec5deeb-a977-4443-8c8d-b2616035ebf0",
+      "inserted_count": 5530,
+      "market": "CN",
+      "provider": "akshare",
+      "reactivated_count": 0,
+      "skipped_count": 0,
+      "source": "akshare.stock_info_a_code_name",
+      "status": "ok",
+      "total_count": 5530,
+      "unchanged_count": 0,
+      "updated_count": 0
+    },
+    "managed_instrument_count": 5530,
+    "status": "ok"
+  },
+  "universe_task": {
+    "duration_ms": 7627,
+    "error_type": null,
+    "finished_at": "2026-07-10T15:04:48.422529+00:00",
+    "heartbeat_at": "2026-07-10T15:04:40.856911+00:00",
+    "id": "12d9005e-f15b-42a8-ac4c-8fc403b37b0e",
+    "result_json": {
+      "counts": {
+        "deactivated_count": 0,
+        "inserted_count": 5530,
+        "reactivated_count": 0,
+        "skipped_count": 0,
+        "total_count": 5530,
+        "unchanged_count": 0,
+        "updated_count": 0
+      },
+      "diagnostics": [],
+      "is_complete": true,
+      "market": "CN",
+      "progress": {
+        "current": 2,
+        "message": "Instrument universe synchronization completed.",
+        "phase": "completed",
+        "total": 2
+      },
+      "provider": "akshare",
+      "safety": {
+        "failed_refresh_preserves_last_good_universe": true,
+        "no_automated_trading": true
+      },
+      "source": "akshare.stock_info_a_code_name",
+      "status": "ok",
+      "sync": {
+        "as_of": "2026-07-10T15:04:47.723438+00:00",
+        "availability": {
+          "reason": null,
+          "row_count": 5530,
+          "status": "ok"
+        },
+        "created_at": "2026-07-10T15:04:47.943059+00:00",
+        "deactivated_count": 0,
+        "diagnostics": [],
+        "id": "dec5deeb-a977-4443-8c8d-b2616035ebf0",
+        "inserted_count": 5530,
+        "market": "CN",
+        "provider": "akshare",
+        "reactivated_count": 0,
+        "skipped_count": 0,
+        "source": "akshare.stock_info_a_code_name",
+        "status": "ok",
+        "total_count": 5530,
+        "unchanged_count": 0,
+        "updated_count": 0
+      }
+    },
+    "started_at": "2026-07-10T15:04:40.794646+00:00",
+    "status": "succeeded",
+    "task_name": "ingestion.sync_instrument_universe"
+  }
+}

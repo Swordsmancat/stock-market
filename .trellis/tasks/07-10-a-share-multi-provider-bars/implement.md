@@ -27,7 +27,7 @@
 - [x] Run focused/full Web tests, TypeScript, and locale JSON parsing.
 - [x] Run Trellis check and update executable provider/A-share specs.
 - [x] Commit implementation before live network execution (`1d34b63`).
-- [ ] Run read-only source probes and a guarded three-exchange canary; do not start full baseline until the canary is usable.
+- [x] Run read-only source probes and a guarded three-exchange canary; do not start full baseline until the canary is usable.
 
 ## Risk and rollback points
 
