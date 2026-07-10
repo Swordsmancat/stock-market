@@ -1398,3 +1398,36 @@ Added research-only AkShare-backed Dragon Tiger List and block-trade market dail
 ### Next Steps
 
 - None - task complete
+
+
+## Session 43: Persist market daily evidence
+
+**Date**: 2026-07-10
+**Task**: Persist market daily evidence
+**Branch**: `master`
+
+### Summary
+
+Integrated persisted market-daily evidence for fund flow, limit-up reasons, dragon-tiger data, block trades, and hot sectors; added guarded citations, assistant and dashboard consumers, Evidence Center refresh UI, migration, API, tests, and contracts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d9f9b51` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
