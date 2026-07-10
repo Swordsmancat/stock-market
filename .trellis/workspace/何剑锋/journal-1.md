@@ -1467,3 +1467,37 @@ Integrated failure-safe full A-share universe sync, bulk deterministic screening
 ### Next Steps
 
 - None - task complete
+
+
+## Session 45: Resumable A-share evidence backfill
+
+**Date**: 2026-07-10
+**Task**: Resumable A-share evidence backfill
+**Branch**: `master`
+
+### Summary
+
+Implemented durable full-market A-share evidence backfills with TaskRun heartbeats, deterministic checkpoints, retry/cancel flows, AkShare error classification, constant-query coverage gates, API/worker dispatch, and Asia/Shanghai incremental schedules; 542 backend tests passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bc69487` | (see git log) |
+| `014b2cf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
