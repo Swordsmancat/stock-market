@@ -15,7 +15,7 @@
   `apps/api/routers/sectors.py`, Next route proxies under
   `apps/web/app/api/market-daily-data/**`, and the AI Research Desk panel.
 - Non-goals: InStock runtime imports, proxy/cookie workflows, Tornado UI, MySQL
-  table import, scheduler import, durable citation rows, trading
+  table import, scheduler import, direct citation of live rows, trading
   recommendations, order intents, broker calls, or automatic trading.
 
 ### 2. Signatures
@@ -74,9 +74,10 @@
   that case rows may be shown as limit-up pool context only, with
   `status="degraded"` and `provider_capabilities.limit_up_reasons.status`
   set to `unavailable`.
-- Live provider rows are not assistant citations in this phase. They become
-  citable only after a future persistence slice stores reviewed local evidence
-  with stable IDs.
+- Live provider rows are not assistant citations. The separate
+  `market-daily-evidence-contract.md` workflow may persist eligible
+  `live|delayed` normalized rows; only those stored rows can emit stable
+  `market_daily_event:*` citation IDs.
 
 ### 4. Validation & Error Matrix
 
@@ -140,8 +141,7 @@
 citations.append({"id": "akshare:limit_up:002001:latest", "source": "akshare"})
 ```
 
-This cites a live provider row before the platform has stored reviewed local
-evidence.
+This cites a live provider row before the platform has stored local evidence.
 
 #### Correct
 

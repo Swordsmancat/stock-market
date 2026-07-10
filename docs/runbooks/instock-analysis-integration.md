@@ -34,6 +34,12 @@ runtime dependency.
 - Implemented feature: provider-backed A-share limit-up pool/reason context API with explicit degraded states when the provider does not expose reason fields.
 - Implemented feature: provider-backed A-share Dragon Tiger List context API.
 - Implemented feature: provider-backed A-share block-trade context API.
+- Implemented feature: persisted market daily evidence for stock fund flow,
+  limit-up context, Dragon Tiger List, block trades, and hot sectors.
+- Implemented feature: stable stored citation IDs shaped as
+  `market_daily_event:<event_type>:<identity>:<trade_date>`.
+- Implemented feature: Evidence Center stored-evidence summary and manual
+  "refresh today's market evidence" action.
 - Rule set: `candlestick_patterns_v1`.
 - CYQ rule set: `chip_distribution_v1`.
 - Composite stock selection rule set: `instock_composite_selection_v1`.
@@ -100,13 +106,15 @@ source metadata.
 `GET /market-daily-data/limit-up-reasons`,
 `GET /market-daily-data/dragon-tiger-list`,
 `GET /market-daily-data/block-trades`, and provider-backed `GET /sectors/hot`
-rows are live/delayed provider context only in this phase. They are not
-persisted local evidence and must not be emitted as assistant citations until a
-future storage and review contract adds stable evidence IDs. Limit-up rows from
-AkShare may be degraded pool context when no provider reason field is available;
-do not fabricate reason text. Dragon Tiger List and block-trade rows may omit
-optional seat, rank, buyer/seller, discount, or amount fields; keep those values
-null rather than inferring them.
+rows remain live/delayed provider context and are never citations by themselves.
+`POST /market-daily-evidence/import` may persist eligible provider-normalized
+`live|delayed` rows; only the resulting `MarketDailyEvidenceEvent` records with
+`is_citable=true` can be emitted as `market_daily_event:*` citations. Mock,
+static, unavailable, empty, and provider-error payloads remain non-citable.
+Limit-up rows from AkShare may be degraded pool context when no provider reason
+field is available; do not fabricate reason text. Dragon Tiger List and
+block-trade rows may omit optional seat, rank, buyer/seller, discount, or amount
+fields; keep those values null rather than inferring them.
 
 ## Extension Notes
 
@@ -238,8 +246,51 @@ GET /market-daily-data/block-trades?date=2026-07-09&market=CN&limit=50&provider=
 The first provider path is AkShare's Eastmoney block-trade daily detail
 function for A-share rows. The payload includes trade price, close price,
 discount/premium, volume, amount, buyer, seller, and source metadata when
-available. Do not treat block-trade rows as order intent, broker instruction, or
-assistant-citable evidence in this non-persistent phase.
+available. Do not treat live block-trade rows as order intent, broker
+instruction, or assistant-citable evidence before persistence.
+
+## Persisted Market Daily Evidence
+
+Use the manual import API to store today's default market daily event set:
+
+```text
+POST /market-daily-evidence/import
+{
+  "market": "CN",
+  "provider": "akshare",
+  "event_types": [
+    "stock_fund_flow",
+    "limit_up_reason",
+    "dragon_tiger_list",
+    "block_trade",
+    "hot_sector"
+  ],
+  "limit": 20
+}
+```
+
+List stored evidence and stable citations with:
+
+```text
+GET /market-daily-evidence?market=CN&citable_only=true&limit=50
+GET /market-daily-evidence?event_type=block_trade&symbol=000001&date=2026-07-10
+```
+
+The table `market_daily_evidence_events` deduplicates on provider, event type,
+normalized identity, market, and trade date. Repeated unchanged rows are
+skipped; changed normalized rows update the same stored evidence identity.
+Block-trade identities include rank or a deterministic row fingerprint so
+multiple same-symbol trades for one date do not collapse.
+
+Only normalized payloads with `status=ok|degraded`, `data_mode=live|delayed`, a
+real provider, and non-empty rows are persisted. Sensitive provider fields are
+removed before JSON storage. Live endpoints, mock/static fixtures, source
+readiness rows, and failed imports never create citation IDs.
+
+The Evidence Center uses the Next proxy at `/api/market-daily-evidence` to show
+stored counts, latest import metadata, recent citation IDs, and the manual
+refresh result. This is a research-evidence action, not a scheduler, historical
+backfill workflow, trading signal, or broker operation.
 
 ## Strategy Screening API
 

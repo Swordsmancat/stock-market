@@ -20,6 +20,7 @@ RESEARCH_BRIEF_CITATION_ID_PREFIXES = (
     "generated_report:",
     "news:",
     "research_source_note:",
+    "market_daily_event:",
 )
 DEFAULT_BRIEF_LIMIT = 20
 MAX_PROMPT_CHARS = 8000
@@ -331,6 +332,12 @@ def _build_source_mix(
             for citation in citations
             if citation.get("source") == "research_source_notes"
             or citation.get("source_type") == "research_source_note"
+        ),
+        "market_daily_citations": sum(
+            1
+            for citation in citations
+            if citation.get("source") == "market_daily_evidence"
+            or citation.get("source_type") == "market_daily_event"
         ),
         "information_source_gaps": len(_extract_source_gaps(information_sources)),
     }

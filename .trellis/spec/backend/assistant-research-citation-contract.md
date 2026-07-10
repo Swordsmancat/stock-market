@@ -23,9 +23,10 @@
 
 - Daily bars remain the core evidence gate. If required market data is unavailable, the assistant must return `no_data` / degraded-safe output and avoid LLM generation.
 - Existing top-level response fields and old minimal citation payloads must remain backward compatible.
-- Evidence may come from existing platform sources only: daily bars, stored technical indicators, stored macro / valuation indicator observations, fundamentals snapshots, news / sentiment payloads, generated reports, and reviewed/citable research source notebook entries.
+- Evidence may come from existing platform sources only: daily bars, stored technical indicators, stored macro / valuation indicator observations, fundamentals snapshots, news / sentiment payloads, generated reports, reviewed/citable research source notebook entries, and persisted/citable `MarketDailyEvidenceEvent` rows.
 - Missing optional sources must produce diagnostics, not fabricated evidence or fake citations.
-- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `market_indicator:{code}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, or `research_source_note:{id}`.
+- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `market_indicator:{code}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, `research_source_note:{id}`, or `market_daily_event:{event_type}:{identity}:{trade_date}`.
+- `market_daily_event:*` citations are allowed only for persisted rows with `is_citable=true`. Live `/market-daily-data/*` and `/sectors/hot` payloads remain non-citable even when their provider status is `ok` or `degraded`.
 - `market_indicator:*` citations are allowed only for stored local macro / valuation observations with value, as-of date, and source metadata. Official source status rows, collection links, seed templates, and missing indicator rows remain guidance or diagnostics only.
 - LLM prompts must list available citation IDs and instruct the model to use only those IDs.
 - LLM output citation IDs must be validated against the payload citations. Unknown IDs must produce `CITATION_UNKNOWN_ID` diagnostics and should fall back to deterministic output when needed.
@@ -40,6 +41,7 @@
 - Source service failure -> sanitized `SOURCE_UNAVAILABLE` diagnostics; no raw secret or stack trace.
 - Draft or non-citable research source notes -> remain collection records; they are not included in allowed assistant citation IDs.
 - Official source readiness/status rows -> remain maintenance guidance; they are not included in allowed assistant citation IDs.
+- Live market daily rows, mock/static sector fixtures, or unknown `market_daily_event:*` IDs -> remain context or diagnostics; they are not accepted as stored evidence citations.
 - LLM returns unknown inline citation ID -> `CITATION_UNKNOWN_ID` diagnostic and degraded/fallback output; unknown citation is not presented as valid.
 - User asks for direct trading instruction -> assistant refuses/reframes per safety policy.
 - Old frontend payload with only `id`, `label`, `source`, `url` citations -> still renders.
@@ -56,10 +58,11 @@
 
 ### 6. Tests Required
 
-- Service/AI tests assert citations are generated for available bars, indicators, stored macro observations, fundamentals, news, generated reports, and reviewed/citable research source notes.
+- Service/AI tests assert citations are generated for available bars, indicators, stored macro observations, fundamentals, news, generated reports, reviewed/citable research source notes, and persisted/citable market daily events.
 - Service tests assert missing optional evidence produces diagnostics rather than fabricated citation items.
 - Service tests assert missing macro observations produce diagnostics rather than fabricated `market_indicator:*` citation items.
 - AI tests assert unknown LLM citation IDs are detected and handled with diagnostics/fallback behavior.
+- AI/dashboard/research-brief tests assert unknown `market_daily_event:*` IDs are rejected and live provider rows never enter the allowed citation list.
 - API tests assert backward compatibility and enriched optional fields.
 - Frontend route/card tests assert citation links, metadata, diagnostic severity/code, and legacy rendering.
 - Safety tests assert direct trading instructions are refused or reframed.

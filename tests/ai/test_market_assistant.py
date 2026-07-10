@@ -367,6 +367,23 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     )
     monkeypatch.setattr(
         market_assistant_service,
+        "list_citable_market_daily_evidence_citations",
+        lambda *args, **kwargs: [
+            {
+                "id": "market_daily_event:hot_sector:semiconductor:2026-01-03",
+                "label": "Hot sector: Semiconductor",
+                "source": "market_daily_evidence",
+                "source_type": "market_daily_event",
+                "as_of": "2026-01-03",
+                "provider": "fake",
+                "retrieved_at": "2026-01-03T13:45:00+00:00",
+                "excerpt": "Semiconductor sector fund-flow context is stored locally.",
+                "metadata": {"event_type": "hot_sector", "market": "CN"},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
         "get_platform_settings",
         lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
     )
@@ -387,10 +404,12 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     assert "news" in citations_by_source_type
     assert "generated_report" in citations_by_source_type
     assert "research_source_note" in citations_by_source_type
+    assert "market_daily_event" in citations_by_source_type
     assert citations_by_source_type["news"]["url"] == "https://example.com/aapl-services"
     assert citations_by_source_type["generated_report"]["id"] == "generated_report:11111111-1111-1111-1111-111111111111"
     assert citations_by_source_type["research_source_note"]["id"].startswith("research_source_note:")
     assert "Reviewed source notebook entries available" in payload["context"]["research_summary"]
+    assert "Stored market daily evidence available" in payload["context"]["market_daily_summary"]
 
 
 def test_market_assistant_includes_only_reviewed_citable_source_notes(monkeypatch):
@@ -514,7 +533,7 @@ def test_market_assistant_includes_only_reviewed_citable_source_notes(monkeypatc
 def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):
     class HallucinatingProvider:
         def generate(self, prompt: str) -> str:
-            return "### Summary\nUnsupported claim [news:AAPL:unknown]."
+            return "### Summary\nUnsupported claim [market_daily_event:hot_sector:invented:2026-01-03]."
 
     monkeypatch.setattr(
         market_assistant_service,
@@ -552,7 +571,12 @@ def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):
     assert payload["status"] == "degraded"
     assert payload["model"]["used_llm"] is False
     assert payload["model"]["fallback_reason"] == "LLM citation validation failed: unknown citation id."
-    assert any(diagnostic.get("code") == "CITATION_UNKNOWN_ID" for diagnostic in payload["diagnostics"])
+    citation_diagnostic = next(
+        diagnostic for diagnostic in payload["diagnostics"] if diagnostic.get("code") == "CITATION_UNKNOWN_ID"
+    )
+    assert citation_diagnostic["details"]["unknown_ids"] == [
+        "market_daily_event:hot_sector:invented:2026-01-03"
+    ]
 
 
 def test_market_assistant_detects_unknown_macro_indicator_llm_citation_ids(monkeypatch):

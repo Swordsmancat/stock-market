@@ -70,6 +70,8 @@
 
 证据中心还提供“已保存研究摘要收件箱”。当你完成来源复核、seed 准备或 follow-up 问题整理后，可以点击生成并保存摘要。系统会基于当前 Evidence Center 上下文生成一条持久研究记录，保存 markdown 摘要、允许引用的本地 citation、来源缺口、follow-up 摘要、diagnostics、model metadata 和 safety flags。该摘要与个股 `GeneratedReport` 分开存储，定位是宏观/来源/证据研究记录，而不是单标的交易报告。
 
+证据中心现在也提供“已存储的每日市场证据”。点击“刷新今日市场证据”后，系统会尝试导入个股资金流、涨停背景、龙虎榜、大宗交易和热门板块数据，并显示新增、更新、跳过数量以及经过清洗的诊断信息。只有成功落库的 `live` / `delayed` 供应商标准化记录会生成 `market_daily_event:<event_type>:<identity>:<trade_date>` 引用；实时接口响应、mock/static 数据、空结果和失败结果都不会直接变成 AI 证据。该入口仅用于研究证据整理，不是定时任务、历史回填、交易信号或自动交易功能。
+
 如果已配置 OpenAI-compatible LLM 和 API key，研究摘要会调用模型；如果未配置、调用失败、返回空内容或引用了未知 citation ID，系统会保存 deterministic fallback。无论哪种模式，摘要只能引用已存在的本地 allowed citation；source-readiness 链接、seed 模板、草稿笔记、浏览器上传建议和未导入 observation 仍然只能作为数据缺口或研究问题。
 
 证据中心的安全边界与首页一致：它用于信息汇总、缺口追踪和 AI 研究摘要，不输出买入、卖出、持有、目标价、仓位或执行建议。

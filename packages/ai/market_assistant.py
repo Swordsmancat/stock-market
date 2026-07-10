@@ -86,6 +86,7 @@ class MarketAssistantPromptContext:
     fundamental_summary: str
     news_summary: str
     macro_summary: str = "No macro indicator context was loaded."
+    market_daily_summary: str = "No stored market daily evidence was loaded."
     research_summary: str = "No generated research reports were loaded."
     citations: list[MarketAssistantCitation] = field(default_factory=list)
     diagnostics: list[dict[str, object]] = field(default_factory=list)
@@ -130,6 +131,7 @@ def build_market_assistant_prompt(context: MarketAssistantPromptContext) -> str:
         f"Price context: {context.price_summary}\n"
         f"Technical indicators: {context.indicator_summary}\n"
         f"Macro context: {context.macro_summary}\n"
+        f"Stored market daily evidence: {context.market_daily_summary}\n"
         f"Fundamentals: {context.fundamental_summary}\n"
         f"News sentiment: {context.news_summary}\n"
         f"Research reports: {context.research_summary}\n"
@@ -216,6 +218,7 @@ def _build_english_deterministic_answer(context: MarketAssistantPromptContext) -
         f"- Price: {context.price_summary}\n"
         f"- Technical indicators: {context.indicator_summary}\n"
         f"- Macro context: {context.macro_summary}\n"
+        f"- Stored market daily evidence: {context.market_daily_summary}\n"
         f"- Fundamentals: {context.fundamental_summary}\n"
         f"- News: {context.news_summary}\n"
         f"- Research reports: {context.research_summary}\n"

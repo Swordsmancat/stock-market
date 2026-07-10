@@ -30,6 +30,11 @@ import {
   type OfficialMacroRefreshActionsLabels,
 } from "@/components/official-macro-refresh-actions";
 import {
+  MarketDailyEvidencePanel,
+  type MarketDailyEvidencePanelLabels,
+  type MarketDailyEvidencePayload,
+} from "@/components/market-daily-evidence-panel";
+import {
   ResearchSourceNotebook,
   type ResearchSourceNotebookLabels,
   type ResearchSourceNote,
@@ -82,6 +87,10 @@ type ResearchSourceNotesLoadResult =
 type ResearchBriefsLoadResult =
   | { status: "loaded"; items: ResearchBriefPayload[] }
   | { status: "failed"; items: [] };
+
+type MarketDailyEvidenceLoadResult =
+  | { status: "loaded"; payload: MarketDailyEvidencePayload }
+  | { status: "failed"; payload: null };
 
 type OfficialMacroSourceStatusLoadResult =
   | { status: "loaded"; payload: OfficialMacroSourceStatusPayload }
@@ -210,6 +219,24 @@ async function fetchResearchBriefs(): Promise<ResearchBriefsLoadResult> {
     };
   } catch {
     return { status: "failed", items: [] };
+  }
+}
+
+async function fetchMarketDailyEvidence(): Promise<MarketDailyEvidenceLoadResult> {
+  try {
+    const response = await backendFetch(
+      "/market-daily-evidence?limit=12&citable_only=true",
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return { status: "failed", payload: null };
+    }
+    return {
+      status: "loaded",
+      payload: (await response.json()) as MarketDailyEvidencePayload,
+    };
+  } catch {
+    return { status: "failed", payload: null };
   }
 }
 
@@ -1409,6 +1436,42 @@ function buildResearchBriefInboxLabels(
   };
 }
 
+function buildMarketDailyEvidenceLabels(
+  t: Awaited<ReturnType<typeof getTranslations>>,
+): MarketDailyEvidencePanelLabels {
+  return {
+    title: t("title"),
+    description: t("description"),
+    refreshAction: t("refreshAction"),
+    refreshing: t("refreshing"),
+    totalRows: t("totalRows"),
+    latestImport: t("latestImport"),
+    latestTradeDate: t("latestTradeDate"),
+    citationsTitle: t("citationsTitle"),
+    emptyTitle: t("emptyTitle"),
+    emptyDescription: t("emptyDescription"),
+    loadFailedTitle: t("loadFailedTitle"),
+    loadFailedDescription: t("loadFailedDescription"),
+    persistedOnly: t("persistedOnly"),
+    notAdvice: t("notAdvice"),
+    refreshSuccess: t("refreshSuccess"),
+    insertedCount: t("insertedCount", { count: "{count}" }),
+    updatedCount: t("updatedCount", { count: "{count}" }),
+    skippedCount: t("skippedCount", { count: "{count}" }),
+    diagnosticsTitle: t("diagnosticsTitle"),
+    diagnosticsEmpty: t("diagnosticsEmpty"),
+    refreshFailed: t("refreshFailed"),
+    unavailableShort: t("unavailableShort"),
+    eventTypeLabels: {
+      stock_fund_flow: t("eventStockFundFlow"),
+      limit_up_reason: t("eventLimitUpReason"),
+      dragon_tiger_list: t("eventDragonTigerList"),
+      block_trade: t("eventBlockTrade"),
+      hot_sector: t("eventHotSector"),
+    },
+  };
+}
+
 export default async function EvidenceCenterPage({
   params = Promise.resolve({ locale: "en" }),
   searchParams = Promise.resolve({}),
@@ -1421,6 +1484,7 @@ export default async function EvidenceCenterPage({
     seedImportT,
     notebookT,
     researchBriefT,
+    marketDailyEvidenceT,
   ] = await Promise.all([
     params,
     searchParams,
@@ -1429,6 +1493,7 @@ export default async function EvidenceCenterPage({
     getTranslations("EvidenceSeedImport"),
     getTranslations("ResearchSourceNotebook"),
     getTranslations("ResearchBriefInbox"),
+    getTranslations("MarketDailyEvidence"),
   ]);
   const locale = getSafeLocale(requestedLocale);
   const provider =
@@ -1438,11 +1503,13 @@ export default async function EvidenceCenterPage({
     officialSourceStatusResult,
     researchSourceNotesResult,
     researchBriefsResult,
+    marketDailyEvidenceResult,
   ] = await Promise.all([
     fetchMarketOverview(provider),
     fetchOfficialMacroSourceStatus(),
     fetchResearchSourceNotes(),
     fetchResearchBriefs(),
+    fetchMarketDailyEvidence(),
   ]);
 
   if (marketOverviewResult.status === "failed") {
@@ -1767,6 +1834,12 @@ export default async function EvidenceCenterPage({
         loadFailed={researchBriefsResult.status === "failed"}
         provider={provider}
         locale={locale}
+      />
+
+      <MarketDailyEvidencePanel
+        labels={buildMarketDailyEvidenceLabels(marketDailyEvidenceT)}
+        initialPayload={marketDailyEvidenceResult.payload}
+        loadFailed={marketDailyEvidenceResult.status === "failed"}
       />
 
       <FinancialTerminalCard>

@@ -377,6 +377,48 @@ class ResearchBrief(Base):
     )
 
 
+class MarketDailyEvidenceEvent(Base):
+    __tablename__ = "market_daily_evidence_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "event_type",
+            "identity",
+            "market",
+            "trade_date",
+            name="uq_market_daily_evidence_event_identity",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    event_type: Mapped[str] = mapped_column(String(64))
+    identity: Mapped[str] = mapped_column(String(256))
+    identity_name: Mapped[str | None] = mapped_column(String(512), default=None)
+    market: Mapped[str] = mapped_column(String(32))
+    trade_date: Mapped[date] = mapped_column(Date)
+    provider: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(512))
+    as_of: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    status: Mapped[str] = mapped_column(String(32), default="verified")
+    is_citable: Mapped[bool] = mapped_column(Boolean, default=True)
+    payload_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    availability_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    provider_capabilities_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    diagnostics_json: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class AlertTrigger(Base):
     __tablename__ = "alert_triggers"
 

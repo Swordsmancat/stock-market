@@ -51,6 +51,13 @@ def market_overview_fixture() -> dict[str, object]:
                     "source_type": "research_source_note",
                     "as_of": "2026-07-01",
                 },
+                {
+                    "id": "market_daily_event:hot_sector:semiconductor:2026-07-07",
+                    "label": "Hot sector: Semiconductor",
+                    "source": "market_daily_evidence",
+                    "source_type": "market_daily_event",
+                    "as_of": "2026-07-07",
+                },
             ],
             "diagnostics": [],
         },
@@ -102,6 +109,7 @@ def test_generate_research_brief_uses_deterministic_fallback_without_llm(monkeyp
     assert payload["model"]["used_llm"] is False
     assert payload["model"]["name"] == "research-brief-deterministic-fallback"
     assert payload["source_summary"]["source_mix"]["research_source_note_citations"] == 1
+    assert payload["source_summary"]["source_mix"]["market_daily_citations"] == 1
     assert payload["safety"]["no_buy_sell_hold"] is True
 
     listed = list_research_briefs(session=session)
@@ -152,7 +160,7 @@ def test_generate_research_brief_falls_back_on_unknown_llm_citation(monkeypatch)
 
     class FakeProvider:
         def generate(self, prompt: str) -> str:
-            return "Invented evidence [market_indicator:not-present:2026-07-01]."
+            return "Invented evidence [market_daily_event:hot_sector:not-present:2026-07-01]."
 
     monkeypatch.setattr(research_briefs, "get_llm_provider", lambda: FakeProvider())
 
@@ -163,5 +171,5 @@ def test_generate_research_brief_falls_back_on_unknown_llm_citation(monkeypatch)
 
     assert payload["model"]["used_llm"] is False
     assert payload["model"]["fallback_reason"] == "LLM citation validation failed: unknown citation id."
-    assert "market_indicator:not-present" not in payload["content_markdown"]
+    assert "market_daily_event:hot_sector:not-present" not in payload["content_markdown"]
     assert any(diagnostic.get("code") == "CITATION_UNKNOWN_ID" for diagnostic in payload["diagnostics"])

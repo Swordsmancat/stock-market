@@ -86,6 +86,16 @@ def load_research_briefs_migration():
     return module
 
 
+def load_market_daily_evidence_migration():
+    migration_path = Path("alembic/versions/0013_market_daily_evidence_events.py")
+    spec = importlib.util.spec_from_file_location("market_daily_evidence_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op
@@ -268,3 +278,43 @@ def test_research_briefs_migration_creates_brief_inbox_table():
         "safety_json",
         "created_at",
     }.issubset(columns)
+
+
+def test_market_daily_evidence_migration_creates_persisted_event_table():
+    migration = load_market_daily_evidence_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(migration, connection)
+
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        columns = {
+            column["name"]
+            for column in inspector.get_columns("market_daily_evidence_events")
+        }
+        unique_constraints = {
+            constraint["name"]
+            for constraint in inspector.get_unique_constraints("market_daily_evidence_events")
+        }
+
+    assert "market_daily_evidence_events" in tables
+    assert {
+        "event_type",
+        "identity",
+        "identity_name",
+        "market",
+        "trade_date",
+        "provider",
+        "source",
+        "as_of",
+        "status",
+        "is_citable",
+        "payload_json",
+        "availability_json",
+        "provider_capabilities_json",
+        "diagnostics_json",
+        "imported_at",
+        "updated_at",
+    }.issubset(columns)
+    assert "uq_market_daily_evidence_event_identity" in unique_constraints

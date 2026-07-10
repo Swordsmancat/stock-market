@@ -15,6 +15,7 @@ from packages.services.market_data import (
 )
 from packages.services.market_indices import DEFAULT_MARKET_INDICES, MarketIndexDefinition, resolve_provider_symbol
 from packages.services.market_indicators import get_macro_indicator_payloads
+from packages.services.market_daily_evidence import list_citable_market_daily_evidence_citations
 from packages.services.platform_settings import get_platform_settings
 from packages.services.research_follow_up_queue import build_research_follow_up_queue
 from packages.services.research_source_notes import (
@@ -36,6 +37,7 @@ DASHBOARD_BRIEF_CITATION_ID_PREFIXES = (
     "generated_report:",
     "news:",
     "research_source_note:",
+    "market_daily_event:",
 )
 DASHBOARD_BRIEF_SOURCE_GAP_STATUSES = {
     "needs_adapter",
@@ -485,6 +487,12 @@ def _build_dashboard_narrative_source_mix(
             if citation.get("source") == "news" or citation.get("source_type") == "news"
         ),
         "research_source_note_citations": sum(1 for citation in citations if _is_research_source_note_citation(citation)),
+        "market_daily_citations": sum(
+            1
+            for citation in citations
+            if citation.get("source") == "market_daily_evidence"
+            or citation.get("source_type") == "market_daily_event"
+        ),
         "information_source_gaps": len(_extract_dashboard_source_gaps(information_sources_payload)),
     }
 
@@ -942,6 +950,46 @@ def get_market_overview_payload(
         session=session,
         followed_payload=followed_payload,
     )
+    try:
+        market_daily_citations = list_citable_market_daily_evidence_citations(
+            session=session,
+            limit=8,
+        )
+        existing_citations = research_availability.get("citations")
+        research_availability["citations"] = [
+            *(
+                [item for item in existing_citations if isinstance(item, dict)]
+                if isinstance(existing_citations, list)
+                else []
+            ),
+            *market_daily_citations,
+        ]
+        research_availability["market_daily_evidence"] = {
+            "status": "ok" if market_daily_citations else "no_data",
+            "count": len(market_daily_citations),
+        }
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        research_diagnostics = research_availability.get("diagnostics")
+        if not isinstance(research_diagnostics, list):
+            research_diagnostics = []
+            research_availability["diagnostics"] = research_diagnostics
+        research_diagnostics.append(
+            {
+                "source": "market_daily_evidence",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Stored market daily evidence could not be loaded for the dashboard brief.",
+            }
+        )
+        research_availability["market_daily_evidence"] = {
+            "status": "unavailable",
+            "count": 0,
+        }
     diagnostics = [*followed_diagnostics, *index_diagnostics]
     generated_at = datetime.now(timezone.utc).isoformat()
     research_source_notes, follow_up_diagnostics = _load_research_source_notes_for_follow_up(session)

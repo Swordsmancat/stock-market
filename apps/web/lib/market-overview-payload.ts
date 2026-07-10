@@ -31,6 +31,8 @@ export type DashboardBriefNarrative = {
       macro_citations?: number;
       report_citations?: number;
       news_citations?: number;
+      research_source_note_citations?: number;
+      market_daily_citations?: number;
       information_source_gaps?: number;
     };
   };

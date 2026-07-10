@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
-from packages.domain.models import GeneratedReport, NewsArticle
+from packages.domain.models import GeneratedReport, MarketDailyEvidenceEvent, NewsArticle
 from packages.services.market_dashboard import get_market_overview_payload
 from packages.services.market_data import MarketDataProviderUnavailableError
 from packages.services.research_source_notes import ResearchSourceNoteInput, create_research_source_note
@@ -129,10 +129,11 @@ def test_market_overview_payload_contains_followed_indices_and_valuation_section
     assert narrative["context"]["source_mix"] == {
         "macro_citations": 0,
             "report_citations": 0,
-            "news_citations": 0,
-            "research_source_note_citations": 0,
-            "information_source_gaps": 11,
-        }
+        "news_citations": 0,
+        "research_source_note_citations": 0,
+        "market_daily_citations": 0,
+        "information_source_gaps": 11,
+    }
 
     information_sources = payload["information_sources"]
     assert information_sources["status"] == "degraded"
@@ -161,6 +162,22 @@ def test_market_overview_brief_includes_report_and_news_availability():
             published_at=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
             summary="Apple reports strong growth and record services profit in the quarter.",
             dedupe_hash="aapl-services-growth",
+        )
+    )
+    session.add(
+        MarketDailyEvidenceEvent(
+            event_type="hot_sector",
+            identity="semiconductor",
+            identity_name="Semiconductor",
+            market="CN",
+            trade_date=date(2026, 7, 2),
+            provider="fake",
+            source="fake_hot_sector",
+            as_of=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
+            payload_json={"sector_id": "semiconductor", "name": "Semiconductor", "fund_flow": 999.0},
+            availability_json={"status": "delayed"},
+            provider_capabilities_json={"ranking": {"status": "delayed"}},
+            diagnostics_json=[],
         )
     )
     session.commit()
@@ -220,9 +237,15 @@ def test_market_overview_brief_includes_report_and_news_availability():
     dashboard_brief = payload["dashboard_brief"]
     assert "1 generated reports and 1 stored news items" in dashboard_brief["sections"][1]["items"][2]
     citation_sources = {citation["source"] for citation in dashboard_brief["citations"]}
-    assert citation_sources >= {"generated_reports", "news", "research_source_notes"}
+    assert citation_sources >= {
+        "generated_reports",
+        "news",
+        "research_source_notes",
+        "market_daily_evidence",
+    }
     citation_ids = {citation["id"] for citation in dashboard_brief["citations"]}
     assert source_note["citation_id"] in citation_ids
+    assert "market_daily_event:hot_sector:semiconductor:2026-07-02" in citation_ids
     source_note_citation = next(
         citation for citation in dashboard_brief["citations"] if citation["id"] == source_note["citation_id"]
     )
@@ -236,6 +259,7 @@ def test_market_overview_brief_includes_report_and_news_availability():
     assert dashboard_brief["narrative"]["context"]["source_mix"]["report_citations"] == 1
     assert dashboard_brief["narrative"]["context"]["source_mix"]["news_citations"] == 1
     assert dashboard_brief["narrative"]["context"]["source_mix"]["research_source_note_citations"] == 1
+    assert dashboard_brief["narrative"]["context"]["source_mix"]["market_daily_citations"] == 1
     diagnostic_codes = {diagnostic["code"] for diagnostic in dashboard_brief["diagnostics"]}
     assert "GENERATED_REPORTS_NO_DATA" not in diagnostic_codes
     assert "NEWS_NO_DATA" not in diagnostic_codes

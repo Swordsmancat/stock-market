@@ -442,6 +442,37 @@ function createResearchBriefsPayload() {
   };
 }
 
+function createMarketDailyEvidencePayload() {
+  return {
+    items: [],
+    citations: [
+      {
+        id: "market_daily_event:hot_sector:semiconductor:2026-01-02",
+        label: "Hot sector: Semiconductor",
+        source: "market_daily_evidence",
+        source_type: "market_daily_event",
+        as_of: "2026-01-02",
+        provider: "akshare",
+      },
+    ],
+    summary: {
+      total: 4,
+      returned: 1,
+      counts_by_event_type: {
+        stock_fund_flow: 2,
+        hot_sector: 2,
+      },
+      latest_imported_at: "2026-01-02T08:00:00+00:00",
+      latest_trade_date: "2026-01-02",
+    },
+    safety: {
+      persisted_rows_only: true,
+      not_investment_advice: true,
+      no_automated_trading: true,
+    },
+  };
+}
+
 it("renders macro evidence first, keeps advanced source tools reachable, and resolves template labels", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
@@ -456,6 +487,9 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
     }
     if (url.endsWith("/research-briefs?limit=10")) {
       return Promise.resolve(new Response(JSON.stringify(createResearchBriefsPayload())));
+    }
+    if (url.endsWith("/market-daily-evidence?limit=12&citable_only=true")) {
+      return Promise.resolve(new Response(JSON.stringify(createMarketDailyEvidencePayload())));
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
@@ -555,6 +589,13 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   expect(screen.getByText("Saved research brief inbox")).toBeInTheDocument();
   expect(screen.getByText("Morning macro evidence")).toBeInTheDocument();
   expect(screen.getByText("research-brief-deterministic-fallback", { exact: false })).toBeInTheDocument();
+  expect(screen.getByText("Stored market daily evidence")).toBeInTheDocument();
+  expect(screen.getByText("Stock fund flow: 2")).toBeInTheDocument();
+  expect(screen.getByText("Hot sector: 2")).toBeInTheDocument();
+  expect(
+    screen.getByText("market_daily_event:hot_sector:semiconductor:2026-01-02"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Only persisted rows are citable")).toBeInTheDocument();
 
   const fredLink = screen.getByRole("link", { name: /FRED DGS10/, hidden: true });
   expect(fredLink).toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");

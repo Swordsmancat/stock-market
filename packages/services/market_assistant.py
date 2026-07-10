@@ -21,6 +21,7 @@ from packages.ai.market_assistant import (
 from packages.services.fundamentals import get_fundamental_payload
 from packages.services.indicators import get_stored_indicators_payload
 from packages.services.market_data import get_bars_payload
+from packages.services.market_daily_evidence import list_citable_market_daily_evidence_citations
 from packages.services.market_indicators import get_macro_indicator_payloads
 from packages.services.news import get_news_sentiment_payload
 from packages.services.platform_settings import get_platform_settings
@@ -42,6 +43,7 @@ ASSISTANT_CITATION_ID_PREFIXES = (
     "news_articles:",
     "generated_report:",
     "research_source_note:",
+    "market_daily_event:",
 )
 
 
@@ -156,12 +158,18 @@ def answer_market_assistant_question(
         session,
         diagnostics,
     )
+    market_daily_summary, market_daily_evidence = _build_market_daily_evidence_context(
+        normalized_symbol,
+        session,
+        diagnostics,
+    )
     research_evidence.extend(indicator_evidence)
     research_evidence.extend(macro_evidence)
     research_evidence.extend(fundamental_evidence)
     research_evidence.extend(news_evidence)
     research_evidence.extend(generated_report_evidence)
     research_evidence.extend(source_note_evidence)
+    research_evidence.extend(market_daily_evidence)
     citations = _rank_research_citations(research_evidence)
 
     prompt_context = MarketAssistantPromptContext(
@@ -178,6 +186,7 @@ def answer_market_assistant_question(
         price_summary=price_context["price_summary"],
         indicator_summary=indicator_summary,
         macro_summary=macro_summary,
+        market_daily_summary=market_daily_summary,
         fundamental_summary=fundamental_summary,
         news_summary=news_summary,
         research_summary=f"{generated_report_summary} {source_note_summary}",
@@ -724,6 +733,7 @@ def _build_response_payload(
             "price_summary": prompt_context.price_summary,
             "indicator_summary": prompt_context.indicator_summary,
             "macro_summary": prompt_context.macro_summary,
+            "market_daily_summary": prompt_context.market_daily_summary,
             "fundamental_summary": prompt_context.fundamental_summary,
             "news_summary": prompt_context.news_summary,
             "research_summary": prompt_context.research_summary,
@@ -1008,6 +1018,63 @@ def _build_research_source_note_context(
     ]
     titles = [item.title for item in evidence_items if item.title]
     return f"Reviewed source notebook entries available: {'; '.join(titles)}.", evidence_items
+
+
+def _build_market_daily_evidence_context(
+    symbol: str,
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
+    if session is None:
+        return "No stored market daily evidence was loaded.", []
+
+    try:
+        citations = list_citable_market_daily_evidence_citations(
+            session=session,
+            symbols=[symbol],
+            limit=5,
+        )
+    except Exception:
+        _rollback_session_if_possible(session)
+        diagnostics.append(
+            {
+                "source": "market_daily_evidence",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Stored market daily evidence could not be loaded.",
+            }
+        )
+        return "Stored market daily evidence could not be loaded.", []
+
+    if not citations:
+        return "No stored market daily evidence is available for this symbol or current market context.", []
+
+    evidence_items = [
+        MarketAssistantResearchEvidence(
+            citation=MarketAssistantCitation(
+                id=str(citation["id"]),
+                label=str(citation.get("label") or "Market daily evidence"),
+                source=str(citation.get("source") or "market_daily_evidence"),
+                source_type=_stringify_optional(citation.get("source_type")),
+                as_of=_stringify_optional(citation.get("as_of")),
+                provider=_stringify_optional(citation.get("provider")),
+                retrieved_at=_stringify_optional(citation.get("retrieved_at")),
+                excerpt=_stringify_optional(citation.get("excerpt")),
+                metadata=citation.get("metadata") if isinstance(citation.get("metadata"), dict) else None,
+            ),
+            summary=str(citation.get("excerpt") or citation.get("label") or "Stored market daily evidence."),
+            priority=42 + item_index,
+            source_type="market_daily_event",
+            title=_stringify_optional(citation.get("label")),
+            as_of=_stringify_optional(citation.get("as_of")),
+            provider=_stringify_optional(citation.get("provider")),
+            metadata=citation.get("metadata") if isinstance(citation.get("metadata"), dict) else None,
+        )
+        for item_index, citation in enumerate(citations)
+    ]
+    labels = [item.title for item in evidence_items if item.title]
+    return f"Stored market daily evidence available: {'; '.join(labels)}.", evidence_items
 
 
 def _build_generated_report_evidence_item(
