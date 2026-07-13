@@ -131,6 +131,34 @@ def load_daily_bar_provenance_migration():
     return module
 
 
+def load_official_disclosures_migration():
+    migration_path = Path("alembic/versions/0017_official_disclosures.py")
+    spec = importlib.util.spec_from_file_location("official_disclosures_migration", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_official_disclosures_migration_creates_metadata_table_and_identity_constraint():
+    migration = load_official_disclosures_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(migration, connection)
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        unique_constraints = inspector.get_unique_constraints("official_disclosures")
+
+    assert "official_disclosures" in tables
+    assert any(
+        constraint["name"] == "uq_official_disclosures_source_document"
+        and set(constraint["column_names"]) == {"source", "source_document_id"}
+        for constraint in unique_constraints
+    )
+
+
 def run_migration(migration, connection):
     context = MigrationContext.configure(connection)
     original_op = migration.op

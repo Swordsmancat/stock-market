@@ -122,6 +122,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | P1 | AI research follow-up queue | Implemented / deterministic queue MVP | `/evidence` now derives a research-action queue from Source Notebook `ai_follow_up`, review completeness, source-readiness gaps, and seed-template readiness. Queue items are prompts and evidence-preparation tasks; only reviewed/citable notebook rows expose `research_source_note:<id>` citation IDs, and this slice does not execute LLM briefs. |
 | P1 | Saved research brief inbox | Implemented / LLM+fallback history MVP | `/evidence` can now generate and persist reusable research briefs from the current Evidence Center context. Briefs store markdown content, allowed local citations, source-gap/follow-up summaries, diagnostics, model metadata, and safety flags. OpenAI-compatible generation is used only when configured; provider failures, empty output, or unknown citation IDs fall back deterministically. |
 | P1 | Persisted market daily evidence | Implemented / manual import MVP | `/market-daily-evidence/import` persists eligible provider-normalized stock fund flow, limit-up, Dragon Tiger List, block-trade, and hot-sector rows with deterministic dedupe and `market_daily_event:*` citations. `/evidence` shows counts, latest import metadata, citations, refresh counts, and sanitized diagnostics. Mock/static/unavailable rows remain non-citable; scheduler automation and historical backfill are follow-up work. |
+| P1 | A-share official disclosure metadata | Implemented / metadata-only MVP | `POST /official-disclosures/refresh` uses AkShare's CNINFO adapter to persist official A-share disclosure identity, title, category, publication time, and canonical detail URL. Repeated refreshes upsert by CNINFO announcement ID and produce stable `official_disclosure:*` citations for symbol-level AI analysis. Document bodies are not downloaded, parsed, summarized, or implied by these citations. |
 | P1 | Comprehensive A-share research coverage | Implemented / breadth-first MVP | AkShare-backed full-universe sync stores SSE/SZSE/BSE identity and reconciliation history without clearing the last good universe on failure. Screening evaluates the complete stored scope with bulk evidence loaders, transparent profiles, coverage counters, and a bounded deterministic shortlist. AI explanation cannot change ranking. Evidence Center adds cursor-based dividend/bonus and rights-allotment batches with partial-success diagnostics. |
 | UI polish | Personal research dashboard surface | Implemented / evidence complete | Ticker, market overview table, settings-driven movement colors, durable screenshots, sampled WCAG contrast evidence, and major movement-color call sites are implemented and covered by web/browser evidence. The UI is optimized for personal scanning and research aggregation rather than terminal parity. |
 | Phase 2 | K-line interaction enhancements | Complete | Interactive candlestick charts include range controls and MA / BOLL / volume / MACD / RSI / KDJ indicator controls. |
@@ -131,7 +132,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | Phase 3 | Intraday chart | Partial / provider-backed MVP | `GET /market-data/{symbol}/intraday` now supports verified yfinance `1m` minute bars when available, including previous-close references and `ok` / `no_data` / `degraded` payloads. Mock, AkShare, and Tushare remain degraded until explicit minute-bar providers are verified. |
 | Phase 3 | Market depth | Partial / provider-boundary MVP | `GET /market-data/{symbol}/depth` now uses an explicit `fetch_market_depth` provider boundary, section-level `ok` / `degraded` semantics, verified order-book / recent-trade / fund-flow normalization, and large-order derivation only from verified trades. AkShare now has a fixture-tested order-book candidate path, but production-verified Level-2 status still requires opt-in live smoke checks, schema monitoring, and provider-permission validation. |
 | Phase 3 | Technical indicator library | Complete | MACD, RSI, KDJ, MA, BOLL, and volume chart overlays are supported; backend MACD/KDJ persistence is covered. |
-| Phase 3 | AI assistant | Partial / research-citation MVP | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily bars, stored indicators, fundamentals, news, generated reports, and reviewed source notebook entries. Citations can include source metadata, excerpts, URLs, and diagnostic severity/code; production filings/transcripts, vector search, and broader watchlist monitoring remain follow-up work. |
+| Phase 3 | AI assistant | Partial / research-citation MVP | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily bars, stored indicators, fundamentals, news, generated reports, reviewed source notebook entries, and persisted CNINFO disclosure metadata. `official_disclosure:*` citations support only document identity/title/category/publication-time claims because document bodies, transcripts, vector search, and broader watchlist monitoring remain follow-up work. |
 
 See [docs/manual/user-guide.md](docs/manual/user-guide.md) for user-facing behavior and [docs/runbooks/developer-maintenance.md](docs/runbooks/developer-maintenance.md) for endpoint and provider-maintenance details.
 
@@ -219,6 +220,20 @@ The Evidence Center also derives a research follow-up queue from the same local 
 The Evidence Center also includes a saved research brief inbox. Use it after reviewing sources and follow-up prompts to generate a durable research summary from the current local Evidence Center context. Saved briefs are stored separately from symbol-level generated reports and include markdown content, local allowed citations, source-gap counts, follow-up context, diagnostics, model metadata, and safety flags. The generator uses an OpenAI-compatible LLM only when configured and falls back deterministically when the provider is missing, fails, returns empty text, or cites an unknown ID.
 
 Use this for information that normal trading sites do not organize well, such as Buffett Indicator source components, manual macro source checks, filing search notes, and one-off research excerpts. Keep full filings/transcripts, bulk scraping, licensed research corpora, and automated ingestion out of scope until source rights, storage policy, and citation metadata are designed.
+
+## A-share official disclosure metadata
+
+Refresh a bounded CNINFO metadata range for one A-share symbol through the API:
+
+```bash
+curl -X POST http://localhost:8000/official-disclosures/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"000001","start_date":"2026-01-01","end_date":"2026-03-31","category":"年报"}'
+
+curl "http://localhost:8000/official-disclosures?symbol=000001&limit=20"
+```
+
+The refresh stores only CNINFO publication metadata and stable external document identity. A successful row can become an `official_disclosure:<id>` AI citation, but that citation proves only that a disclosure with the returned title/category/publication time exists at the linked official source. It does not prove or summarize any statement inside the document. Provider failures are sanitized, and an empty or failed refresh never deletes previously stored metadata.
 
 ## Tests
 

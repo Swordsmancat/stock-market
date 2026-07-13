@@ -512,6 +512,41 @@ class ResearchSourceNote(Base):
     )
 
 
+class OfficialDisclosure(Base):
+    __tablename__ = "official_disclosures"
+    __table_args__ = (
+        UniqueConstraint(
+            "source",
+            "source_document_id",
+            name="uq_official_disclosures_source_document",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    source: Mapped[str] = mapped_column(String(64))
+    source_document_id: Mapped[str] = mapped_column(String(128))
+    symbol: Mapped[str] = mapped_column(String(64), index=True)
+    company_name: Mapped[str | None] = mapped_column(String(256), default=None)
+    title: Mapped[str] = mapped_column(String(1024))
+    category: Mapped[str | None] = mapped_column(String(128), default=None)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    source_url: Mapped[str] = mapped_column(String(2048))
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    dedupe_hash: Mapped[str] = mapped_column(String(64))
+    metadata_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class ResearchBrief(Base):
     __tablename__ = "research_briefs"
 

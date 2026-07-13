@@ -384,6 +384,24 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     )
     monkeypatch.setattr(
         market_assistant_service,
+        "list_citable_official_disclosure_citations",
+        lambda *args, **kwargs: [
+            {
+                "id": "official_disclosure:11111111-3333-3333-4444-555555555555",
+                "label": "AAPL annual report publication",
+                "source": "official_disclosures",
+                "source_type": "official_disclosure",
+                "url": "https://www.cninfo.com.cn/new/disclosure/detail?announcementId=1",
+                "as_of": "2026-01-03T12:00:00+00:00",
+                "provider": "cninfo",
+                "retrieved_at": "2026-01-03T13:50:00+00:00",
+                "excerpt": "CNINFO published disclosure metadata; document body has not been ingested.",
+                "metadata": {"evidence_scope": "metadata_only", "content_ingested": False},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
         "get_platform_settings",
         lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
     )
@@ -405,10 +423,12 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     assert "generated_report" in citations_by_source_type
     assert "research_source_note" in citations_by_source_type
     assert "market_daily_event" in citations_by_source_type
+    assert "official_disclosure" in citations_by_source_type
     assert citations_by_source_type["news"]["url"] == "https://example.com/aapl-services"
     assert citations_by_source_type["generated_report"]["id"] == "generated_report:11111111-1111-1111-1111-111111111111"
     assert citations_by_source_type["research_source_note"]["id"].startswith("research_source_note:")
     assert "Reviewed source notebook entries available" in payload["context"]["research_summary"]
+    assert "document bodies not ingested" in payload["context"]["research_summary"]
     assert "Stored market daily evidence available" in payload["context"]["market_daily_summary"]
 
 

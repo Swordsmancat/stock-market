@@ -460,7 +460,7 @@ AI 市场助手当前能力：
 使用边界：
 
 - AI 助手不会下单，不提供个性化投资建议，也不会给出必须买入/卖出/持有的交易指令。
-- 当前 MVP 主要基于日线、平台内已验证上下文和人工复核来源笔记；filings、transcripts、exchange announcements、向量检索、完整文档语料库和 watchlist 级监控仍是后续能力。
+- 当前 MVP 主要基于日线、平台内已验证上下文、人工复核来源笔记和已持久化的 CNINFO 公告元数据；公告/财报正文、transcripts、向量检索、完整文档语料库和 watchlist 级监控仍是后续能力。
 - 实时行情、分时、Level-2、逐笔和资金流仍取决于后续 provider 管线。
 - 对“能不能买”“该不该卖”等问题，系统应转为风险与证据框架，而不是直接交易指令。
 
@@ -472,7 +472,7 @@ AI 市场助手当前能力：
 |---|---|---|---|
 | Koyfin / MacroMicro | 宏观、估值、经济周期、市场图表和跨资产 dashboard | 已有专门证据中心、宏观/估值 definitions-first 指标、no-data-safe 展示、source readiness 和 seed 模板 | 还缺官方宏观 adapter、发布日历、跨指标图表和可复用宏观专题页。 |
 | TradingView / Yahoo Finance 类工具 | watchlist、图表、新闻、日历、筛选器和个人跟踪工作流 | 已有首页汇总、watchlist、K 线/指标、推荐线索、报告和 provider/degraded 状态 | 还缺 watchlist 事件监控、日/周 digest、保存的研究问题和更系统的提醒。 |
-| AlphaSense 类研究产品 | 对 filings、transcripts、新闻和研究资料做 AI 搜索、监控、摘要和引用 | 已有 citation-aware dashboard narrative、已保存研究摘要收件箱、AI 报告、个股 AI assistant 的引用校验，以及人工复核来源笔记本 | 还缺合法研究语料库、文档 ingest policy、全文 ingest、主题追踪和更细的摘要筛选。 |
+| AlphaSense 类研究产品 | 对 filings、transcripts、新闻和研究资料做 AI 搜索、监控、摘要和引用 | 已有 citation-aware dashboard narrative、已保存研究摘要收件箱、AI 报告、个股 AI assistant 的引用校验、人工复核来源笔记本，以及 metadata-only CNINFO 公告引用 | 还缺公告/财报正文 ingest policy、全文 ingest、主题追踪和更细的摘要筛选。 |
 | FRED / World Bank / SEC EDGAR / Trading Economics | 官方或 API 化宏观、公司文档、经济日历和指标源 | 已有 FRED opt-in adapter、World Bank 巴菲特指标 opt-in adapter、中国宏观 source capability matrix、官方/合法来源链接、导入边界、manual seed import 和 source-to-seed 模板 | 还缺宏观发布日历、更多官方源的生产 adapter 和 license/freshness 运营记录。 |
 
 因此，当前实现已经满足一个个人研究 cockpit 的 MVP：它能把市场、watchlist、报告、推荐、新闻、宏观指标、来源缺口和 AI 摘要放到同一工作台，并通过证据中心明确区分“可引用证据”和“还需要收集/复核的来源”。但它还不是完整的信息平台：数据源仍以人工 seed 和本地证据为主，官方宏观源、文档语料、日历、watchlist 级监控和历史化 AI digest 仍是后续重点。
@@ -491,6 +491,6 @@ AI 市场助手当前能力：
 3. **P1 saved brief 增强**：已完成 Evidence Center 摘要保存 MVP；下一步可增加日/周分组、筛选、专题标签、导出和与 watchlist 事件的关联。
 4. **P1 watchlist 事件监控**：把 watchlist 价格异动、报告更新、新闻事件、宏观发布和 source readiness 变化汇总成个人研究 inbox。
 5. **P1 source notebook 到宏观证据工作流**：继续增强已实现的来源笔记本、source-readiness linkage 和 research follow-up queue，让一个来源条目更自然地进入“收集 -> 复核 -> seed/import 准备 -> 入库 -> AI 可引用”的流程。
-6. **P2 文档/公告语料 ingest**：在合法来源和引用策略明确后，再接入 SEC filings、交易所公告、电话会 transcript 或用户上传文档；默认只保存 metadata/摘要/引用，不假设可随意抓取全文。
+6. **P2 文档/公告语料 ingest**：A 股 CNINFO 公告元数据已可持久化并以 `official_disclosure:*` 引用；下一步是在合法来源、存储和引用策略明确后接入公告/财报正文、SEC filings、电话会 transcript 或用户上传文档，不假设可随意抓取全文。
 7. **P2 研究级筛选与提醒**：围绕宏观阈值、watchlist 异动、报告更新和资料更新做提醒；推荐继续作为“研究线索生成器”，输出证据、历史样本和风险，而不是直接买卖建议。
 8. **P2 图表与个人工作区增强**：增加跨指标图表、参数持久化、轻量注释和 saved view；仍保持研究辅助定位，不把 terminal parity 作为近期目标。

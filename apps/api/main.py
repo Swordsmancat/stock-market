@@ -14,6 +14,7 @@ from apps.api.routers.market_daily_data import router as market_daily_data_route
 from apps.api.routers.market_daily_evidence import router as market_daily_evidence_router
 from apps.api.routers.market_indicators import router as market_indicators_router
 from apps.api.routers.news import router as news_router
+from apps.api.routers.official_disclosures import router as official_disclosures_router
 from apps.api.routers.portfolios import router as portfolios_router
 from apps.api.routers.recommendations import router as recommendations_router
 from apps.api.routers.research_briefs import router as research_briefs_router
@@ -42,6 +43,7 @@ app.include_router(market_daily_data_router)
 app.include_router(market_daily_evidence_router)
 app.include_router(market_indicators_router)
 app.include_router(news_router)
+app.include_router(official_disclosures_router)
 app.include_router(portfolios_router)
 app.include_router(recommendations_router)
 app.include_router(research_briefs_router)

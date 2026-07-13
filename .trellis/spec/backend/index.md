@@ -54,6 +54,7 @@ Primary examples:
 | [Intraday Minute Cache Contract](./intraday-cache-contract.md) | `/market-data/{symbol}/intraday` verified minute cache, session policy, freshness metadata, and no-fabrication rules | Filled |
 | [Market Depth Contract](./market-depth-contract.md) | `/market-data/{symbol}/depth` explicit provider boundary, section-level degraded states, large-order derivation, and no-fabrication rules | Filled |
 | [Comprehensive A-share Research Coverage Contract](./a-share-research-coverage-contract.md) | Full A-share universe sync, bulk screening, transparent profiles, validated AI shortlist explanation, and corporate-action evidence batches | Filled |
+| [Official Disclosure Metadata Contract](./official-disclosure-metadata-contract.md) | CNINFO metadata refresh, stable document identity, metadata-only citations, and no-body-inference boundary | Filled |
 
 ---
 
