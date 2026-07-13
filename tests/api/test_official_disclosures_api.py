@@ -293,3 +293,50 @@ def test_official_disclosure_sections_api_maps_missing_document(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Official disclosure document version not found."
+
+
+def test_official_disclosure_evidence_status_api_delegates(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.list_watchlist_official_disclosure_evidence",
+        lambda *, session, limit: {
+            "status": "ok",
+            "scope": "watchlist",
+            "summary": {"eligible_symbol_count": 2, "returned": limit},
+            "items": [],
+        },
+    )
+    client = with_test_client(session)
+    try:
+        response = client.get("/official-disclosures/evidence-status?limit=12")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == {"eligible_symbol_count": 2, "returned": 12}
+
+
+def test_official_disclosure_watchlist_ingest_api_enqueues_bounded_task(monkeypatch):
+    session = make_session()
+    captured = {}
+
+    def enqueue(*, session, lookback_days, max_documents):
+        captured.update(lookback_days=lookback_days, max_documents=max_documents)
+        return {"status": "dispatched", "task_run": {"id": "task-1"}}
+
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.enqueue_watchlist_official_disclosure_ingestion",
+        enqueue,
+    )
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/official-disclosures/watchlist/ingest",
+            json={"lookback_days": 45, "max_documents": 12},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured == {"lookback_days": 45, "max_documents": 12}
+    assert response.json()["task_run"]["id"] == "task-1"

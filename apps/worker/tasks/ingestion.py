@@ -15,6 +15,10 @@ from packages.services.ingestion import (
     normalize_symbol_list,
 )
 from packages.services.instrument_universe import sync_instrument_universe
+from packages.services.official_disclosure_operations import (
+    WATCHLIST_DISCLOSURE_TASK_NAME,
+    ingest_watchlist_official_disclosures,
+)
 from packages.services.research_evidence_backfill import (
     BACKFILL_TASK_NAME,
     BackfillRequest,
@@ -419,6 +423,55 @@ def ingest_symbol_daily_bars_batch_task(
         }
         finish_task_run(task_run, result_payload, session=session)
         return result_payload
+    except Exception as exc:
+        fail_task_run(task_run, str(exc), session=session)
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name=WATCHLIST_DISCLOSURE_TASK_NAME)
+def ingest_watchlist_official_disclosures_task(
+    lookback_days: int = 30,
+    max_documents: int = 20,
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    session = SessionLocal()
+    if task_run_id:
+        task_run = session.get(TaskRun, UUID(task_run_id))
+        if task_run is None:
+            session.close()
+            raise ValueError(f"Task run not found: {task_run_id}")
+    else:
+        task_run = start_task_run(
+            WATCHLIST_DISCLOSURE_TASK_NAME,
+            {
+                "lookback_days": lookback_days,
+                "max_documents": max_documents,
+            },
+            session=session,
+        )
+
+    def report_progress(phase: str, current: int, total: int, message: str) -> None:
+        update_task_run_progress(
+            task_run,
+            phase=phase,
+            current=current,
+            total=total,
+            message=message,
+            session=session,
+        )
+
+    try:
+        result = ingest_watchlist_official_disclosures(
+            session=session,
+            lookback_days=lookback_days,
+            max_documents=max_documents,
+            request_delay_seconds=max(0.25, settings.disclosure_batch_request_delay_ms / 1000),
+            progress_callback=report_progress,
+        )
+        finish_task_run(task_run, result, session=session)
+        return result
     except Exception as exc:
         fail_task_run(task_run, str(exc), session=session)
         raise

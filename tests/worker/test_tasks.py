@@ -142,6 +142,36 @@ def test_sync_corporate_actions_task_records_partial_batch_and_progress(monkeypa
     assert latest_run["result_json"] == result
 
 
+def test_watchlist_official_disclosures_task_records_progress_and_success(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    def fake_ingest(*, session, lookback_days, max_documents, request_delay_seconds, progress_callback):
+        assert lookback_days == 45
+        assert max_documents == 12
+        assert request_delay_seconds >= 0.25
+        progress_callback("metadata", 1, 2, "Metadata complete.")
+        progress_callback("documents", 2, 2, "Documents complete.")
+        return {"status": "ok", "summary": {"processed_document_count": 1}}
+
+    monkeypatch.setattr(ingestion_tasks, "ingest_watchlist_official_disclosures", fake_ingest)
+
+    result = ingestion_tasks.ingest_watchlist_official_disclosures_task(
+        lookback_days=45,
+        max_documents=12,
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.ingest_watchlist_official_disclosures",
+    )
+
+    assert result["status"] == "ok"
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"] == result
+
+
 @pytest.mark.parametrize("quality_status", ["WARN", "FAIL"])
 def test_ingest_market_data_persists_quality_diagnostics_without_failing_task_run(
     monkeypatch,

@@ -491,6 +491,29 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
     if (url.endsWith("/market-daily-evidence?limit=12&citable_only=true")) {
       return Promise.resolve(new Response(JSON.stringify(createMarketDailyEvidencePayload())));
     }
+    if (url.endsWith("/official-disclosures/evidence-status?limit=50")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        status: "ok",
+        symbols: ["000001"],
+        summary: {
+          eligible_symbol_count: 1,
+          metadata_disclosure_count: 1,
+          extracted_document_count: 1,
+          citable_section_count: 3,
+        },
+        items: [{
+          id: "11111111-2222-3333-4444-555555555555",
+          symbol: "000001",
+          title: "2025 Annual Report",
+          published_at: "2026-03-21T00:00:00+00:00",
+          source_url: "https://www.cninfo.com.cn/disclosure/1",
+          citation_id: "official_disclosure:11111111-2222-3333-4444-555555555555",
+          status: "extracted",
+          section_count: 3,
+          content_citable: true,
+        }],
+      })));
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
@@ -596,6 +619,9 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
     screen.getByText("market_daily_event:hot_sector:semiconductor:2026-01-02"),
   ).toBeInTheDocument();
   expect(screen.getByText("Only persisted rows are citable")).toBeInTheDocument();
+  expect(screen.getByText("Official disclosure document evidence")).toBeInTheDocument();
+  expect(screen.getByText("2025 Annual Report")).toBeInTheDocument();
+  expect(screen.getByText("Watchlist-only, sequential CNINFO requests")).toBeInTheDocument();
 
   const fredLink = screen.getByRole("link", { name: /FRED DGS10/, hidden: true });
   expect(fredLink).toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");

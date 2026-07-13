@@ -13,6 +13,10 @@ from packages.services.official_disclosure_documents import (
     ingest_official_disclosure_document,
     list_official_disclosure_sections,
 )
+from packages.services.official_disclosure_operations import (
+    enqueue_watchlist_official_disclosure_ingestion,
+    list_watchlist_official_disclosure_evidence,
+)
 from packages.services.official_disclosures import (
     OfficialDisclosurePersistenceError,
     OfficialDisclosureRefreshInput,
@@ -30,6 +34,11 @@ class OfficialDisclosureRefreshRequest(BaseModel):
     start_date: date
     end_date: date
     category: str | None = Field(default=None, max_length=128)
+
+
+class WatchlistOfficialDisclosureIngestRequest(BaseModel):
+    lookback_days: int = Field(default=30, ge=1, le=365)
+    max_documents: int = Field(default=20, ge=1, le=50)
 
 
 @router.get("")
@@ -68,6 +77,29 @@ def refresh_disclosures(
         ) from error
     except OfficialDisclosurePersistenceError as error:
         raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@router.get("/evidence-status")
+def get_watchlist_disclosure_evidence_status(
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return list_watchlist_official_disclosure_evidence(session=session, limit=limit)
+
+
+@router.post("/watchlist/ingest")
+def ingest_watchlist_disclosures(
+    payload: WatchlistOfficialDisclosureIngestRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        return enqueue_watchlist_official_disclosure_ingestion(
+            session=session,
+            lookback_days=payload.lookback_days,
+            max_documents=payload.max_documents,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.post("/{disclosure_id}/ingest-document")

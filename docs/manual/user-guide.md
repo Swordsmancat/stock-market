@@ -491,6 +491,6 @@ AI 市场助手当前能力：
 3. **P1 saved brief 增强**：已完成 Evidence Center 摘要保存 MVP；下一步可增加日/周分组、筛选、专题标签、导出和与 watchlist 事件的关联。
 4. **P1 watchlist 事件监控**：把 watchlist 价格异动、报告更新、新闻事件、宏观发布和 source readiness 变化汇总成个人研究 inbox。
 5. **P1 source notebook 到宏观证据工作流**：继续增强已实现的来源笔记本、source-readiness linkage 和 research follow-up queue，让一个来源条目更自然地进入“收集 -> 复核 -> seed/import 准备 -> 入库 -> AI 可引用”的流程。
-6. **P2 文档/公告语料 ingest**：A 股 CNINFO 公告元数据和文本型 PDF 页级章节已可持久化，分别以 `official_disclosure:*` 与 `official_disclosure_section:*` 引用；下一步是 OCR、批量监控、向量检索、SEC filings、电话会 transcript 或用户上传文档，不假设可随意抓取任意全文。
+6. **P2 文档/公告语料 ingest**：A 股 CNINFO 公告元数据和文本型 PDF 页级章节已可持久化，Evidence Center 也可查看自选股覆盖率、摄取单篇 PDF，并启动严格串行且有数量/延迟限制的自选股批次；下一步是定时监控、OCR、向量检索、SEC filings、电话会 transcript 或用户上传文档，不假设可随意抓取任意全文。
 7. **P2 研究级筛选与提醒**：围绕宏观阈值、watchlist 异动、报告更新和资料更新做提醒；推荐继续作为“研究线索生成器”，输出证据、历史样本和风险，而不是直接买卖建议。
 8. **P2 图表与个人工作区增强**：增加跨指标图表、参数持久化、轻量注释和 saved view；仍保持研究辅助定位，不把 terminal parity 作为近期目标。

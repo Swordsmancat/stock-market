@@ -11,6 +11,7 @@ def test_is_dispatchable_task_supports_registered_tasks():
     assert is_dispatchable_task("ingestion.sync_corporate_actions") is True
     assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars") is True
     assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars_batch") is True
+    assert is_dispatchable_task("ingestion.ingest_watchlist_official_disclosures") is True
     assert is_dispatchable_task("alerts.evaluate_watchlist_alerts") is True
     assert is_dispatchable_task("unknown.task") is False
 
@@ -239,5 +240,25 @@ def test_dispatch_task_run_enqueues_research_evidence_backfill(mock_task):
     assert celery_id == "celery-id-evidence-backfill"
     mock_task.delay.assert_called_once_with(
         backfill_run_id="backfill-run-id",
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.ingestion.ingest_watchlist_official_disclosures_task")
+def test_dispatch_task_run_enqueues_watchlist_official_disclosures(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-disclosures"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.ingest_watchlist_official_disclosures",
+        {"lookback_days": 45, "max_documents": 12},
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-disclosures"
+    mock_task.delay.assert_called_once_with(
+        lookback_days=45,
+        max_documents=12,
         task_run_id="task-run-id",
     )

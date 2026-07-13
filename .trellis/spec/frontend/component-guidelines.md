@@ -168,3 +168,11 @@ Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics
 - Do not add user-visible hardcoded strings outside `apps/web/messages/*.json`.
 - Do not duplicate interaction logic when an existing component already covers the flow.
 - When a server page passes a translated template string to a client component that later performs manual `.replace("{name}", value)` formatting, do not call `t("key")` on a message containing placeholders. Pass placeholder literals through the translator, for example `t("selectedFile", { name: "{name}" })`, or the real `next-intl` runtime may render the raw namespace key such as `ResearchSourceNotebook.completenessSummary`.
+
+## Scenario: Official Disclosure Evidence Operations Panel
+
+- `apps/web/app/[locale]/evidence/page.tsx` server-loads watchlist disclosure coverage and passes serializable localized labels to `OfficialDisclosureEvidencePanel`.
+- The client panel calls only same-origin proxies for one exact disclosure or one bounded watchlist batch, then uses `router.refresh()`.
+- Metadata-only and extracted-section evidence boundaries must remain visible. Empty and failed-load states are distinct.
+- Batch success exposes the existing TaskRun detail link; the panel does not poll or implement a second job-state model.
+- Component, page, and route-proxy tests cover rendering, request identity, task links, error state, and both locale catalogs.

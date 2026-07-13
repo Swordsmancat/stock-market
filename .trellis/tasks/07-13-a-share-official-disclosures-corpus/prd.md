@@ -22,19 +22,19 @@ Give stock discovery and AI research access to auditable A-share disclosure evid
 
 ## Child Deliverables
 
-1. `07-13-official-disclosure-metadata`: official CNINFO metadata refresh, persistence, retrieval, dedupe, and metadata-only citations.
-2. Follow-up: reviewed document-content ingestion with content hashing, section anchors, and storage policy.
-3. Follow-up: Evidence Center and AI Research document search/monitoring workflows.
-4. Follow-up: incremental watchlist/universe scheduling and coverage/SLA reporting.
+1. `07-13-official-disclosure-metadata`: completed official CNINFO metadata refresh, persistence, retrieval, dedupe, and metadata-only citations.
+2. `07-13-official-disclosure-content`: completed text-PDF ingestion with content hashing, page anchors, and immutable storage policy.
+3. `07-13-official-disclosure-evidence-operations`: completed Evidence Center coverage, exact single-document action, and explicit bounded watchlist TaskRun batch.
+4. Follow-up: scheduled incremental watchlist monitoring with durable cursors, freshness/SLA reporting, and operator controls.
 
 ## Acceptance Criteria
 
-- [ ] Official metadata can be refreshed and persisted without storing document bodies.
-- [ ] Repeated refreshes are idempotent and preserve stable citation identifiers.
-- [ ] Reviewed document content, when added later, remains distinguishable from metadata-only evidence.
-- [ ] AI surfaces use only persisted evidence and expose exact source links and boundaries.
-- [ ] Provider-wide failures produce sanitized diagnostics and preserve existing data.
-- [ ] Documentation states the source-rights, citation, and research-only boundaries.
+- [x] Official metadata can be refreshed and persisted without storing document bodies.
+- [x] Repeated refreshes are idempotent and preserve stable citation identifiers.
+- [x] Reviewed document content remains distinguishable from metadata-only evidence.
+- [x] AI surfaces use only persisted evidence and expose exact source links and boundaries.
+- [x] Provider-wide failures produce sanitized diagnostics and preserve existing data.
+- [x] Documentation states the source-rights, citation, and research-only boundaries.
 
 ## Out of Scope
 
