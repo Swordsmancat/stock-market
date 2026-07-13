@@ -1,4 +1,5 @@
 from apps.worker.celery_app import celery_app
+from packages.shared.config import settings
 
 
 def test_celery_uses_explicit_shanghai_timezone():
@@ -61,3 +62,14 @@ def test_celery_beat_schedules_a_share_incremental_evidence_refreshes():
         "evidence_kinds": ["fundamentals"],
         "shard_count": 5,
     }
+
+
+def test_celery_beat_schedules_incremental_watchlist_disclosure_monitor():
+    schedule = celery_app.conf.beat_schedule["watchlist-official-disclosure-monitor"]
+
+    assert schedule["task"] == "ingestion.schedule_watchlist_official_disclosures"
+    assert schedule["kwargs"] == {}
+    assert schedule["schedule"].total_seconds() == max(
+        15,
+        settings.disclosure_monitor_interval_minutes,
+    ) * 60

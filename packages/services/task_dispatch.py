@@ -127,11 +127,14 @@ def _dispatch_watchlist_official_disclosures(
 ) -> str:
     from apps.worker.tasks.ingestion import ingest_watchlist_official_disclosures_task
 
-    async_result = ingest_watchlist_official_disclosures_task.delay(
-        lookback_days=input_json.get("lookback_days", 30),
-        max_documents=input_json.get("max_documents", 20),
-        task_run_id=task_run_id,
-    )
+    kwargs = {
+        "lookback_days": input_json.get("lookback_days", 30),
+        "max_documents": input_json.get("max_documents", 20),
+        "task_run_id": task_run_id,
+    }
+    if "mode" in input_json:
+        kwargs["mode"] = input_json["mode"]
+    async_result = ingest_watchlist_official_disclosures_task.delay(**kwargs)
     return async_result.id
 
 

@@ -16,7 +16,9 @@ from packages.services.ingestion import (
 )
 from packages.services.instrument_universe import sync_instrument_universe
 from packages.services.official_disclosure_operations import (
+    WATCHLIST_DISCLOSURE_SCHEDULE_TASK_NAME,
     WATCHLIST_DISCLOSURE_TASK_NAME,
+    enqueue_watchlist_official_disclosure_ingestion,
     ingest_watchlist_official_disclosures,
 )
 from packages.services.research_evidence_backfill import (
@@ -434,6 +436,7 @@ def ingest_symbol_daily_bars_batch_task(
 def ingest_watchlist_official_disclosures_task(
     lookback_days: int = 30,
     max_documents: int = 20,
+    mode: str = "batch",
     task_run_id: str | None = None,
 ) -> dict[str, object]:
     session = SessionLocal()
@@ -448,6 +451,7 @@ def ingest_watchlist_official_disclosures_task(
             {
                 "lookback_days": lookback_days,
                 "max_documents": max_documents,
+                "mode": mode,
             },
             session=session,
         )
@@ -463,18 +467,52 @@ def ingest_watchlist_official_disclosures_task(
         )
 
     try:
-        result = ingest_watchlist_official_disclosures(
-            session=session,
-            lookback_days=lookback_days,
-            max_documents=max_documents,
-            request_delay_seconds=max(0.25, settings.disclosure_batch_request_delay_ms / 1000),
-            progress_callback=report_progress,
-        )
+        if mode == "incremental":
+            result = ingest_watchlist_official_disclosures(
+                session=session,
+                lookback_days=lookback_days,
+                max_documents=max_documents,
+                mode=mode,
+                overlap_days=settings.disclosure_monitor_overlap_days,
+                retry_base_minutes=settings.disclosure_monitor_retry_base_minutes,
+                retry_max_minutes=settings.disclosure_monitor_retry_max_minutes,
+                task_run_id=str(task_run.id),
+                request_delay_seconds=max(
+                    0.25,
+                    settings.disclosure_batch_request_delay_ms / 1000,
+                ),
+                progress_callback=report_progress,
+            )
+        else:
+            result = ingest_watchlist_official_disclosures(
+                session=session,
+                lookback_days=lookback_days,
+                max_documents=max_documents,
+                request_delay_seconds=max(
+                    0.25,
+                    settings.disclosure_batch_request_delay_ms / 1000,
+                ),
+                progress_callback=report_progress,
+            )
         finish_task_run(task_run, result, session=session)
         return result
     except Exception as exc:
         fail_task_run(task_run, str(exc), session=session)
         raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name=WATCHLIST_DISCLOSURE_SCHEDULE_TASK_NAME)
+def schedule_watchlist_official_disclosures_task() -> dict[str, object]:
+    session = SessionLocal()
+    try:
+        return enqueue_watchlist_official_disclosure_ingestion(
+            session=session,
+            lookback_days=settings.disclosure_monitor_lookback_days,
+            max_documents=settings.disclosure_monitor_max_documents,
+            mode="incremental",
+        )
     finally:
         session.close()
 

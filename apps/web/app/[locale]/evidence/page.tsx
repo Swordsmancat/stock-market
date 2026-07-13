@@ -1512,6 +1512,15 @@ function buildOfficialDisclosureEvidenceLabels(
     batchAction: t("batchAction"),
     batchPending: t("batchPending"),
     batchQueued: t("batchQueued"),
+    monitorAction: t("monitorAction"),
+    monitorPending: t("monitorPending"),
+    monitoringTitle: t("monitoringTitle"),
+    monitoringDescription: t("monitoringDescription"),
+    freshSymbols: t("freshSymbols"),
+    staleSymbols: t("staleSymbols"),
+    backoffSymbols: t("backoffSymbols"),
+    newDisclosures: t("newDisclosures"),
+    lastSuccess: t("lastSuccess"),
     openTaskRun: t("openTaskRun"),
     eligibleSymbols: t("eligibleSymbols"),
     metadataRows: t("metadataRows"),
@@ -1540,6 +1549,12 @@ function buildOfficialDisclosureEvidenceLabels(
       no_text: t("statusNoText"),
       rejected: t("statusRejected"),
       failed: t("statusFailed"),
+    },
+    freshnessLabels: {
+      fresh: t("freshnessFresh"),
+      stale: t("freshnessStale"),
+      backoff: t("freshnessBackoff"),
+      never: t("freshnessNever"),
     },
   };
 }

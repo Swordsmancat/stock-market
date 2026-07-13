@@ -547,6 +547,56 @@ class OfficialDisclosure(Base):
     )
 
 
+class OfficialDisclosureMonitorState(Base):
+    __tablename__ = "official_disclosure_monitor_states"
+    __table_args__ = (
+        UniqueConstraint(
+            "source",
+            "symbol",
+            name="uq_official_disclosure_monitor_source_symbol",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    source: Mapped[str] = mapped_column(String(64), default="cninfo")
+    symbol: Mapped[str] = mapped_column(String(64), index=True)
+    cursor_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    cursor_source_document_id: Mapped[str | None] = mapped_column(
+        String(128), default=None
+    )
+    last_attempted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    last_success_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    last_failure_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    status: Mapped[str] = mapped_column(String(32), default="never")
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
+    next_retry_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    last_error_code: Mapped[str | None] = mapped_column(String(128), default=None)
+    last_error_message: Mapped[str | None] = mapped_column(Text, default=None)
+    last_new_disclosure_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_task_run_id: Mapped[PythonUUID | None] = mapped_column(
+        ForeignKey("task_runs.id"), default=None
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class OfficialDisclosureDocument(Base):
     __tablename__ = "official_disclosure_documents"
     __table_args__ = (

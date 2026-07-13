@@ -172,6 +172,37 @@ def test_watchlist_official_disclosures_task_records_progress_and_success(monkey
     assert latest_run["result_json"] == result
 
 
+def test_scheduled_watchlist_disclosure_monitor_enqueues_incremental_mode(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    captured = {}
+
+    def fake_enqueue(*, session, lookback_days, max_documents, mode):
+        captured.update(
+            lookback_days=lookback_days,
+            max_documents=max_documents,
+            mode=mode,
+        )
+        return {"status": "dispatched", "task_run": {"id": "task-monitor"}}
+
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "enqueue_watchlist_official_disclosure_ingestion",
+        fake_enqueue,
+    )
+
+    result = ingestion_tasks.schedule_watchlist_official_disclosures_task()
+
+    assert result["status"] == "dispatched"
+    assert captured == {
+        "lookback_days": ingestion_tasks.settings.disclosure_monitor_lookback_days,
+        "max_documents": ingestion_tasks.settings.disclosure_monitor_max_documents,
+        "mode": "incremental",
+    }
+
+
 @pytest.mark.parametrize("quality_status", ["WARN", "FAIL"])
 def test_ingest_market_data_persists_quality_diagnostics_without_failing_task_run(
     monkeypatch,

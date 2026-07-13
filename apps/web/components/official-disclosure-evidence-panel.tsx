@@ -41,6 +41,25 @@ export type OfficialDisclosureEvidencePayload = {
     non_citable_count?: number;
     citable_section_count?: number;
   };
+  monitoring?: {
+    enabled?: boolean;
+    interval_minutes?: number;
+    freshness_sla_hours?: number;
+    summary?: {
+      fresh_symbol_count?: number;
+      stale_symbol_count?: number;
+      backoff_symbol_count?: number;
+      never_succeeded_symbol_count?: number;
+      new_disclosure_count?: number;
+    };
+    items?: Array<{
+      symbol: string;
+      freshness: string;
+      last_success_at?: string | null;
+      next_retry_at?: string | null;
+      last_new_disclosure_count?: number;
+    }>;
+  };
   items?: OfficialDisclosureEvidenceItem[];
 };
 
@@ -50,6 +69,15 @@ export type OfficialDisclosureEvidenceLabels = {
   batchAction: string;
   batchPending: string;
   batchQueued: string;
+  monitorAction: string;
+  monitorPending: string;
+  monitoringTitle: string;
+  monitoringDescription: string;
+  freshSymbols: string;
+  staleSymbols: string;
+  backoffSymbols: string;
+  newDisclosures: string;
+  lastSuccess: string;
   openTaskRun: string;
   eligibleSymbols: string;
   metadataRows: string;
@@ -73,6 +101,7 @@ export type OfficialDisclosureEvidenceLabels = {
   contentBoundary: string;
   watchlistOnly: string;
   statusLabels: Record<string, string>;
+  freshnessLabels: Record<string, string>;
 };
 
 type Props = {
@@ -105,18 +134,20 @@ function count(value: unknown): number {
 
 export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, labels }: Props) {
   const [batchPending, setBatchPending] = React.useState(false);
+  const [monitorPending, setMonitorPending] = React.useState(false);
   const [pendingDisclosureId, setPendingDisclosureId] = React.useState<string | null>(null);
   const [taskRunId, setTaskRunId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const router = useRouter();
   const summary = initialPayload?.summary;
+  const monitoring = initialPayload?.monitoring;
+  const monitoringSummary = monitoring?.summary;
   const items = initialPayload?.items ?? [];
 
-  async function ingestBatch() {
-    setBatchPending(true);
+  async function enqueueWatchlist(path: string) {
     setError(null);
     try {
-      const response = await fetch("/api/official-disclosures/watchlist-ingest", {
+      const response = await fetch(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ lookback_days: 30, max_documents: 20 }),
@@ -134,8 +165,24 @@ export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, la
       router.refresh();
     } catch {
       setError(labels.operationFailed);
+    }
+  }
+
+  async function ingestBatch() {
+    setBatchPending(true);
+    try {
+      await enqueueWatchlist("/api/official-disclosures/watchlist-ingest");
     } finally {
       setBatchPending(false);
+    }
+  }
+
+  async function monitorWatchlist() {
+    setMonitorPending(true);
+    try {
+      await enqueueWatchlist("/api/official-disclosures/watchlist-monitor");
+    } finally {
+      setMonitorPending(false);
     }
   }
 
@@ -171,10 +218,16 @@ export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, la
             </CardTitle>
             <CardDescription className="mt-1">{labels.description}</CardDescription>
           </div>
-          <Button type="button" onClick={() => void ingestBatch()} disabled={batchPending}>
-            <RefreshCw className={batchPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            {batchPending ? labels.batchPending : labels.batchAction}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void monitorWatchlist()} disabled={monitorPending}>
+              <RefreshCw className={monitorPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              {monitorPending ? labels.monitorPending : labels.monitorAction}
+            </Button>
+            <Button type="button" onClick={() => void ingestBatch()} disabled={batchPending}>
+              <RefreshCw className={batchPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              {batchPending ? labels.batchPending : labels.batchAction}
+            </Button>
+          </div>
         </div>
       </FinancialTerminalCardHeader>
       <FinancialTerminalCardContent className="space-y-4">
@@ -197,6 +250,38 @@ export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, la
                 </FinancialTerminalSurface>
               ))}
             </div>
+            {monitoring ? (
+              <FinancialTerminalSurface className="space-y-3 p-3">
+                <div>
+                  <div className="font-semibold">{labels.monitoringTitle}</div>
+                  <p className="text-xs text-muted-foreground">{labels.monitoringDescription}</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {[
+                    [labels.freshSymbols, count(monitoringSummary?.fresh_symbol_count)],
+                    [labels.staleSymbols, count(monitoringSummary?.stale_symbol_count)],
+                    [labels.backoffSymbols, count(monitoringSummary?.backoff_symbol_count)],
+                    [labels.newDisclosures, count(monitoringSummary?.new_disclosure_count)],
+                  ].map(([label, value]) => (
+                    <div key={String(label)} className="border-l border-border/70 pl-3">
+                      <div className="text-xs text-muted-foreground">{label}</div>
+                      <div className="font-mono text-lg font-semibold">{value}</div>
+                    </div>
+                  ))}
+                </div>
+                {(monitoring.items ?? []).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(monitoring.items ?? []).map((item) => (
+                      <Badge key={item.symbol} variant={item.freshness === "fresh" ? "secondary" : "outline"}>
+                        <span className="font-mono">{item.symbol}</span>
+                        <span>{labels.freshnessLabels[item.freshness] ?? item.freshness}</span>
+                        {item.last_success_at ? <span>{labels.lastSuccess}: {item.last_success_at.slice(0, 16).replace("T", " ")}</span> : null}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </FinancialTerminalSurface>
+            ) : null}
             {items.length === 0 ? (
               <div><div className="font-semibold">{labels.emptyTitle}</div><p className="text-sm text-muted-foreground">{labels.emptyDescription}</p></div>
             ) : (

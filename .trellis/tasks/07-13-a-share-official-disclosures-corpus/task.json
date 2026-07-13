@@ -21,7 +21,8 @@
   "children": [
     "07-13-official-disclosure-metadata",
     "07-13-official-disclosure-content",
-    "07-13-official-disclosure-evidence-operations"
+    "07-13-official-disclosure-evidence-operations",
+    "07-13-official-disclosure-incremental-monitoring"
   ],
   "parent": null,
   "relatedFiles": [],

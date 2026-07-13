@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -90,6 +92,15 @@ celery_app.conf.beat_schedule = {
         },
     },
 }
+
+if settings.disclosure_monitor_enabled:
+    celery_app.conf.beat_schedule["watchlist-official-disclosure-monitor"] = {
+        "task": "ingestion.schedule_watchlist_official_disclosures",
+        "schedule": timedelta(
+            minutes=max(15, settings.disclosure_monitor_interval_minutes),
+        ),
+        "kwargs": {},
+    }
 celery_app.autodiscover_tasks(["apps.worker.tasks"], force=True)
 
 # Manually import tasks to ensure they are registered

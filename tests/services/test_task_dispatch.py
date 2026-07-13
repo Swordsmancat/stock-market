@@ -262,3 +262,22 @@ def test_dispatch_task_run_enqueues_watchlist_official_disclosures(mock_task):
         max_documents=12,
         task_run_id="task-run-id",
     )
+
+
+@patch("apps.worker.tasks.ingestion.ingest_watchlist_official_disclosures_task")
+def test_dispatch_task_run_preserves_incremental_disclosure_mode(mock_task):
+    mock_task.delay.return_value.id = "celery-id-monitor"
+
+    celery_id = dispatch_task_run(
+        "ingestion.ingest_watchlist_official_disclosures",
+        {"lookback_days": 30, "max_documents": 20, "mode": "incremental"},
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-monitor"
+    mock_task.delay.assert_called_once_with(
+        lookback_days=30,
+        max_documents=20,
+        mode="incremental",
+        task_run_id="task-run-id",
+    )

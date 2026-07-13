@@ -340,3 +340,37 @@ def test_official_disclosure_watchlist_ingest_api_enqueues_bounded_task(monkeypa
     assert response.status_code == 200
     assert captured == {"lookback_days": 45, "max_documents": 12}
     assert response.json()["task_run"]["id"] == "task-1"
+
+
+def test_official_disclosure_watchlist_monitor_api_enqueues_incremental_task(monkeypatch):
+    session = make_session()
+    captured = {}
+
+    def enqueue(*, session, lookback_days, max_documents, mode):
+        captured.update(
+            lookback_days=lookback_days,
+            max_documents=max_documents,
+            mode=mode,
+        )
+        return {"status": "dispatched", "task_run": {"id": "task-monitor"}}
+
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.enqueue_watchlist_official_disclosure_ingestion",
+        enqueue,
+    )
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/official-disclosures/watchlist/monitor",
+            json={"lookback_days": 30, "max_documents": 20},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured == {
+        "lookback_days": 30,
+        "max_documents": 20,
+        "mode": "incremental",
+    }
+    assert response.json()["task_run"]["id"] == "task-monitor"

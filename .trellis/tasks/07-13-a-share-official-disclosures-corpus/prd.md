@@ -25,7 +25,7 @@ Give stock discovery and AI research access to auditable A-share disclosure evid
 1. `07-13-official-disclosure-metadata`: completed official CNINFO metadata refresh, persistence, retrieval, dedupe, and metadata-only citations.
 2. `07-13-official-disclosure-content`: completed text-PDF ingestion with content hashing, page anchors, and immutable storage policy.
 3. `07-13-official-disclosure-evidence-operations`: completed Evidence Center coverage, exact single-document action, and explicit bounded watchlist TaskRun batch.
-4. Follow-up: scheduled incremental watchlist monitoring with durable cursors, freshness/SLA reporting, and operator controls.
+4. `07-13-official-disclosure-incremental-monitoring`: completed scheduled incremental watchlist monitoring with durable cursors, overlap dedupe, retry backoff, freshness/SLA reporting, and operator controls.
 
 ## Acceptance Criteria
 

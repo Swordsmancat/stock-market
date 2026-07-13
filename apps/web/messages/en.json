@@ -571,6 +571,15 @@
     "batchAction": "Ingest watchlist disclosures",
     "batchPending": "Queueing disclosure batch...",
     "batchQueued": "Watchlist disclosure batch queued",
+    "monitorAction": "Run incremental monitor",
+    "monitorPending": "Queueing incremental monitor...",
+    "monitoringTitle": "Incremental monitoring freshness",
+    "monitoringDescription": "Scheduled CNINFO refresh uses durable cursors, a bounded overlap window, and per-symbol retry backoff. New rows require human review.",
+    "freshSymbols": "Fresh symbols",
+    "staleSymbols": "Stale symbols",
+    "backoffSymbols": "Retry backoff",
+    "newDisclosures": "New on last run",
+    "lastSuccess": "Last success",
     "openTaskRun": "Open task run",
     "eligibleSymbols": "Eligible A-share symbols",
     "metadataRows": "Disclosure metadata",
@@ -597,7 +606,11 @@
     "statusExtracted": "Text extracted",
     "statusNoText": "No extractable text",
     "statusRejected": "Extraction rejected",
-    "statusFailed": "Extraction failed"
+    "statusFailed": "Extraction failed",
+    "freshnessFresh": "Fresh",
+    "freshnessStale": "Stale",
+    "freshnessBackoff": "Retry backoff",
+    "freshnessNever": "Never refreshed"
   },
   "ResearchBriefInbox": {
     "title": "Saved research brief inbox",

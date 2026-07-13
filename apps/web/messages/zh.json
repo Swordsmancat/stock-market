@@ -578,6 +578,15 @@
     "batchAction": "摄取自选股公告",
     "batchPending": "正在加入公告任务队列...",
     "batchQueued": "自选股公告任务已进入队列",
+    "monitorAction": "运行增量监控",
+    "monitorPending": "正在加入增量监控队列...",
+    "monitoringTitle": "增量监控新鲜度",
+    "monitoringDescription": "定时 CNINFO 刷新使用持久化游标、有界重叠窗口和逐标的失败退避；新增公告需人工复核。",
+    "freshSymbols": "新鲜标的",
+    "staleSymbols": "过期标的",
+    "backoffSymbols": "重试退避",
+    "newDisclosures": "上次新增公告",
+    "lastSuccess": "最近成功",
     "openTaskRun": "打开任务记录",
     "eligibleSymbols": "可处理 A 股标的",
     "metadataRows": "公告元数据",
@@ -604,7 +613,11 @@
     "statusExtracted": "正文已提取",
     "statusNoText": "无可提取文本",
     "statusRejected": "提取被拒绝",
-    "statusFailed": "提取失败"
+    "statusFailed": "提取失败",
+    "freshnessFresh": "新鲜",
+    "freshnessStale": "已过期",
+    "freshnessBackoff": "重试退避中",
+    "freshnessNever": "从未刷新"
   },
   "ResearchBriefInbox": {
     "title": "已保存研究摘要收件箱",

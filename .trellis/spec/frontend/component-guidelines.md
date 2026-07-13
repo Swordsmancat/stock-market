@@ -172,7 +172,8 @@ Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics
 ## Scenario: Official Disclosure Evidence Operations Panel
 
 - `apps/web/app/[locale]/evidence/page.tsx` server-loads watchlist disclosure coverage and passes serializable localized labels to `OfficialDisclosureEvidencePanel`.
-- The client panel calls only same-origin proxies for one exact disclosure or one bounded watchlist batch, then uses `router.refresh()`.
+- The client panel calls only same-origin proxies for one exact disclosure, one bounded watchlist batch, or one incremental monitor run, then uses `router.refresh()`.
 - Metadata-only and extracted-section evidence boundaries must remain visible. Empty and failed-load states are distinct.
-- Batch success exposes the existing TaskRun detail link; the panel does not poll or implement a second job-state model.
+- Monitoring renders backend-owned `fresh`, `stale`, `backoff`, and `never` projections plus last-run new counts. It must not derive a second cursor/SLA model or turn new disclosures into automatic investment conclusions.
+- Batch/monitor success exposes the existing TaskRun detail link; the panel does not poll or implement a second job-state model.
 - Component, page, and route-proxy tests cover rendering, request identity, task links, error state, and both locale catalogs.

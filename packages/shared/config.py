@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     a_share_backfill_max_transient_attempts: int = 3
     a_share_backfill_retry_base_seconds: float = 1.0
     disclosure_batch_request_delay_ms: int = 1000
+    disclosure_monitor_enabled: bool = True
+    disclosure_monitor_interval_minutes: int = 60
+    disclosure_monitor_lookback_days: int = 30
+    disclosure_monitor_overlap_days: int = 3
+    disclosure_monitor_max_documents: int = 20
+    disclosure_monitor_freshness_hours: int = 24
+    disclosure_monitor_retry_base_minutes: int = 60
+    disclosure_monitor_retry_max_minutes: int = 1440
     fred_api_key: str | None = None
     fred_api_base_url: str = "https://api.stlouisfed.org/fred"
     world_bank_api_base_url: str = "https://api.worldbank.org/v2"

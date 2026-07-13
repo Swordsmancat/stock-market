@@ -102,6 +102,22 @@ def ingest_watchlist_disclosures(
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
+@router.post("/watchlist/monitor")
+def monitor_watchlist_disclosures(
+    payload: WatchlistOfficialDisclosureIngestRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        return enqueue_watchlist_official_disclosure_ingestion(
+            session=session,
+            lookback_days=payload.lookback_days,
+            max_documents=payload.max_documents,
+            mode="incremental",
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
 @router.post("/{disclosure_id}/ingest-document")
 def ingest_disclosure_document(
     disclosure_id: str,

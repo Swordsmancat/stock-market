@@ -154,6 +154,19 @@ def load_official_disclosure_documents_migration():
     return module
 
 
+def load_official_disclosure_monitoring_migration():
+    migration_path = Path("alembic/versions/0019_official_disclosure_monitoring.py")
+    spec = importlib.util.spec_from_file_location(
+        "official_disclosure_monitoring_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_official_disclosures_migration_creates_metadata_table_and_identity_constraint():
     migration = load_official_disclosures_migration()
     engine = create_engine("sqlite:///:memory:")
@@ -194,6 +207,45 @@ def test_official_disclosure_documents_migration_creates_versions_and_sections()
         constraint["name"] == "uq_official_disclosure_sections_index"
         for constraint in section_constraints
     )
+
+
+def test_official_disclosure_monitoring_migration_creates_durable_symbol_state():
+    migration = load_official_disclosure_monitoring_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(migration, connection)
+        inspector = inspect(connection)
+        columns = {column["name"] for column in inspector.get_columns(
+            "official_disclosure_monitor_states"
+        )}
+        constraints = inspector.get_unique_constraints(
+            "official_disclosure_monitor_states"
+        )
+
+    assert {
+        "cursor_published_at",
+        "cursor_source_document_id",
+        "last_success_at",
+        "next_retry_at",
+        "consecutive_failures",
+        "last_new_disclosure_count",
+    }.issubset(columns)
+    assert any(
+        constraint["name"] == "uq_official_disclosure_monitor_source_symbol"
+        and set(constraint["column_names"]) == {"source", "symbol"}
+        for constraint in constraints
+    )
+
+    with engine.begin() as connection:
+        context = MigrationContext.configure(connection)
+        original_op = migration.op
+        migration.op = Operations(context)
+        try:
+            migration.downgrade()
+        finally:
+            migration.op = original_op
+        assert "official_disclosure_monitor_states" not in inspect(connection).get_table_names()
 
 
 def run_migration(migration, connection):
