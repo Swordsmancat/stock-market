@@ -47,4 +47,3 @@ The cursor advances only after a successful metadata refresh and is selected by 
 - Existing explicit ingestion requests default to `mode=batch`; the new monitor endpoint uses `mode=incremental`.
 - Beat defaults are bounded and configurable. Deployments must apply Alembic migration and restart API/worker/beat to load the new route, model, and schedule.
 - Rollback removes only monitor state; the official metadata and extracted document corpus is unaffected.
-
