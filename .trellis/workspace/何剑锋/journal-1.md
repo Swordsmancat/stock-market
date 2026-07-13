@@ -1680,3 +1680,36 @@ Added exact-ID CNINFO PDF ingestion, safe immutable document storage, bounded py
 ### Next Steps
 
 - None - task complete
+
+
+## Session 51: Official disclosure evidence operations
+
+**Date**: 2026-07-13
+**Task**: Official disclosure evidence operations
+**Branch**: `master`
+
+### Summary
+
+Added watchlist-only disclosure coverage, exact single-PDF Evidence Center actions, deduplicated bounded sequential TaskRun ingestion, progress and partial-failure diagnostics, localized UI, proxies, tests, docs, and executable contracts. Backend 634 and Web 209 tests passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6505e4d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
