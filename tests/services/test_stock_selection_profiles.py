@@ -44,3 +44,23 @@ def test_resolve_stock_selection_profile_rejects_unknown_profile():
 def test_resolve_stock_selection_profile_rejects_unknown_override():
     with pytest.raises(ValueError, match="Unsupported stock-selection profile override"):
         resolve_stock_selection_profile("quality_value", {"future_return": 0.5})
+
+
+def test_resolve_stock_selection_profile_canonicalizes_set_like_overrides():
+    resolved = resolve_stock_selection_profile(
+        "quality_value",
+        {
+            "required_pattern_codes": [" Hammer ", "doji", "HAMMER", ""],
+            "required_news_sentiment": " Positive ",
+        },
+    )
+
+    assert resolved["overrides"] == {
+        "required_pattern_codes": ["doji", "hammer"],
+        "required_news_sentiment": "positive",
+    }
+    assert resolved["effective_criteria"]["required_pattern_codes"] == [
+        "doji",
+        "hammer",
+    ]
+    assert resolved["effective_criteria"]["required_news_sentiment"] == "positive"

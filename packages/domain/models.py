@@ -8,6 +8,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     Numeric,
@@ -682,6 +683,171 @@ class ResearchBrief(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
     )
+
+
+class ResearchShortlistRun(Base):
+    __tablename__ = "research_shortlist_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "generation_key",
+            name="uq_research_shortlist_runs_generation_key",
+        ),
+        Index(
+            "ix_research_shortlist_runs_latest",
+            "market",
+            "profile_id",
+            "decision_date",
+            "generated_at",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    generation_key: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="committed")
+    decision_date: Mapped[date] = mapped_column(Date)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    market: Mapped[str] = mapped_column(String(32))
+    asset_type: Mapped[str] = mapped_column(String(32))
+    profile_id: Mapped[str] = mapped_column(String(64))
+    rule_set: Mapped[str] = mapped_column(String(64))
+    scoring_model: Mapped[str] = mapped_column(String(64))
+    locale: Mapped[str] = mapped_column(String(8))
+    shortlist_limit: Mapped[int] = mapped_column(Integer)
+    default_criteria_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    effective_criteria_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    overrides_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    dimension_weights_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    candidate_scope_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    coverage_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    diagnostics_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    explanation_markdown: Mapped[str] = mapped_column(Text)
+    model_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    citations_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    safety_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    research_signal_only: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    candidates: Mapped[list["ResearchShortlistCandidate"]] = relationship(
+        "ResearchShortlistCandidate",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class ResearchShortlistCandidate(Base):
+    __tablename__ = "research_shortlist_candidates"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "instrument_id",
+            name="uq_research_shortlist_candidates_instrument",
+        ),
+        UniqueConstraint(
+            "run_id",
+            "rank",
+            name="uq_research_shortlist_candidates_rank",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    run_id: Mapped[PythonUUID] = mapped_column(
+        ForeignKey("research_shortlist_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    instrument_id: Mapped[PythonUUID] = mapped_column(ForeignKey("instruments.id"))
+    symbol: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(256))
+    market: Mapped[str] = mapped_column(String(32))
+    asset_type: Mapped[str] = mapped_column(String(32))
+    rank: Mapped[int] = mapped_column(Integer)
+    total_score: Mapped[Decimal] = mapped_column(Numeric(8, 4))
+    minimum_rule_buffer: Mapped[Decimal] = mapped_column(Numeric(8, 4))
+    entry_trade_date: Mapped[date] = mapped_column(Date)
+    entry_close: Mapped[Decimal] = mapped_column(Numeric(20, 6))
+    entry_provider: Mapped[str] = mapped_column(String(64))
+    entry_source: Mapped[str] = mapped_column(String(128))
+    entry_adjustment: Mapped[str] = mapped_column(String(32))
+    entry_source_priority: Mapped[int] = mapped_column(Integer)
+    entry_ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    factor_scores_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    supporting_factors_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    opposing_factors_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    data_gaps_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    invalidation_conditions_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    evidence_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    matched_rules_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    citations_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    safety_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    run: Mapped[ResearchShortlistRun] = relationship(
+        "ResearchShortlistRun",
+        back_populates="candidates",
+    )
+    instrument: Mapped[Instrument] = relationship("Instrument")
 
 
 class MarketDailyEvidenceEvent(Base):

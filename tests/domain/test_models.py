@@ -6,6 +6,8 @@ from packages.domain.models import (
     OfficialDisclosure,
     OfficialDisclosureDocument,
     OfficialDisclosureSection,
+    ResearchShortlistCandidate,
+    ResearchShortlistRun,
     ResearchSourceNote,
 )
 
@@ -81,3 +83,41 @@ def test_official_disclosure_document_and_section_preserve_content_provenance():
     assert document.metadata_json["content_addressed"] is True
     assert section.page_number == 12
     assert section.topic == "risks"
+
+
+def test_research_shortlist_models_preserve_frozen_decision_evidence():
+    run = ResearchShortlistRun(
+        generation_key="a" * 64,
+        status="committed",
+        decision_date=datetime(2026, 7, 10, tzinfo=timezone.utc).date(),
+        market="CN",
+        asset_type="stock",
+        profile_id="quality_value",
+        rule_set="instock_composite_selection_v1",
+        scoring_model="daily_research_score_v1",
+        locale="zh",
+        shortlist_limit=10,
+        explanation_markdown="Research only.",
+    )
+    candidate = ResearchShortlistCandidate(
+        symbol="000001",
+        name="Example",
+        market="CN",
+        asset_type="stock",
+        rank=1,
+        total_score=0.8125,
+        minimum_rule_buffer=0.625,
+        entry_trade_date=datetime(2026, 7, 10, tzinfo=timezone.utc).date(),
+        entry_close=10.5,
+        entry_provider="akshare",
+        entry_source="akshare.stock_zh_a_hist",
+        entry_adjustment="qfq",
+        entry_source_priority=0,
+        entry_ingested_at=datetime(2026, 7, 10, 10, tzinfo=timezone.utc),
+        safety_json={"research_signal_only": True},
+    )
+    run.candidates.append(candidate)
+
+    assert run.scoring_model == "daily_research_score_v1"
+    assert run.candidates[0].entry_source == "akshare.stock_zh_a_hist"
+    assert run.candidates[0].safety_json["research_signal_only"] is True

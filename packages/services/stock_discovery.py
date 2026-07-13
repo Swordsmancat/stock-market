@@ -42,9 +42,9 @@ def discover_local_stocks(
     shortlist = selection["items"]
     if not isinstance(shortlist, list):
         shortlist = []
-    citations = _shortlist_citations(shortlist)
+    citations = build_stock_discovery_citations(shortlist)
     diagnostics = list(selection.get("diagnostics", []))
-    explanation, model = _generate_explanation_or_fallback(
+    explanation, model = generate_stock_discovery_explanation(
         locale="en" if locale == "en" else "zh",
         resolved=resolved,
         effective_criteria=effective_criteria,
@@ -77,7 +77,7 @@ def discover_local_stocks(
     }
 
 
-def _generate_explanation_or_fallback(
+def generate_stock_discovery_explanation(
     *,
     locale: str,
     resolved: dict[str, object],
@@ -160,7 +160,9 @@ def _generate_explanation_or_fallback(
     }
 
 
-def _shortlist_citations(shortlist: list[dict[str, object]]) -> list[dict[str, object]]:
+def build_stock_discovery_citations(
+    shortlist: list[dict[str, object]],
+) -> list[dict[str, object]]:
     citations: list[dict[str, object]] = []
     seen: set[str] = set()
     for item in shortlist:

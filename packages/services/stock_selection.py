@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -16,6 +16,10 @@ from packages.domain.models import (
     TechnicalIndicator,
 )
 from packages.services.watchlists import get_active_watchlist_scope
+from packages.services.stock_selection_profiles import (
+    normalize_stock_selection_criteria,
+    normalize_stock_selection_sentiment,
+)
 
 
 RULE_SET_ID = "instock_composite_selection_v1"
@@ -56,6 +60,8 @@ def screen_local_stock_selection(
     min_news_sentiment_confidence: float | None = None,
     watchlist_only: bool = False,
     limit: int = 20,
+    unbounded_results: bool = False,
+    as_of: date | None = None,
 ) -> dict[str, object]:
     criteria = _criteria_payload(
         max_pe_ratio=max_pe_ratio,
@@ -114,6 +120,7 @@ def screen_local_stock_selection(
         session=session,
         instruments=instruments,
         include_news=_news_criteria_requested(criteria),
+        as_of=as_of,
     )
     detailed_diagnostics = bool(_normalize_symbols(symbols)) or watchlist_only or len(instruments) <= 100
     diagnostics: list[dict[str, object]] = []
@@ -129,14 +136,19 @@ def screen_local_stock_selection(
         if evaluation["matched"]:
             items.append(evaluation["item"])
 
-    ranked_items = sorted(
+    all_ranked_items = sorted(
         items,
         key=lambda item: (
             float(item.get("score", 0.0)),
             str(item.get("symbol", "")),
         ),
         reverse=True,
-    )[: max(1, min(limit, 100))]
+    )
+    ranked_items = (
+        all_ranked_items
+        if unbounded_results
+        else all_ranked_items[: max(1, min(limit, 100))]
+    )
     if not detailed_diagnostics:
         diagnostics = _compact_diagnostics(diagnostic_counts)
 
@@ -187,14 +199,14 @@ def _criteria_payload(
     required_news_sentiment: str | None,
     min_news_sentiment_confidence: float | None,
 ) -> dict[str, object]:
-    return {
+    return normalize_stock_selection_criteria({
         "max_pe_ratio": max_pe_ratio,
         "min_revenue_growth": min_revenue_growth,
         "min_net_margin": min_net_margin,
         "min_rsi": min_rsi,
         "max_rsi": max_rsi,
         "require_price_above_ma": require_price_above_ma,
-        "required_pattern_codes": _normalize_pattern_codes(required_pattern_codes),
+        "required_pattern_codes": required_pattern_codes,
         "min_mfi": min_mfi,
         "max_mfi": max_mfi,
         "min_william_r": min_william_r,
@@ -204,9 +216,9 @@ def _criteria_payload(
         "min_latest_volume": min_latest_volume,
         "min_traded_amount": min_traded_amount,
         "min_news_article_count": min_news_article_count,
-        "required_news_sentiment": _normalize_sentiment(required_news_sentiment),
+        "required_news_sentiment": required_news_sentiment,
         "min_news_sentiment_confidence": min_news_sentiment_confidence,
-    }
+    })
 
 
 def _has_active_criteria(criteria: dict[str, object]) -> bool:
@@ -352,6 +364,7 @@ def _evaluate_instrument(
         "score": round(criteria_count / max(1, _active_criteria_count(criteria)), 4),
         "latest_bar": _serialize_daily_bar(latest_bar),
         "fundamentals": _serialize_fundamentals(latest_fundamentals),
+        "technical_indicators_as_of": latest_indicators["as_of"],
         "technical_indicators": latest_indicators["values"],
         "matched_rules": matched_rules,
         "evidence_citations": evidence_citations,
@@ -691,17 +704,20 @@ def _load_selection_evidence(
     session: Session,
     instruments: list[Instrument],
     include_news: bool,
+    as_of: date | None,
 ) -> SelectionEvidence:
     instrument_ids = [instrument.id for instrument in instruments]
     symbols = sorted({instrument.symbol.upper() for instrument in instruments})
     if not instrument_ids:
         return SelectionEvidence({}, {}, {}, {})
     return SelectionEvidence(
-        latest_bars=_bulk_latest_daily_bars(session, instrument_ids),
-        latest_indicators=_bulk_latest_indicators(session, instrument_ids),
-        latest_fundamentals=_bulk_latest_fundamentals(session, symbols),
+        latest_bars=_bulk_latest_daily_bars(session, instrument_ids, as_of=as_of),
+        latest_indicators=_bulk_latest_indicators(session, instrument_ids, as_of=as_of),
+        latest_fundamentals=_bulk_latest_fundamentals(session, symbols, as_of=as_of),
         latest_news_sentiment=(
-            _bulk_latest_news_sentiment(session, symbols) if include_news else {}
+            _bulk_latest_news_sentiment(session, symbols, as_of=as_of)
+            if include_news
+            else {}
         ),
     )
 
@@ -709,16 +725,19 @@ def _load_selection_evidence(
 def _bulk_latest_daily_bars(
     session: Session,
     instrument_ids: list[UUID],
+    *,
+    as_of: date | None,
 ) -> dict[UUID, DailyBar]:
-    latest_dates = (
+    latest_dates_query = (
         session.query(
             DailyBar.instrument_id.label("instrument_id"),
             func.max(DailyBar.trade_date).label("trade_date"),
         )
         .filter(DailyBar.instrument_id.in_(instrument_ids))
-        .group_by(DailyBar.instrument_id)
-        .subquery()
     )
+    if as_of is not None:
+        latest_dates_query = latest_dates_query.filter(DailyBar.trade_date <= as_of)
+    latest_dates = latest_dates_query.group_by(DailyBar.instrument_id).subquery()
     rows = (
         session.query(DailyBar)
         .join(
@@ -736,17 +755,21 @@ def _bulk_latest_daily_bars(
 def _bulk_latest_indicators(
     session: Session,
     instrument_ids: list[UUID],
+    *,
+    as_of: date | None,
 ) -> dict[UUID, dict[str, object]]:
-    latest_times = (
+    latest_times_query = (
         session.query(
             TechnicalIndicator.instrument_id.label("instrument_id"),
             func.max(TechnicalIndicator.as_of).label("as_of"),
         )
         .filter(TechnicalIndicator.instrument_id.in_(instrument_ids))
         .filter(TechnicalIndicator.timeframe == "1d")
-        .group_by(TechnicalIndicator.instrument_id)
-        .subquery()
     )
+    cutoff = _exclusive_utc_day_end(as_of)
+    if cutoff is not None:
+        latest_times_query = latest_times_query.filter(TechnicalIndicator.as_of < cutoff)
+    latest_times = latest_times_query.group_by(TechnicalIndicator.instrument_id).subquery()
     rows = (
         session.query(TechnicalIndicator)
         .join(
@@ -774,16 +797,19 @@ def _bulk_latest_indicators(
 def _bulk_latest_fundamentals(
     session: Session,
     symbols: list[str],
+    *,
+    as_of: date | None,
 ) -> dict[str, FundamentalSnapshot]:
-    latest_dates = (
+    latest_dates_query = (
         session.query(
             FundamentalSnapshot.symbol.label("symbol"),
             func.max(FundamentalSnapshot.as_of).label("as_of"),
         )
         .filter(FundamentalSnapshot.symbol.in_(symbols))
-        .group_by(FundamentalSnapshot.symbol)
-        .subquery()
     )
+    if as_of is not None:
+        latest_dates_query = latest_dates_query.filter(FundamentalSnapshot.as_of <= as_of)
+    latest_dates = latest_dates_query.group_by(FundamentalSnapshot.symbol).subquery()
     rows = (
         session.query(FundamentalSnapshot)
         .join(
@@ -801,32 +827,43 @@ def _bulk_latest_fundamentals(
 def _bulk_latest_news_sentiment(
     session: Session,
     symbols: list[str],
+    *,
+    as_of: date | None,
 ) -> dict[str, dict[str, object]]:
     payloads = {symbol: _empty_news_sentiment_payload() for symbol in symbols}
-    count_rows = (
+    cutoff = _exclusive_utc_day_end(as_of)
+    count_query = (
         session.query(
             NewsArticle.symbol,
             func.count(func.distinct(NewsArticle.id)),
         )
         .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
         .filter(NewsArticle.symbol.in_(symbols))
-        .group_by(NewsArticle.symbol)
-        .all()
     )
+    if cutoff is not None:
+        count_query = count_query.filter(
+            NewsArticle.published_at < cutoff,
+            SentimentSignal.created_at < cutoff,
+        )
+    count_rows = count_query.group_by(NewsArticle.symbol).all()
     for symbol, article_count in count_rows:
         payloads[symbol.upper()]["article_count"] = int(article_count)
 
-    latest_published = (
+    latest_published_query = (
         session.query(
             NewsArticle.symbol.label("symbol"),
             func.max(NewsArticle.published_at).label("published_at"),
         )
         .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
         .filter(NewsArticle.symbol.in_(symbols))
-        .group_by(NewsArticle.symbol)
-        .subquery()
     )
-    rows = (
+    if cutoff is not None:
+        latest_published_query = latest_published_query.filter(
+            NewsArticle.published_at < cutoff,
+            SentimentSignal.created_at < cutoff,
+        )
+    latest_published = latest_published_query.group_by(NewsArticle.symbol).subquery()
+    rows_query = (
         session.query(NewsArticle, SentimentSignal)
         .join(SentimentSignal, SentimentSignal.article_id == NewsArticle.id)
         .join(
@@ -836,6 +873,14 @@ def _bulk_latest_news_sentiment(
                 NewsArticle.published_at == latest_published.c.published_at,
             ),
         )
+    )
+    if cutoff is not None:
+        rows_query = rows_query.filter(
+            NewsArticle.published_at < cutoff,
+            SentimentSignal.created_at < cutoff,
+        )
+    rows = (
+        rows_query
         .order_by(
             NewsArticle.symbol,
             SentimentSignal.created_at.desc(),
@@ -853,6 +898,7 @@ def _bulk_latest_news_sentiment(
                 "latest_sentiment": signal.sentiment,
                 "latest_confidence": _numeric_value(signal.confidence),
                 "latest_published_at": _isoformat_utc(article.published_at),
+                "latest_sentiment_created_at": _isoformat_utc(signal.created_at),
                 "latest_title": article.title,
                 "latest_source": article.source,
                 "latest_url": article.url,
@@ -869,6 +915,7 @@ def _empty_news_sentiment_payload() -> dict[str, object]:
         "latest_sentiment": None,
         "latest_confidence": None,
         "latest_published_at": None,
+        "latest_sentiment_created_at": None,
         "latest_title": None,
         "latest_source": None,
         "latest_url": None,
@@ -976,6 +1023,11 @@ def _serialize_daily_bar(row: DailyBar) -> dict[str, object]:
         "volume": _numeric_value(row.volume),
         "amount": _numeric_value(row.amount),
         "traded_amount": _traded_amount_from_bar(row),
+        "provider": row.provider,
+        "source": row.source,
+        "adjustment": row.adjustment,
+        "source_priority": row.source_priority,
+        "ingested_at": _isoformat_utc(row.ingested_at),
     }
 
 
@@ -1043,23 +1095,8 @@ def _normalize_symbols(symbols: list[str] | None) -> list[str]:
     return normalized
 
 
-def _normalize_pattern_codes(pattern_codes: list[str] | None) -> list[str]:
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for pattern_code in pattern_codes or []:
-        normalized_code = pattern_code.strip().lower()
-        if not normalized_code or normalized_code in seen:
-            continue
-        normalized.append(normalized_code)
-        seen.add(normalized_code)
-    return normalized
-
-
 def _normalize_sentiment(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip().lower()
-    return normalized or None
+    return normalize_stock_selection_sentiment(value)
 
 
 def _news_criteria_requested(criteria: dict[str, object]) -> bool:
@@ -1146,3 +1183,9 @@ def _isoformat_utc(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.isoformat()
+
+
+def _exclusive_utc_day_end(value: date | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.combine(value + timedelta(days=1), time.min, tzinfo=timezone.utc)

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
 import enMessages from "../../../messages/en.json";
+import type { DailyResearchShortlistPayload } from "@/lib/daily-research-shortlist";
 import type { MarketAssistantResponse } from "@/lib/market-assistant";
 
 const { askMarketAssistantMock } = vi.hoisted(() => ({
@@ -384,6 +385,61 @@ function createEvidenceCoveragePayload() {
   };
 }
 
+function createDailyShortlistPayload(): DailyResearchShortlistPayload {
+  return {
+    status: "ok",
+    research_signal_only: true,
+    run: {
+      id: "daily-run-1",
+      decision_date: "2026-07-10",
+      generated_at: "2026-07-10T08:30:00Z",
+      market: "CN",
+      profile_id: "balanced_research",
+      scoring_model: "daily_research_score_v1",
+      shortlist_limit: 10,
+      locale: "zh",
+      counts: { candidate_count: 5200, evaluated_count: 5000, matched_count: 12, returned_count: 1 },
+      coverage: { status: "ok", ready: true },
+      model: { used_llm: false, name: "deterministic-stock-discovery-v1" },
+      explanation_markdown: "不应直接显示在英文页面的中文持久化解释。",
+      diagnostics: [
+        {
+          code: "UNKNOWN_PAGE_DIAGNOSTIC",
+          message: "不应直接显示在英文页面的中文未知诊断。",
+        },
+      ],
+      safety: { disclaimer: "不应直接显示在英文页面的中文免责声明。" },
+    },
+    items: [
+      {
+        id: "candidate-600519",
+        symbol: "600519",
+        name: "Kweichow Moutai",
+        market: "CN",
+        rank: 1,
+        total_score: 0.8732,
+        minimum_rule_buffer: 0.61,
+        supporting_factors: [{ code: "min_net_margin", buffer: 0.92 }],
+        opposing_factors: [{ code: "max_pe_ratio", buffer: 0.61 }],
+        data_gaps: [
+          {
+            code: "UNKNOWN_PAGE_GAP",
+            message: "不应直接显示在英文页面的中文未知缺口。",
+          },
+        ],
+        invalidation_conditions: [
+          {
+            code: "UNKNOWN_PAGE_RULE",
+            message: "不应直接显示在英文页面的中文未知失效条件。",
+          },
+        ],
+        entry_observation: { trade_date: "2026-07-10", close: 1688.5 },
+        evidence_citations: ["bars_1d:600519:2026-07-10"],
+      },
+    ],
+  };
+}
+
 async function renderAiResearchPage() {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
@@ -446,6 +502,9 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
     if (url.endsWith("/stock-selection/evidence-coverage?market=CN&provider=akshare")) {
       return Promise.resolve(new Response(JSON.stringify(createEvidenceCoveragePayload())));
     }
+    if (url.endsWith("/research-shortlists/latest?market=CN&profile_id=balanced_research")) {
+      return Promise.resolve(new Response(JSON.stringify(createDailyShortlistPayload())));
+    }
     if (url.includes("/recommendations?symbols=AAPL%2C0700&limit=6")) {
       return Promise.resolve(
         new Response(
@@ -482,6 +541,22 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   await renderAiResearchPage();
 
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Daily A-share research shortlist" })).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "This immutable cohort's explanation was first published in Chinese. Structured factors, gaps, and invalidation conditions remain available in the current language.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("An unrecognized publication diagnostic was reported (UNKNOWN_PAGE_DIAGNOSTIC)."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("An unrecognized evidence gap was reported (UNKNOWN_PAGE_GAP)."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("An unrecognized invalidation condition was reported (UNKNOWN_PAGE_RULE)."),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/不应直接显示在英文页面/)).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "A-share evidence coverage" })).toBeInTheDocument();
   expect(screen.getByText("Coverage ready")).toBeInTheDocument();
   expect(screen.getByText(/Research only: this desk summarizes evidence/)).toBeInTheDocument();
@@ -512,6 +587,14 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   expect(screen.getByText("Signals are deterministic research inputs only.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open watchlist" })).toHaveAttribute("href", "/watchlist");
   expect(screen.getByRole("link", { name: "Open macro research" })).toHaveAttribute("href", "/evidence");
+
+  const shortlistHeading = screen.getByRole("heading", { name: "Daily A-share research shortlist" });
+  const deskHeading = screen.getByRole("heading", { name: "AI Research Desk" });
+  const coverageHeading = screen.getByRole("heading", { name: "A-share evidence coverage" });
+  const discoveryHeading = screen.getByText("Full A-share discovery");
+  expect(shortlistHeading.compareDocumentPosition(deskHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(deskHeading.compareDocumentPosition(coverageHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(coverageHeading.compareDocumentPosition(discoveryHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it("adds a manual symbol and submits the active symbol through the existing market assistant", async () => {
@@ -548,6 +631,11 @@ it("adds a manual symbol and submits the active symbol through the existing mark
     if (url.includes("/recommendations?")) {
       return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
     }
+    if (url.endsWith("/research-shortlists/latest?market=CN&profile_id=balanced_research")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ status: "no_data", research_signal_only: true, run: null, items: [] })),
+      );
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
@@ -577,7 +665,7 @@ it("adds a manual symbol and submits the active symbol through the existing mark
   expect(screen.getByText("Research only. Not investment advice.")).toBeInTheDocument();
 });
 
-it("keeps the AI research desk usable when official source status is unavailable", async () => {
+it("keeps the AI research desk usable when the latest shortlist and official source status are unavailable", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
     if (url.endsWith("/watchlist")) {
@@ -636,12 +724,16 @@ it("keeps the AI research desk usable when official source status is unavailable
     if (url.includes("/recommendations?")) {
       return Promise.resolve(new Response(JSON.stringify({ status: "ok", items: [] })));
     }
+    if (url.endsWith("/research-shortlists/latest?market=CN&profile_id=balanced_research")) {
+      return Promise.resolve(new Response("unavailable", { status: 503 }));
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
   await renderAiResearchPage();
 
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
+  expect(screen.getByText("Latest shortlist could not be loaded")).toBeInTheDocument();
   expect(screen.getByText("Official source readiness could not be loaded.")).toBeInTheDocument();
   expect(screen.getByText("Market daily-data provider is unavailable.")).toBeInTheDocument();
   expect(screen.getByText("No Dragon Tiger List rows are available.")).toBeInTheDocument();

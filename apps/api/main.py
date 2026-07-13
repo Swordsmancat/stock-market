@@ -18,6 +18,7 @@ from apps.api.routers.official_disclosures import router as official_disclosures
 from apps.api.routers.portfolios import router as portfolios_router
 from apps.api.routers.recommendations import router as recommendations_router
 from apps.api.routers.research_briefs import router as research_briefs_router
+from apps.api.routers.research_shortlists import router as research_shortlists_router
 from apps.api.routers.research_source_notes import router as research_source_notes_router
 from apps.api.routers.reports import router as reports_router
 from apps.api.routers.sectors import router as sectors_router
@@ -47,6 +48,7 @@ app.include_router(official_disclosures_router)
 app.include_router(portfolios_router)
 app.include_router(recommendations_router)
 app.include_router(research_briefs_router)
+app.include_router(research_shortlists_router)
 app.include_router(research_source_notes_router)
 app.include_router(reports_router)
 app.include_router(sectors_router)

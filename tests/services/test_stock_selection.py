@@ -596,3 +596,109 @@ def test_stock_selection_evaluates_candidates_after_position_100_with_bulk_queri
         }
     ]
     assert len(statements) <= 5
+
+
+def test_stock_selection_as_of_excludes_future_evidence_across_all_bulk_loaders():
+    session = make_session()
+    seed_instrument(
+        session,
+        "POINT",
+        close=120.0,
+        ma=100.0,
+        rsi=55.0,
+        pe_ratio=25.0,
+    )
+    seed_news_sentiment(
+        session,
+        "POINT",
+        sentiment="positive",
+        confidence=0.8,
+        published_at=datetime(2026, 1, 20, 12, tzinfo=timezone.utc),
+    )
+    earlier_signal = (
+        session.query(SentimentSignal)
+        .filter(SentimentSignal.symbol == "POINT")
+        .one()
+    )
+    earlier_signal.created_at = datetime(2026, 1, 20, 13, tzinfo=timezone.utc)
+    instrument = session.query(Instrument).filter(Instrument.symbol == "POINT").one()
+    session.add(
+        DailyBar(
+            instrument_id=instrument.id,
+            trade_date=date(2026, 1, 22),
+            open=Decimal("200"),
+            high=Decimal("202"),
+            low=Decimal("198"),
+            close=Decimal("201"),
+            volume=Decimal("2000000"),
+        )
+    )
+    session.add(
+        TechnicalIndicator(
+            instrument_id=instrument.id,
+            timeframe="1d",
+            as_of=datetime(2026, 1, 22, tzinfo=timezone.utc),
+            indicator_code="rsi",
+            params={"window": 14},
+            value_json={"value": 95.0},
+        )
+    )
+    session.add(
+        FundamentalSnapshot(
+            symbol="POINT",
+            as_of=date(2026, 1, 22),
+            currency="USD",
+            pe_ratio=Decimal("5"),
+            revenue_growth=Decimal("0.50"),
+            net_margin=Decimal("0.40"),
+            debt_to_assets=Decimal("0.10"),
+            source="future_fixture",
+        )
+    )
+    session.commit()
+    future_article = seed_news_sentiment(
+        session,
+        "POINT",
+        sentiment="negative",
+        confidence=0.99,
+        published_at=datetime(2026, 1, 22, 12, tzinfo=timezone.utc),
+    )
+    future_signal = (
+        session.query(SentimentSignal)
+        .filter(SentimentSignal.article_id == future_article.id)
+        .one()
+    )
+    future_signal.created_at = datetime(2026, 1, 22, 13, tzinfo=timezone.utc)
+    session.commit()
+
+    latest = screen_local_stock_selection(
+        session=session,
+        symbols=["POINT"],
+        min_rsi=1,
+        max_pe_ratio=100,
+        min_news_article_count=1,
+    )
+    point_in_time = screen_local_stock_selection(
+        session=session,
+        symbols=["POINT"],
+        min_rsi=1,
+        max_pe_ratio=100,
+        min_news_article_count=1,
+        as_of=date(2026, 1, 20),
+    )
+
+    assert latest["items"][0]["latest_bar"]["trade_date"] == "2026-01-22"
+    assert latest["items"][0]["technical_indicators"]["rsi"] == 95.0
+    assert latest["items"][0]["fundamentals"]["pe_ratio"] == 5.0
+    assert latest["items"][0]["news_sentiment"]["latest_sentiment"] == "negative"
+    assert latest["items"][0]["news_sentiment"]["article_count"] == 2
+
+    item = point_in_time["items"][0]
+    assert item["latest_bar"]["trade_date"] == "2026-01-20"
+    assert item["technical_indicators"]["rsi"] == 55.0
+    assert item["fundamentals"]["pe_ratio"] == 25.0
+    assert item["news_sentiment"]["latest_sentiment"] == "positive"
+    assert item["news_sentiment"]["article_count"] == 1
+    assert item["news_sentiment"]["latest_sentiment_created_at"].startswith(
+        "2026-01-20"
+    )

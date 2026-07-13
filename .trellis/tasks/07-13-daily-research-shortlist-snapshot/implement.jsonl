@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend layering, pre-development checklist, and affected quality gates."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"SQLAlchemy model, session, JSONB, transaction, and Alembic conventions."}
+{"file":".trellis/spec/backend/instock-composite-stock-selection-contract.md","reason":"Existing full-universe eligibility, bulk evidence, profile, AI-rank, and compatibility contract."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"A-share coverage thresholds, stored-evidence-only boundary, and full-universe constraints."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Fail-closed AI citation validation and research-only safety rules."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend structure, accessibility, localization, and quality gates."}
+{"file":".trellis/tasks/07-13-a-share-ai-research-decision-loop/research/existing-capabilities-and-gaps.md","reason":"Focused audit of reusable paths, ranking defect, persistence gap, outcome risks, and UI placement."}

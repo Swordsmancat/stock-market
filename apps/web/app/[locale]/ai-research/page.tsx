@@ -21,7 +21,9 @@ import {
   AshareEvidenceCoveragePanel,
   type EvidenceCoveragePayload,
 } from "@/components/ashare-evidence-coverage-panel";
+import { DailyResearchShortlistPanel } from "@/components/daily-research-shortlist-panel";
 import { backendFetch } from "@/lib/backend-api";
+import type { DailyResearchShortlistPayload } from "@/lib/daily-research-shortlist";
 import { withProviderQuery } from "@/lib/market-data";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
 
@@ -86,6 +88,7 @@ export default async function AiResearchPage({
     stockSelectionProfilesResult,
     stockUniverseStatusResult,
     evidenceCoverageResult,
+    dailyShortlistResult,
   ] = await Promise.all([
     fetchOptionalJson<WatchlistPayload>("/watchlist"),
     fetchOptionalJson<MarketOverviewPayload>(withProviderQuery("/dashboard/market-overview", provider)),
@@ -107,6 +110,9 @@ export default async function AiResearchPage({
     fetchOptionalJson<EvidenceCoveragePayload>(
       "/stock-selection/evidence-coverage?market=CN&provider=akshare",
     ),
+    fetchOptionalJson<DailyResearchShortlistPayload>(
+      "/research-shortlists/latest?market=CN&profile_id=balanced_research",
+    ),
   ]);
 
   const watchlistItems = watchlistResult.status === "loaded" ? watchlistResult.payload.items ?? [] : [];
@@ -124,6 +130,54 @@ export default async function AiResearchPage({
 
   return (
     <div className="space-y-6">
+      <DailyResearchShortlistPanel
+        locale={locale}
+        initialPayload={
+          dailyShortlistResult.status === "loaded" ? dailyShortlistResult.payload : null
+        }
+        initialLoadFailed={dailyShortlistResult.status === "failed"}
+      />
+      <AiResearchDesk
+        locale={locale}
+        provider={marketOverviewPayload?.provider ?? provider}
+        generatedAt={marketOverviewPayload?.generated_at ?? null}
+        watchlistItems={watchlistItems}
+        followedItems={followedItems}
+        recommendations={recommendationsPayload?.items ?? []}
+        recommendationStatus={recommendationsPayload?.status ?? null}
+        recommendationDiagnostics={recommendationsPayload?.diagnostics ?? []}
+        macroIndicators={getMacroIndicators(marketOverviewPayload)}
+        officialSourceStatus={
+          officialSourceStatusResult.status === "loaded" ? officialSourceStatusResult.payload : null
+        }
+        stockFundFlowPayload={
+          stockFundFlowResult.status === "loaded" ? stockFundFlowResult.payload : null
+        }
+        limitUpReasonsPayload={
+          limitUpReasonsResult.status === "loaded" ? limitUpReasonsResult.payload : null
+        }
+        dragonTigerPayload={
+          dragonTigerResult.status === "loaded" ? dragonTigerResult.payload : null
+        }
+        blockTradesPayload={
+          blockTradesResult.status === "loaded" ? blockTradesResult.payload : null
+        }
+        overviewDiagnostics={[
+          ...(marketOverviewResult.status === "failed"
+            ? [
+                {
+                  source: "market_overview",
+                  status: "unavailable",
+                  severity: "warning",
+                  code: "MARKET_OVERVIEW_UNAVAILABLE",
+                  message: null,
+                },
+              ]
+            : []),
+          ...(marketOverviewPayload?.dashboard_brief?.diagnostics ?? []),
+          ...(marketOverviewPayload?.diagnostics ?? []),
+        ]}
+      />
       <AshareEvidenceCoveragePanel
         initialCoverage={
           evidenceCoverageResult.status === "loaded" ? evidenceCoverageResult.payload : null
@@ -140,47 +194,6 @@ export default async function AiResearchPage({
             ? stockUniverseStatusResult.payload
             : null
         }
-      />
-      <AiResearchDesk
-      locale={locale}
-      provider={marketOverviewPayload?.provider ?? provider}
-      generatedAt={marketOverviewPayload?.generated_at ?? null}
-      watchlistItems={watchlistItems}
-      followedItems={followedItems}
-      recommendations={recommendationsPayload?.items ?? []}
-      recommendationStatus={recommendationsPayload?.status ?? null}
-      recommendationDiagnostics={recommendationsPayload?.diagnostics ?? []}
-      macroIndicators={getMacroIndicators(marketOverviewPayload)}
-      officialSourceStatus={
-        officialSourceStatusResult.status === "loaded" ? officialSourceStatusResult.payload : null
-      }
-      stockFundFlowPayload={
-        stockFundFlowResult.status === "loaded" ? stockFundFlowResult.payload : null
-      }
-      limitUpReasonsPayload={
-        limitUpReasonsResult.status === "loaded" ? limitUpReasonsResult.payload : null
-      }
-      dragonTigerPayload={
-        dragonTigerResult.status === "loaded" ? dragonTigerResult.payload : null
-      }
-      blockTradesPayload={
-        blockTradesResult.status === "loaded" ? blockTradesResult.payload : null
-      }
-      overviewDiagnostics={[
-        ...(marketOverviewResult.status === "failed"
-          ? [
-              {
-                source: "market_overview",
-                status: "unavailable",
-                severity: "warning",
-                code: "MARKET_OVERVIEW_UNAVAILABLE",
-                message: null,
-              },
-            ]
-          : []),
-        ...(marketOverviewPayload?.dashboard_brief?.diagnostics ?? []),
-        ...(marketOverviewPayload?.diagnostics ?? []),
-      ]}
       />
     </div>
   );

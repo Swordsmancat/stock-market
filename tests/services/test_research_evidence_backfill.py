@@ -453,6 +453,80 @@ def test_evidence_coverage_reports_thresholds_and_exchange_breakdown(session: Se
     assert payload["status"] == "needs_attention"
 
 
+def test_evidence_coverage_as_of_ignores_future_indicator_and_fundamental_rows(
+    session: Session,
+):
+    seed_universe(session, symbols_per_exchange=1)
+    instruments = session.query(Instrument).order_by(Instrument.symbol).all()
+    decision_date = date(2026, 7, 1)
+    for instrument in instruments:
+        if instrument.symbol == "600000":
+            for code in ("ma", "rsi", "mfi"):
+                session.add(
+                    TechnicalIndicator(
+                        instrument_id=instrument.id,
+                        timeframe="1d",
+                        as_of=datetime(2026, 6, 30, tzinfo=timezone.utc),
+                        indicator_code=code,
+                        params={},
+                        value_json={"value": 50},
+                    )
+                )
+            session.add(
+                FundamentalSnapshot(
+                    symbol=instrument.symbol,
+                    as_of=date(2026, 6, 30),
+                    currency="CNY",
+                    pe_ratio=20,
+                    revenue_growth=0.1,
+                    net_margin=0.12,
+                    debt_to_assets=0.4,
+                    source="point_in_time_fixture",
+                )
+            )
+        for code in ("ma", "rsi", "mfi"):
+            session.add(
+                TechnicalIndicator(
+                    instrument_id=instrument.id,
+                    timeframe="1d",
+                    as_of=datetime(2026, 7, 2, tzinfo=timezone.utc),
+                    indicator_code=code,
+                    params={},
+                    value_json={"value": 80},
+                )
+            )
+        session.add(
+            FundamentalSnapshot(
+                symbol=instrument.symbol,
+                as_of=date(2026, 7, 2),
+                currency="CNY",
+                pe_ratio=10,
+                revenue_growth=0.2,
+                net_margin=0.2,
+                debt_to_assets=0.2,
+                source="future_fixture",
+            )
+        )
+    session.commit()
+
+    payload = get_evidence_coverage(
+        session=session,
+        market="CN",
+        provider="akshare",
+        as_of=decision_date,
+    )
+
+    assert payload["evidence"]["technical_indicators"]["ready_count"] == 1
+    assert payload["evidence"]["fundamentals"]["ready_count"] == 1
+    assert payload["evidence"]["technical_indicators"]["threshold"] == 0.90
+    assert payload["evidence"]["fundamentals"]["threshold"] == 0.80
+    assert payload["thresholds"] == {
+        "daily_bars": 0.95,
+        "technical_indicators": 0.90,
+        "fundamentals": 0.80,
+    }
+
+
 def test_evidence_coverage_query_count_is_constant_for_large_universe(session: Session):
     seed_universe(session, symbols_per_exchange=50)
     select_count = 0

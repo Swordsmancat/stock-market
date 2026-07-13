@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time as datetime_time, timedelta, timezone
 import time
 from uuid import UUID
 
@@ -333,6 +333,11 @@ def get_evidence_coverage(
     effective_as_of = as_of or date.today()
     horizon_start = _subtract_months(effective_as_of, 18)
     freshness_cutoff = date.fromordinal(effective_as_of.toordinal() - 10)
+    point_in_time_cutoff = datetime.combine(
+        effective_as_of + timedelta(days=1),
+        datetime_time.min,
+        tzinfo=timezone.utc,
+    )
 
     instrument_rows = (
         session.query(Instrument.id, Instrument.symbol, Exchange.code)
@@ -413,6 +418,7 @@ def get_evidence_coverage(
             .filter(TechnicalIndicator.instrument_id.in_(instrument_ids))
             .filter(TechnicalIndicator.timeframe == "1d")
             .filter(TechnicalIndicator.indicator_code.in_(CRITICAL_INDICATOR_CODES))
+            .filter(TechnicalIndicator.as_of < point_in_time_cutoff)
             .group_by(TechnicalIndicator.instrument_id)
             .subquery()
         )
@@ -431,6 +437,7 @@ def get_evidence_coverage(
             )
             .filter(TechnicalIndicator.timeframe == "1d")
             .filter(TechnicalIndicator.indicator_code.in_(CRITICAL_INDICATOR_CODES))
+            .filter(TechnicalIndicator.as_of < point_in_time_cutoff)
             .group_by(
                 TechnicalIndicator.instrument_id,
                 latest_indicator_subquery.c.latest_as_of,
@@ -452,6 +459,7 @@ def get_evidence_coverage(
             )
             .filter(FundamentalSnapshot.symbol.in_(symbols))
             .filter(FundamentalSnapshot.as_of >= horizon_start)
+            .filter(FundamentalSnapshot.as_of <= effective_as_of)
             .group_by(FundamentalSnapshot.symbol)
             .subquery()
         )
@@ -470,6 +478,7 @@ def get_evidence_coverage(
                     FundamentalSnapshot.as_of == latest_fundamental_subquery.c.latest_as_of,
                 ),
             )
+            .filter(FundamentalSnapshot.as_of <= effective_as_of)
             .all()
         )
         for symbol, _, pe_ratio, revenue_growth, net_margin in fundamental_rows:

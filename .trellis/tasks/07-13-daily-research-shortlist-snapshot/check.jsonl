@@ -1,0 +1,8 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend full-scope quality checklist."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify model, migration, transaction, and SQLite/PostgreSQL compatibility."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Focused and full backend validation expectations."}
+{"file":".trellis/spec/backend/instock-composite-stock-selection-contract.md","reason":"Check existing selection/discovery compatibility and no N+1 regression."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Check coverage thresholds and stored-evidence-only behavior."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Check AI fail-closed citations and non-advice boundaries."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend quality, localization, responsive, and accessibility review."}
+{"file":".trellis/tasks/07-13-a-share-ai-research-decision-loop/research/existing-capabilities-and-gaps.md","reason":"Cross-check implementation against audited gaps and prohibited reuse."}

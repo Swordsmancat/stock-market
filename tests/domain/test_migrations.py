@@ -167,6 +167,19 @@ def load_official_disclosure_monitoring_migration():
     return module
 
 
+def load_research_shortlists_migration():
+    migration_path = Path("alembic/versions/0020_research_shortlists.py")
+    spec = importlib.util.spec_from_file_location(
+        "research_shortlists_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_official_disclosures_migration_creates_metadata_table_and_identity_constraint():
     migration = load_official_disclosures_migration()
     engine = create_engine("sqlite:///:memory:")
@@ -246,6 +259,88 @@ def test_official_disclosure_monitoring_migration_creates_durable_symbol_state()
         finally:
             migration.op = original_op
         assert "official_disclosure_monitor_states" not in inspect(connection).get_table_names()
+
+
+def test_research_shortlists_migration_creates_immutable_run_and_candidate_tables():
+    initial_migration = load_initial_migration()
+    migration = load_research_shortlists_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(migration, connection)
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        run_columns = {
+            column["name"] for column in inspector.get_columns("research_shortlist_runs")
+        }
+        candidate_columns = {
+            column["name"]
+            for column in inspector.get_columns("research_shortlist_candidates")
+        }
+        run_constraints = inspector.get_unique_constraints("research_shortlist_runs")
+        run_indexes = inspector.get_indexes("research_shortlist_runs")
+        candidate_constraints = inspector.get_unique_constraints(
+            "research_shortlist_candidates"
+        )
+        candidate_foreign_keys = inspector.get_foreign_keys(
+            "research_shortlist_candidates"
+        )
+
+    assert {"research_shortlist_runs", "research_shortlist_candidates"}.issubset(tables)
+    assert {
+        "generation_key",
+        "decision_date",
+        "scoring_model",
+        "coverage_json",
+        "explanation_markdown",
+        "safety_json",
+    }.issubset(run_columns)
+    assert {
+        "run_id",
+        "instrument_id",
+        "rank",
+        "total_score",
+        "entry_trade_date",
+        "entry_provider",
+        "factor_scores_json",
+        "invalidation_conditions_json",
+        "safety_json",
+    }.issubset(candidate_columns)
+    assert any(
+        constraint["name"] == "uq_research_shortlist_runs_generation_key"
+        for constraint in run_constraints
+    )
+    assert any(
+        index["name"] == "ix_research_shortlist_runs_latest"
+        and index["column_names"]
+        == ["market", "profile_id", "decision_date", "generated_at"]
+        for index in run_indexes
+    )
+    assert {
+        constraint["name"] for constraint in candidate_constraints
+    } >= {
+        "uq_research_shortlist_candidates_instrument",
+        "uq_research_shortlist_candidates_rank",
+    }
+    assert any(
+        foreign_key["referred_table"] == "research_shortlist_runs"
+        and foreign_key.get("options", {}).get("ondelete") == "CASCADE"
+        for foreign_key in candidate_foreign_keys
+    )
+
+    with engine.begin() as connection:
+        context = MigrationContext.configure(connection)
+        original_op = migration.op
+        migration.op = Operations(context)
+        try:
+            migration.downgrade()
+        finally:
+            migration.op = original_op
+        tables_after_downgrade = set(inspect(connection).get_table_names())
+
+    assert "research_shortlist_candidates" not in tables_after_downgrade
+    assert "research_shortlist_runs" not in tables_after_downgrade
 
 
 def run_migration(migration, connection):

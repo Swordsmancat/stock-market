@@ -160,6 +160,32 @@ Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics
 - Keep visible button text translated and assertable in tests, for example the retry button in `task-run-actions.tsx`.
 - Table empty/error rows should set `colSpan` to cover all visible columns.
 
+### Convention: Immutable Snapshot Locale Boundary
+
+**What**: Persisted research snapshots keep their generation locale as
+provenance. Localize current-page UI from structured codes and fields. Do not
+render backend free-text readiness, diagnostic, gap, invalidation, factor, or
+safety messages as UI copy. When immutable explanation prose was generated in
+another locale, show a localized provenance notice instead of the raw prose.
+
+**Why**: Locale is intentionally excluded from daily cohort identity. Reusing
+one immutable run across English and Chinese pages must not create duplicate
+cohorts or leak the first request's language into later UI.
+
+**Example**:
+
+```tsx
+const sameLocale = normalizeLocale(run.locale) === normalizeLocale(locale);
+
+return sameLocale
+  ? <PublishedExplanation>{run.explanation_markdown}</PublishedExplanation>
+  : <LocaleProvenanceNotice locale={run.locale} />;
+```
+
+Use exhaustive mappings for known structured codes and a localized unknown-code
+fallback. The complete cross-layer contract is in
+`../backend/daily-research-shortlist-contract.md`.
+
 ---
 
 ## Common Mistakes

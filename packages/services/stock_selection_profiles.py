@@ -93,24 +93,59 @@ def resolve_stock_selection_profile(
     if profile is None:
         raise ValueError(f"Unknown stock-selection profile: {profile_id}")
 
-    normalized_overrides = overrides or {}
+    raw_overrides = overrides or {}
+    normalized_overrides = normalize_stock_selection_criteria(raw_overrides)
     unsupported = sorted(set(normalized_overrides) - set(SUPPORTED_PROFILE_OVERRIDES))
     if unsupported:
         raise ValueError(
             "Unsupported stock-selection profile override(s): " + ", ".join(unsupported)
         )
-    criteria = deepcopy(profile["criteria"])
+    criteria = normalize_stock_selection_criteria(profile["criteria"])
     if not isinstance(criteria, dict):
         raise RuntimeError("Stock-selection profile criteria are invalid.")
     criteria.update(normalized_overrides)
+    criteria = normalize_stock_selection_criteria(criteria)
     return {
         "profile": {
             "id": profile["id"],
             "label": profile["label"],
             "description": profile["description"],
         },
-        "default_criteria": deepcopy(profile["criteria"]),
+        "default_criteria": normalize_stock_selection_criteria(profile["criteria"]),
         "overrides": deepcopy(normalized_overrides),
         "effective_criteria": criteria,
         "supported_overrides": list(SUPPORTED_PROFILE_OVERRIDES),
     }
+
+
+def normalize_stock_selection_criteria(
+    criteria: dict[str, object],
+) -> dict[str, object]:
+    normalized = deepcopy(criteria)
+    if "required_pattern_codes" in normalized:
+        value = normalized["required_pattern_codes"]
+        if isinstance(value, str):
+            raw_codes = [value]
+        elif isinstance(value, list | tuple | set):
+            raw_codes = value
+        else:
+            raw_codes = []
+        normalized["required_pattern_codes"] = sorted(
+            {
+                str(code).strip().lower()
+                for code in raw_codes
+                if str(code).strip()
+            }
+        )
+    if "required_news_sentiment" in normalized:
+        normalized["required_news_sentiment"] = normalize_stock_selection_sentiment(
+            normalized["required_news_sentiment"]
+        )
+    return normalized
+
+
+def normalize_stock_selection_sentiment(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
