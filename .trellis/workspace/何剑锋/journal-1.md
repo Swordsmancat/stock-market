@@ -1779,3 +1779,36 @@ Backed up and migrated PostgreSQL from 0016 to 0019, restarted the API, launched
 ### Next Steps
 
 - None - task complete
+
+
+## Session 54: Published daily A-share research shortlist
+
+**Date**: 2026-07-13
+**Task**: Published daily A-share research shortlist
+**Branch**: `master`
+
+### Summary
+
+Added immutable point-in-time daily shortlist persistence, transparent scoring, idempotent generation, localized AI Research UI, and complete backend/frontend regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7cdef12` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
