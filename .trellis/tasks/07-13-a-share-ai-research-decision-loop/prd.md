@@ -129,24 +129,24 @@ requirements and final integration acceptance.
 
 ## Acceptance Criteria
 
-- [ ] A completed A-share trading day can produce one idempotent, persisted,
+- [x] A completed A-share trading day can produce one idempotent, persisted,
       versioned shortlist whose candidates do not all collapse to score `1.0`.
-- [ ] Every saved candidate contains reproducible score factors, positive and
+- [x] Every saved candidate contains reproducible score factors, positive and
       opposing evidence, gaps, invalidation conditions, entry observation, and
       citations without AI-controlled membership or rank.
-- [ ] Opening or refreshing `/ai-research` shows the latest persisted shortlist
+- [x] Opening or refreshing `/ai-research` shows the latest persisted shortlist
       first and links every candidate to existing deep analysis.
-- [ ] 5/20/60 data readiness occurs only on the corresponding stored trading
+- [x] 5/20/60 data readiness occurs only on the corresponding stored trading
       bar; before evaluation a ready horizon stays pending `N/N`, and terminal
       results use exact-date CSI 300 alignment while incomplete evidence stays
       pending/null.
-- [ ] Outcome aggregates show evaluated/pending/blocked counts and sample size,
+- [x] Outcome aggregates show evaluated/pending/blocked counts and sample size,
       and retain inactive/delisted cohort members.
-- [ ] Manual and scheduled runs share idempotent services, expose TaskRun
+- [x] Manual and scheduled runs share idempotent services, expose TaskRun
       lineage, and do not revise frozen published observations implicitly.
-- [ ] Focused and full backend/frontend checks pass, migrations upgrade and
+- [x] Focused and full backend/frontend checks pass, migrations upgrade and
       downgrade cleanly, and the normal 3000/8000 runtime remains compatible.
-- [ ] No output or UI introduces investment instructions or automated trading.
+- [x] No output or UI introduces investment instructions or automated trading.
 
 ## Out of Scope
 

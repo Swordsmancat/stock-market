@@ -69,3 +69,33 @@ Use the repository's actual package scripts if the frontend command names differ
   deleting shortlist snapshots.
 - Child 3: disable Beat entries/tasks while preserving manual services and all
   published domain data.
+
+## Final Integration Verification - 2026-07-13
+
+- All three children are completed and archived:
+  `7cdef12` persisted daily shortlist snapshots, `282b031` added immutable
+  5/20/60 outcome tracking, and `bb7aea9` automated the trusted daily loop.
+- Full backend suite: `783 passed`. Full frontend suite: `234 passed`.
+  TypeScript, locale JSON, touched-file Ruff, Trellis validation, and
+  `git diff --check` passed.
+- Normal PostgreSQL is at revision `0022`. A disposable PostgreSQL database
+  completed a fresh full upgrade, `0022 -> 0021` downgrade, and re-upgrade to
+  `0022`, then was deleted without touching the live `stock` database.
+- The unmocked synthetic daily loop resolves 3/3 SSE/SZSE/BSE coverage,
+  matures a 5-session terminal outcome, publishes a three-item shortlist, and
+  on the second invocation reuses the original run/TaskRun lineage without
+  revising IDs or terminal metrics.
+- The normal API on port 8000 and `/zh/ai-research` on port 3000 are healthy.
+  Celery connects to Redis and registers 25 tasks. Real TaskRun
+  `41e7f041-a700-4e05-ae7d-ec29f96c8888` completed the expected deferred path
+  with progress 3/3 because the development database has only 2/3 exact-date
+  coverage and no exchange attribution.
+- In-app browser acceptance found no console errors. The rendered workflow is
+  ordered daily shortlist, published outcomes, research desk, evidence
+  coverage, then full-market screening; empty shortlist/outcome states leave
+  all later panels usable. Candidate deep links are covered by the persisted
+  shortlist component/page tests because the development database has no
+  published cohort.
+- Every surface retains the research-only/no-automated-trading boundary. AI
+  explanation remains downstream of deterministic membership/ranking, and
+  outcomes never feed back into later shortlist weights or membership.
