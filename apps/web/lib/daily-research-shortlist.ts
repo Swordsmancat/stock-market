@@ -1,3 +1,6 @@
+export const DAILY_RESEARCH_SHORTLIST_PUBLISHED_EVENT =
+  "daily-research-shortlist:published";
+
 export type DailyResearchCitation = {
   id: string;
   label?: string | null;

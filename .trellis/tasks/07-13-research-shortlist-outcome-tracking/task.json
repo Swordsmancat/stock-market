@@ -1,11 +1,11 @@
 {
-  "id": "a-share-ai-research-decision-loop",
-  "name": "a-share-ai-research-decision-loop",
-  "title": "A-share AI research decision loop",
+  "id": "research-shortlist-outcome-tracking",
+  "name": "research-shortlist-outcome-tracking",
+  "title": "Research shortlist outcome tracking",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
-  "scope": "product",
+  "scope": null,
   "package": null,
   "priority": "P2",
   "creator": "何剑锋",
@@ -18,11 +18,8 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "07-13-daily-research-shortlist-snapshot",
-    "07-13-research-shortlist-outcome-tracking"
-  ],
-  "parent": null,
+  "children": [],
+  "parent": "07-13-a-share-ai-research-decision-loop",
   "relatedFiles": [],
   "notes": "",
   "meta": {}

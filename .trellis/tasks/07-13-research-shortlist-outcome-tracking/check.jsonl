@@ -1,0 +1,9 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend full-scope verification checklist."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify schema constraints, migration reversibility, locking, transactions, and cross-database behavior."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify focused/full tests, bulk query behavior, and maintainability."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Ensure outcome work preserves immutable snapshot and existing API contracts."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Verify the narrow Tushare adjustment metadata correction preserves fallback priority and coverage behavior."}
+{"file":".trellis/spec/frontend/index.md","reason":"Verify localization, accessibility, responsive layout, and independent degradation."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify explicit status unions and nullable metric handling across the web layer."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify end-to-end status, diagnostics, ratio, safety, and error propagation."}
+{"file":".trellis/tasks/07-13-research-shortlist-outcome-tracking/research/outcome-contract-audit.md","reason":"Cross-check strict horizon, benchmark identity, immutable terminal, and product-focus risks."}

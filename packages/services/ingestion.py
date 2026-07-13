@@ -481,7 +481,10 @@ def build_daily_bar_fetch_coordinator(provider_name: str) -> DailyBarFetchCoordi
         DailyBarSource(
             provider=normalized_provider,
             source=primary_source,
-            adjustment="qfq" if normalized_provider in {"akshare", "tushare"} else "provider_default",
+            adjustment={"akshare": "qfq", "tushare": "raw"}.get(
+                normalized_provider,
+                "provider_default",
+            ),
             priority=0,
             fetch=primary.fetch_bars,
             min_interval_seconds=0.25 if normalized_provider == "akshare" else 0.0,
@@ -505,7 +508,7 @@ def build_daily_bar_fetch_coordinator(provider_name: str) -> DailyBarFetchCoordi
                 DailyBarSource(
                     provider="tushare",
                     source="tushare.pro.daily",
-                    adjustment="qfq",
+                    adjustment="raw",
                     priority=2,
                     fetch=tushare.fetch_bars,
                     configured=tushare_configured,

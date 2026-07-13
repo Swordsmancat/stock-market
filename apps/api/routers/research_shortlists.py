@@ -1,7 +1,8 @@
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from apps.api.routers.stock_selection import StockSelectionOverrides
@@ -11,6 +12,11 @@ from packages.services.research_shortlists import (
     generate_research_shortlist,
     get_latest_research_shortlist,
     get_research_shortlist,
+)
+from packages.services.research_shortlist_outcomes import (
+    evaluate_research_shortlist_outcomes,
+    get_research_shortlist_outcome_tracking,
+    get_research_shortlist_outcomes,
 )
 from packages.shared.database import get_session
 
@@ -26,6 +32,12 @@ class ResearchShortlistGenerateRequest(BaseModel):
     shortlist_limit: int = Field(default=10, ge=1, le=20)
     locale: Literal["zh", "en"] = "zh"
     use_llm: bool = True
+
+
+class ResearchShortlistOutcomeEvaluateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: date | None = None
 
 
 @router.post("/generate")
@@ -69,6 +81,66 @@ def latest_daily_research_shortlist(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/tracking")
+def research_shortlist_outcome_tracking(
+    market: str = Query(default="CN"),
+    profile_id: str = Query(default="balanced_research"),
+    limit: int = Query(default=10, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    as_of: date | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        return get_research_shortlist_outcome_tracking(
+            session=session,
+            market=market,
+            profile_id=profile_id,
+            limit=limit,
+            offset=offset,
+            as_of=as_of,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{run_id}/outcomes/evaluate")
+def evaluate_research_shortlist_outcome_detail(
+    run_id: str,
+    request: ResearchShortlistOutcomeEvaluateRequest | None = None,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        payload = evaluate_research_shortlist_outcomes(
+            run_id,
+            session=session,
+            as_of=request.as_of if request is not None else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Research shortlist not found")
+    return payload
+
+
+@router.get("/{run_id}/outcomes")
+def research_shortlist_outcome_detail(
+    run_id: str,
+    as_of: date | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        payload = get_research_shortlist_outcomes(
+            run_id,
+            session=session,
+            as_of=as_of,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Research shortlist not found")
+    return payload
+
+
 @router.get("/{run_id}")
 def research_shortlist_detail(
     run_id: str,
@@ -82,9 +154,7 @@ def research_shortlist_detail(
 
 def _validated_overrides(overrides: dict[str, object]) -> dict[str, object]:
     try:
-        validated = StockSelectionOverrides.model_validate(overrides).model_dump(
-            exclude_none=True
-        )
+        validated = StockSelectionOverrides.model_validate(overrides).model_dump(exclude_none=True)
     except ValidationError as exc:
         first_error = exc.errors(include_url=False)[0]
         location = ".".join(str(part) for part in first_error.get("loc", ()))

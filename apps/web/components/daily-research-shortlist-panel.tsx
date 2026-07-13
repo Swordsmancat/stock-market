@@ -27,13 +27,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type {
-  DailyResearchDiagnostic,
-  DailyResearchFactor,
-  DailyResearchGap,
-  DailyResearchInvalidation,
-  DailyResearchShortlistPayload,
-  GenerateDailyResearchShortlistRequest,
+import {
+  DAILY_RESEARCH_SHORTLIST_PUBLISHED_EVENT,
+  type DailyResearchDiagnostic,
+  type DailyResearchFactor,
+  type DailyResearchGap,
+  type DailyResearchInvalidation,
+  type DailyResearchShortlistPayload,
+  type GenerateDailyResearchShortlistRequest,
 } from "@/lib/daily-research-shortlist";
 import { Link } from "@/src/i18n/routing";
 
@@ -79,6 +80,13 @@ export function DailyResearchShortlistPanel({
       };
       if (!response.ok) {
         throw new Error(localizeGenerationError(response.status, responsePayload.detail));
+      }
+      if (responsePayload.run?.id) {
+        window.dispatchEvent(
+          new CustomEvent(DAILY_RESEARCH_SHORTLIST_PUBLISHED_EVENT, {
+            detail: { runId: responsePayload.run.id },
+          }),
+        );
       }
       setPayload(responsePayload);
       router.refresh();

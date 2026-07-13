@@ -1,9 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import enMessages from "../../../messages/en.json";
 import type { DailyResearchShortlistPayload } from "@/lib/daily-research-shortlist";
 import type { MarketAssistantResponse } from "@/lib/market-assistant";
+import type { ResearchShortlistOutcomeTrackingPayload } from "@/lib/research-shortlist-outcomes";
+import { ResearchShortlistOutcomePanel } from "@/components/research-shortlist-outcome-panel";
 
 const { askMarketAssistantMock } = vi.hoisted(() => ({
   askMarketAssistantMock: vi.fn(),
@@ -440,12 +443,87 @@ function createDailyShortlistPayload(): DailyResearchShortlistPayload {
   };
 }
 
+function createOutcomeTrackingPayload(
+  runId = "daily-run-1",
+  symbol = "600519",
+  name = "Kweichow Moutai",
+): ResearchShortlistOutcomeTrackingPayload {
+  const summaries = ([5, 20, 60] as const).map((horizon) => ({
+    horizon_sessions: horizon,
+    total_count: 1,
+    evaluated_count: 0,
+    pending_count: 1,
+    blocked_count: 0,
+    return_sample_size: 0,
+    benchmark_sample_size: 0,
+    positive_return_ratio: null,
+    mean_return_ratio: null,
+    median_return_ratio: null,
+    mean_drawdown_ratio: null,
+    mean_excess_return_ratio: null,
+  }));
+  return {
+    status: "ok",
+    as_of: "2026-07-20",
+    market: "CN",
+    profile_id: "balanced_research",
+    research_signal_only: true,
+    latest: {
+      status: "ok",
+      as_of: "2026-07-20",
+      research_signal_only: true,
+      run: {
+        id: runId,
+        decision_date: "2026-07-10",
+        market: "CN",
+        profile_id: "balanced_research",
+      },
+      items: [
+        {
+          candidate_id: `candidate-${symbol}`,
+          instrument_id: `instrument-${symbol}`,
+          symbol,
+          name,
+          rank: 1,
+          entry_trade_date: "2026-07-10",
+          horizons: ([5, 20, 60] as const).map((horizon) => ({
+            horizon_sessions: horizon,
+            status: "pending",
+            available_forward_bars: 0,
+            ready_for_evaluation: false,
+            benchmark: null,
+            diagnostics: [],
+          })),
+        },
+      ],
+      summaries,
+    },
+    history: [],
+    limit: 10,
+    offset: 0,
+    has_more: false,
+  };
+}
+
 async function renderAiResearchPage() {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
       {await AiResearchPage({ params: Promise.resolve({ locale: "en" }) })}
     </NextIntlClientProvider>,
   );
+}
+
+function getOutcomePanelElement(page: ReactElement): ReactElement {
+  const children = Children.toArray(
+    (page.props as { children?: ReactNode }).children,
+  );
+  const outcome = children.find(
+    (child) => isValidElement(child) && child.type === ResearchShortlistOutcomePanel,
+  );
+  if (!isValidElement(outcome)) {
+    throw new Error("Outcome panel element was not found");
+  }
+  return outcome;
 }
 
 it("renders the AI research desk with watchlist, signal, macro, and source-gap context", async () => {
@@ -505,6 +583,9 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
     if (url.endsWith("/research-shortlists/latest?market=CN&profile_id=balanced_research")) {
       return Promise.resolve(new Response(JSON.stringify(createDailyShortlistPayload())));
     }
+    if (url.endsWith("/research-shortlists/tracking?market=CN&profile_id=balanced_research&limit=10&offset=0")) {
+      return Promise.resolve(new Response(JSON.stringify(createOutcomeTrackingPayload())));
+    }
     if (url.includes("/recommendations?symbols=AAPL%2C0700&limit=6")) {
       return Promise.resolve(
         new Response(
@@ -542,6 +623,7 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
 
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Daily A-share research shortlist" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Published cohort outcomes" })).toBeInTheDocument();
   expect(
     screen.getByText(
       "This immutable cohort's explanation was first published in Chinese. Structured factors, gaps, and invalidation conditions remain available in the current language.",
@@ -589,10 +671,13 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   expect(screen.getByRole("link", { name: "Open macro research" })).toHaveAttribute("href", "/evidence");
 
   const shortlistHeading = screen.getByRole("heading", { name: "Daily A-share research shortlist" });
+  const outcomeHeading = screen.getByRole("heading", { name: "Published cohort outcomes" });
   const deskHeading = screen.getByRole("heading", { name: "AI Research Desk" });
   const coverageHeading = screen.getByRole("heading", { name: "A-share evidence coverage" });
   const discoveryHeading = screen.getByText("Full A-share discovery");
   expect(shortlistHeading.compareDocumentPosition(deskHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(shortlistHeading.compareDocumentPosition(outcomeHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(outcomeHeading.compareDocumentPosition(deskHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(deskHeading.compareDocumentPosition(coverageHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(coverageHeading.compareDocumentPosition(discoveryHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
@@ -665,6 +750,51 @@ it("adds a manual symbol and submits the active symbol through the existing mark
   expect(screen.getByText("Research only. Not investment advice.")).toBeInTheDocument();
 });
 
+it("remounts outcome client state when a refreshed page advances to a new tracking run", async () => {
+  let currentRunId = "daily-run-1";
+  let currentSymbol = "600519";
+  let currentName = "First cohort candidate";
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/research-shortlists/latest?market=CN&profile_id=balanced_research")) {
+      const payload = createDailyShortlistPayload();
+      payload.run!.id = currentRunId;
+      return Promise.resolve(new Response(JSON.stringify(payload)));
+    }
+    if (url.endsWith("/research-shortlists/tracking?market=CN&profile_id=balanced_research&limit=10&offset=0")) {
+      return Promise.resolve(
+        new Response(JSON.stringify(
+          createOutcomeTrackingPayload(currentRunId, currentSymbol, currentName),
+        )),
+      );
+    }
+    return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+  });
+
+  const firstPage = await AiResearchPage({ params: Promise.resolve({ locale: "en" }) });
+  const firstOutcome = getOutcomePanelElement(firstPage);
+  const view = render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {firstOutcome}
+    </NextIntlClientProvider>,
+  );
+  expect(screen.getByText("First cohort candidate")).toBeInTheDocument();
+
+  currentRunId = "daily-run-2";
+  currentSymbol = "000001";
+  currentName = "Second cohort candidate";
+  const secondPage = await AiResearchPage({ params: Promise.resolve({ locale: "en" }) });
+  const secondOutcome = getOutcomePanelElement(secondPage);
+  view.rerender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {secondOutcome}
+    </NextIntlClientProvider>,
+  );
+
+  expect(screen.getByText("Second cohort candidate")).toBeInTheDocument();
+  expect(screen.queryByText("First cohort candidate")).not.toBeInTheDocument();
+});
+
 it("keeps the AI research desk usable when the latest shortlist and official source status are unavailable", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
@@ -734,6 +864,7 @@ it("keeps the AI research desk usable when the latest shortlist and official sou
 
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
   expect(screen.getByText("Latest shortlist could not be loaded")).toBeInTheDocument();
+  expect(screen.getByText("Cohort outcomes could not be loaded")).toBeInTheDocument();
   expect(screen.getByText("Official source readiness could not be loaded.")).toBeInTheDocument();
   expect(screen.getByText("Market daily-data provider is unavailable.")).toBeInTheDocument();
   expect(screen.getByText("No Dragon Tiger List rows are available.")).toBeInTheDocument();

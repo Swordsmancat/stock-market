@@ -180,6 +180,19 @@ def load_research_shortlists_migration():
     return module
 
 
+def load_research_shortlist_outcomes_migration():
+    migration_path = Path("alembic/versions/0021_research_shortlist_outcomes.py")
+    spec = importlib.util.spec_from_file_location(
+        "research_shortlist_outcomes_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_official_disclosures_migration_creates_metadata_table_and_identity_constraint():
     migration = load_official_disclosures_migration()
     engine = create_engine("sqlite:///:memory:")
@@ -341,6 +354,136 @@ def test_research_shortlists_migration_creates_immutable_run_and_candidate_table
 
     assert "research_shortlist_candidates" not in tables_after_downgrade
     assert "research_shortlist_runs" not in tables_after_downgrade
+
+
+def test_research_shortlist_outcomes_migration_creates_terminal_ledger():
+    initial_migration = load_initial_migration()
+    task_runs_migration = load_task_runs_migration()
+    shortlists_migration = load_research_shortlists_migration()
+    outcomes_migration = load_research_shortlist_outcomes_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(task_runs_migration, connection)
+        run_migration(shortlists_migration, connection)
+        run_migration(outcomes_migration, connection)
+        inspector = inspect(connection)
+        columns = {
+            column["name"]: column
+            for column in inspector.get_columns("research_candidate_outcomes")
+        }
+        unique_constraints = inspector.get_unique_constraints(
+            "research_candidate_outcomes"
+        )
+        check_constraints = inspector.get_check_constraints(
+            "research_candidate_outcomes"
+        )
+        foreign_keys = inspector.get_foreign_keys("research_candidate_outcomes")
+        indexes = inspector.get_indexes("research_candidate_outcomes")
+
+    assert {
+        "candidate_id",
+        "horizon_sessions",
+        "methodology_version",
+        "status",
+        "evaluation_as_of",
+        "available_forward_bars",
+        "evaluation_task_run_id",
+        "maturity_trade_date",
+        "exit_close",
+        "minimum_forward_low",
+        "minimum_forward_low_trade_date",
+        "return_ratio",
+        "drawdown_ratio",
+        "exit_provider",
+        "exit_source",
+        "exit_adjustment",
+        "exit_source_priority",
+        "exit_ingested_at",
+        "minimum_low_provider",
+        "minimum_low_source",
+        "minimum_low_adjustment",
+        "minimum_low_source_priority",
+        "minimum_low_ingested_at",
+        "benchmark_code",
+        "benchmark_instrument_id",
+        "benchmark_status",
+        "benchmark_entry_trade_date",
+        "benchmark_entry_close",
+        "benchmark_entry_provider",
+        "benchmark_entry_source",
+        "benchmark_entry_adjustment",
+        "benchmark_entry_source_priority",
+        "benchmark_entry_ingested_at",
+        "benchmark_exit_trade_date",
+        "benchmark_exit_close",
+        "benchmark_exit_provider",
+        "benchmark_exit_source",
+        "benchmark_exit_adjustment",
+        "benchmark_exit_source_priority",
+        "benchmark_exit_ingested_at",
+        "benchmark_return_ratio",
+        "excess_return_ratio",
+        "diagnostics_json",
+        "benchmark_diagnostics_json",
+        "created_at",
+        "evaluated_at",
+        "benchmark_completed_at",
+    }.issubset(columns)
+    assert columns["maturity_trade_date"]["nullable"] is False
+    assert columns["return_ratio"]["type"].precision == 20
+    assert columns["return_ratio"]["type"].scale == 10
+    assert columns["benchmark_return_ratio"]["nullable"] is True
+    assert columns["excess_return_ratio"]["nullable"] is True
+    assert any(
+        constraint["name"] == "uq_research_candidate_outcomes_horizon"
+        and set(constraint["column_names"]) == {"candidate_id", "horizon_sessions"}
+        for constraint in unique_constraints
+    )
+    assert {constraint["name"] for constraint in check_constraints} >= {
+        "ck_research_candidate_outcomes_horizon_sessions",
+        "ck_research_candidate_outcomes_status",
+        "ck_research_candidate_outcomes_benchmark_status",
+        "ck_research_candidate_outcomes_mature",
+        "ck_research_candidate_outcomes_evaluation_order",
+        "ck_research_candidate_outcomes_candidate_terminal_values",
+        "ck_research_candidate_outcomes_benchmark_terminal_values",
+    }
+    assert any(
+        foreign_key["constrained_columns"] == ["candidate_id"]
+        and foreign_key["referred_table"] == "research_shortlist_candidates"
+        and foreign_key.get("options", {}).get("ondelete") == "CASCADE"
+        for foreign_key in foreign_keys
+    )
+    assert any(
+        foreign_key["constrained_columns"] == ["benchmark_instrument_id"]
+        and foreign_key["referred_table"] == "instruments"
+        for foreign_key in foreign_keys
+    )
+    assert any(
+        foreign_key["constrained_columns"] == ["evaluation_task_run_id"]
+        and foreign_key["referred_table"] == "task_runs"
+        for foreign_key in foreign_keys
+    )
+    assert any(
+        index["name"] == "ix_research_candidate_outcomes_candidate_id"
+        and index["column_names"] == ["candidate_id"]
+        for index in indexes
+    )
+
+    with engine.begin() as connection:
+        context = MigrationContext.configure(connection)
+        original_op = outcomes_migration.op
+        outcomes_migration.op = Operations(context)
+        try:
+            outcomes_migration.downgrade()
+        finally:
+            outcomes_migration.op = original_op
+        tables_after_downgrade = set(inspect(connection).get_table_names())
+
+    assert "research_candidate_outcomes" not in tables_after_downgrade
+    assert "research_shortlist_candidates" in tables_after_downgrade
 
 
 def run_migration(migration, connection):

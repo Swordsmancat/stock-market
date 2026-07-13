@@ -86,6 +86,9 @@ deterministic mapping exists.
 - Persist 5/20/60-trading-day observations for each saved candidate.
 - Horizon N means the Nth distinct stored daily bar strictly after the frozen
   entry trade date, not N calendar days.
+- Before explicit evaluation, a horizon with N available bars remains a visible
+  pending `N/N` read state marked ready; evaluation materializes exactly one
+  immutable evaluated or blocked terminal observation.
 - Store absolute return, future low-based drawdown, and benchmark-relative
   return when exact-date benchmark bars exist.
 - Pending, evaluated, and blocked counts and sample sizes must remain visible;
@@ -133,8 +136,10 @@ requirements and final integration acceptance.
       citations without AI-controlled membership or rank.
 - [ ] Opening or refreshing `/ai-research` shows the latest persisted shortlist
       first and links every candidate to existing deep analysis.
-- [ ] 5/20/60 outcomes mature only on the corresponding stored trading bar and
-      use exact-date CSI 300 alignment; incomplete evidence stays pending/null.
+- [ ] 5/20/60 data readiness occurs only on the corresponding stored trading
+      bar; before evaluation a ready horizon stays pending `N/N`, and terminal
+      results use exact-date CSI 300 alignment while incomplete evidence stays
+      pending/null.
 - [ ] Outcome aggregates show evaluated/pending/blocked counts and sample size,
       and retain inactive/delisted cohort members.
 - [ ] Manual and scheduled runs share idempotent services, expose TaskRun

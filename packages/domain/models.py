@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -848,6 +849,273 @@ class ResearchShortlistCandidate(Base):
         back_populates="candidates",
     )
     instrument: Mapped[Instrument] = relationship("Instrument")
+    outcomes: Mapped[list["ResearchCandidateOutcome"]] = relationship(
+        "ResearchCandidateOutcome",
+        back_populates="candidate",
+        cascade="all, delete-orphan",
+    )
+
+
+class ResearchCandidateOutcome(Base):
+    __tablename__ = "research_candidate_outcomes"
+    __table_args__ = (
+        UniqueConstraint(
+            "candidate_id",
+            "horizon_sessions",
+            name="uq_research_candidate_outcomes_horizon",
+        ),
+        CheckConstraint(
+            "horizon_sessions IN (5, 20, 60)",
+            name="ck_research_candidate_outcomes_horizon_sessions",
+        ),
+        CheckConstraint(
+            "status IN ('evaluated', 'blocked')",
+            name="ck_research_candidate_outcomes_status",
+        ),
+        CheckConstraint(
+            "benchmark_status IN ('pending', 'evaluated', 'blocked', 'not_applicable')",
+            name="ck_research_candidate_outcomes_benchmark_status",
+        ),
+        CheckConstraint(
+            "available_forward_bars >= horizon_sessions",
+            name="ck_research_candidate_outcomes_mature",
+        ),
+        CheckConstraint(
+            "evaluation_as_of >= maturity_trade_date",
+            name="ck_research_candidate_outcomes_evaluation_order",
+        ),
+        CheckConstraint(
+            "(status = 'evaluated' AND exit_close IS NOT NULL "
+            "AND minimum_forward_low IS NOT NULL "
+            "AND minimum_forward_low_trade_date IS NOT NULL "
+            "AND return_ratio IS NOT NULL AND drawdown_ratio IS NOT NULL "
+            "AND exit_provider IS NOT NULL AND exit_source IS NOT NULL "
+            "AND exit_adjustment IS NOT NULL AND exit_source_priority IS NOT NULL "
+            "AND exit_ingested_at IS NOT NULL "
+            "AND minimum_low_provider IS NOT NULL "
+            "AND minimum_low_source IS NOT NULL "
+            "AND minimum_low_adjustment IS NOT NULL "
+            "AND minimum_low_source_priority IS NOT NULL "
+            "AND minimum_low_ingested_at IS NOT NULL "
+            "AND benchmark_status != 'not_applicable') OR "
+            "(status = 'blocked' AND exit_close IS NULL "
+            "AND minimum_forward_low IS NULL "
+            "AND minimum_forward_low_trade_date IS NULL "
+            "AND return_ratio IS NULL AND drawdown_ratio IS NULL "
+            "AND exit_provider IS NULL AND exit_source IS NULL "
+            "AND exit_adjustment IS NULL AND exit_source_priority IS NULL "
+            "AND exit_ingested_at IS NULL "
+            "AND minimum_low_provider IS NULL "
+            "AND minimum_low_source IS NULL "
+            "AND minimum_low_adjustment IS NULL "
+            "AND minimum_low_source_priority IS NULL "
+            "AND minimum_low_ingested_at IS NULL "
+            "AND benchmark_status = 'not_applicable')",
+            name="ck_research_candidate_outcomes_candidate_terminal_values",
+        ),
+        CheckConstraint(
+            "(benchmark_status = 'evaluated' "
+            "AND benchmark_instrument_id IS NOT NULL "
+            "AND benchmark_entry_trade_date IS NOT NULL "
+            "AND benchmark_entry_close IS NOT NULL "
+            "AND benchmark_entry_provider IS NOT NULL "
+            "AND benchmark_entry_source IS NOT NULL "
+            "AND benchmark_entry_adjustment IS NOT NULL "
+            "AND benchmark_entry_source_priority IS NOT NULL "
+            "AND benchmark_entry_ingested_at IS NOT NULL "
+            "AND benchmark_exit_trade_date IS NOT NULL "
+            "AND benchmark_exit_close IS NOT NULL "
+            "AND benchmark_exit_provider IS NOT NULL "
+            "AND benchmark_exit_source IS NOT NULL "
+            "AND benchmark_exit_adjustment IS NOT NULL "
+            "AND benchmark_exit_source_priority IS NOT NULL "
+            "AND benchmark_exit_ingested_at IS NOT NULL "
+            "AND benchmark_return_ratio IS NOT NULL "
+            "AND excess_return_ratio IS NOT NULL "
+            "AND benchmark_completed_at IS NOT NULL) OR "
+            "(benchmark_status = 'blocked' "
+            "AND benchmark_instrument_id IS NOT NULL "
+            "AND benchmark_entry_trade_date IS NULL "
+            "AND benchmark_entry_close IS NULL "
+            "AND benchmark_entry_provider IS NULL "
+            "AND benchmark_entry_source IS NULL "
+            "AND benchmark_entry_adjustment IS NULL "
+            "AND benchmark_entry_source_priority IS NULL "
+            "AND benchmark_entry_ingested_at IS NULL "
+            "AND benchmark_exit_trade_date IS NULL "
+            "AND benchmark_exit_close IS NULL "
+            "AND benchmark_exit_provider IS NULL "
+            "AND benchmark_exit_source IS NULL "
+            "AND benchmark_exit_adjustment IS NULL "
+            "AND benchmark_exit_source_priority IS NULL "
+            "AND benchmark_exit_ingested_at IS NULL "
+            "AND benchmark_return_ratio IS NULL "
+            "AND excess_return_ratio IS NULL "
+            "AND benchmark_completed_at IS NOT NULL) OR "
+            "(benchmark_status = 'pending' "
+            "AND benchmark_entry_trade_date IS NULL "
+            "AND benchmark_entry_close IS NULL "
+            "AND benchmark_entry_provider IS NULL "
+            "AND benchmark_entry_source IS NULL "
+            "AND benchmark_entry_adjustment IS NULL "
+            "AND benchmark_entry_source_priority IS NULL "
+            "AND benchmark_entry_ingested_at IS NULL "
+            "AND benchmark_exit_trade_date IS NULL "
+            "AND benchmark_exit_close IS NULL "
+            "AND benchmark_exit_provider IS NULL "
+            "AND benchmark_exit_source IS NULL "
+            "AND benchmark_exit_adjustment IS NULL "
+            "AND benchmark_exit_source_priority IS NULL "
+            "AND benchmark_exit_ingested_at IS NULL "
+            "AND benchmark_return_ratio IS NULL "
+            "AND excess_return_ratio IS NULL "
+            "AND benchmark_completed_at IS NULL) OR "
+            "(benchmark_status = 'not_applicable' "
+            "AND benchmark_instrument_id IS NULL "
+            "AND benchmark_entry_trade_date IS NULL "
+            "AND benchmark_entry_close IS NULL "
+            "AND benchmark_entry_provider IS NULL "
+            "AND benchmark_entry_source IS NULL "
+            "AND benchmark_entry_adjustment IS NULL "
+            "AND benchmark_entry_source_priority IS NULL "
+            "AND benchmark_entry_ingested_at IS NULL "
+            "AND benchmark_exit_trade_date IS NULL "
+            "AND benchmark_exit_close IS NULL "
+            "AND benchmark_exit_provider IS NULL "
+            "AND benchmark_exit_source IS NULL "
+            "AND benchmark_exit_adjustment IS NULL "
+            "AND benchmark_exit_source_priority IS NULL "
+            "AND benchmark_exit_ingested_at IS NULL "
+            "AND benchmark_return_ratio IS NULL "
+            "AND excess_return_ratio IS NULL "
+            "AND benchmark_completed_at IS NULL)",
+            name="ck_research_candidate_outcomes_benchmark_terminal_values",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    candidate_id: Mapped[PythonUUID] = mapped_column(
+        ForeignKey("research_shortlist_candidates.id", ondelete="CASCADE"),
+        index=True,
+    )
+    horizon_sessions: Mapped[int] = mapped_column(Integer)
+    methodology_version: Mapped[str] = mapped_column(
+        String(64),
+        default="research_candidate_outcome_v1",
+    )
+    status: Mapped[str] = mapped_column(String(32))
+    evaluation_as_of: Mapped[date] = mapped_column(Date)
+    available_forward_bars: Mapped[int] = mapped_column(Integer)
+    evaluation_task_run_id: Mapped[PythonUUID | None] = mapped_column(
+        ForeignKey("task_runs.id"),
+        default=None,
+    )
+    maturity_trade_date: Mapped[date] = mapped_column(Date)
+    exit_close: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), default=None)
+    minimum_forward_low: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 6),
+        default=None,
+    )
+    minimum_forward_low_trade_date: Mapped[date | None] = mapped_column(
+        Date,
+        default=None,
+    )
+    return_ratio: Mapped[Decimal | None] = mapped_column(Numeric(20, 10), default=None)
+    drawdown_ratio: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 10),
+        default=None,
+    )
+    exit_provider: Mapped[str | None] = mapped_column(String(64), default=None)
+    exit_source: Mapped[str | None] = mapped_column(String(128), default=None)
+    exit_adjustment: Mapped[str | None] = mapped_column(String(32), default=None)
+    exit_source_priority: Mapped[int | None] = mapped_column(Integer, default=None)
+    exit_ingested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+    minimum_low_provider: Mapped[str | None] = mapped_column(String(64), default=None)
+    minimum_low_source: Mapped[str | None] = mapped_column(String(128), default=None)
+    minimum_low_adjustment: Mapped[str | None] = mapped_column(String(32), default=None)
+    minimum_low_source_priority: Mapped[int | None] = mapped_column(Integer, default=None)
+    minimum_low_ingested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+    benchmark_code: Mapped[str] = mapped_column(String(64), default="cn_csi_300")
+    benchmark_instrument_id: Mapped[PythonUUID | None] = mapped_column(
+        ForeignKey("instruments.id"),
+        default=None,
+    )
+    benchmark_status: Mapped[str] = mapped_column(String(32), default="pending")
+    benchmark_entry_trade_date: Mapped[date | None] = mapped_column(Date, default=None)
+    benchmark_entry_close: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 6),
+        default=None,
+    )
+    benchmark_entry_provider: Mapped[str | None] = mapped_column(String(64), default=None)
+    benchmark_entry_source: Mapped[str | None] = mapped_column(String(128), default=None)
+    benchmark_entry_adjustment: Mapped[str | None] = mapped_column(String(32), default=None)
+    benchmark_entry_source_priority: Mapped[int | None] = mapped_column(
+        Integer,
+        default=None,
+    )
+    benchmark_entry_ingested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+    benchmark_exit_trade_date: Mapped[date | None] = mapped_column(Date, default=None)
+    benchmark_exit_close: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 6),
+        default=None,
+    )
+    benchmark_exit_provider: Mapped[str | None] = mapped_column(String(64), default=None)
+    benchmark_exit_source: Mapped[str | None] = mapped_column(String(128), default=None)
+    benchmark_exit_adjustment: Mapped[str | None] = mapped_column(String(32), default=None)
+    benchmark_exit_source_priority: Mapped[int | None] = mapped_column(
+        Integer,
+        default=None,
+    )
+    benchmark_exit_ingested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+    benchmark_return_ratio: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 10),
+        default=None,
+    )
+    excess_return_ratio: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 10),
+        default=None,
+    )
+    diagnostics_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    benchmark_diagnostics_json: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=list,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    evaluated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    benchmark_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+    )
+
+    candidate: Mapped[ResearchShortlistCandidate] = relationship(
+        "ResearchShortlistCandidate",
+        back_populates="outcomes",
+    )
+    benchmark_instrument: Mapped[Instrument | None] = relationship(
+        "Instrument",
+        foreign_keys=[benchmark_instrument_id],
+    )
 
 
 class MarketDailyEvidenceEvent(Base):

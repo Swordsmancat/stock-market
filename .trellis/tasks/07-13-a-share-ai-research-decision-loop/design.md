@@ -55,12 +55,22 @@ explicitly rejected before publication.
 
 ### ResearchCandidateOutcome
 
-One immutable observation per candidate and horizon (`5`, `20`, `60`) with:
+One immutable terminal observation per candidate and horizon (`5`, `20`, `60`)
+with:
 
-- pending/evaluated/blocked status and available forward-bar count;
+- evaluated/blocked status, available forward-bar count, and maturity cutoff;
 - exit date/close, return, future drawdown, and frozen price provenance;
-- exact-date benchmark entry/exit data, return, and excess return;
+- independently progressing exact-date benchmark status/data, return, and
+  excess return;
 - diagnostics and evaluation timestamp.
+
+Before terminal materialization, pending is a read-model state derived from the
+frozen candidate and local forward bars. With fewer than N eligible bars it is
+not data-ready; with at least N bars it reports `N/N` and
+`ready_for_evaluation=true` until an explicit evaluator freezes evaluated or
+blocked. Public responses still expose all three horizons for every candidate.
+This refinement avoids mutating progress rows while preserving the parent
+requirement for visible pending/evaluated/blocked counts.
 
 This table is introduced by the outcome child, not pre-created speculatively by
 the snapshot child.
@@ -103,13 +113,21 @@ No live provider fetch occurs inside publication.
 - Horizon N is the Nth distinct local `DailyBar` after entry.
 - Return is `exit_close / entry_close - 1`.
 - Drawdown uses the minimum low over forward bars 1..N relative to entry close.
-- Candidate and benchmark bars join by exact trade date. V1 benchmark is CSI 300
-  (`000300`) when locally available.
+- Candidate and benchmark bars join by exact trade date. V1 benchmark is the
+  dedicated local CSI 300 instrument identified by
+  `market=CN`, `asset_type=index`, `symbol=cn_csi_300`; stock `000300` is never
+  a benchmark substitute.
 - Different adjustment modes block evaluation with a diagnostic.
-- Fewer than N bars remains pending. Missing/invalid bars and adjustment
-  mismatch remain blocked/null. Neither state becomes a zero return.
-- Published outcomes are immutable; an explicit future revision mechanism is
-  required to recalculate after source replacement.
+- Fewer than N eligible completed bars remains pending and not ready. Once N
+  exist but before evaluation, the read model remains pending `N/N` and ready;
+  evaluation then freezes invalid candidate entry/path values or incompatible
+  adjustment as blocked/null.
+  Missing benchmark bars leave the candidate evaluated while benchmark and
+  relative fields remain pending/null. No missing state becomes a zero return.
+- Published candidate terminal outcomes are immutable; an explicit future
+  revision mechanism is required to recalculate after source replacement. A
+  missing benchmark may make one independent transition from pending to a
+  frozen evaluated/blocked benchmark observation on the same terminal row.
 
 The outcome worker queries `DailyBar` directly. It must not call
 `get_bars_payload` or any provider fallback.

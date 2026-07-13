@@ -22,10 +22,12 @@ import {
   type EvidenceCoveragePayload,
 } from "@/components/ashare-evidence-coverage-panel";
 import { DailyResearchShortlistPanel } from "@/components/daily-research-shortlist-panel";
+import { ResearchShortlistOutcomePanel } from "@/components/research-shortlist-outcome-panel";
 import { backendFetch } from "@/lib/backend-api";
 import type { DailyResearchShortlistPayload } from "@/lib/daily-research-shortlist";
 import { withProviderQuery } from "@/lib/market-data";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
+import type { ResearchShortlistOutcomeTrackingPayload } from "@/lib/research-shortlist-outcomes";
 
 type WatchlistPayload = {
   items?: AiResearchWatchlistItem[];
@@ -89,6 +91,7 @@ export default async function AiResearchPage({
     stockUniverseStatusResult,
     evidenceCoverageResult,
     dailyShortlistResult,
+    outcomeTrackingResult,
   ] = await Promise.all([
     fetchOptionalJson<WatchlistPayload>("/watchlist"),
     fetchOptionalJson<MarketOverviewPayload>(withProviderQuery("/dashboard/market-overview", provider)),
@@ -113,6 +116,9 @@ export default async function AiResearchPage({
     fetchOptionalJson<DailyResearchShortlistPayload>(
       "/research-shortlists/latest?market=CN&profile_id=balanced_research",
     ),
+    fetchOptionalJson<ResearchShortlistOutcomeTrackingPayload>(
+      "/research-shortlists/tracking?market=CN&profile_id=balanced_research&limit=10&offset=0",
+    ),
   ]);
 
   const watchlistItems = watchlistResult.status === "loaded" ? watchlistResult.payload.items ?? [] : [];
@@ -131,11 +137,28 @@ export default async function AiResearchPage({
   return (
     <div className="space-y-6">
       <DailyResearchShortlistPanel
+        key={
+          dailyShortlistResult.status === "loaded"
+            ? dailyShortlistResult.payload.run?.id ?? "no-shortlist"
+            : "shortlist-load-failed"
+        }
         locale={locale}
         initialPayload={
           dailyShortlistResult.status === "loaded" ? dailyShortlistResult.payload : null
         }
         initialLoadFailed={dailyShortlistResult.status === "failed"}
+      />
+      <ResearchShortlistOutcomePanel
+        key={
+          outcomeTrackingResult.status === "loaded"
+            ? outcomeTrackingResult.payload.latest?.run.id ?? "no-outcomes"
+            : "outcome-load-failed"
+        }
+        locale={locale}
+        initialPayload={
+          outcomeTrackingResult.status === "loaded" ? outcomeTrackingResult.payload : null
+        }
+        initialLoadFailed={outcomeTrackingResult.status === "failed"}
       />
       <AiResearchDesk
         locale={locale}

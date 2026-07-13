@@ -1,0 +1,8 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend layering, pre-development checklist, and affected quality gates."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"SQLAlchemy model, decimal, transaction, relationship, and Alembic conventions."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Immutable cohort, frozen entry provenance, local evidence, API compatibility, and safety boundary."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Existing DailyBar fallback coordinator, source priority, adjustment provenance, and local coverage contract."}
+{"file":".trellis/spec/backend/recommendation-signal-evaluation-contract.md","reason":"Existing signal-evaluation semantics to compare without reusing incompatible percentage or benchmark alignment behavior."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend structure, localization, accessibility, responsiveness, and quality gates."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace nullable status and ratio contracts from database through API/proxy/UI."}
+{"file":".trellis/tasks/07-13-research-shortlist-outcome-tracking/research/outcome-contract-audit.md","reason":"Focused domain, UI, benchmark, immutability, and risk conclusions for implementation."}

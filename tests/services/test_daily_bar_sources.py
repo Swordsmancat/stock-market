@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from packages.providers.base import ProviderBar
+from packages.services import ingestion
 from packages.services.daily_bar_sources import (
     CN_RESILIENT_POLICY,
     STRICT_POLICY,
@@ -141,6 +142,64 @@ def test_unconfigured_tushare_is_visible_but_never_called() -> None:
         "source": "tushare.pro.daily",
         "status": "skipped_unconfigured",
     }
+
+
+def test_ingestion_coordinator_labels_tushare_pro_daily_as_raw(monkeypatch) -> None:
+    class EmptySinaProvider:
+        download_sina_daily_bars = staticmethod(lambda *_args: [])
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_bars(self, *_args):
+            return []
+
+    class Provider:
+        def __init__(self, bars):
+            self._bars = bars
+
+        def fetch_bars(self, *_args):
+            return self._bars
+
+    providers = {
+        "akshare": Provider([]),
+        "tushare": Provider([_bar()]),
+    }
+    monkeypatch.setattr(ingestion, "AkShareProvider", EmptySinaProvider)
+    monkeypatch.setattr(
+        ingestion,
+        "resolve_market_data_provider_name",
+        lambda provider_name: provider_name,
+    )
+    monkeypatch.setattr(ingestion, "get_provider", providers.__getitem__)
+    monkeypatch.setattr(
+        ingestion,
+        "get_platform_settings",
+        lambda: {"tushare_token": "configured"},
+    )
+
+    result = ingestion.build_daily_bar_fetch_coordinator("akshare").fetch(
+        "600519",
+        "1d",
+        date(2026, 7, 1),
+        date(2026, 7, 10),
+        policy=CN_RESILIENT_POLICY,
+    )
+
+    assert result.status == "ok"
+    assert result.source == "tushare.pro.daily"
+    assert result.adjustment == "raw"
+
+    direct_result = ingestion.build_daily_bar_fetch_coordinator("tushare").fetch(
+        "600519",
+        "1d",
+        date(2026, 7, 1),
+        date(2026, 7, 10),
+        policy=STRICT_POLICY,
+    )
+
+    assert direct_result.source == "tushare.pro.daily"
+    assert direct_result.adjustment == "raw"
 
 
 def test_repeated_source_failures_open_run_local_circuit() -> None:
