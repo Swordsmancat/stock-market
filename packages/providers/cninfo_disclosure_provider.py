@@ -8,10 +8,14 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
+import httpx
+
 
 CNINFO_SOURCE = "cninfo"
 CNINFO_SOURCE_NAME = "CNINFO"
 CNINFO_HOSTS = {"cninfo.com.cn", "www.cninfo.com.cn"}
+CNINFO_STOCK_LIST_URL = "https://www.cninfo.com.cn/new/data/szse_stock.json"
+CNINFO_ANNOUNCEMENT_QUERY_URL = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
 CNINFO_REQUIRED_COLUMNS = {"代码", "简称", "公告标题", "公告时间", "公告链接"}
 A_SHARE_SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 MAX_CNINFO_DATE_RANGE_DAYS = 366
@@ -76,7 +80,19 @@ def fetch_cninfo_disclosures(
             start_date=start_date.strftime("%Y%m%d"),
             end_date=end_date.strftime("%Y%m%d"),
         )
-    except (ValueError, KeyError) as error:
+    except KeyError as error:
+        if _confirm_cninfo_empty_result(
+            symbol=normalized_symbol,
+            start_date=start_date,
+            end_date=end_date,
+            category=category,
+        ):
+            return CninfoDisclosureFetchResult(items=[], rejections=[])
+        raise CninfoDisclosureProviderError(
+            "CNINFO_REQUEST_REJECTED",
+            f"CNINFO rejected the disclosure metadata request: {error.__class__.__name__}.",
+        ) from error
+    except ValueError as error:
         raise CninfoDisclosureProviderError(
             "CNINFO_REQUEST_REJECTED",
             f"CNINFO rejected the disclosure metadata request: {error.__class__.__name__}.",
@@ -139,6 +155,73 @@ def _load_akshare_fetcher() -> Callable[..., Any]:
             "AkShare is not installed; install the cn-market dependency extra.",
         ) from error
     return ak.stock_zh_a_disclosure_report_cninfo
+
+
+def _confirm_cninfo_empty_result(
+    *,
+    symbol: str,
+    start_date: date,
+    end_date: date,
+    category: str | None,
+    http_get: Callable[..., Any] | None = None,
+    http_post: Callable[..., Any] | None = None,
+) -> bool:
+    if (category or "").strip():
+        return False
+    get = http_get or httpx.get
+    post = http_post or httpx.post
+    try:
+        stock_response = get(
+            CNINFO_STOCK_LIST_URL,
+            timeout=10,
+            follow_redirects=False,
+        )
+        stock_response.raise_for_status()
+        stock_payload = stock_response.json()
+        stock_rows = stock_payload.get("stockList") if isinstance(stock_payload, dict) else None
+        if not isinstance(stock_rows, list):
+            return False
+        org_id = next(
+            (
+                str(row.get("orgId", "")).strip()
+                for row in stock_rows
+                if isinstance(row, dict) and str(row.get("code", "")).strip() == symbol
+            ),
+            "",
+        )
+        if not org_id:
+            return False
+
+        query_response = post(
+            CNINFO_ANNOUNCEMENT_QUERY_URL,
+            params={
+                "pageNum": "1",
+                "pageSize": "1",
+                "column": "szse",
+                "tabName": "fulltext",
+                "plate": "",
+                "stock": f"{symbol},{org_id}",
+                "searchkey": "",
+                "secid": "",
+                "category": "",
+                "trade": "",
+                "seDate": f"{start_date.isoformat()}~{end_date.isoformat()}",
+                "sortName": "",
+                "sortType": "",
+                "isHLtitle": "true",
+            },
+            timeout=10,
+            follow_redirects=False,
+        )
+        query_response.raise_for_status()
+        query_payload = query_response.json()
+        if not isinstance(query_payload, dict):
+            return False
+        total = query_payload.get("totalAnnouncement")
+        announcements = query_payload.get("announcements")
+        return int(total) == 0 and announcements in (None, [])
+    except (httpx.HTTPError, KeyError, TypeError, ValueError):
+        return False
 
 
 def _normalize_candidate(

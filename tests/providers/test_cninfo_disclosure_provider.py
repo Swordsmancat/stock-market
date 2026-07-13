@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 import pandas as pd
 import pytest
 
+import packages.providers.cninfo_disclosure_provider as provider_module
 from packages.providers.cninfo_disclosure_provider import (
     CninfoDisclosureProviderError,
     fetch_cninfo_disclosures,
@@ -98,6 +99,103 @@ def test_fetch_cninfo_disclosures_sanitizes_provider_failure():
 
     assert exc_info.value.code == "CNINFO_PROVIDER_ERROR"
     assert "secret raw provider response" not in exc_info.value.message
+
+
+def test_fetch_cninfo_disclosures_treats_independently_confirmed_empty_key_error_as_no_data(
+    monkeypatch,
+):
+    def empty_bug_fetcher(**kwargs):
+        raise KeyError("None of the expected columns are present")
+
+    monkeypatch.setattr(
+        provider_module,
+        "_confirm_cninfo_empty_result",
+        lambda **kwargs: True,
+    )
+
+    result = fetch_cninfo_disclosures(
+        symbol="000001",
+        start_date=date(2026, 7, 12),
+        end_date=date(2026, 7, 13),
+        fetcher=empty_bug_fetcher,
+    )
+
+    assert result.items == []
+    assert result.rejections == []
+
+
+def test_confirm_cninfo_empty_result_requires_zero_official_count():
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured["stock_url"] = url
+        return FakeResponse({"stockList": [{"code": "000001", "orgId": "gssz0000001"}]})
+
+    def fake_post(url, **kwargs):
+        captured["query_url"] = url
+        captured["params"] = kwargs["params"]
+        return FakeResponse({"totalAnnouncement": 0, "announcements": None})
+
+    confirmed = provider_module._confirm_cninfo_empty_result(
+        symbol="000001",
+        start_date=date(2026, 7, 12),
+        end_date=date(2026, 7, 13),
+        category=None,
+        http_get=fake_get,
+        http_post=fake_post,
+    )
+
+    assert confirmed is True
+    assert captured["stock_url"].startswith("https://www.cninfo.com.cn/")
+    assert captured["query_url"].startswith("https://www.cninfo.com.cn/")
+    assert captured["params"]["stock"] == "000001,gssz0000001"
+    assert captured["params"]["seDate"] == "2026-07-12~2026-07-13"
+
+
+def test_confirm_cninfo_empty_result_does_not_mask_nonzero_or_category_responses():
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    assert provider_module._confirm_cninfo_empty_result(
+        symbol="000001",
+        start_date=date(2026, 7, 12),
+        end_date=date(2026, 7, 13),
+        category="年报",
+        http_get=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError()),
+        http_post=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError()),
+    ) is False
+
+    responses = iter(
+        [
+            FakeResponse({"stockList": [{"code": "000001", "orgId": "gssz0000001"}]}),
+            FakeResponse({"totalAnnouncement": 1, "announcements": [{"announcementId": "1"}]}),
+        ]
+    )
+    assert provider_module._confirm_cninfo_empty_result(
+        symbol="000001",
+        start_date=date(2026, 7, 12),
+        end_date=date(2026, 7, 13),
+        category=None,
+        http_get=lambda *args, **kwargs: next(responses),
+        http_post=lambda *args, **kwargs: next(responses),
+    ) is False
 
 
 def test_fetch_cninfo_disclosures_rejects_unbounded_date_range_before_fetch():
