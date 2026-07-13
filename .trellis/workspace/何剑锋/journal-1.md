@@ -1647,3 +1647,36 @@ Archived the completed dashboard redesign task, created the A-share official dis
 ### Next Steps
 
 - None - task complete
+
+
+## Session 50: Official disclosure document evidence
+
+**Date**: 2026-07-13
+**Task**: Official disclosure document evidence
+**Branch**: `master`
+
+### Summary
+
+Added exact-ID CNINFO PDF ingestion, safe immutable document storage, bounded pypdf page extraction, versioned section evidence, APIs, assistant citations, tests, docs, and executable backend contracts. Full suite passed with 625 tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `189b26d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
