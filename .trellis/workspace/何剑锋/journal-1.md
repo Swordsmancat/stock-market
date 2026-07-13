@@ -1812,3 +1812,36 @@ Added immutable point-in-time daily shortlist persistence, transparent scoring, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 55: Research shortlist outcome tracking
+
+**Date**: 2026-07-13
+**Task**: Research shortlist outcome tracking
+**Branch**: `master`
+
+### Summary
+
+Added immutable 5/20/60-session outcome tracking for published A-share research cohorts, local completed-bar evaluation with exact CSI 300 comparison, bounded candidate-level history queries, FastAPI/Next/UI integration, migration 0021, full tests, PostgreSQL rollout, and desktop/mobile acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `282b031` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
