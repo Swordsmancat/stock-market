@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     fred_api_key: str | None = None
     fred_api_base_url: str = "https://api.stlouisfed.org/fred"
     world_bank_api_base_url: str = "https://api.worldbank.org/v2"
+    disclosure_document_storage_dir: str = "data/official_disclosures"
 
     model_config = SettingsConfigDict(
         env_file=".env",

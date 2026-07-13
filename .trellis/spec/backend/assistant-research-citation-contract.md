@@ -6,7 +6,7 @@
 
 - Trigger: `POST /assistant/market` now returns enriched research citations and diagnostics built from existing platform evidence.
 - Scope: assistant service logic in `packages/services/market_assistant.py`, prompt/citation validation in `packages/ai/market_assistant.py`, FastAPI route behavior in `apps/api/routers/assistant.py`, frontend route/card consumers under `apps/web`, and focused assistant tests.
-- Non-goals: production filings/transcripts/announcements ingestion, embeddings/vector search, raw document corpus storage, streaming responses, watchlist-level monitoring, paid research entitlements, or direct trading recommendations.
+- Non-goals: OCR, broad filings/transcripts ingestion, embeddings/vector search, whole-market document crawling, streaming responses, watchlist-level monitoring, paid research entitlements, or direct trading recommendations.
 
 ### 2. Signatures
 
@@ -23,9 +23,11 @@
 
 - Daily bars remain the core evidence gate. If required market data is unavailable, the assistant must return `no_data` / degraded-safe output and avoid LLM generation.
 - Existing top-level response fields and old minimal citation payloads must remain backward compatible.
-- Evidence may come from existing platform sources only: daily bars, stored technical indicators, stored macro / valuation indicator observations, fundamentals snapshots, news / sentiment payloads, generated reports, reviewed/citable research source notebook entries, and persisted/citable `MarketDailyEvidenceEvent` rows.
+- Evidence may come from existing platform sources only: daily bars, stored technical indicators, stored macro / valuation indicator observations, fundamentals snapshots, news / sentiment payloads, generated reports, reviewed/citable research source notebook entries, persisted/citable `MarketDailyEvidenceEvent` rows, persisted CNINFO disclosure metadata, and persisted extracted official disclosure sections.
 - Missing optional sources must produce diagnostics, not fabricated evidence or fake citations.
-- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `market_indicator:{code}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, `research_source_note:{id}`, or `market_daily_event:{event_type}:{identity}:{trade_date}`.
+- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `market_indicator:{code}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, `research_source_note:{id}`, `market_daily_event:{event_type}:{identity}:{trade_date}`, `official_disclosure:{id}`, or `official_disclosure_section:{id}`.
+- `official_disclosure:*` supports metadata claims only. `official_disclosure_section:*` supports document-content claims only when the cited local section preserves exact announcement ID, document SHA-256, page number, topic, content hash, and extracted excerpt.
+- The assistant loads sections only from the latest extracted version of each disclosure. Older versions remain queryable for audit but do not enter current AI context.
 - `market_daily_event:*` citations are allowed only for persisted rows with `is_citable=true`. Live `/market-daily-data/*` and `/sectors/hot` payloads remain non-citable even when their provider status is `ok` or `degraded`.
 - `market_indicator:*` citations are allowed only for stored local macro / valuation observations with value, as-of date, and source metadata. Official source status rows, collection links, seed templates, and missing indicator rows remain guidance or diagnostics only.
 - LLM prompts must list available citation IDs and instruct the model to use only those IDs.
@@ -42,6 +44,7 @@
 - Draft or non-citable research source notes -> remain collection records; they are not included in allowed assistant citation IDs.
 - Official source readiness/status rows -> remain maintenance guidance; they are not included in allowed assistant citation IDs.
 - Live market daily rows, mock/static sector fixtures, or unknown `market_daily_event:*` IDs -> remain context or diagnostics; they are not accepted as stored evidence citations.
+- Stored disclosure PDF without extracted text, an older document version, or an unknown `official_disclosure_section:*` ID -> not accepted as current document-content evidence.
 - LLM returns unknown inline citation ID -> `CITATION_UNKNOWN_ID` diagnostic and degraded/fallback output; unknown citation is not presented as valid.
 - User asks for direct trading instruction -> assistant refuses/reframes per safety policy.
 - Old frontend payload with only `id`, `label`, `source`, `url` citations -> still renders.
@@ -51,14 +54,14 @@
 
 - Good: daily bars, technical indicators, stored macro observations, fundamentals, news, a generated report, and reviewed/citable source notebook entries are available; response contains deterministic citation IDs, optional metadata/excerpts, compact diagnostics, and an answer using only known citation IDs.
 - Base: only daily bars are available; answer remains traceable to bars and diagnostics state missing optional sources.
-- Bad: a missing filing/transcript is represented as a live citation. These sources are not production integrations in this slice.
+- Bad: a missing filing/transcript, image-only PDF, or metadata-only disclosure is represented as document-body evidence.
 - Bad: `fred`, `world_bank`, source-readiness IDs, collection links, or seed-template IDs are cited instead of stored `market_indicator:{code}:{as_of}` observations.
 - Bad: an LLM-invented citation ID is rendered as if it existed in `citations`.
 - Bad: direct buy/sell/hold advice, target prices, or position sizing is emitted because citations exist.
 
 ### 6. Tests Required
 
-- Service/AI tests assert citations are generated for available bars, indicators, stored macro observations, fundamentals, news, generated reports, reviewed/citable research source notes, and persisted/citable market daily events.
+- Service/AI tests assert citations are generated for available bars, indicators, stored macro observations, fundamentals, news, generated reports, reviewed/citable research source notes, persisted/citable market daily events, disclosure metadata, and latest-version extracted disclosure sections.
 - Service tests assert missing optional evidence produces diagnostics rather than fabricated citation items.
 - Service tests assert missing macro observations produce diagnostics rather than fabricated `market_indicator:*` citation items.
 - AI tests assert unknown LLM citation IDs are detected and handled with diagnostics/fallback behavior.

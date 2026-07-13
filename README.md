@@ -123,6 +123,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | P1 | Saved research brief inbox | Implemented / LLM+fallback history MVP | `/evidence` can now generate and persist reusable research briefs from the current Evidence Center context. Briefs store markdown content, allowed local citations, source-gap/follow-up summaries, diagnostics, model metadata, and safety flags. OpenAI-compatible generation is used only when configured; provider failures, empty output, or unknown citation IDs fall back deterministically. |
 | P1 | Persisted market daily evidence | Implemented / manual import MVP | `/market-daily-evidence/import` persists eligible provider-normalized stock fund flow, limit-up, Dragon Tiger List, block-trade, and hot-sector rows with deterministic dedupe and `market_daily_event:*` citations. `/evidence` shows counts, latest import metadata, citations, refresh counts, and sanitized diagnostics. Mock/static/unavailable rows remain non-citable; scheduler automation and historical backfill are follow-up work. |
 | P1 | A-share official disclosure metadata | Implemented / metadata-only MVP | `POST /official-disclosures/refresh` uses AkShare's CNINFO adapter to persist official A-share disclosure identity, title, category, publication time, and canonical detail URL. Repeated refreshes upsert by CNINFO announcement ID and produce stable `official_disclosure:*` citations for symbol-level AI analysis. Document bodies are not downloaded, parsed, summarized, or implied by these citations. |
+| P1 | A-share official disclosure document evidence | Implemented / text-PDF MVP | `POST /official-disclosures/{id}/ingest-document` discovers the exact CNINFO PDF attachment, enforces an official host/path and 25 MiB boundary, stores immutable SHA-256 versions under `data/official_disclosures`, extracts bounded page-anchored text with pypdf, and produces `official_disclosure_section:*` citations. Image-only/encrypted/malformed/over-limit PDFs remain non-citable; OCR, bulk backfill, vector search, and LLM document summaries are not included. |
 | P1 | Comprehensive A-share research coverage | Implemented / breadth-first MVP | AkShare-backed full-universe sync stores SSE/SZSE/BSE identity and reconciliation history without clearing the last good universe on failure. Screening evaluates the complete stored scope with bulk evidence loaders, transparent profiles, coverage counters, and a bounded deterministic shortlist. AI explanation cannot change ranking. Evidence Center adds cursor-based dividend/bonus and rights-allotment batches with partial-success diagnostics. |
 | UI polish | Personal research dashboard surface | Implemented / evidence complete | Ticker, market overview table, settings-driven movement colors, durable screenshots, sampled WCAG contrast evidence, and major movement-color call sites are implemented and covered by web/browser evidence. The UI is optimized for personal scanning and research aggregation rather than terminal parity. |
 | Phase 2 | K-line interaction enhancements | Complete | Interactive candlestick charts include range controls and MA / BOLL / volume / MACD / RSI / KDJ indicator controls. |
@@ -132,7 +133,7 @@ Open [http://localhost:3000/en](http://localhost:3000/en).
 | Phase 3 | Intraday chart | Partial / provider-backed MVP | `GET /market-data/{symbol}/intraday` now supports verified yfinance `1m` minute bars when available, including previous-close references and `ok` / `no_data` / `degraded` payloads. Mock, AkShare, and Tushare remain degraded until explicit minute-bar providers are verified. |
 | Phase 3 | Market depth | Partial / provider-boundary MVP | `GET /market-data/{symbol}/depth` now uses an explicit `fetch_market_depth` provider boundary, section-level `ok` / `degraded` semantics, verified order-book / recent-trade / fund-flow normalization, and large-order derivation only from verified trades. AkShare now has a fixture-tested order-book candidate path, but production-verified Level-2 status still requires opt-in live smoke checks, schema monitoring, and provider-permission validation. |
 | Phase 3 | Technical indicator library | Complete | MACD, RSI, KDJ, MA, BOLL, and volume chart overlays are supported; backend MACD/KDJ persistence is covered. |
-| Phase 3 | AI assistant | Partial / research-citation MVP | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily bars, stored indicators, fundamentals, news, generated reports, reviewed source notebook entries, and persisted CNINFO disclosure metadata. `official_disclosure:*` citations support only document identity/title/category/publication-time claims because document bodies, transcripts, vector search, and broader watchlist monitoring remain follow-up work. |
+| Phase 3 | AI assistant | Partial / research-citation MVP | `POST /assistant/market` and the instrument-detail AI Market Assistant UI provide traceable, safety-bounded answers from verified daily bars, stored indicators, fundamentals, news, generated reports, reviewed source notebook entries, persisted CNINFO disclosure metadata, and extracted official document sections. `official_disclosure:*` remains metadata-only; `official_disclosure_section:*` carries exact PDF hash/page/topic/text provenance. OCR, transcripts, vector search, and broader watchlist monitoring remain follow-up work. |
 
 See [docs/manual/user-guide.md](docs/manual/user-guide.md) for user-facing behavior and [docs/runbooks/developer-maintenance.md](docs/runbooks/developer-maintenance.md) for endpoint and provider-maintenance details.
 
@@ -221,7 +222,7 @@ The Evidence Center also includes a saved research brief inbox. Use it after rev
 
 Use this for information that normal trading sites do not organize well, such as Buffett Indicator source components, manual macro source checks, filing search notes, and one-off research excerpts. Keep full filings/transcripts, bulk scraping, licensed research corpora, and automated ingestion out of scope until source rights, storage policy, and citation metadata are designed.
 
-## A-share official disclosure metadata
+## A-share official disclosure evidence
 
 Refresh a bounded CNINFO metadata range for one A-share symbol through the API:
 
@@ -234,6 +235,18 @@ curl "http://localhost:8000/official-disclosures?symbol=000001&limit=20"
 ```
 
 The refresh stores only CNINFO publication metadata and stable external document identity. A successful row can become an `official_disclosure:<id>` AI citation, but that citation proves only that a disclosure with the returned title/category/publication time exists at the linked official source. It does not prove or summarize any statement inside the document. Provider failures are sanitized, and an empty or failed refresh never deletes previously stored metadata.
+
+After metadata exists, ingest one exact official attachment and list its extracted sections:
+
+```bash
+curl -X POST "http://localhost:8000/official-disclosures/<disclosure-uuid>/ingest-document"
+curl "http://localhost:8000/official-disclosures/<disclosure-uuid>/sections?limit=100"
+curl "http://localhost:8000/official-disclosures/<disclosure-uuid>/sections?document_id=<older-version-uuid>&limit=100"
+```
+
+PDF versions are stored by SHA-256 under `data/official_disclosures/<disclosure-uuid>/`; this directory is ignored by Git and can be changed with `DISCLOSURE_DOCUMENT_STORAGE_DIR`. Ingestion accepts only exact-ID CNINFO PDFs from `static.cninfo.com.cn/finalpage/`, does not follow redirects, and caps each file at 25 MiB. Extraction caps the PDF at 500 pages, 5,000,000 text characters, 4,000 characters per page section, and 2,000 sections.
+
+`official_disclosure_section:<id>` citations are created only for persisted text sections and include the announcement ID, immutable document SHA-256, one-based PDF page number, detected heading/topic, content hash, and bounded verbatim excerpt. Image-only, encrypted, malformed, and over-limit documents keep an explicit non-citable status. OCR, whole-market document backfill, vector search, and LLM document summarization are intentionally not part of this slice.
 
 ## Tests
 

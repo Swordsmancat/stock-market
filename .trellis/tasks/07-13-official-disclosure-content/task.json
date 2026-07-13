@@ -1,9 +1,9 @@
 {
-  "id": "a-share-official-disclosures-corpus",
-  "name": "a-share-official-disclosures-corpus",
-  "title": "A-share official disclosures research corpus",
+  "id": "official-disclosure-content",
+  "name": "official-disclosure-content",
+  "title": "Official disclosure document content and section citations",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -18,11 +18,8 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "07-13-official-disclosure-metadata",
-    "07-13-official-disclosure-content"
-  ],
-  "parent": null,
+  "children": [],
+  "parent": "07-13-a-share-official-disclosures-corpus",
   "relatedFiles": [],
   "notes": "",
   "meta": {}

@@ -9,6 +9,12 @@ import packages.domain.models  # noqa: F401
 from apps.api.main import app
 from packages.domain.models import OfficialDisclosure
 from packages.providers.cninfo_disclosure_provider import CninfoDisclosureProviderError
+from packages.providers.cninfo_document_provider import CninfoDocumentProviderError
+from packages.services.official_disclosure_documents import (
+    OfficialDisclosureDocumentNotFoundError,
+    OfficialDisclosureDocumentPersistenceError,
+    OfficialDisclosureDocumentStorageError,
+)
 from packages.shared.database import Base, get_session
 
 
@@ -149,3 +155,141 @@ def test_official_disclosures_api_rejects_invalid_symbol():
 
     assert response.status_code == 422
     assert "six-digit" in response.json()["detail"]
+
+
+def test_official_disclosure_document_ingest_api_delegates(monkeypatch):
+    session = make_session()
+    captured = {}
+
+    def fake_ingest(disclosure_id, *, session):
+        captured["disclosure_id"] = disclosure_id
+        return {
+            "status": "ok",
+            "action": "created",
+            "summary": {"section_count": 2, "citable_section_count": 2},
+            "citations": [{"id": "official_disclosure_section:section-1"}],
+        }
+
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.ingest_official_disclosure_document",
+        fake_ingest,
+    )
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/official-disclosures/11111111-2222-3333-4444-555555555555/ingest-document"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["disclosure_id"] == "11111111-2222-3333-4444-555555555555"
+    assert response.json()["citations"][0]["id"].startswith("official_disclosure_section:")
+
+
+def test_official_disclosure_document_ingest_api_maps_provider_error(monkeypatch):
+    session = make_session()
+
+    def failing_ingest(disclosure_id, *, session):
+        raise CninfoDocumentProviderError("CNINFO_DOCUMENT_DOWNLOAD_ERROR", "Download failed.")
+
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.ingest_official_disclosure_document",
+        failing_ingest,
+    )
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/official-disclosures/11111111-2222-3333-4444-555555555555/ingest-document"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == {
+        "source": "cninfo",
+        "code": "CNINFO_DOCUMENT_DOWNLOAD_ERROR",
+        "message": "Download failed.",
+    }
+
+
+def test_official_disclosure_document_ingest_api_maps_invalid_uuid():
+    session = make_session()
+    client = with_test_client(session)
+    try:
+        response = client.post("/official-disclosures/not-a-uuid/ingest-document")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "disclosure_id must be a valid UUID."
+
+
+def test_official_disclosure_document_ingest_api_maps_storage_error(monkeypatch):
+    session = make_session()
+
+    def failing_ingest(disclosure_id, *, session):
+        raise OfficialDisclosureDocumentStorageError("Official disclosure storage root is not available.")
+
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.ingest_official_disclosure_document",
+        failing_ingest,
+    )
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/official-disclosures/11111111-2222-3333-4444-555555555555/ingest-document"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Official disclosure storage root is not available."
+
+
+def test_official_disclosure_document_ingest_api_maps_persistence_error(monkeypatch):
+    session = make_session()
+
+    def failing_ingest(disclosure_id, *, session):
+        raise OfficialDisclosureDocumentPersistenceError(
+            "Official disclosure document evidence could not be persisted."
+        )
+
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.ingest_official_disclosure_document",
+        failing_ingest,
+    )
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/official-disclosures/11111111-2222-3333-4444-555555555555/ingest-document"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == (
+        "Official disclosure document evidence could not be persisted."
+    )
+
+
+def test_official_disclosure_sections_api_maps_missing_document(monkeypatch):
+    session = make_session()
+
+    def missing_sections(*args, **kwargs):
+        raise OfficialDisclosureDocumentNotFoundError("Official disclosure document version not found.")
+
+    monkeypatch.setattr(
+        "apps.api.routers.official_disclosures.list_official_disclosure_sections",
+        missing_sections,
+    )
+    client = with_test_client(session)
+    try:
+        response = client.get(
+            "/official-disclosures/11111111-2222-3333-4444-555555555555/sections"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Official disclosure document version not found."

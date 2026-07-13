@@ -24,6 +24,9 @@ from packages.services.market_data import get_bars_payload
 from packages.services.market_daily_evidence import list_citable_market_daily_evidence_citations
 from packages.services.market_indicators import get_macro_indicator_payloads
 from packages.services.news import get_news_sentiment_payload
+from packages.services.official_disclosure_documents import (
+    list_citable_official_disclosure_section_citations,
+)
 from packages.services.official_disclosures import list_citable_official_disclosure_citations
 from packages.services.platform_settings import get_platform_settings
 from packages.services.research_source_notes import list_citable_research_source_note_citations
@@ -46,6 +49,7 @@ ASSISTANT_CITATION_ID_PREFIXES = (
     "research_source_note:",
     "market_daily_event:",
     "official_disclosure:",
+    "official_disclosure_section:",
 )
 
 
@@ -165,6 +169,11 @@ def answer_market_assistant_question(
         session,
         diagnostics,
     )
+    disclosure_section_summary, disclosure_section_evidence = _build_official_disclosure_section_context(
+        normalized_symbol,
+        session,
+        diagnostics,
+    )
     market_daily_summary, market_daily_evidence = _build_market_daily_evidence_context(
         normalized_symbol,
         session,
@@ -177,6 +186,7 @@ def answer_market_assistant_question(
     research_evidence.extend(generated_report_evidence)
     research_evidence.extend(source_note_evidence)
     research_evidence.extend(disclosure_evidence)
+    research_evidence.extend(disclosure_section_evidence)
     research_evidence.extend(market_daily_evidence)
     citations = _rank_research_citations(research_evidence)
 
@@ -197,7 +207,10 @@ def answer_market_assistant_question(
         market_daily_summary=market_daily_summary,
         fundamental_summary=fundamental_summary,
         news_summary=news_summary,
-        research_summary=f"{generated_report_summary} {source_note_summary} {disclosure_summary}",
+        research_summary=(
+            f"{generated_report_summary} {source_note_summary} {disclosure_summary} "
+            f"{disclosure_section_summary}"
+        ),
         citations=citations,
         diagnostics=diagnostics,
     )
@@ -1089,6 +1102,69 @@ def _build_official_disclosure_context(
     return (
         "Official disclosure metadata available (document bodies not ingested): "
         f"{'; '.join(titles)}.",
+        evidence_items,
+    )
+
+
+def _build_official_disclosure_section_context(
+    symbol: str,
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> tuple[str, list[MarketAssistantResearchEvidence]]:
+    if session is None:
+        return "No extracted official disclosure sections were loaded.", []
+    try:
+        citations = list_citable_official_disclosure_section_citations(
+            session=session,
+            symbols=[symbol],
+            limit=4,
+        )
+    except ValueError:
+        return "Official A-share disclosure sections are not applicable to this symbol.", []
+    except Exception:
+        _rollback_session_if_possible(session)
+        diagnostics.append(
+            {
+                "source": "official_disclosure_sections",
+                "status": "unavailable",
+                "severity": "warning",
+                "code": "SOURCE_UNAVAILABLE",
+                "message": "Extracted official disclosure sections could not be loaded.",
+            }
+        )
+        return "Extracted official disclosure sections could not be loaded.", []
+
+    if not citations:
+        return "No persisted extracted disclosure sections are available for this symbol.", []
+
+    evidence_items = [
+        MarketAssistantResearchEvidence(
+            citation=MarketAssistantCitation(
+                id=str(citation["id"]),
+                label=str(citation.get("label") or "Official disclosure section"),
+                source=str(citation.get("source") or "official_disclosure_sections"),
+                url=_stringify_optional(citation.get("url")),
+                source_type=_stringify_optional(citation.get("source_type")),
+                as_of=_stringify_optional(citation.get("as_of")),
+                provider=_stringify_optional(citation.get("provider")),
+                retrieved_at=_stringify_optional(citation.get("retrieved_at")),
+                excerpt=_stringify_optional(citation.get("excerpt")),
+                metadata=_optional_dict(citation.get("metadata")),
+            ),
+            summary=str(citation.get("excerpt") or citation.get("label") or "Official disclosure section."),
+            priority=35 + item_index,
+            source_type="official_disclosure_section",
+            title=_stringify_optional(citation.get("label")),
+            as_of=_stringify_optional(citation.get("as_of")),
+            url=_stringify_optional(citation.get("url")),
+            provider=_stringify_optional(citation.get("provider")),
+            metadata=_optional_dict(citation.get("metadata")),
+        )
+        for item_index, citation in enumerate(citations)
+    ]
+    return (
+        f"Extracted official disclosure sections available: {len(evidence_items)} "
+        "page-anchored excerpts.",
         evidence_items,
     )
 

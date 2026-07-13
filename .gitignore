@@ -16,6 +16,7 @@ build/
 .venv/
 venv/
 data/platform_settings.json
+data/official_disclosures/
 
 # Node
 node_modules/

@@ -141,6 +141,19 @@ def load_official_disclosures_migration():
     return module
 
 
+def load_official_disclosure_documents_migration():
+    migration_path = Path("alembic/versions/0018_official_disclosure_documents.py")
+    spec = importlib.util.spec_from_file_location(
+        "official_disclosure_documents_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_official_disclosures_migration_creates_metadata_table_and_identity_constraint():
     migration = load_official_disclosures_migration()
     engine = create_engine("sqlite:///:memory:")
@@ -156,6 +169,30 @@ def test_official_disclosures_migration_creates_metadata_table_and_identity_cons
         constraint["name"] == "uq_official_disclosures_source_document"
         and set(constraint["column_names"]) == {"source", "source_document_id"}
         for constraint in unique_constraints
+    )
+
+
+def test_official_disclosure_documents_migration_creates_versions_and_sections():
+    metadata_migration = load_official_disclosures_migration()
+    document_migration = load_official_disclosure_documents_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(metadata_migration, connection)
+        run_migration(document_migration, connection)
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        document_constraints = inspector.get_unique_constraints("official_disclosure_documents")
+        section_constraints = inspector.get_unique_constraints("official_disclosure_sections")
+
+    assert {"official_disclosure_documents", "official_disclosure_sections"}.issubset(tables)
+    assert any(
+        constraint["name"] == "uq_official_disclosure_documents_version"
+        for constraint in document_constraints
+    )
+    assert any(
+        constraint["name"] == "uq_official_disclosure_sections_index"
+        for constraint in section_constraints
     )
 
 

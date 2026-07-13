@@ -402,6 +402,29 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     )
     monkeypatch.setattr(
         market_assistant_service,
+        "list_citable_official_disclosure_section_citations",
+        lambda *args, **kwargs: [
+            {
+                "id": "official_disclosure_section:11111111-4444-3333-4444-555555555555",
+                "label": "AAPL annual report — Risk Factors",
+                "source": "official_disclosure_sections",
+                "source_type": "official_disclosure_section",
+                "url": "https://static.cninfo.com.cn/finalpage/2026-01-03/1.PDF",
+                "as_of": "2026-01-03T12:00:00+00:00",
+                "provider": "cninfo",
+                "retrieved_at": "2026-01-03T13:55:00+00:00",
+                "excerpt": "Customer concentration is a material risk.",
+                "metadata": {
+                    "evidence_scope": "document_section",
+                    "content_ingested": True,
+                    "page_number": 12,
+                    "document_sha256": "a" * 64,
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
         "get_platform_settings",
         lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
     )
@@ -424,11 +447,13 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     assert "research_source_note" in citations_by_source_type
     assert "market_daily_event" in citations_by_source_type
     assert "official_disclosure" in citations_by_source_type
+    assert "official_disclosure_section" in citations_by_source_type
     assert citations_by_source_type["news"]["url"] == "https://example.com/aapl-services"
     assert citations_by_source_type["generated_report"]["id"] == "generated_report:11111111-1111-1111-1111-111111111111"
     assert citations_by_source_type["research_source_note"]["id"].startswith("research_source_note:")
     assert "Reviewed source notebook entries available" in payload["context"]["research_summary"]
     assert "document bodies not ingested" in payload["context"]["research_summary"]
+    assert "page-anchored excerpts" in payload["context"]["research_summary"]
     assert "Stored market daily evidence available" in payload["context"]["market_daily_summary"]
 
 
@@ -548,6 +573,15 @@ def test_market_assistant_includes_only_reviewed_citable_source_notes(monkeypatc
     assert source_note_citation["metadata"]["completeness"]["status"] == "partial"
     assert "AAPL draft source" not in citation_labels
     assert "AAPL reviewed collection source" not in citation_labels
+
+
+def test_market_assistant_recognizes_invented_disclosure_section_citation_ids():
+    unknown = market_assistant_service._extract_unknown_inline_citation_ids(
+        "Unsupported claim [official_disclosure_section:not-present].",
+        [],
+    )
+
+    assert unknown == ["official_disclosure_section:not-present"]
 
 
 def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):

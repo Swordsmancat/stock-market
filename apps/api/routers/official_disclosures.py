@@ -5,6 +5,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from packages.providers.cninfo_disclosure_provider import CninfoDisclosureProviderError
+from packages.providers.cninfo_document_provider import CninfoDocumentProviderError
+from packages.services.official_disclosure_documents import (
+    OfficialDisclosureDocumentNotFoundError,
+    OfficialDisclosureDocumentPersistenceError,
+    OfficialDisclosureDocumentStorageError,
+    ingest_official_disclosure_document,
+    list_official_disclosure_sections,
+)
 from packages.services.official_disclosures import (
     OfficialDisclosurePersistenceError,
     OfficialDisclosureRefreshInput,
@@ -60,3 +68,43 @@ def refresh_disclosures(
         ) from error
     except OfficialDisclosurePersistenceError as error:
         raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@router.post("/{disclosure_id}/ingest-document")
+def ingest_disclosure_document(
+    disclosure_id: str,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        return ingest_official_disclosure_document(disclosure_id, session=session)
+    except OfficialDisclosureDocumentNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except CninfoDocumentProviderError as error:
+        raise HTTPException(
+            status_code=502,
+            detail={"source": "cninfo", "code": error.code, "message": error.message},
+        ) from error
+    except (OfficialDisclosureDocumentPersistenceError, OfficialDisclosureDocumentStorageError) as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@router.get("/{disclosure_id}/sections")
+def list_disclosure_sections(
+    disclosure_id: str,
+    document_id: str | None = None,
+    limit: int = Query(default=100, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        return list_official_disclosure_sections(
+            disclosure_id,
+            session=session,
+            document_id=document_id,
+            limit=limit,
+        )
+    except OfficialDisclosureDocumentNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error

@@ -547,6 +547,66 @@ class OfficialDisclosure(Base):
     )
 
 
+class OfficialDisclosureDocument(Base):
+    __tablename__ = "official_disclosure_documents"
+    __table_args__ = (
+        UniqueConstraint(
+            "official_disclosure_id",
+            "sha256",
+            name="uq_official_disclosure_documents_version",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    official_disclosure_id: Mapped[PythonUUID] = mapped_column(
+        ForeignKey("official_disclosures.id"), index=True
+    )
+    attachment_url: Mapped[str] = mapped_column(String(2048))
+    media_type: Mapped[str] = mapped_column(String(128))
+    provider_size: Mapped[int | None] = mapped_column(Integer, default=None)
+    byte_size: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_path: Mapped[str] = mapped_column(String(1024))
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_modified: Mapped[str | None] = mapped_column(String(128), default=None)
+    page_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    extraction_status: Mapped[str] = mapped_column(String(32))
+    extraction_method: Mapped[str] = mapped_column(String(64), default="pypdf")
+    metadata_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class OfficialDisclosureSection(Base):
+    __tablename__ = "official_disclosure_sections"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "section_index",
+            name="uq_official_disclosure_sections_index",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    document_id: Mapped[PythonUUID] = mapped_column(
+        ForeignKey("official_disclosure_documents.id"), index=True
+    )
+    section_index: Mapped[int] = mapped_column(Integer)
+    page_number: Mapped[int] = mapped_column(Integer)
+    heading: Mapped[str] = mapped_column(String(512))
+    topic: Mapped[str] = mapped_column(String(64))
+    content_text: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
 class ResearchBrief(Base):
     __tablename__ = "research_briefs"
 
