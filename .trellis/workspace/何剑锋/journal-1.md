@@ -1713,3 +1713,36 @@ Added watchlist-only disclosure coverage, exact single-PDF Evidence Center actio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 52: Incremental official disclosure monitoring
+
+**Date**: 2026-07-13
+**Task**: Incremental official disclosure monitoring
+**Branch**: `master`
+
+### Summary
+
+Added durable per-symbol CNINFO cursors, overlap refresh, bounded retry backoff, shared TaskRun mutex, Celery Beat scheduling, operator API/proxy controls, Evidence Center freshness/SLA and new-disclosure review signals, migration/config/docs, and full backend/frontend regression coverage. Archived the monitoring child and completed official-disclosure corpus parent.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2a0b48c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
