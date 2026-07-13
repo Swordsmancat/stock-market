@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     a_share_backfill_request_delay_ms: int = 250
     a_share_backfill_max_transient_attempts: int = 3
     a_share_backfill_retry_base_seconds: float = 1.0
+    daily_research_loop_enabled: bool = True
+    daily_research_loop_cron_hour: int = 21
+    daily_research_loop_cron_minute: int = 30
+    daily_research_loop_outcome_run_limit: int = 25
     disclosure_batch_request_delay_ms: int = 1000
     disclosure_monitor_enabled: bool = True
     disclosure_monitor_interval_minutes: int = 60

@@ -8,16 +8,20 @@ from sqlalchemy.orm import Session
 def _run_with_session(session: Session, runner) -> str:
     from apps.worker.tasks import ingestion as ingestion_tasks
     from apps.worker.tasks import reports as report_tasks
+    from apps.worker.tasks import research as research_tasks
 
     original_report_session = report_tasks.SessionLocal
     original_ingestion_session = ingestion_tasks.SessionLocal
+    original_research_session = research_tasks.SessionLocal
     report_tasks.SessionLocal = lambda: session
     ingestion_tasks.SessionLocal = lambda: session
+    research_tasks.SessionLocal = lambda: session
     try:
         runner()
     finally:
         report_tasks.SessionLocal = original_report_session
         ingestion_tasks.SessionLocal = original_ingestion_session
+        research_tasks.SessionLocal = original_research_session
     session.expire_all()
     return "sync-celery-id"
 
@@ -145,6 +149,24 @@ def dispatch_task_run_sync(
             session,
             lambda: backfill_a_share_research_evidence_task.run(
                 backfill_run_id=input_json["backfill_run_id"],
+                task_run_id=task_run_id,
+            ),
+        )
+
+    if task_name == "research.run_daily_research_loop":
+        from apps.worker.tasks.research import run_daily_research_loop_task
+
+        return _run_with_session(
+            session,
+            lambda: run_daily_research_loop_task.run(
+                market=input_json.get("market", "CN"),
+                asset_type=input_json.get("asset_type", "stock"),
+                profile_id=input_json.get("profile_id", "balanced_research"),
+                shortlist_limit=input_json.get("shortlist_limit", 10),
+                locale=input_json.get("locale", "zh"),
+                use_llm=input_json.get("use_llm", True),
+                outcome_run_limit=input_json.get("outcome_run_limit"),
+                trigger=input_json.get("trigger", "manual"),
                 task_run_id=task_run_id,
             ),
         )

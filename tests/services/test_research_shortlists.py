@@ -18,6 +18,7 @@ from packages.domain.models import (
     Market,
     ResearchShortlistCandidate,
     ResearchShortlistRun,
+    TaskRun,
 )
 from packages.services import research_shortlists
 from packages.services.research_shortlists import (
@@ -246,6 +247,126 @@ def test_generate_persists_ranked_snapshot_and_reuses_idempotent_run(monkeypatch
     detail = get_research_shortlist(first["run"]["id"], session=session)
     assert latest["run"]["id"] == first["run"]["id"]
     assert detail == first
+
+
+def test_verified_date_and_original_task_run_lineage_survive_reuse(monkeypatch):
+    session = make_session()
+    instruments = seed_instruments_with_entry_bars(session)
+    newer_partial_date = date(2026, 7, 11)
+    session.add(
+        DailyBar(
+            instrument_id=instruments[0].id,
+            trade_date=newer_partial_date,
+            open=Decimal("11"),
+            high=Decimal("13"),
+            low=Decimal("10"),
+            close=Decimal("12"),
+            volume=Decimal("10000000"),
+            amount=Decimal("120000000"),
+            provider="akshare",
+            source="akshare.stock_zh_a_hist",
+            adjustment="qfq",
+            source_priority=0,
+            ingested_at=datetime(2026, 7, 11, 10, tzinfo=timezone.utc),
+        )
+    )
+    first_task_run = TaskRun(
+        task_name="research.run_daily_research_loop",
+        status="running",
+        started_at=datetime(2026, 7, 13, 13, 30, tzinfo=timezone.utc),
+    )
+    retry_task_run = TaskRun(
+        task_name="research.run_daily_research_loop",
+        status="running",
+        started_at=datetime(2026, 7, 13, 14, 30, tzinfo=timezone.utc),
+    )
+    session.add_all([first_task_run, retry_task_run])
+    session.commit()
+
+    captured: dict[str, list[date]] = {"coverage": [], "selection": []}
+
+    def coverage(**kwargs):
+        captured["coverage"].append(kwargs["as_of"])
+        return ready_coverage()
+
+    def selection(**kwargs):
+        captured["selection"].append(kwargs["as_of"])
+        return selection_payload()
+
+    monkeypatch.setattr(research_shortlists, "get_evidence_coverage", coverage)
+    monkeypatch.setattr(research_shortlists, "screen_local_stock_selection", selection)
+    monkeypatch.setattr(
+        research_shortlists,
+        "generate_stock_discovery_explanation",
+        lambda **_: (
+            "### Verified research shortlist",
+            {
+                "provider": "deterministic",
+                "name": "test",
+                "used_llm": False,
+                "fallback_reason": "test",
+            },
+        ),
+    )
+
+    first = generate_research_shortlist(
+        ResearchShortlistGenerateInput(
+            profile_id="quality_value",
+            shortlist_limit=2,
+            use_llm=False,
+            verified_decision_date=DECISION_DATE,
+            generation_task_run_id=str(first_task_run.id),
+        ),
+        session=session,
+    )
+    reused = generate_research_shortlist(
+        ResearchShortlistGenerateInput(
+            profile_id="quality_value",
+            shortlist_limit=2,
+            use_llm=False,
+            verified_decision_date=DECISION_DATE,
+            generation_task_run_id=retry_task_run.id,
+        ),
+        session=session,
+    )
+
+    assert first["run"]["decision_date"] == DECISION_DATE.isoformat()
+    assert first["run"]["generation_task_run_id"] == str(first_task_run.id)
+    assert reused["run"]["id"] == first["run"]["id"]
+    assert reused["run"]["generation_task_run_id"] == str(first_task_run.id)
+    assert captured == {
+        "coverage": [DECISION_DATE],
+        "selection": [DECISION_DATE],
+    }
+    persisted = (
+        session.query(ResearchShortlistRun)
+        .filter(ResearchShortlistRun.generation_key == first["run"]["generation_key"])
+        .one()
+    )
+    assert persisted.generation_task_run_id == first_task_run.id
+
+    latest = get_latest_research_shortlist(
+        session=session,
+        market="CN",
+        profile_id="quality_value",
+    )
+    detail = get_research_shortlist(first["run"]["id"], session=session)
+    assert latest["run"]["generation_task_run_id"] == str(first_task_run.id)
+    assert detail["run"]["generation_task_run_id"] == str(first_task_run.id)
+
+
+def test_generate_rejects_invalid_task_run_lineage():
+    session = make_session()
+
+    with pytest.raises(ValueError, match="Invalid generation_task_run_id"):
+        generate_research_shortlist(
+            ResearchShortlistGenerateInput(
+                generation_task_run_id="not-a-uuid",
+            ),
+            session=session,
+        )
+
+    assert session.query(ResearchShortlistRun).count() == 0
 
 
 def test_semantically_equivalent_set_like_criteria_share_generation_key(monkeypatch):

@@ -12,6 +12,7 @@ def test_is_dispatchable_task_supports_registered_tasks():
     assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars") is True
     assert is_dispatchable_task("ingestion.ingest_symbol_daily_bars_batch") is True
     assert is_dispatchable_task("ingestion.ingest_watchlist_official_disclosures") is True
+    assert is_dispatchable_task("research.run_daily_research_loop") is True
     assert is_dispatchable_task("alerts.evaluate_watchlist_alerts") is True
     assert is_dispatchable_task("unknown.task") is False
 
@@ -279,5 +280,39 @@ def test_dispatch_task_run_preserves_incremental_disclosure_mode(mock_task):
         lookback_days=30,
         max_documents=20,
         mode="incremental",
+        task_run_id="task-run-id",
+    )
+
+
+@patch("apps.worker.tasks.research.run_daily_research_loop_task")
+def test_dispatch_task_run_enqueues_daily_research_loop(mock_task):
+    mock_task.delay.return_value.id = "celery-id-daily-research"
+
+    celery_id = dispatch_task_run(
+        "research.run_daily_research_loop",
+        {
+            "market": "CN",
+            "asset_type": "stock",
+            "profile_id": "balanced_research",
+            "shortlist_limit": 8,
+            "locale": "zh",
+            "use_llm": False,
+            "outcome_run_limit": 12,
+            "trigger": "scheduled",
+            "retry_of": "original-task-run",
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-daily-research"
+    mock_task.delay.assert_called_once_with(
+        market="CN",
+        asset_type="stock",
+        profile_id="balanced_research",
+        shortlist_limit=8,
+        locale="zh",
+        use_llm=False,
+        outcome_run_limit=12,
+        trigger="scheduled",
         task_run_id="task-run-id",
     )

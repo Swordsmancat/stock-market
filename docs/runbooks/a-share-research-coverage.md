@@ -204,6 +204,16 @@ with a 10-day overlap, and fundamentals rotate through deterministic fifths of
 the universe. If another AkShare backfill is active, the schedule reports
 `already_running` instead of creating overlapping provider load.
 
+The daily research loop runs at 21:30 on weekdays after those evidence windows.
+It does not start a provider job: it defers while a backfill is active, verifies
+an exact-date completed daily-bar watermark, matures due 5/20/60-session
+outcomes, and publishes or reuses the immutable shortlist through one TaskRun.
+Inspect and retry `research.run_daily_research_loop` from the existing Task Runs
+surface. Configure the schedule with `DAILY_RESEARCH_LOOP_ENABLED`,
+`DAILY_RESEARCH_LOOP_CRON_HOUR`, `DAILY_RESEARCH_LOOP_CRON_MINUTE`, and
+`DAILY_RESEARCH_LOOP_OUTCOME_RUN_LIMIT`. Fixed clock time never bypasses the
+95/90/80 publication gates or the completed-bar watermark.
+
 Provider pacing defaults to 250 ms between network symbols with at most three
 transient attempts and a 1-second exponential-backoff base. Operators can tune
 `A_SHARE_BACKFILL_REQUEST_DELAY_MS`,

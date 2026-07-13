@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import create_engine, event
@@ -19,9 +20,11 @@ from packages.domain.models import (
     ResearchShortlistRun,
 )
 from packages.services.research_shortlist_outcomes import (
+    evaluate_due_research_shortlist_outcomes,
     evaluate_research_shortlist_outcomes,
     get_research_shortlist_outcome_tracking,
     get_research_shortlist_outcomes,
+    select_due_research_shortlist_runs,
 )
 from packages.shared.database import Base
 
@@ -198,6 +201,7 @@ def test_get_ready_horizon_remains_pending_until_explicit_evaluation():
         "status": "pending",
         "available_forward_bars": 5,
         "ready_for_evaluation": True,
+        "evaluation_task_run_id": None,
         "maturity_date": None,
         "exit_close": None,
         "minimum_forward_low": None,
@@ -337,11 +341,13 @@ def test_evaluate_freezes_candidate_result_and_reuses_it_after_bar_replacement()
     session = make_session()
     run, _, instrument = seed_committed_run(session)
     add_forward_bars(session, instrument, 5)
+    evaluation_task_run_id = uuid4()
 
     first = evaluate_research_shortlist_outcomes(
         run.id,
         session=session,
         now=NOW,
+        evaluation_task_run_id=evaluation_task_run_id,
     )
 
     first_five = horizon(first, 5)
@@ -352,6 +358,7 @@ def test_evaluate_freezes_candidate_result_and_reuses_it_after_bar_replacement()
     assert first_five["minimum_low_date"] == "2026-07-02"
     assert first_five["return_ratio"] == pytest.approx(0.5)
     assert first_five["drawdown_ratio"] == 0.0
+    assert first_five["evaluation_task_run_id"] == str(evaluation_task_run_id)
     assert first_five["benchmark"]["status"] == "pending"
     assert first_five["benchmark"]["return_ratio"] is None
     assert first_five["benchmark"]["diagnostics"] == ["BENCHMARK_INSTRUMENT_MISSING"]
@@ -387,6 +394,9 @@ def test_evaluate_freezes_candidate_result_and_reuses_it_after_bar_replacement()
     )
     assert horizon(repeated, 5)["exit_close"] == 15.0
     assert horizon(repeated, 5)["return_ratio"] == pytest.approx(0.5)
+    assert horizon(repeated, 5)["evaluation_task_run_id"] == str(
+        evaluation_task_run_id
+    )
     assert session.query(ResearchCandidateOutcome).count() == 1
 
 
@@ -1021,3 +1031,468 @@ def test_candidate_bar_windows_are_isolated_for_shared_instrument_entry_dates():
     assert windows[first_candidate.id].bars[-1].trade_date == DECISION_DATE + timedelta(days=60)
     assert windows[second_candidate.id].bars[0].trade_date == second_entry
     assert windows[second_candidate.id].bars[-1].trade_date == DECISION_DATE + timedelta(days=70)
+
+
+def _add_forward_range(
+    session,
+    instrument: Instrument,
+    start_offset: int,
+    end_offset: int,
+    *,
+    entry_date: date = DECISION_DATE,
+):
+    for offset in range(start_offset, end_offset + 1):
+        add_bar(
+            session,
+            instrument,
+            entry_date + timedelta(days=offset),
+            close=str(10 + offset),
+            low=str(9 + offset),
+        )
+    session.commit()
+
+
+def test_due_selector_uses_literal_five_twenty_and_sixty_bar_boundaries():
+    session = make_session()
+    run, _, instrument = seed_committed_run(session)
+    _add_forward_range(session, instrument, 1, 4)
+
+    assert select_due_research_shortlist_runs(
+        session=session,
+        market="cn",
+        profile_id="BALANCED_RESEARCH",
+        completed_through=DECISION_DATE + timedelta(days=4),
+    ) == []
+
+    _add_forward_range(session, instrument, 5, 5)
+    instrument.is_active = False
+    session.commit()
+    five_due = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=5),
+    )
+    assert [(item.run_id, item.due_since, item.reasons) for item in five_due] == [
+        (
+            run.id,
+            DECISION_DATE + timedelta(days=5),
+            frozenset({"candidate_terminal"}),
+        )
+    ]
+    evaluate_research_shortlist_outcomes(
+        run.id,
+        session=session,
+        as_of=DECISION_DATE + timedelta(days=5),
+        verified_completed_through=DECISION_DATE + timedelta(days=5),
+        now=FAR_NOW,
+    )
+
+    _add_forward_range(session, instrument, 6, 19)
+    assert select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=19),
+    ) == []
+    _add_forward_range(session, instrument, 20, 20)
+    twenty_due = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=20),
+    )
+    assert twenty_due[0].due_since == DECISION_DATE + timedelta(days=20)
+    evaluate_research_shortlist_outcomes(
+        run.id,
+        session=session,
+        as_of=DECISION_DATE + timedelta(days=20),
+        verified_completed_through=DECISION_DATE + timedelta(days=20),
+        now=FAR_NOW,
+    )
+
+    _add_forward_range(session, instrument, 21, 59)
+    assert select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=59),
+    ) == []
+    _add_forward_range(session, instrument, 60, 60)
+    sixty_due = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=60),
+    )
+    assert sixty_due[0].due_since == DECISION_DATE + timedelta(days=60)
+
+
+def test_due_selector_prioritizes_candidate_work_and_requires_exact_complete_benchmark_dates():
+    session = make_session()
+    benchmark_run, _, benchmark_candidate = seed_committed_run(
+        session,
+        symbol="000001",
+    )
+    add_forward_bars(session, benchmark_candidate, 5)
+    evaluate_research_shortlist_outcomes(
+        benchmark_run.id,
+        session=session,
+        now=NOW,
+    )
+
+    market = session.query(Market).filter(Market.code == "CN").one()
+    benchmark = Instrument(
+        symbol="cn_csi_300",
+        name="CSI 300",
+        market=market,
+        asset_type="index",
+        currency="CNY",
+        is_active=True,
+    )
+    session.add(benchmark)
+    session.flush()
+    add_bar(session, benchmark, DECISION_DATE, close="100", low="99")
+    maturity_date = DECISION_DATE + timedelta(days=5)
+    add_bar(
+        session,
+        benchmark,
+        maturity_date,
+        close="105",
+        low="104",
+        ingested_at=datetime.combine(maturity_date, time(7, 59), tzinfo=UTC),
+    )
+    session.commit()
+
+    assert select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=maturity_date,
+    ) == []
+
+    maturity_bar = session.get(DailyBar, (benchmark.id, maturity_date))
+    maturity_bar.ingested_at = datetime.combine(maturity_date, time(8), tzinfo=UTC)
+    session.commit()
+    benchmark_due = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=maturity_date,
+    )
+    assert benchmark_due[0].run_id == benchmark_run.id
+    assert benchmark_due[0].reasons == frozenset({"benchmark_repair"})
+
+    candidate_run, _, candidate_instrument = seed_committed_run(
+        session,
+        symbol="000002",
+    )
+    add_forward_bars(session, candidate_instrument, 5)
+    prioritized = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=maturity_date,
+        run_limit=1,
+    )
+    assert prioritized[0].run_id == candidate_run.id
+    assert prioritized[0].reasons == frozenset({"candidate_terminal"})
+
+    both = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=maturity_date,
+        run_limit=2,
+    )
+    assert [item.run_id for item in both] == [candidate_run.id, benchmark_run.id]
+
+
+def test_due_batch_is_bounded_reports_progress_and_serializes_lineage():
+    session = make_session()
+    first_run, _, first_instrument = seed_committed_run(session, symbol="000001")
+    second_run, _, second_instrument = seed_committed_run(session, symbol="000002")
+    add_forward_bars(session, first_instrument, 5)
+    add_forward_bars(session, second_instrument, 5)
+    task_run_id = uuid4()
+    progress_calls: list[tuple[str, int, int, str]] = []
+
+    result = evaluate_due_research_shortlist_outcomes(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        verified_completed_through=DECISION_DATE + timedelta(days=5),
+        evaluation_task_run_id=task_run_id,
+        run_limit=2,
+        now=NOW,
+        progress=lambda phase, completed, total, message: progress_calls.append(
+            (phase, completed, total, message)
+        ),
+    )
+
+    assert result["status"] == "completed"
+    assert result["selected_run_count"] == 2
+    assert result["candidate_due_run_count"] == 2
+    assert result["benchmark_due_run_count"] == 0
+    assert result["processed_run_count"] == 2
+    assert result["succeeded_run_count"] == 2
+    assert result["failed_run_count"] == 0
+    assert result["has_more"] is False
+    assert result["final_evaluated_horizon_count"] == 2
+    assert result["final_blocked_horizon_count"] == 0
+    assert result["final_pending_horizon_count"] == 4
+    assert set(result["selected_run_ids"]) == {str(first_run.id), str(second_run.id)}
+    assert [call[:3] for call in progress_calls] == [
+        ("outcomes", 1, 2),
+        ("outcomes", 2, 2),
+    ]
+    outcomes = session.query(ResearchCandidateOutcome).all()
+    assert len(outcomes) == 2
+    assert {outcome.evaluation_task_run_id for outcome in outcomes} == {task_run_id}
+    payload = get_research_shortlist_outcomes(
+        first_run.id,
+        session=session,
+        as_of=DECISION_DATE + timedelta(days=5),
+        now=NOW,
+    )
+    assert horizon(payload, 5)["evaluation_task_run_id"] == str(task_run_id)
+    assert horizon(payload, 20)["evaluation_task_run_id"] is None
+
+
+def test_due_batch_uses_a_sentinel_and_drains_without_an_offset_cursor():
+    session = make_session()
+    _, _, first_instrument = seed_committed_run(session, symbol="000001")
+    _, _, second_instrument = seed_committed_run(session, symbol="000002")
+    add_forward_bars(session, first_instrument, 5)
+    add_forward_bars(session, second_instrument, 5)
+
+    first = evaluate_due_research_shortlist_outcomes(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        verified_completed_through=DECISION_DATE + timedelta(days=5),
+        evaluation_task_run_id=uuid4(),
+        run_limit=1,
+        now=NOW,
+    )
+    second = evaluate_due_research_shortlist_outcomes(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        verified_completed_through=DECISION_DATE + timedelta(days=5),
+        evaluation_task_run_id=uuid4(),
+        run_limit=1,
+        now=NOW,
+    )
+
+    assert first["selected_run_count"] == 1
+    assert first["has_more"] is True
+    assert second["selected_run_count"] == 1
+    assert second["has_more"] is False
+    assert first["selected_run_ids"] != second["selected_run_ids"]
+    assert select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=5),
+    ) == []
+
+
+def test_due_selector_merges_candidate_and_benchmark_reasons_for_one_run():
+    session = make_session()
+    run, _, instrument = seed_committed_run(session)
+    add_forward_bars(session, instrument, 5)
+    evaluate_research_shortlist_outcomes(run.id, session=session, now=NOW)
+    _add_forward_range(session, instrument, 6, 20)
+    market = session.query(Market).filter(Market.code == "CN").one()
+    benchmark = Instrument(
+        symbol="cn_csi_300",
+        name="CSI 300",
+        market=market,
+        asset_type="index",
+        currency="CNY",
+        is_active=True,
+    )
+    session.add(benchmark)
+    session.flush()
+    add_bar(session, benchmark, DECISION_DATE, close="100", low="99")
+    add_bar(
+        session,
+        benchmark,
+        DECISION_DATE + timedelta(days=5),
+        close="105",
+        low="104",
+    )
+    session.commit()
+
+    due = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=20),
+    )
+
+    assert len(due) == 1
+    assert due[0].run_id == run.id
+    assert due[0].due_since == DECISION_DATE + timedelta(days=5)
+    assert due[0].reasons == frozenset(
+        {"candidate_terminal", "benchmark_repair"}
+    )
+
+
+def test_due_batch_rolls_back_one_failure_and_continues_with_bounded_diagnostics(
+    monkeypatch,
+):
+    session = make_session()
+    _, _, first_instrument = seed_committed_run(session, symbol="000001")
+    _, _, second_instrument = seed_committed_run(session, symbol="000002")
+    add_forward_bars(session, first_instrument, 5)
+    add_forward_bars(session, second_instrument, 5)
+    selected = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=5),
+        run_limit=2,
+    )
+    failed_run_id = selected[0].run_id
+    original_evaluate = research_shortlist_outcomes.evaluate_research_shortlist_outcomes
+
+    def fail_one(run_id, **kwargs):
+        if run_id == failed_run_id:
+            raise RuntimeError("secret provider response must not escape")
+        return original_evaluate(run_id, **kwargs)
+
+    monkeypatch.setattr(
+        research_shortlist_outcomes,
+        "evaluate_research_shortlist_outcomes",
+        fail_one,
+    )
+    progress_calls = []
+    result = evaluate_due_research_shortlist_outcomes(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        verified_completed_through=DECISION_DATE + timedelta(days=5),
+        evaluation_task_run_id=uuid4(),
+        run_limit=2,
+        now=NOW,
+        progress=lambda *args: progress_calls.append(args),
+    )
+
+    assert result["status"] == "partial_failure"
+    assert result["processed_run_count"] == 2
+    assert result["succeeded_run_count"] == 1
+    assert result["failed_run_count"] == 1
+    assert result["failures"] == [
+        {
+            "run_id": str(failed_run_id),
+            "code": "OUTCOME_EVALUATION_FAILED",
+            "error_type": "RuntimeError",
+            "message": "Research shortlist outcome evaluation failed.",
+        }
+    ]
+    assert "secret provider" not in str(result)
+    assert len(progress_calls) == 2
+    assert session.query(ResearchCandidateOutcome).count() == 1
+
+
+def test_due_batch_allows_missing_entry_to_freeze_blocked_terminal_outcome():
+    session = make_session()
+    run, _, instrument = seed_committed_run(session)
+    add_forward_bars(session, instrument, 5)
+    session.delete(session.get(DailyBar, (instrument.id, DECISION_DATE)))
+    session.commit()
+
+    due = select_due_research_shortlist_runs(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        completed_through=DECISION_DATE + timedelta(days=5),
+    )
+    assert due[0].run_id == run.id
+    result = evaluate_due_research_shortlist_outcomes(
+        session=session,
+        market="CN",
+        profile_id="balanced_research",
+        verified_completed_through=DECISION_DATE + timedelta(days=5),
+        evaluation_task_run_id=uuid4(),
+        now=NOW,
+    )
+
+    assert result["final_blocked_horizon_count"] == 1
+    payload = get_research_shortlist_outcomes(
+        run.id,
+        session=session,
+        as_of=DECISION_DATE + timedelta(days=5),
+        now=NOW,
+    )
+    assert horizon(payload, 5)["status"] == "blocked"
+    assert horizon(payload, 5)["diagnostics"] == ["ENTRY_BAR_MISSING"]
+
+
+def test_evaluator_loads_only_exact_required_benchmark_dates(monkeypatch):
+    session = make_session()
+    run, _, instrument = seed_committed_run(session)
+    add_forward_bars(session, instrument, 60)
+    market = session.query(Market).filter(Market.code == "CN").one()
+    benchmark = Instrument(
+        symbol="cn_csi_300",
+        name="CSI 300",
+        market=market,
+        asset_type="index",
+        currency="CNY",
+        is_active=True,
+    )
+    session.add(benchmark)
+    session.flush()
+    required_offsets = {0, 5, 20, 60}
+    for offset in required_offsets | {10}:
+        add_bar(
+            session,
+            benchmark,
+            DECISION_DATE + timedelta(days=offset),
+            close=str(100 + offset),
+            low=str(99 + offset),
+        )
+    session.commit()
+    captured_dates: list[set[date]] = []
+    original_benchmark_bars = research_shortlist_outcomes._benchmark_bars
+
+    def capture_benchmark_dates(session, *, benchmark, trade_dates):
+        captured_dates.append(set(trade_dates))
+        return original_benchmark_bars(
+            session,
+            benchmark=benchmark,
+            trade_dates=trade_dates,
+        )
+
+    monkeypatch.setattr(
+        research_shortlist_outcomes,
+        "_benchmark_bars",
+        capture_benchmark_dates,
+    )
+    evaluate_research_shortlist_outcomes(
+        run.id,
+        session=session,
+        as_of=DECISION_DATE + timedelta(days=60),
+        verified_completed_through=DECISION_DATE + timedelta(days=60),
+        now=FAR_NOW,
+    )
+
+    assert captured_dates == [
+        {DECISION_DATE + timedelta(days=offset) for offset in required_offsets}
+    ]
+
+
+@pytest.mark.parametrize("run_limit", [0, 101])
+def test_due_selector_enforces_hard_run_limit(run_limit):
+    session = make_session()
+    with pytest.raises(ValueError, match="between 1 and 100"):
+        select_due_research_shortlist_runs(
+            session=session,
+            market="CN",
+            profile_id="balanced_research",
+            completed_through=DECISION_DATE,
+            run_limit=run_limit,
+        )

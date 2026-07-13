@@ -1,19 +1,27 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
 import math
 from statistics import median
 import threading
-from typing import Iterable
+from typing import Iterable, Literal
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
-from sqlalchemy import DateTime, and_, case, cast, func, or_, select, text, update
+from sqlalchemy import (
+    and_,
+    case,
+    func,
+    or_,
+    select,
+    text,
+    union_all,
+    update,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload
 
@@ -25,13 +33,20 @@ from packages.domain.models import (
     ResearchShortlistCandidate,
     ResearchShortlistRun,
 )
+from packages.services.daily_bar_completion import (
+    DAILY_BAR_COMPLETION_TIME,
+    SHANGHAI_TIMEZONE,
+    completed_daily_bar_predicate,
+    daily_bar_is_complete,
+    daily_bar_timestamp_is_complete,
+)
 
 
 OUTCOME_HORIZONS = (5, 20, 60)
 OUTCOME_METHODOLOGY_VERSION = "research_candidate_outcome_v1"
 BENCHMARK_CODE = "cn_csi_300"
-SHANGHAI = ZoneInfo("Asia/Shanghai")
-BAR_COMPLETION_TIME = time(16, 0)
+SHANGHAI = SHANGHAI_TIMEZONE
+BAR_COMPLETION_TIME = DAILY_BAR_COMPLETION_TIME
 SAFETY_PAYLOAD = {
     "research_signal_only": True,
     "disclaimer": (
@@ -46,12 +61,29 @@ SAFETY_PAYLOAD = {
     "outcomes_do_not_change_shortlist_ranking": True,
 }
 _EVALUATION_LOCK_STRIPES = tuple(threading.RLock() for _ in range(64))
+MAX_DUE_RUN_LIMIT = 100
+
+
+DueResearchShortlistReason = Literal["candidate_terminal", "benchmark_repair"]
+
+
+@dataclass(frozen=True)
+class DueResearchShortlistRun:
+    run_id: UUID
+    due_since: date
+    reasons: frozenset[DueResearchShortlistReason]
 
 
 @dataclass
 class _CandidateBarWindow:
     bars: list[DailyBar]
     has_incomplete_forward: bool = False
+
+
+@dataclass(frozen=True)
+class _OutcomeRunState:
+    terminal_keys: frozenset[tuple[UUID, int]]
+    benchmark_statuses: dict[UUID, str]
 
 
 def get_research_shortlist_outcomes(
@@ -126,11 +158,12 @@ def evaluate_research_shortlist_outcomes(
         benchmark_bars = _benchmark_bars(
             session,
             benchmark=benchmark,
-            start_date=min(
-                (candidate.entry_trade_date for candidate in candidates),
-                default=effective_as_of,
+            trade_dates=_required_benchmark_dates(
+                candidates=candidates,
+                candidate_bars=bars,
+                existing=existing,
+                as_of=effective_as_of,
             ),
-            as_of=effective_as_of,
         )
 
         staged = _stage_terminal_outcomes(
@@ -165,6 +198,177 @@ def evaluate_research_shortlist_outcomes(
         )
         session.commit()
         return result
+
+
+def select_due_research_shortlist_runs(
+    *,
+    session: Session,
+    market: str,
+    profile_id: str,
+    completed_through: date,
+    run_limit: int = 25,
+) -> list[DueResearchShortlistRun]:
+    normalized_market, normalized_profile = _normalize_due_scope(
+        market=market,
+        profile_id=profile_id,
+        run_limit=run_limit,
+    )
+    selected, _ = _select_due_research_shortlist_runs(
+        session=session,
+        market=normalized_market,
+        profile_id=normalized_profile,
+        completed_through=completed_through,
+        run_limit=run_limit,
+    )
+    return selected
+
+
+def evaluate_due_research_shortlist_outcomes(
+    *,
+    session: Session,
+    market: str,
+    profile_id: str,
+    verified_completed_through: date,
+    evaluation_task_run_id: str | UUID | None,
+    run_limit: int = 25,
+    now: datetime | None = None,
+    progress: Callable[[str, int, int, str], None] | None = None,
+) -> dict[str, object]:
+    normalized_market, normalized_profile = _normalize_due_scope(
+        market=market,
+        profile_id=profile_id,
+        run_limit=run_limit,
+    )
+    completed_through = _resolve_as_of(
+        as_of=verified_completed_through,
+        now=now,
+        verified_completed_through=verified_completed_through,
+    )
+    parsed_task_run_id = _optional_uuid(
+        evaluation_task_run_id,
+        label="evaluation_task_run_id",
+    )
+    selected, has_more = _select_due_research_shortlist_runs(
+        session=session,
+        market=normalized_market,
+        profile_id=normalized_profile,
+        completed_through=completed_through,
+        run_limit=run_limit,
+    )
+
+    processed_run_ids: list[str] = []
+    succeeded_run_ids: list[str] = []
+    failures: list[dict[str, object]] = []
+    run_results: list[dict[str, object]] = []
+    concurrent_reuse_count = 0
+    final_evaluated_horizon_count = 0
+    final_blocked_horizon_count = 0
+    final_pending_horizon_count = 0
+
+    for position, due_run in enumerate(selected, start=1):
+        run_id = str(due_run.run_id)
+        processed_run_ids.append(run_id)
+        message = f"Processed research outcome cohort {run_id}."
+        try:
+            before = _outcome_run_state(session, due_run.run_id)
+            payload = evaluate_research_shortlist_outcomes(
+                due_run.run_id,
+                session=session,
+                as_of=completed_through,
+                now=now,
+                verified_completed_through=completed_through,
+                evaluation_task_run_id=parsed_task_run_id,
+            )
+            after = _outcome_run_state(session, due_run.run_id)
+            new_terminal_keys = after.terminal_keys - before.terminal_keys
+            repaired_benchmark_ids = {
+                outcome_id
+                for outcome_id, status in before.benchmark_statuses.items()
+                if status == "pending"
+                and after.benchmark_statuses.get(outcome_id) in {"evaluated", "blocked"}
+            }
+            final_counts = _final_horizon_counts(payload)
+            final_evaluated_horizon_count += final_counts["evaluated"]
+            final_blocked_horizon_count += final_counts["blocked"]
+            final_pending_horizon_count += final_counts["pending"]
+            diagnostics: list[str] = []
+            status = "processed"
+            if not new_terminal_keys and not repaired_benchmark_ids:
+                remaining_reasons = _due_reasons_for_run(
+                    session=session,
+                    run_id=due_run.run_id,
+                    market=normalized_market,
+                    profile_id=normalized_profile,
+                    completed_through=completed_through,
+                )
+                if not remaining_reasons and _payload_has_terminal_reason(
+                    payload,
+                    due_run.reasons,
+                ):
+                    status = "concurrent_reuse"
+                    concurrent_reuse_count += 1
+                else:
+                    status = "no_progress"
+                    diagnostics.append("DUE_RUN_NO_PROGRESS")
+            run_results.append(
+                {
+                    "run_id": run_id,
+                    "due_since": due_run.due_since.isoformat(),
+                    "reasons": sorted(due_run.reasons),
+                    "status": status,
+                    "new_terminal_horizon_count": len(new_terminal_keys),
+                    "new_benchmark_terminal_count": len(repaired_benchmark_ids),
+                    "final_evaluated_horizon_count": final_counts["evaluated"],
+                    "final_blocked_horizon_count": final_counts["blocked"],
+                    "final_pending_horizon_count": final_counts["pending"],
+                    "diagnostics": diagnostics,
+                }
+            )
+            succeeded_run_ids.append(run_id)
+        except Exception as exc:
+            session.rollback()
+            message = f"Research outcome cohort {run_id} failed."
+            failures.append(
+                {
+                    "run_id": run_id,
+                    "code": "OUTCOME_EVALUATION_FAILED",
+                    "error_type": type(exc).__name__[:128],
+                    "message": "Research shortlist outcome evaluation failed.",
+                }
+            )
+        if progress is not None:
+            progress("outcomes", position, len(selected), message)
+
+    return {
+        "status": "partial_failure" if failures else "completed",
+        "market": normalized_market,
+        "profile_id": normalized_profile,
+        "verified_completed_through": completed_through.isoformat(),
+        "run_limit": run_limit,
+        "considered_run_count": len(selected),
+        "selected_run_count": len(selected),
+        "candidate_due_run_count": sum(
+            "candidate_terminal" in item.reasons for item in selected
+        ),
+        "benchmark_due_run_count": sum(
+            "benchmark_repair" in item.reasons for item in selected
+        ),
+        "processed_run_count": len(processed_run_ids),
+        "succeeded_run_count": len(succeeded_run_ids),
+        "failed_run_count": len(failures),
+        "concurrent_reuse_count": concurrent_reuse_count,
+        "has_more": has_more,
+        "remaining_due_estimate": None,
+        "selected_run_ids": [str(item.run_id) for item in selected],
+        "processed_run_ids": processed_run_ids,
+        "succeeded_run_ids": succeeded_run_ids,
+        "failures": failures,
+        "run_results": run_results,
+        "final_evaluated_horizon_count": final_evaluated_horizon_count,
+        "final_blocked_horizon_count": final_blocked_horizon_count,
+        "final_pending_horizon_count": final_pending_horizon_count,
+        "research_signal_only": True,
+    }
 
 
 def get_research_shortlist_outcome_tracking(
@@ -296,6 +500,359 @@ def _optional_uuid(value: str | UUID | None, *, label: str) -> UUID | None:
     if parsed is None:
         raise ValueError(f"Invalid {label}.")
     return parsed
+
+
+def _normalize_due_scope(
+    *,
+    market: str,
+    profile_id: str,
+    run_limit: int,
+) -> tuple[str, str]:
+    normalized_market = market.strip().upper()
+    if normalized_market != "CN":
+        raise ValueError(f"Unsupported research shortlist market: {market}")
+    normalized_profile = profile_id.strip().lower()
+    if not normalized_profile:
+        raise ValueError("Research shortlist profile_id is required.")
+    if run_limit < 1 or run_limit > MAX_DUE_RUN_LIMIT:
+        raise ValueError(
+            f"Outcome due-run limit must be between 1 and {MAX_DUE_RUN_LIMIT}."
+        )
+    return normalized_market, normalized_profile
+
+
+def _select_due_research_shortlist_runs(
+    *,
+    session: Session,
+    market: str,
+    profile_id: str,
+    completed_through: date,
+    run_limit: int,
+) -> tuple[list[DueResearchShortlistRun], bool]:
+    candidate_rows = session.execute(
+        _candidate_due_run_query(
+            session=session,
+            market=market,
+            profile_id=profile_id,
+            completed_through=completed_through,
+        ).limit(run_limit + 1)
+    ).all()
+    candidate_has_more = len(candidate_rows) > run_limit
+    candidate_rows = candidate_rows[:run_limit]
+
+    selected: dict[UUID, tuple[date, set[DueResearchShortlistReason]]] = {
+        run_id: (due_since, {"candidate_terminal"})
+        for run_id, due_since in candidate_rows
+    }
+    candidate_run_ids = list(selected)
+    benchmark = _canonical_benchmark(session)
+    if benchmark is not None and candidate_run_ids:
+        overlap_rows = session.execute(
+            _benchmark_due_run_query(
+                session=session,
+                market=market,
+                profile_id=profile_id,
+                completed_through=completed_through,
+                benchmark=benchmark,
+                include_run_ids=candidate_run_ids,
+            )
+        ).all()
+        for run_id, due_since in overlap_rows:
+            candidate_due_since, reasons = selected[run_id]
+            selected[run_id] = (
+                min(candidate_due_since, due_since),
+                reasons | {"benchmark_repair"},
+            )
+
+    has_more = candidate_has_more
+    if benchmark is not None and not candidate_has_more:
+        remaining = run_limit - len(selected)
+        benchmark_rows = session.execute(
+            _benchmark_due_run_query(
+                session=session,
+                market=market,
+                profile_id=profile_id,
+                completed_through=completed_through,
+                benchmark=benchmark,
+                exclude_run_ids=candidate_run_ids,
+            ).limit(remaining + 1)
+        ).all()
+        has_more = len(benchmark_rows) > remaining
+        for run_id, due_since in benchmark_rows[:remaining]:
+            selected[run_id] = (due_since, {"benchmark_repair"})
+
+    return (
+        [
+            DueResearchShortlistRun(
+                run_id=run_id,
+                due_since=due_since,
+                reasons=frozenset(reasons),
+            )
+            for run_id, (due_since, reasons) in selected.items()
+        ],
+        has_more,
+    )
+
+
+def _candidate_due_run_query(
+    *,
+    session: Session,
+    market: str,
+    profile_id: str,
+    completed_through: date,
+    run_id: UUID | None = None,
+):
+    completed_bar = _completed_bar_predicate(session, DailyBar)
+    horizon_queries = []
+    for horizon_sessions in OUTCOME_HORIZONS:
+        nth_completed_date = (
+            select(DailyBar.trade_date)
+            .where(DailyBar.instrument_id == ResearchShortlistCandidate.instrument_id)
+            .where(DailyBar.trade_date > ResearchShortlistCandidate.entry_trade_date)
+            .where(DailyBar.trade_date <= completed_through)
+            .where(completed_bar)
+            .order_by(DailyBar.trade_date)
+            .offset(horizon_sessions - 1)
+            .limit(1)
+            .correlate(ResearchShortlistCandidate)
+            .scalar_subquery()
+        )
+        terminal_exists = (
+            select(ResearchCandidateOutcome.id)
+            .where(
+                ResearchCandidateOutcome.candidate_id
+                == ResearchShortlistCandidate.id
+            )
+            .where(
+                ResearchCandidateOutcome.horizon_sessions == horizon_sessions
+            )
+            .correlate(ResearchShortlistCandidate)
+            .exists()
+        )
+        horizon_query = (
+            select(
+                ResearchShortlistCandidate.run_id.label("run_id"),
+                nth_completed_date.label("due_since"),
+            )
+            .join(
+                ResearchShortlistRun,
+                ResearchShortlistRun.id == ResearchShortlistCandidate.run_id,
+            )
+            .where(ResearchShortlistRun.status == "committed")
+            .where(ResearchShortlistRun.market == market)
+            .where(ResearchShortlistRun.asset_type == "stock")
+            .where(ResearchShortlistRun.profile_id == profile_id)
+            .where(~terminal_exists)
+        )
+        if run_id is not None:
+            horizon_query = horizon_query.where(
+                ResearchShortlistCandidate.run_id == run_id
+            )
+        horizon_queries.append(horizon_query)
+
+    due_rows = union_all(*horizon_queries).subquery("candidate_due_rows")
+    grouped = (
+        select(
+            due_rows.c.run_id,
+            func.min(due_rows.c.due_since).label("due_since"),
+        )
+        .group_by(due_rows.c.run_id)
+        .subquery("candidate_due_runs")
+    )
+    return (
+        select(grouped.c.run_id, grouped.c.due_since)
+        .join(ResearchShortlistRun, ResearchShortlistRun.id == grouped.c.run_id)
+        .where(grouped.c.due_since.is_not(None))
+        .order_by(
+            grouped.c.due_since,
+            ResearchShortlistRun.decision_date,
+            ResearchShortlistRun.generated_at,
+            ResearchShortlistRun.id,
+        )
+    )
+
+
+def _benchmark_due_run_query(
+    *,
+    session: Session,
+    market: str,
+    profile_id: str,
+    completed_through: date,
+    benchmark: Instrument,
+    include_run_ids: list[UUID] | None = None,
+    exclude_run_ids: list[UUID] | None = None,
+):
+    entry_bar = aliased(DailyBar, name="benchmark_entry_bar")
+    maturity_bar = aliased(DailyBar, name="benchmark_maturity_bar")
+    statement = (
+        select(
+            ResearchShortlistCandidate.run_id.label("run_id"),
+            func.min(ResearchCandidateOutcome.maturity_trade_date).label(
+                "due_since"
+            ),
+        )
+        .select_from(ResearchCandidateOutcome)
+        .join(
+            ResearchShortlistCandidate,
+            ResearchShortlistCandidate.id
+            == ResearchCandidateOutcome.candidate_id,
+        )
+        .join(
+            ResearchShortlistRun,
+            ResearchShortlistRun.id == ResearchShortlistCandidate.run_id,
+        )
+        .join(
+            entry_bar,
+            and_(
+                entry_bar.instrument_id == benchmark.id,
+                entry_bar.trade_date
+                == ResearchShortlistCandidate.entry_trade_date,
+                _completed_bar_predicate(session, entry_bar),
+            ),
+        )
+        .join(
+            maturity_bar,
+            and_(
+                maturity_bar.instrument_id == benchmark.id,
+                maturity_bar.trade_date
+                == ResearchCandidateOutcome.maturity_trade_date,
+                _completed_bar_predicate(session, maturity_bar),
+            ),
+        )
+        .where(ResearchCandidateOutcome.status == "evaluated")
+        .where(ResearchCandidateOutcome.benchmark_status == "pending")
+        .where(
+            ResearchCandidateOutcome.maturity_trade_date <= completed_through
+        )
+        .where(ResearchShortlistRun.status == "committed")
+        .where(ResearchShortlistRun.market == market)
+        .where(ResearchShortlistRun.asset_type == "stock")
+        .where(ResearchShortlistRun.profile_id == profile_id)
+    )
+    if include_run_ids is not None:
+        statement = statement.where(
+            ResearchShortlistCandidate.run_id.in_(include_run_ids)
+        )
+    if exclude_run_ids:
+        statement = statement.where(
+            ~ResearchShortlistCandidate.run_id.in_(exclude_run_ids)
+        )
+    return statement.group_by(
+        ResearchShortlistCandidate.run_id,
+        ResearchShortlistRun.decision_date,
+        ResearchShortlistRun.generated_at,
+        ResearchShortlistRun.id,
+    ).order_by(
+        func.min(ResearchCandidateOutcome.maturity_trade_date),
+        ResearchShortlistRun.decision_date,
+        ResearchShortlistRun.generated_at,
+        ResearchShortlistRun.id,
+    )
+
+
+def _due_reasons_for_run(
+    *,
+    session: Session,
+    run_id: UUID,
+    market: str,
+    profile_id: str,
+    completed_through: date,
+) -> frozenset[DueResearchShortlistReason]:
+    reasons: set[DueResearchShortlistReason] = set()
+    candidate_due = session.execute(
+        _candidate_due_run_query(
+            session=session,
+            market=market,
+            profile_id=profile_id,
+            completed_through=completed_through,
+            run_id=run_id,
+        ).limit(1)
+    ).first()
+    if candidate_due is not None:
+        reasons.add("candidate_terminal")
+    benchmark = _canonical_benchmark(session)
+    if benchmark is not None:
+        benchmark_due = session.execute(
+            _benchmark_due_run_query(
+                session=session,
+                market=market,
+                profile_id=profile_id,
+                completed_through=completed_through,
+                benchmark=benchmark,
+                include_run_ids=[run_id],
+            ).limit(1)
+        ).first()
+        if benchmark_due is not None:
+            reasons.add("benchmark_repair")
+    return frozenset(reasons)
+
+
+def _outcome_run_state(session: Session, run_id: UUID) -> _OutcomeRunState:
+    rows = (
+        session.query(ResearchCandidateOutcome)
+        .join(
+            ResearchShortlistCandidate,
+            ResearchShortlistCandidate.id
+            == ResearchCandidateOutcome.candidate_id,
+        )
+        .filter(ResearchShortlistCandidate.run_id == run_id)
+        .all()
+    )
+    return _OutcomeRunState(
+        terminal_keys=frozenset(
+            (row.candidate_id, row.horizon_sessions) for row in rows
+        ),
+        benchmark_statuses={row.id: row.benchmark_status for row in rows},
+    )
+
+
+def _final_horizon_counts(payload: dict[str, object] | None) -> dict[str, int]:
+    counts = {"evaluated": 0, "blocked": 0, "pending": 0}
+    if payload is None:
+        return counts
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return counts
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("horizons"), list):
+            continue
+        for horizon in item["horizons"]:
+            if not isinstance(horizon, dict):
+                continue
+            status = horizon.get("status")
+            if status in counts:
+                counts[status] += 1
+    return counts
+
+
+def _payload_has_terminal_reason(
+    payload: dict[str, object] | None,
+    reasons: frozenset[DueResearchShortlistReason],
+) -> bool:
+    if payload is None:
+        return False
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("horizons"), list):
+            continue
+        for horizon in item["horizons"]:
+            if not isinstance(horizon, dict):
+                continue
+            if (
+                "candidate_terminal" in reasons
+                and horizon.get("status") in {"evaluated", "blocked"}
+            ):
+                return True
+            benchmark = horizon.get("benchmark")
+            if (
+                "benchmark_repair" in reasons
+                and isinstance(benchmark, dict)
+                and benchmark.get("status") in {"evaluated", "blocked"}
+            ):
+                return True
+    return False
 
 
 def _committed_run(
@@ -465,18 +1022,7 @@ def _candidate_bars(
 
 
 def _completed_bar_predicate(session: Session, bar):
-    dialect_name = session.get_bind().dialect.name
-    if dialect_name == "sqlite":
-        return func.datetime(bar.ingested_at) >= func.datetime(bar.trade_date, "+8 hours")
-    if dialect_name == "postgresql":
-        local_close = func.timezone(
-            "Asia/Shanghai",
-            cast(bar.trade_date, DateTime) + text("INTERVAL '16 hours'"),
-        )
-        return bar.ingested_at >= local_close
-    raise RuntimeError(
-        "Research shortlist outcome bar loading supports only SQLite and PostgreSQL."
-    )
+    return completed_daily_bar_predicate(session, bar)
 
 
 def _outcomes_for_candidates(
@@ -509,20 +1055,52 @@ def _benchmark_bars(
     session: Session,
     *,
     benchmark: Instrument | None,
-    start_date: date,
-    as_of: date,
+    trade_dates: set[date],
 ) -> dict[date, DailyBar]:
-    if benchmark is None:
+    if benchmark is None or not trade_dates:
         return {}
     rows = (
         session.query(DailyBar)
         .filter(DailyBar.instrument_id == benchmark.id)
-        .filter(DailyBar.trade_date >= start_date)
-        .filter(DailyBar.trade_date <= as_of)
+        .filter(DailyBar.trade_date.in_(trade_dates))
         .order_by(DailyBar.trade_date)
         .all()
     )
     return {row.trade_date: row for row in rows}
+
+
+def _required_benchmark_dates(
+    *,
+    candidates: list[ResearchShortlistCandidate],
+    candidate_bars: dict[UUID, _CandidateBarWindow],
+    existing: dict[tuple[UUID, int], ResearchCandidateOutcome],
+    as_of: date,
+) -> set[date]:
+    required_dates = {candidate.entry_trade_date for candidate in candidates}
+    required_dates.update(
+        outcome.maturity_trade_date
+        for outcome in existing.values()
+        if outcome.status == "evaluated"
+        and outcome.benchmark_status == "pending"
+        and outcome.maturity_trade_date <= as_of
+    )
+    for candidate in candidates:
+        window = candidate_bars.get(candidate.id)
+        bars = window.bars if window is not None else []
+        forward_bars = [
+            bar
+            for bar in bars
+            if candidate.entry_trade_date < bar.trade_date <= as_of
+            and _bar_is_complete(bar)
+        ]
+        for horizon_sessions in OUTCOME_HORIZONS:
+            if (candidate.id, horizon_sessions) in existing:
+                continue
+            if len(forward_bars) >= horizon_sessions:
+                required_dates.add(
+                    forward_bars[horizon_sessions - 1].trade_date
+                )
+    return required_dates
 
 
 def _stage_terminal_outcomes(
@@ -859,10 +1437,7 @@ def _effective_adjustment(source: object, adjustment: object) -> tuple[str | Non
 
 
 def _timestamp_is_complete(value: datetime, trade_date: date) -> bool:
-    local = _aware_utc(value).astimezone(SHANGHAI)
-    return local.date() > trade_date or (
-        local.date() == trade_date and local.timetz().replace(tzinfo=None) >= BAR_COMPLETION_TIME
-    )
+    return daily_bar_timestamp_is_complete(value, trade_date)
 
 
 def _insert_outcomes_ignore_conflicts(
@@ -1041,6 +1616,7 @@ def _serialize_candidate(
                 "status": "pending",
                 "available_forward_bars": available,
                 "ready_for_evaluation": available == horizon_sessions,
+                "evaluation_task_run_id": None,
                 "maturity_date": None,
                 "exit_close": None,
                 "minimum_forward_low": None,
@@ -1085,6 +1661,9 @@ def _serialize_terminal_outcome(
         "status": outcome.status,
         "available_forward_bars": outcome.available_forward_bars,
         "ready_for_evaluation": False,
+        "evaluation_task_run_id": str(outcome.evaluation_task_run_id)
+        if outcome.evaluation_task_run_id is not None
+        else None,
         "maturity_date": outcome.maturity_trade_date.isoformat(),
         "exit_close": _float_or_none(outcome.exit_close),
         "minimum_forward_low": _float_or_none(outcome.minimum_forward_low),
@@ -1126,11 +1705,7 @@ def _date_iso(value: date | None) -> str | None:
 
 
 def _bar_is_complete(bar: DailyBar) -> bool:
-    ingested_local = _aware_utc(bar.ingested_at).astimezone(SHANGHAI)
-    return ingested_local.date() > bar.trade_date or (
-        ingested_local.date() == bar.trade_date
-        and ingested_local.timetz().replace(tzinfo=None) >= BAR_COMPLETION_TIME
-    )
+    return daily_bar_is_complete(bar)
 
 
 def _aware_utc(value: datetime) -> datetime:

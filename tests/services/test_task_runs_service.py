@@ -203,3 +203,39 @@ def test_retry_task_run_marks_failed_when_dispatch_fails(mock_dispatch):
     assert payload["item"]["status"] == "failed"
     assert "redis unavailable" in payload["item"]["error_message"]
     mock_dispatch.assert_called_once()
+
+
+@patch("packages.services.task_dispatch.dispatch_task_run", return_value="research-celery-id")
+def test_retry_daily_research_loop_preserves_input_and_adds_lineage(mock_dispatch):
+    session = make_session()
+    failed_run = start_task_run(
+        "research.run_daily_research_loop",
+        {
+            "market": "CN",
+            "asset_type": "stock",
+            "profile_id": "balanced_research",
+            "outcome_run_limit": 25,
+            "trigger": "scheduled",
+        },
+        session=session,
+    )
+    fail_task_run(failed_run, "Daily research loop failed (RuntimeError).", session=session)
+
+    payload = retry_task_run_payload(session=session, task_run_id=str(failed_run.id))
+
+    assert payload is not None
+    assert payload["status"] == "retry_started"
+    assert payload["item"]["task_name"] == "research.run_daily_research_loop"
+    assert payload["item"]["input_json"] == {
+        "market": "CN",
+        "asset_type": "stock",
+        "profile_id": "balanced_research",
+        "outcome_run_limit": 25,
+        "trigger": "scheduled",
+        "retry_of": str(failed_run.id),
+    }
+    mock_dispatch.assert_called_once_with(
+        "research.run_daily_research_loop",
+        payload["item"]["input_json"],
+        payload["item"]["id"],
+    )

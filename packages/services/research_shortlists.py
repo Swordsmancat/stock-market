@@ -88,6 +88,8 @@ class ResearchShortlistGenerateInput:
     shortlist_limit: int = 10
     locale: str = "zh"
     use_llm: bool = True
+    verified_decision_date: date | None = None
+    generation_task_run_id: str | UUID | None = None
 
 
 class ResearchShortlistReadinessError(RuntimeError):
@@ -125,11 +127,13 @@ def generate_research_shortlist(
     if not effective_criteria:
         raise ValueError("The selected profile has no active research criteria.")
 
-    decision_date = _latest_decision_date(
-        session,
-        market=normalized.market,
-        asset_type=normalized.asset_type,
-    )
+    decision_date = normalized.verified_decision_date
+    if decision_date is None:
+        decision_date = _latest_decision_date(
+            session,
+            market=normalized.market,
+            asset_type=normalized.asset_type,
+        )
     if decision_date is None:
         if session.in_transaction():
             session.rollback()
@@ -326,6 +330,7 @@ def _generate_research_shortlist_locked(
     }
     run = ResearchShortlistRun(
         generation_key=generation_key,
+        generation_task_run_id=normalized.generation_task_run_id,
         status="committed",
         decision_date=decision_date,
         generated_at=generated_at,
@@ -812,6 +817,11 @@ def _serialize_response(
         "run": {
             "id": str(run.id),
             "generation_key": run.generation_key,
+            "generation_task_run_id": (
+                str(run.generation_task_run_id)
+                if run.generation_task_run_id is not None
+                else None
+            ),
             "status": run.status,
             "decision_date": run.decision_date.isoformat(),
             "generated_at": _iso_datetime(run.generated_at),
@@ -905,6 +915,12 @@ def _normalize_generate_input(
         raise ValueError(f"Unsupported research shortlist asset type: {payload.asset_type}")
     if payload.shortlist_limit < 1 or payload.shortlist_limit > 20:
         raise ValueError("Research shortlist limit must be between 1 and 20.")
+    verified_decision_date = payload.verified_decision_date
+    if verified_decision_date is not None and (
+        not isinstance(verified_decision_date, date)
+        or isinstance(verified_decision_date, datetime)
+    ):
+        raise ValueError("Invalid verified_decision_date.")
     return ResearchShortlistGenerateInput(
         profile_id=payload.profile_id.strip().lower(),
         overrides=dict(payload.overrides or {}),
@@ -913,7 +929,21 @@ def _normalize_generate_input(
         shortlist_limit=payload.shortlist_limit,
         locale="en" if payload.locale == "en" else "zh",
         use_llm=bool(payload.use_llm),
+        verified_decision_date=verified_decision_date,
+        generation_task_run_id=_optional_uuid(
+            payload.generation_task_run_id,
+            label="generation_task_run_id",
+        ),
     )
+
+
+def _optional_uuid(value: str | UUID | None, *, label: str) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return value if isinstance(value, UUID) else UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid {label}.") from exc
 
 
 def _normalize_market(value: str) -> str:

@@ -6,7 +6,7 @@ from datetime import date, datetime, time as datetime_time, timedelta, timezone
 import time
 from uuid import UUID
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from packages.domain.models import (
@@ -19,13 +19,18 @@ from packages.domain.models import (
     ResearchEvidenceBackfill,
     TechnicalIndicator,
 )
-from packages.services.fundamentals import ingest_fundamentals
-from packages.services.indicators import calculate_and_store_daily_indicators
+from packages.services.daily_bar_completion import (
+    DAILY_BAR_COMPLETION_TIME,
+    as_shanghai_datetime,
+    completed_daily_bar_predicate,
+)
 from packages.services.daily_bar_sources import (
     STRICT_POLICY,
     SUPPORTED_DAILY_BAR_POLICIES,
     DailyBarFetchCoordinator,
 )
+from packages.services.fundamentals import ingest_fundamentals
+from packages.services.indicators import calculate_and_store_daily_indicators
 from packages.services.ingestion import (
     build_daily_bar_fetch_coordinator,
     ingest_symbol_daily_bars,
@@ -50,6 +55,10 @@ SUPPORTED_RUN_KINDS = {
 }
 ACTIVE_RUN_STATUSES = {"queued", "running", "cancel_requested"}
 TERMINAL_RESUMABLE_STATUSES = {"failed", "cancelled"}
+WATERMARK_RUN_KINDS = {"baseline", "incremental"}
+WATERMARK_RUN_STATUSES = {"succeeded", "partial"}
+WATERMARK_REQUIRED_EXCHANGES = ("SSE", "SZSE", "BSE")
+WATERMARK_SCAN_DAYS = 31
 MAX_DIAGNOSTICS = 100
 CRITICAL_INDICATOR_CODES = {"ma", "rsi", "mfi"}
 EVIDENCE_THRESHOLDS = {
@@ -83,7 +92,11 @@ def create_backfill_run(
     session: Session,
 ) -> dict[str, object]:
     normalized = _normalize_request(request)
-    existing = _active_backfill(session, normalized.market, normalized.provider)
+    existing = get_active_research_evidence_backfill(
+        session=session,
+        market=normalized.market,
+        provider=normalized.provider,
+    )
     if existing is not None:
         return {"status": "already_running", "item": serialize_backfill(existing)}
 
@@ -152,7 +165,11 @@ def create_resume_backfill_run(
     original = _get_backfill(run_id, session)
     if original.status not in TERMINAL_RESUMABLE_STATUSES:
         raise ValueError("Only failed or cancelled backfills can be resumed.")
-    existing = _active_backfill(session, original.market, original.provider)
+    existing = get_active_research_evidence_backfill(
+        session=session,
+        market=original.market,
+        provider=original.provider,
+    )
     if existing is not None:
         return {"status": "already_running", "item": serialize_backfill(existing)}
 
@@ -198,7 +215,11 @@ def create_retry_failed_backfill_run(
     session: Session,
 ) -> dict[str, object]:
     original = _get_backfill(run_id, session)
-    existing = _active_backfill(session, original.market, original.provider)
+    existing = get_active_research_evidence_backfill(
+        session=session,
+        market=original.market,
+        provider=original.provider,
+    )
     if existing is not None:
         return {"status": "already_running", "item": serialize_backfill(existing)}
     retry_by_kind = {
@@ -317,6 +338,232 @@ def get_backfill_payload(run_id: str, *, session: Session) -> dict[str, object] 
     return {"source": "database", "item": serialize_backfill(run)}
 
 
+def resolve_completed_daily_bar_watermark(
+    *,
+    session: Session,
+    market: str = SUPPORTED_MARKET,
+    provider: str = SUPPORTED_PROVIDER,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    """Resolve the latest completed, full-market daily-bar date from local evidence."""
+    normalized_market, normalized_provider = _normalize_backfill_scope(market, provider)
+    current = as_shanghai_datetime(now or _utc_now())
+    candidate_ceiling = current.date()
+    if current.timetz().replace(tzinfo=None) < DAILY_BAR_COMPLETION_TIME:
+        candidate_ceiling -= timedelta(days=1)
+
+    base: dict[str, object] = {
+        "market": normalized_market,
+        "provider": normalized_provider,
+        "verified_completed_through": None,
+        "timezone": "Asia/Shanghai",
+        "evaluated_at": current.isoformat(),
+        "candidate_date_ceiling": candidate_ceiling.isoformat(),
+        "scan_window_days": WATERMARK_SCAN_DAYS,
+        "scan_start_date": None,
+        "scan_end_date": None,
+        "threshold": EVIDENCE_THRESHOLDS["daily_bars"],
+        "eligible_backfill_count": 0,
+        "backfill_run_id": None,
+        "backfill_task_run_id": None,
+        "backfill": None,
+        "coverage": None,
+        "active_backfill": None,
+        "diagnostics": [],
+        "safety": {
+            "stored_evidence_only": True,
+            "no_provider_or_network_calls": True,
+            "no_silent_provider_fallback": True,
+            "no_automated_trading": True,
+        },
+    }
+
+    active = get_active_research_evidence_backfill(
+        session=session,
+        market=normalized_market,
+        provider=normalized_provider,
+    )
+    if active is not None:
+        return {
+            **base,
+            "status": "not_ready",
+            "code": "ACTIVE_EVIDENCE_BACKFILL",
+            "active_backfill": _watermark_backfill_summary(active),
+            "diagnostics": ["ACTIVE_EVIDENCE_BACKFILL"],
+        }
+
+    terminal_runs = (
+        session.query(ResearchEvidenceBackfill)
+        .filter(ResearchEvidenceBackfill.market == normalized_market)
+        .filter(ResearchEvidenceBackfill.provider == normalized_provider)
+        .filter(ResearchEvidenceBackfill.run_kind.in_(WATERMARK_RUN_KINDS))
+        .filter(ResearchEvidenceBackfill.status.in_(WATERMARK_RUN_STATUSES))
+        .filter(ResearchEvidenceBackfill.finished_at.is_not(None))
+        .filter(ResearchEvidenceBackfill.end_date <= current.date())
+        .filter(ResearchEvidenceBackfill.start_date <= candidate_ceiling)
+        .order_by(
+            ResearchEvidenceBackfill.finished_at.desc(),
+            ResearchEvidenceBackfill.created_at.desc(),
+            ResearchEvidenceBackfill.id.desc(),
+        )
+        .all()
+    )
+    eligible_runs = [
+        run
+        for run in terminal_runs
+        if "daily_bars"
+        in {
+            str(kind).strip().lower()
+            for kind in (run.evidence_kinds_json or [])
+        }
+    ]
+    base["eligible_backfill_count"] = len(eligible_runs)
+    if not eligible_runs:
+        return {
+            **base,
+            "status": "no_data",
+            "code": "NO_ELIGIBLE_DAILY_BAR_BACKFILL",
+            "diagnostics": ["NO_ELIGIBLE_DAILY_BAR_BACKFILL"],
+        }
+
+    universe_rows = (
+        session.query(Exchange.code, func.count(func.distinct(Instrument.id)))
+        .select_from(Instrument)
+        .join(Market, Instrument.market_id == Market.id)
+        .outerjoin(Exchange, Instrument.exchange_id == Exchange.id)
+        .filter(Market.code == normalized_market)
+        .filter(Instrument.asset_type == "stock")
+        .filter(Instrument.is_active.is_(True))
+        .group_by(Exchange.code)
+        .all()
+    )
+    universe_by_exchange = {
+        str(exchange or "UNKNOWN"): int(total)
+        for exchange, total in universe_rows
+    }
+    universe_count = sum(universe_by_exchange.values())
+    if universe_count == 0:
+        return {
+            **base,
+            "status": "no_data",
+            "code": "NO_ACTIVE_CN_STOCK_UNIVERSE",
+            "diagnostics": ["NO_ACTIVE_CN_STOCK_UNIVERSE"],
+        }
+
+    latest_date = min(
+        candidate_ceiling,
+        max(run.end_date for run in eligible_runs),
+    )
+    earliest_date = latest_date - timedelta(days=WATERMARK_SCAN_DAYS - 1)
+    base["scan_start_date"] = earliest_date.isoformat()
+    base["scan_end_date"] = latest_date.isoformat()
+    candidate_runs = [
+        run
+        for run in eligible_runs
+        if run.start_date <= latest_date and run.end_date >= earliest_date
+    ]
+    completed_bar = completed_daily_bar_predicate(session, DailyBar)
+    date_rows = (
+        session.query(
+            DailyBar.trade_date,
+            Exchange.code,
+            func.count(func.distinct(Instrument.id)),
+            func.count(
+                func.distinct(
+                    case((completed_bar, Instrument.id), else_=None)
+                )
+            ),
+        )
+        .select_from(DailyBar)
+        .join(Instrument, DailyBar.instrument_id == Instrument.id)
+        .join(Market, Instrument.market_id == Market.id)
+        .outerjoin(Exchange, Instrument.exchange_id == Exchange.id)
+        .filter(Market.code == normalized_market)
+        .filter(Instrument.asset_type == "stock")
+        .filter(Instrument.is_active.is_(True))
+        .filter(DailyBar.trade_date >= earliest_date)
+        .filter(DailyBar.trade_date <= latest_date)
+        .group_by(DailyBar.trade_date, Exchange.code)
+        .order_by(DailyBar.trade_date.desc(), Exchange.code)
+        .all()
+    )
+    coverage_by_date: dict[date, dict[str, dict[str, int]]] = {}
+    for trade_date, exchange, stored_count, ready_count in date_rows:
+        if not _date_has_eligible_provenance(trade_date, candidate_runs):
+            continue
+        exchange_code = str(exchange or "UNKNOWN")
+        date_coverage = coverage_by_date.setdefault(
+            trade_date,
+            {"stored": {}, "ready": {}},
+        )
+        date_coverage["stored"][exchange_code] = int(stored_count)
+        date_coverage["ready"][exchange_code] = int(ready_count)
+
+    if not coverage_by_date:
+        return {
+            **base,
+            "status": "no_data",
+            "code": "NO_DAILY_BAR_CANDIDATES",
+            "diagnostics": ["NO_DAILY_BAR_CANDIDATES"],
+        }
+
+    watermark_date: date | None = None
+    watermark_coverage: dict[str, object] | None = None
+    latest_candidate_coverage: dict[str, object] | None = None
+    skipped_newer_date_count = 0
+    for trade_date in sorted(coverage_by_date, reverse=True):
+        coverage = _exact_date_watermark_coverage(
+            coverage_by_date[trade_date],
+            universe_by_exchange=universe_by_exchange,
+            threshold=EVIDENCE_THRESHOLDS["daily_bars"],
+        )
+        coverage["trade_date"] = trade_date.isoformat()
+        if latest_candidate_coverage is None:
+            latest_candidate_coverage = coverage
+        if coverage["passes_threshold"] and coverage["passes_exchange_representation"]:
+            watermark_date = trade_date
+            watermark_coverage = coverage
+            break
+        skipped_newer_date_count += 1
+
+    if watermark_date is None or watermark_coverage is None:
+        diagnostics = ["DAILY_BAR_WATERMARK_NOT_READY"]
+        if latest_candidate_coverage and not latest_candidate_coverage[
+            "passes_exchange_representation"
+        ]:
+            diagnostics.append("MISSING_REQUIRED_EXCHANGE_REPRESENTATION")
+        return {
+            **base,
+            "status": "not_ready",
+            "code": "DAILY_BAR_WATERMARK_NOT_READY",
+            "coverage": latest_candidate_coverage,
+            "diagnostics": diagnostics,
+        }
+
+    provenance = next(
+        run
+        for run in candidate_runs
+        if run.start_date <= watermark_date <= run.end_date
+    )
+    diagnostics = []
+    if skipped_newer_date_count:
+        diagnostics.append("NEWER_DAILY_BAR_DATE_NOT_READY")
+    return {
+        **base,
+        "status": "ready",
+        "code": "DAILY_BAR_WATERMARK_READY",
+        "verified_completed_through": watermark_date.isoformat(),
+        "backfill_run_id": str(provenance.id),
+        "backfill_task_run_id": str(provenance.task_run_id)
+        if provenance.task_run_id is not None
+        else None,
+        "backfill": _watermark_backfill_summary(provenance),
+        "coverage": watermark_coverage,
+        "skipped_newer_date_count": skipped_newer_date_count,
+        "diagnostics": diagnostics,
+    }
+
+
 def get_evidence_coverage(
     *,
     session: Session,
@@ -324,12 +571,7 @@ def get_evidence_coverage(
     provider: str = SUPPORTED_PROVIDER,
     as_of: date | None = None,
 ) -> dict[str, object]:
-    normalized_market = market.strip().upper()
-    normalized_provider = provider.strip().lower()
-    if normalized_market != SUPPORTED_MARKET:
-        raise ValueError(f"Unsupported backfill market: {market}")
-    if normalized_provider != SUPPORTED_PROVIDER:
-        raise ValueError(f"Unsupported backfill provider: {provider}")
+    normalized_market, normalized_provider = _normalize_backfill_scope(market, provider)
     effective_as_of = as_of or date.today()
     horizon_start = _subtract_months(effective_as_of, 18)
     freshness_cutoff = date.fromordinal(effective_as_of.toordinal() - 10)
@@ -768,19 +1010,95 @@ def _normalize_request(request: BackfillRequest) -> BackfillRequest:
     )
 
 
-def _active_backfill(
+def get_active_research_evidence_backfill(
+    *,
     session: Session,
-    market: str,
-    provider: str,
+    market: str = SUPPORTED_MARKET,
+    provider: str = SUPPORTED_PROVIDER,
 ) -> ResearchEvidenceBackfill | None:
+    normalized_market, normalized_provider = _normalize_backfill_scope(market, provider)
     return (
         session.query(ResearchEvidenceBackfill)
-        .filter(ResearchEvidenceBackfill.market == market)
-        .filter(ResearchEvidenceBackfill.provider == provider)
+        .filter(ResearchEvidenceBackfill.market == normalized_market)
+        .filter(ResearchEvidenceBackfill.provider == normalized_provider)
         .filter(ResearchEvidenceBackfill.status.in_(ACTIVE_RUN_STATUSES))
         .order_by(ResearchEvidenceBackfill.created_at.desc())
         .first()
     )
+
+
+def _normalize_backfill_scope(market: str, provider: str) -> tuple[str, str]:
+    normalized_market = market.strip().upper()
+    normalized_provider = provider.strip().lower()
+    if normalized_market != SUPPORTED_MARKET:
+        raise ValueError(f"Unsupported backfill market: {market}")
+    if normalized_provider != SUPPORTED_PROVIDER:
+        raise ValueError(f"Unsupported backfill provider: {provider}")
+    return normalized_market, normalized_provider
+
+
+def _date_has_eligible_provenance(
+    trade_date: date,
+    eligible_runs: list[ResearchEvidenceBackfill],
+) -> bool:
+    return any(run.start_date <= trade_date <= run.end_date for run in eligible_runs)
+
+
+def _exact_date_watermark_coverage(
+    values: dict[str, dict[str, int]],
+    *,
+    universe_by_exchange: dict[str, int],
+    threshold: float,
+) -> dict[str, object]:
+    stored_by_exchange = values["stored"]
+    ready_by_exchange = values["ready"]
+    exchanges = sorted(
+        set(universe_by_exchange)
+        | set(stored_by_exchange)
+        | set(WATERMARK_REQUIRED_EXCHANGES)
+    )
+    by_exchange = {
+        exchange: {
+            "ready_count": ready_by_exchange.get(exchange, 0),
+            "stored_count": stored_by_exchange.get(exchange, 0),
+            "total_count": universe_by_exchange.get(exchange, 0),
+            "coverage_ratio": (
+                ready_by_exchange.get(exchange, 0) / universe_by_exchange[exchange]
+                if universe_by_exchange.get(exchange, 0)
+                else 0.0
+            ),
+        }
+        for exchange in exchanges
+    }
+    ready_count = sum(ready_by_exchange.values())
+    total_count = sum(universe_by_exchange.values())
+    coverage_ratio = ready_count / total_count if total_count else 0.0
+    return {
+        "ready_count": ready_count,
+        "missing_count": total_count - ready_count,
+        "stored_count": sum(stored_by_exchange.values()),
+        "total_count": total_count,
+        "coverage_ratio": coverage_ratio,
+        "threshold": threshold,
+        "passes_threshold": bool(total_count) and coverage_ratio >= threshold,
+        "passes_exchange_representation": all(
+            ready_by_exchange.get(exchange, 0) > 0
+            for exchange in WATERMARK_REQUIRED_EXCHANGES
+        ),
+        "by_exchange": by_exchange,
+    }
+
+
+def _watermark_backfill_summary(run: ResearchEvidenceBackfill) -> dict[str, object]:
+    return {
+        "id": str(run.id),
+        "task_run_id": str(run.task_run_id) if run.task_run_id is not None else None,
+        "run_kind": run.run_kind,
+        "status": run.status,
+        "start_date": run.start_date.isoformat(),
+        "end_date": run.end_date.isoformat(),
+        "finished_at": _iso_datetime(run.finished_at),
+    }
 
 
 def _latest_usable_universe_sync(

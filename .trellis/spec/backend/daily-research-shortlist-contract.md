@@ -6,8 +6,9 @@
 
 - Trigger: AI Research publishes a small daily A-share research cohort from
   locally stored evidence and later consumers need a frozen decision record.
-- Scope: `ResearchShortlistRun` / `ResearchShortlistCandidate`, Alembic revision
-  `0020_research_shortlists`, `packages/services/research_shortlists.py`, the
+- Scope: `ResearchShortlistRun` / `ResearchShortlistCandidate`, Alembic revisions
+  `0020_research_shortlists` and `0022_research_shortlist_task_run`,
+  `packages/services/research_shortlists.py`, the
   point-in-time selector and coverage gate, FastAPI/Next routes, and the first
   panel on `/[locale]/ai-research`.
 - Non-goals: historical reconstruction, outcome calculation, scheduling,
@@ -15,7 +16,9 @@
 
 ### 2. Signatures
 
-- DB tables: `research_shortlist_runs`, `research_shortlist_candidates`.
+- DB tables: `research_shortlist_runs`, `research_shortlist_candidates`;
+  nullable `research_shortlist_runs.generation_task_run_id` references
+  `task_runs.id` with `ON DELETE SET NULL`.
 - Scoring model: `daily_research_score_v1`.
 - Eligibility rule set: `instock_composite_selection_v1`.
 - Service write:
@@ -34,9 +37,12 @@
 
 ### 3. Contracts
 
-- V1 supports locally stored active `CN` `stock` instruments only. The decision
-  date is the latest stored in-scope daily-bar date; callers cannot provide an
-  arbitrary historical date.
+- V1 supports locally stored active `CN` `stock` instruments only. Public
+  FastAPI/browser callers cannot provide an arbitrary historical date or
+  TaskRun lineage. The daily research orchestrator may pass an internal
+  `verified_decision_date` established by the completed-market watermark and a
+  nullable `generation_task_run_id`; manual calls still derive the latest
+  in-scope stored daily-bar date.
 - Publication keeps the existing readiness thresholds unchanged: 95% daily
   bars, 90% critical technical indicators, 80% complete fundamentals, with all
   three A-share exchanges represented.
@@ -69,6 +75,9 @@
   database defense.
 - A run and all candidates commit atomically. Read-only early returns and error
   paths roll back open transactions; process-local locks are always released.
+- The first committed run stores its optional generation TaskRun lineage.
+  Generation-key reuse returns that original nullable lineage and never
+  rewrites it for a later manual, scheduled, or retry caller.
 - `latest` with no row returns HTTP 200 and `status="no_data"`; missing detail
   returns 404; invalid profile/override returns 400; readiness failure returns
   409 with a structured code and no partial rows.
@@ -93,6 +102,8 @@
 | All eligible candidates are stale/contaminated | 409 `NO_DECISION_DATE_ALIGNED_CANDIDATES` |
 | Entry bar disappears before commit | 409 `ENTRY_BAR_CHANGED_DURING_GENERATION` |
 | Unknown profile/override/rule | 400 or service `ValueError`; no run |
+| Invalid internal verified date or generation TaskRun UUID | Service `ValueError`; no run |
+| Original generation TaskRun is deleted | Nullable shortlist lineage becomes null; cohort remains |
 | Same semantic criteria use different order/case/duplicates | Same generation key and run ID; no second explanation |
 | Concurrent same-key requests | One committed run; one explanation invocation |
 | LLM unavailable, fails, or invents symbol/citation | Deterministic validated fallback; rank unchanged |
@@ -128,8 +139,9 @@
   thresholds.
 - Service tests cover semantic generation-key normalization, two-session
   concurrency with one explanation call, duplicate-key fallback, stale/post-
-  decision rejection, atomic rollback, no provider calls, and deterministic AI
-  fallback.
+  decision rejection, internal verified cutoff, immutable TaskRun lineage,
+  public-request exclusion, atomic rollback, no provider calls, and
+  deterministic AI fallback.
 - Domain/migration tests cover both tables, generation/rank uniqueness, cascade,
   latest-index column order, and upgrade/downgrade.
 - API/proxy tests cover generate/latest/detail, 400/409/404/no-data behavior,

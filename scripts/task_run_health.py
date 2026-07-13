@@ -79,7 +79,12 @@ def check_task_run_health(
         stale_running_task_runs = (
             session.query(TaskRun)
             .filter(TaskRun.status == "running")
-            .filter(TaskRun.started_at < stale_cutoff)
+            .filter(
+                or_(
+                    and_(TaskRun.heartbeat_at.is_(None), TaskRun.started_at < stale_cutoff),
+                    TaskRun.heartbeat_at < stale_cutoff,
+                )
+            )
             .order_by(TaskRun.started_at.asc())
             .all()
         )

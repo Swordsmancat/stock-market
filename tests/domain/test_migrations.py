@@ -3,7 +3,7 @@ from pathlib import Path
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 
 def load_initial_migration():
@@ -184,6 +184,19 @@ def load_research_shortlist_outcomes_migration():
     migration_path = Path("alembic/versions/0021_research_shortlist_outcomes.py")
     spec = importlib.util.spec_from_file_location(
         "research_shortlist_outcomes_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_research_shortlist_task_run_migration():
+    migration_path = Path("alembic/versions/0022_research_shortlist_task_run.py")
+    spec = importlib.util.spec_from_file_location(
+        "research_shortlist_task_run_migration",
         migration_path,
     )
     assert spec is not None
@@ -484,6 +497,136 @@ def test_research_shortlist_outcomes_migration_creates_terminal_ledger():
 
     assert "research_candidate_outcomes" not in tables_after_downgrade
     assert "research_shortlist_candidates" in tables_after_downgrade
+
+
+def test_research_shortlist_task_run_migration_preserves_rows_and_sets_null_on_delete():
+    initial_migration = load_initial_migration()
+    task_runs_migration = load_task_runs_migration()
+    shortlists_migration = load_research_shortlists_migration()
+    outcomes_migration = load_research_shortlist_outcomes_migration()
+    migration = load_research_shortlist_task_run_migration()
+    engine = create_engine("sqlite:///:memory:")
+    shortlist_run_id = "11111111-1111-1111-1111-111111111111"
+    task_run_id = "22222222-2222-2222-2222-222222222222"
+
+    with engine.connect() as connection:
+        with connection.begin():
+            run_migration(initial_migration, connection)
+            run_migration(task_runs_migration, connection)
+            run_migration(shortlists_migration, connection)
+            run_migration(outcomes_migration, connection)
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO research_shortlist_runs (
+                        id, generation_key, status, decision_date, generated_at,
+                        market, asset_type, profile_id, rule_set, scoring_model,
+                        locale, shortlist_limit, default_criteria_json,
+                        effective_criteria_json, overrides_json,
+                        dimension_weights_json, candidate_scope_json, coverage_json,
+                        diagnostics_json, explanation_markdown, model_json,
+                        citations_json, safety_json, research_signal_only
+                    ) VALUES (
+                        :id, :generation_key, 'committed', '2026-07-10',
+                        '2026-07-10 13:30:00', 'CN', 'stock', 'balanced_research',
+                        'instock_composite_selection_v1', 'daily_research_score_v1',
+                        'zh', 10, '{}', '{}', '{}', '{}', '{}', '{}', '[]',
+                        'Research only.', '{}', '[]', '{}', 1
+                    )
+                    """
+                ),
+                {"id": shortlist_run_id, "generation_key": "c" * 64},
+            )
+            run_migration(migration, connection)
+
+            inspector = inspect(connection)
+            columns = {
+                column["name"]
+                for column in inspector.get_columns("research_shortlist_runs")
+            }
+            foreign_keys = inspector.get_foreign_keys("research_shortlist_runs")
+            indexes = inspector.get_indexes("research_shortlist_runs")
+            existing_lineage = connection.execute(
+                text(
+                    "SELECT generation_task_run_id FROM research_shortlist_runs "
+                    "WHERE id = :id"
+                ),
+                {"id": shortlist_run_id},
+            ).scalar_one()
+
+        assert "generation_task_run_id" in columns
+        assert existing_lineage is None
+        assert any(
+            foreign_key["constrained_columns"] == ["generation_task_run_id"]
+            and foreign_key["referred_table"] == "task_runs"
+            and foreign_key.get("options", {}).get("ondelete") == "SET NULL"
+            for foreign_key in foreign_keys
+        )
+        assert any(
+            index["name"]
+            == "ix_research_shortlist_runs_generation_task_run_id"
+            and index["column_names"] == ["generation_task_run_id"]
+            for index in indexes
+        )
+
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        connection.commit()
+        with connection.begin():
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO task_runs (
+                        id, task_name, status, started_at, input_json, created_at
+                    ) VALUES (
+                        :id, 'research.run_daily_research_loop', 'running',
+                        '2026-07-13 13:30:00', '{}', '2026-07-13 13:30:00'
+                    )
+                    """
+                ),
+                {"id": task_run_id},
+            )
+            connection.execute(
+                text(
+                    "UPDATE research_shortlist_runs "
+                    "SET generation_task_run_id = :task_run_id WHERE id = :run_id"
+                ),
+                {"task_run_id": task_run_id, "run_id": shortlist_run_id},
+            )
+            connection.execute(
+                text("DELETE FROM task_runs WHERE id = :id"),
+                {"id": task_run_id},
+            )
+            nulled_lineage = connection.execute(
+                text(
+                    "SELECT generation_task_run_id FROM research_shortlist_runs "
+                    "WHERE id = :id"
+                ),
+                {"id": shortlist_run_id},
+            ).scalar_one()
+
+        assert nulled_lineage is None
+
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+        with connection.begin():
+            context = MigrationContext.configure(connection)
+            original_op = migration.op
+            migration.op = Operations(context)
+            try:
+                migration.downgrade()
+            finally:
+                migration.op = original_op
+            inspector = inspect(connection)
+            downgraded_columns = {
+                column["name"]
+                for column in inspector.get_columns("research_shortlist_runs")
+            }
+            remaining_run_count = connection.execute(
+                text("SELECT COUNT(*) FROM research_shortlist_runs")
+            ).scalar_one()
+
+    assert "generation_task_run_id" not in downgraded_columns
+    assert remaining_run_count == 1
 
 
 def run_migration(migration, connection):

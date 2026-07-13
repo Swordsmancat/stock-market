@@ -704,6 +704,11 @@ class ResearchShortlistRun(Base):
 
     id: Mapped[PythonUUID] = uuid_pk()
     generation_key: Mapped[str] = mapped_column(String(64))
+    generation_task_run_id: Mapped[PythonUUID | None] = mapped_column(
+        ForeignKey("task_runs.id", ondelete="SET NULL"),
+        default=None,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), default="committed")
     decision_date: Mapped[date] = mapped_column(Date)
     generated_at: Mapped[datetime] = mapped_column(

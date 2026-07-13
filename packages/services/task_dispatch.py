@@ -138,6 +138,26 @@ def _dispatch_watchlist_official_disclosures(
     return async_result.id
 
 
+def _dispatch_daily_research_loop(
+    input_json: dict[str, Any],
+    task_run_id: str,
+) -> str:
+    from apps.worker.tasks.research import run_daily_research_loop_task
+
+    async_result = run_daily_research_loop_task.delay(
+        market=input_json.get("market", "CN"),
+        asset_type=input_json.get("asset_type", "stock"),
+        profile_id=input_json.get("profile_id", "balanced_research"),
+        shortlist_limit=input_json.get("shortlist_limit", 10),
+        locale=input_json.get("locale", "zh"),
+        use_llm=input_json.get("use_llm", True),
+        outcome_run_limit=input_json.get("outcome_run_limit"),
+        trigger=input_json.get("trigger", "manual"),
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
 def _dispatch_alert_evaluation(input_json: dict[str, Any], task_run_id: str) -> str:
     from apps.worker.tasks.alerts import evaluate_watchlist_alerts
 
@@ -158,6 +178,7 @@ _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "ingestion.ingest_symbol_daily_bars_batch": _dispatch_symbol_daily_bars_batch_ingestion,
     "ingestion.backfill_a_share_research_evidence": _dispatch_research_evidence_backfill,
     "ingestion.ingest_watchlist_official_disclosures": _dispatch_watchlist_official_disclosures,
+    "research.run_daily_research_loop": _dispatch_daily_research_loop,
     "alerts.evaluate_watchlist_alerts": _dispatch_alert_evaluation,
 }
 

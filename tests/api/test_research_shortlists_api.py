@@ -53,6 +53,8 @@ def test_generate_shortlist_forwards_compatible_request_fields(monkeypatch):
                 "shortlist_limit": 5,
                 "locale": "en",
                 "use_llm": False,
+                "verified_decision_date": "2026-07-10",
+                "generation_task_run_id": str(uuid4()),
             },
         )
     finally:
@@ -65,7 +67,53 @@ def test_generate_shortlist_forwards_compatible_request_fields(monkeypatch):
     assert captured["payload"].shortlist_limit == 5
     assert captured["payload"].locale == "en"
     assert captured["payload"].use_llm is False
+    assert captured["payload"].verified_decision_date is None
+    assert captured["payload"].generation_task_run_id is None
     assert captured["session"] is session
+
+
+def test_latest_and_detail_preserve_generation_task_run_lineage(monkeypatch):
+    session = make_session()
+    run_id = str(uuid4())
+    task_run_id = str(uuid4())
+    payload = {
+        "status": "ok",
+        "run": {
+            "id": run_id,
+            "generation_task_run_id": task_run_id,
+            "research_signal_only": True,
+        },
+        "items": [],
+        "research_signal_only": True,
+        "safety": {"no_automated_trading": True},
+    }
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    monkeypatch.setattr(
+        shortlist_router,
+        "get_latest_research_shortlist",
+        lambda **_: payload,
+    )
+    monkeypatch.setattr(
+        shortlist_router,
+        "get_research_shortlist",
+        lambda *_, **__: payload,
+    )
+    try:
+        latest = TestClient(app).get(
+            "/research-shortlists/latest?market=CN&profile_id=balanced_research"
+        )
+        detail = TestClient(app).get(f"/research-shortlists/{run_id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert latest.status_code == 200
+    assert detail.status_code == 200
+    assert latest.json()["run"]["generation_task_run_id"] == task_run_id
+    assert detail.json()["run"]["generation_task_run_id"] == task_run_id
 
 
 def test_generate_shortlist_maps_validation_and_readiness_errors(monkeypatch):

@@ -64,6 +64,27 @@ def test_stale_running_task_returns_warn_without_mutating_status(session: Sessio
     assert task_run.finished_at is None
 
 
+def test_fresh_heartbeat_keeps_old_running_task_healthy(session: Session) -> None:
+    task_run = TaskRun(
+        task_name="research.run_daily_research_loop",
+        status="running",
+        started_at=FIXED_NOW - timedelta(hours=2),
+        heartbeat_at=FIXED_NOW - timedelta(minutes=5),
+        input_json={},
+        created_at=FIXED_NOW - timedelta(hours=2),
+    )
+    session.add(task_run)
+    session.commit()
+
+    result = check_task_run_health(session, now=FIXED_NOW, stale_minutes=30)
+
+    assert result.status == "OK"
+    assert result.stale_running_count == 0
+
+    session.refresh(task_run)
+    assert task_run.status == "running"
+
+
 def test_recent_failed_task_returns_warn_with_count_and_task_names(session: Session) -> None:
     failed_task_run = TaskRun(
         task_name="ingestion.ingest_market_data",

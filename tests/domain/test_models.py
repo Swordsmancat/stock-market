@@ -128,8 +128,25 @@ def test_research_shortlist_models_preserve_frozen_decision_evidence():
     run.candidates.append(candidate)
 
     assert run.scoring_model == "daily_research_score_v1"
+    assert run.generation_task_run_id is None
     assert run.candidates[0].entry_source == "akshare.stock_zh_a_hist"
     assert run.candidates[0].safety_json["research_signal_only"] is True
+
+
+def test_research_shortlist_run_schema_tracks_generation_task_run_lineage():
+    table = ResearchShortlistRun.__table__
+    column = table.c.generation_task_run_id
+    foreign_key = next(iter(column.foreign_keys))
+
+    assert column.nullable is True
+    assert foreign_key.target_fullname == "task_runs.id"
+    assert foreign_key.ondelete == "SET NULL"
+    assert any(
+        index.name == "ix_research_shortlist_runs_generation_task_run_id"
+        and [indexed.name for indexed in index.columns]
+        == ["generation_task_run_id"]
+        for index in table.indexes
+    )
 
 
 def test_research_candidate_outcome_preserves_terminal_result_relationship():

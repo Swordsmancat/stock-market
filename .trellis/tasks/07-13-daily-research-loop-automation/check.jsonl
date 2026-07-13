@@ -1,0 +1,13 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend quality checklist and affected layer audit."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Review model/migration/session correctness and SQLite/PostgreSQL parity."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Review deferred, partial, and unexpected worker failure behavior."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run focused/full tests and preserve non-network diagnostics."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Verify TaskRun results are bounded and secret-safe."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Verify exact-date watermark without changing 95/90/80 thresholds."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Verify immutable generation, lineage, and public API boundaries."}
+{"file":".trellis/spec/backend/research-shortlist-outcome-contract.md","reason":"Verify maturation, benchmark, idempotency, and lineage behavior."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check shared predicates/constants and all registry/config consumers."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace watermark and lineage through DB, services, worker, and TaskRun."}
+{"file":".trellis/tasks/07-13-daily-research-loop-automation/research/backend-orchestration.md","reason":"Cross-check implementation against researched operational risks."}
+{"file":".trellis/tasks/07-13-daily-research-loop-automation/research/frontend-operations.md","reason":"Confirm no unnecessary frontend surface and existing UI compatibility."}
+{"file":".trellis/tasks/07-13-daily-research-loop-automation/research/due-cohort-batching.md","reason":"Review due selection priority, boundedness, and no-op avoidance."}

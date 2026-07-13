@@ -1,0 +1,15 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend layer ownership and pre-development checklist."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Service, worker, model, migration, script, and test placement conventions."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"SQLAlchemy session, model, Alembic, and SQLite test contracts."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Expected domain deferral versus worker fail-and-reraise semantics."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Focused/full backend verification and non-network test boundaries."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"TaskRun observability and secret-safe diagnostic requirements."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Backfill, exact evidence, threshold, and A-share operational contracts."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Immutable generation, idempotency, point-in-time, and safety contracts."}
+{"file":".trellis/spec/backend/research-shortlist-outcome-contract.md","reason":"Completed-bar, horizon, benchmark, concurrency, and lineage contracts."}
+{"file":".trellis/spec/backend/official-disclosure-operations-contract.md","reason":"Existing bounded sequential TaskRun/Celery operations pattern."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Shared completion predicate and registry/config consistency review."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Model-service-worker-TaskRun data-flow verification."}
+{"file":".trellis/tasks/07-13-daily-research-loop-automation/research/backend-orchestration.md","reason":"Repository-backed orchestration, failure, batching, and test research."}
+{"file":".trellis/tasks/07-13-daily-research-loop-automation/research/frontend-operations.md","reason":"Existing TaskRun/AI Research surface reuse and acceptance findings."}
+{"file":".trellis/tasks/07-13-daily-research-loop-automation/research/due-cohort-batching.md","reason":"Due cohort SQL selection and bounded benchmark enrichment research."}

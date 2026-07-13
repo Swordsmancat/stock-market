@@ -5,6 +5,32 @@ from celery.schedules import crontab
 
 from packages.shared.config import settings
 
+
+def _daily_research_loop_schedule() -> dict[str, dict[str, object]]:
+    if not settings.daily_research_loop_enabled:
+        return {}
+    return {
+        "daily-a-share-research-loop": {
+            "task": "research.run_daily_research_loop",
+            "schedule": crontab(
+                hour=settings.daily_research_loop_cron_hour,
+                minute=settings.daily_research_loop_cron_minute,
+                day_of_week="1-5",
+            ),
+            "kwargs": {
+                "market": "CN",
+                "asset_type": "stock",
+                "profile_id": "balanced_research",
+                "shortlist_limit": 10,
+                "locale": "zh",
+                "use_llm": True,
+                "outcome_run_limit": settings.daily_research_loop_outcome_run_limit,
+                "trigger": "scheduled",
+            },
+        }
+    }
+
+
 celery_app = Celery(
     "stock_analysis_worker",
     broker=settings.redis_url,
@@ -101,7 +127,9 @@ if settings.disclosure_monitor_enabled:
         ),
         "kwargs": {},
     }
+
+celery_app.conf.beat_schedule.update(_daily_research_loop_schedule())
 celery_app.autodiscover_tasks(["apps.worker.tasks"], force=True)
 
 # Manually import tasks to ensure they are registered
-from apps.worker.tasks import alerts, indicators, ingestion, reports  # noqa: E402, F401
+from apps.worker.tasks import alerts, indicators, ingestion, reports, research  # noqa: E402, F401

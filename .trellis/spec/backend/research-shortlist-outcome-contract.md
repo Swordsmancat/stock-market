@@ -26,6 +26,10 @@
   `evaluate_research_shortlist_outcomes(run_id, *, session, as_of=None,
   now=None, verified_completed_through=None,
   evaluation_task_run_id=None)`.
+- Bounded due-batch service:
+  `evaluate_due_research_shortlist_outcomes(*, session, market, profile_id,
+  verified_completed_through, evaluation_task_run_id, run_limit=25,
+  now=None, progress=None)`.
 - Tracking service:
   `get_research_shortlist_outcome_tracking(*, session, market="CN",
   profile_id="balanced_research", limit=10, offset=0, as_of=None, now=None)`.
@@ -54,6 +58,9 @@
 - POST freezes either `evaluated` or structured `blocked` candidate fields.
   Repeated calls, concurrent calls, and later `DailyBar` replacement do not
   revise candidate terminal values. A pending benchmark may transition once.
+- Terminal payloads expose the nullable `evaluation_task_run_id` that created
+  the candidate observation. Derived pending horizons expose null. Later
+  benchmark repair preserves the original candidate evaluation lineage.
 - Evaluation reads only local `DailyBar` rows. It must not call providers,
   payload fallback services, or network clients.
 - Adjustment bases are `qfq`, `hfq`, and `raw`; unknown or mixed bases block.
@@ -88,6 +95,7 @@
 | Incomplete forward bars exist | Ignore them for positions and emit structured diagnostic |
 | Canonical benchmark or exact date missing | Candidate result remains evaluated; relative fields null |
 | Same instrument appears in multiple cohorts | Independent candidate-ID windows from each entry date |
+| Due batch limit is outside `1..100` | `ValueError`; no cohort evaluation |
 | Later terminal maturity is after historical `as_of` | Hide terminal row and derive earlier pending progress |
 | Tracking has no committed cohort | HTTP 200 `status="no_data"` with safety and pagination shape |
 
@@ -118,7 +126,10 @@
   candidates sharing an instrument retain independent entry/maturity dates.
 - Persistence: evaluated/blocked constraints, unique horizon identity,
   conflict-ignore concurrency, immutable terminal values, and one-way
-  benchmark completion.
+  benchmark completion with original evaluation TaskRun lineage.
+- Due batching: literal 5/20/60 probes, oldest-first candidate priority,
+  exact-date benchmark repair, inactive candidates, sentinel `has_more`,
+  `1..100` validation, isolated failures, and concurrent reuse.
 - Benchmark: canonical index identity, stock `000300` rejection, exact dates,
   missing/invalid basis, and nullable sample semantics.
 - API/UI: GET remains non-mutating, POST idempotent, tracking pagination/no-data,
