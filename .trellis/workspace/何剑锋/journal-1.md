@@ -1614,3 +1614,36 @@ Completed isolated 5,530-symbol A-share baseline, retry lineage, deterministic d
 ### Next Steps
 
 - None - task complete
+
+
+## Session 49: Official disclosure metadata evidence
+
+**Date**: 2026-07-13
+**Task**: Official disclosure metadata evidence
+**Branch**: `master`
+
+### Summary
+
+Archived the completed dashboard redesign task, created the A-share official disclosure corpus roadmap, and delivered the first CNINFO metadata vertical slice with durable identity, metadata-only AI citations, API endpoints, migration, documentation, executable spec, and offline regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dc2a333` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
