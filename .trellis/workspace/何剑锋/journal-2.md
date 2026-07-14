@@ -38,3 +38,36 @@ Monitored the sole normal-stack incremental backfill, cooperatively cancelled it
 ### Next Steps
 
 - None - task complete
+
+
+## Session 61: Complete DeepSeek live API acceptance
+
+**Date**: 2026-07-14
+**Task**: Complete DeepSeek live API acceptance
+**Branch**: `master`
+
+### Summary
+
+Verified the refreshed DeepSeek configuration through all three secret-safe settings projections, then ran one stock-discovery and one market-assistant live canary without retries. Both used deepseek-chat with no fallback; deterministic shortlist membership, order, and scores stayed unchanged, citations passed validation, sanitized evidence was recorded, and the LLM API configuration task was completed and archived.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `abf7286` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
