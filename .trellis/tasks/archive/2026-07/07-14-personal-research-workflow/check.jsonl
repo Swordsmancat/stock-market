@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Requires colocated behavior tests, synchronized English/Chinese messages, route proxy tests, TypeScript, and full web verification."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Requires focused service/router tests, no real network in automated tests, and explicit mutation boundaries for the one-time cleanup."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Locks the no-secret boundary for the manual LLM test, evidence, errors, and logs."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Checks that navigation taxonomy, pagination payloads, provider testing, and advanced-section patterns reuse existing owners instead of duplicating contracts."}

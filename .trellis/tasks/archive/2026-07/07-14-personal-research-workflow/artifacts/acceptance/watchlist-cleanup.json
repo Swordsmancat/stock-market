@@ -1,0 +1,42 @@
+{
+  "performed_at": "2026-07-14T17:34:29.7239446Z",
+  "runtime": {
+    "app_env": "local",
+    "database_name": "stock"
+  },
+  "operation": "soft_deactivate_exact_watchlist_items",
+  "targets": [
+    {
+      "id": "2f3fe79f-abe5-43d3-a1b1-2f965c5a8ccf",
+      "watchlist_id": "7b458eed-e69b-41ed-b710-5f567046a631",
+      "symbol": "TEST",
+      "market": "US",
+      "name": "Test",
+      "before_active": true,
+      "after_active": false
+    },
+    {
+      "id": "7466eebb-3887-4868-9d61-b3801f209262",
+      "watchlist_id": "7b458eed-e69b-41ed-b710-5f567046a631",
+      "symbol": "CN_SHANGHAI_COMPOSITE",
+      "market": "CN",
+      "name": "\u4e0a\u8bc1\u6307\u6570",
+      "before_active": true,
+      "after_active": false
+    }
+  ],
+  "verification": {
+    "watchlist_count_before": 1,
+    "watchlist_count_after": 1,
+    "item_count_before": 2,
+    "item_count_after": 2,
+    "active_count_before": 2,
+    "active_count_after": 0,
+    "inactive_count_after": 2,
+    "non_target_count_before": 0,
+    "non_target_count_after": 0,
+    "public_item_count_after": 0,
+    "physical_delete_detected": false,
+    "automatic_reseed_detected": false
+  }
+}

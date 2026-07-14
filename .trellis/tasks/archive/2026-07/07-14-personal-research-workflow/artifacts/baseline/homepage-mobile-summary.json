@@ -1,0 +1,86 @@
+{
+  "bottomNavLinks": [
+    {
+      "href": "/zh",
+      "text": "首页概览"
+    },
+    {
+      "href": "/zh/instruments",
+      "text": "行情标的"
+    },
+    {
+      "href": "/zh/ai-research",
+      "text": "AI 研究"
+    },
+    {
+      "href": "/zh/evidence",
+      "text": "宏观研究"
+    },
+    {
+      "href": "/zh/watchlist",
+      "text": "关注列表"
+    },
+    {
+      "href": "/zh/portfolios",
+      "text": "模拟组合"
+    },
+    {
+      "href": "/zh/reports",
+      "text": "报告中心"
+    },
+    {
+      "href": "/zh/alerts",
+      "text": "告警中心"
+    },
+    {
+      "href": "/zh/task-runs",
+      "text": "任务监控"
+    },
+    {
+      "href": "/zh/settings",
+      "text": "设置"
+    },
+    {
+      "href": "/zh",
+      "text": "首页概览"
+    },
+    {
+      "href": "/zh/instruments",
+      "text": "行情标的"
+    },
+    {
+      "href": "/zh/ai-research",
+      "text": "AI 研究"
+    },
+    {
+      "href": "/zh/evidence",
+      "text": "宏观研究"
+    },
+    {
+      "href": "/zh/watchlist",
+      "text": "关注列表"
+    },
+    {
+      "href": "/zh/portfolios",
+      "text": "模拟组合"
+    },
+    {
+      "href": "/zh/reports",
+      "text": "报告中心"
+    },
+    {
+      "href": "/zh/alerts",
+      "text": "告警中心"
+    },
+    {
+      "href": "/zh/task-runs",
+      "text": "任务监控"
+    },
+    {
+      "href": "/zh/settings",
+      "text": "设置"
+    }
+  ],
+  "clientWidth": 390,
+  "scrollWidth": 390
+}

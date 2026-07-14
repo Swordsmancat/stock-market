@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Owns the existing financial terminal components, server/client composition, localization, accessibility, and protected curated-homepage contract."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Requires server-rendered data, URL filter/pagination state, isolated client pending state, and no global store for these workflows."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Owns OpenAI-compatible settings, secret redaction, model identity, deterministic fallback, and cited assistant boundaries used by the manual connection test and retained AI flows."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Instrument pagination and the LLM test cross service, FastAPI, Next proxy/action, component, localization, and browser acceptance boundaries."}

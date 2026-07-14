@@ -1,0 +1,14 @@
+{
+  "executed_at": "2026-07-14T17:57:14.4847763Z",
+  "trigger": "single_manual_browser_click",
+  "request_count": 1,
+  "retry_count": 0,
+  "status": "ok",
+  "code": "connected",
+  "provider": "openai",
+  "model": "deepseek-chat",
+  "latency_ms": 906,
+  "response_content_recorded": false,
+  "credential_recorded": false,
+  "upstream_error_recorded": false
+}

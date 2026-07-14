@@ -1,0 +1,140 @@
+{
+  "executed_at": "2026-07-14T17:58:13.3225812Z",
+  "base_url": "http://localhost:3000/zh",
+  "homepage": {
+    "source_diff": false,
+    "desktop_viewport": "1440x1000",
+    "desktop_horizontal_overflow": false,
+    "main_tag_before": "MAIN",
+    "main_tag_after": "MAIN",
+    "main_child_count_before": 1,
+    "main_child_count_after": 1,
+    "heading_before": "A-share market",
+    "heading_after": "A-share market",
+    "main_link_count_before": 13,
+    "main_link_count_after": 13,
+    "text_length_before": 1502,
+    "text_length_after": 1502,
+    "html_length_before": 63486,
+    "html_length_after": 63485,
+    "dynamic_market_values_changed": true,
+    "content_or_layout_regression_detected": false
+  },
+  "responsive_shell": [
+    {
+      "viewport": "390x844",
+      "horizontal_overflow": false,
+      "visible_primary_navigation_items": 5,
+      "minimum_navigation_target_height": 48,
+      "main_bottom_padding_px": 96
+    },
+    {
+      "viewport": "375x844",
+      "horizontal_overflow": false,
+      "visible_primary_navigation_items": 5
+    },
+    {
+      "viewport": "768x900",
+      "horizontal_overflow": false,
+      "visible_primary_navigation_items": 5,
+      "navigation_mode": "sidebar"
+    },
+    {
+      "viewport": "1440x1000",
+      "horizontal_overflow": false,
+      "visible_primary_navigation_items": 5,
+      "navigation_mode": "sidebar"
+    }
+  ],
+  "routes": [
+    {
+      "path": "/zh/ai-research",
+      "desktop_overflow": false,
+      "mobile_overflow": false,
+      "core_order": [
+        "daily_shortlist",
+        "full_universe_discovery",
+        "cited_assistant",
+        "published_outcomes"
+      ],
+      "universe_maintenance_closed": true,
+      "coverage_backfill_maintenance_closed": true,
+      "console_errors": 0
+    },
+    {
+      "path": "/zh/instruments",
+      "desktop_overflow": false,
+      "mobile_overflow": false,
+      "page_size": 25,
+      "total_items": 5532,
+      "page_2_url_verified": true,
+      "page_2_first_symbol": "000035",
+      "console_errors": 0
+    },
+    {
+      "path": "/zh/instruments/688202",
+      "desktop_overflow": false,
+      "mobile_overflow": false,
+      "core_order": [
+        "cited_assistant",
+        "technical_indicators",
+        "fundamentals",
+        "news"
+      ],
+      "advanced_market_data_closed": true,
+      "console_errors": 0
+    },
+    {
+      "path": "/zh/watchlist",
+      "desktop_overflow": false,
+      "mobile_overflow": false,
+      "empty_state": true,
+      "ai_research_recovery_link": true,
+      "instruments_recovery_link": true,
+      "manual_entry_and_alerts_closed": true,
+      "console_errors": 0
+    },
+    {
+      "path": "/zh/evidence",
+      "desktop_overflow": false,
+      "mobile_overflow": false,
+      "stored_market_evidence_visible_outside_details": true,
+      "official_disclosure_evidence_visible_outside_details": true,
+      "market_refresh_and_import_closed": true,
+      "disclosure_ingestion_closed": true,
+      "source_maintenance_closed": true,
+      "console_errors": 0
+    },
+    {
+      "path": "/zh/settings",
+      "desktop_overflow": false,
+      "mobile_overflow": false,
+      "saved_preset": "deepseek",
+      "visible_save_commands": 1,
+      "built_in_api_base_fields": 0,
+      "built_in_model_fields": 0,
+      "custom_api_base_fields": 1,
+      "custom_model_fields": 1,
+      "advanced_settings_closed": true,
+      "connection_test_button_type": "button",
+      "console_errors": 0
+    }
+  ],
+  "secondary_routes": {
+    "/zh/portfolios": 200,
+    "/zh/reports": 200,
+    "/zh/alerts": 200,
+    "/zh/task-runs": 200
+  },
+  "themes": {
+    "dark_verified": true,
+    "light_verified": true,
+    "light_mobile_horizontal_overflow": false
+  },
+  "screenshots": [
+    "homepage-1440x1000.png",
+    "homepage-390x844.png",
+    "settings-375x844-light.png",
+    "settings-llm-connected-1440x1000.png"
+  ]
+}
