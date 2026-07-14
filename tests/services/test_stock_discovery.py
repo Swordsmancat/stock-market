@@ -92,7 +92,11 @@ def seed_candidate(session, symbol: str) -> None:
 
 
 def _configured_llm_settings() -> dict[str, str]:
-    return {"llm_provider": "openai", "llm_api_key": "configured"}
+    return {
+        "llm_provider": "openai",
+        "llm_api_key": "configured",
+        "llm_model": "  deepseek-chat  ",
+    }
 
 
 def test_stock_discovery_uses_deterministic_shortlist_and_fallback():
@@ -120,12 +124,17 @@ def test_stock_discovery_accepts_valid_llm_explanation(monkeypatch):
             return "`600519` matched the profile. [bars_1d:600519:2026-01-20]"
 
     monkeypatch.setattr(discovery_service, "get_platform_settings", _configured_llm_settings)
-    monkeypatch.setattr(discovery_service, "get_llm_provider", FakeLLM)
+    monkeypatch.setattr(
+        discovery_service,
+        "get_llm_provider",
+        lambda _settings=None: FakeLLM(),
+    )
 
     payload = discover_local_stocks(session=session, locale="en")
 
     assert payload["status"] == "ok"
     assert payload["model"]["used_llm"] is True
+    assert payload["model"]["name"] == "deepseek-chat"
     assert payload["explanation_markdown"].startswith("`600519`")
     assert [item["symbol"] for item in payload["shortlist"]] == ["600519"]
 
@@ -139,7 +148,11 @@ def test_stock_discovery_falls_back_on_llm_provider_failure(monkeypatch):
             raise RuntimeError("provider unavailable")
 
     monkeypatch.setattr(discovery_service, "get_platform_settings", _configured_llm_settings)
-    monkeypatch.setattr(discovery_service, "get_llm_provider", FailingLLM)
+    monkeypatch.setattr(
+        discovery_service,
+        "get_llm_provider",
+        lambda _settings=None: FailingLLM(),
+    )
 
     payload = discover_local_stocks(session=session, locale="en")
 
@@ -173,7 +186,11 @@ def test_stock_discovery_rejects_unknown_llm_citation(monkeypatch):
             return "`600519` is listed. [bars_1d:FAKE:2099-01-01]"
 
     monkeypatch.setattr(discovery_service, "get_platform_settings", _configured_llm_settings)
-    monkeypatch.setattr(discovery_service, "get_llm_provider", HallucinatingLLM)
+    monkeypatch.setattr(
+        discovery_service,
+        "get_llm_provider",
+        lambda _settings=None: HallucinatingLLM(),
+    )
 
     payload = discover_local_stocks(session=session, locale="en")
 
@@ -194,7 +211,11 @@ def test_stock_discovery_rejects_unknown_llm_symbol(monkeypatch):
             return "Compare `600519` with `000001`. [bars_1d:600519:2026-01-20]"
 
     monkeypatch.setattr(discovery_service, "get_platform_settings", _configured_llm_settings)
-    monkeypatch.setattr(discovery_service, "get_llm_provider", HallucinatingLLM)
+    monkeypatch.setattr(
+        discovery_service,
+        "get_llm_provider",
+        lambda _settings=None: HallucinatingLLM(),
+    )
 
     payload = discover_local_stocks(session=session, locale="en")
 

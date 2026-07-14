@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
-from packages.shared.config import settings
+from pydantic import AnyHttpUrl, TypeAdapter
+
+from packages.shared.config import DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL, settings
 from packages.services.news_provider_registry import (
     DEFAULT_NEWS_SEARCH_ENABLED_PROVIDERS,
     DEFAULT_NEWS_SEARCH_MAX_RESULTS,
@@ -18,6 +21,7 @@ from packages.services.news_provider_registry import (
 )
 
 SETTINGS_PATH = Path(__file__).resolve().parents[2] / "data" / "platform_settings.json"
+_HTTP_URL_ADAPTER = TypeAdapter(AnyHttpUrl)
 
 DEFAULT_FAVORITE_MACRO_INDICATOR_CODES = [
     "buffett_indicator_us",
@@ -34,7 +38,8 @@ DEFAULTS: dict[str, Any] = {
     "market_data_provider": settings.market_data_provider,
     "llm_provider": settings.llm_provider,
     "llm_api_key": settings.llm_api_key or "",
-    "llm_api_base": "https://api.openai.com/v1",
+    "llm_api_base": settings.llm_api_base,
+    "llm_model": settings.llm_model,
     "akshare_enabled": False,
     "tushare_token": "",
     "tushare_http_url": "",
@@ -99,6 +104,74 @@ def normalize_favorite_macro_indicator_codes(value: Any) -> list[str]:
     return normalized
 
 
+def is_valid_llm_api_base(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().rstrip("/")
+    if "\\" in normalized or any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127
+        for character in normalized
+    ):
+        return False
+    authority = normalized.partition("://")[2].partition("/")[0]
+    if not authority or "%" in authority:
+        return False
+    try:
+        parsed = urlsplit(normalized)
+        parsed.port
+        _HTTP_URL_ADAPTER.validate_python(normalized)
+    except (TypeError, ValueError):
+        return False
+    return bool(
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname
+        and not parsed.username
+        and not parsed.password
+        and "?" not in normalized
+        and "#" not in normalized
+    )
+
+
+def normalize_llm_api_base(
+    value: Any,
+    *,
+    fallback: Any = DEFAULT_LLM_API_BASE,
+) -> str:
+    normalized = value.strip().rstrip("/") if isinstance(value, str) else ""
+    normalized_fallback = fallback.strip().rstrip("/") if isinstance(fallback, str) else ""
+    if not is_valid_llm_api_base(normalized_fallback):
+        normalized_fallback = DEFAULT_LLM_API_BASE
+    return normalized if is_valid_llm_api_base(normalized) else normalized_fallback
+
+
+def has_invalid_explicit_llm_api_base(value: Any) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, str):
+        return True
+    normalized = value.strip().rstrip("/")
+    return bool(normalized) and not is_valid_llm_api_base(normalized)
+
+
+def normalize_llm_model(
+    value: Any,
+    *,
+    fallback: Any = DEFAULT_LLM_MODEL,
+) -> str:
+    normalized_fallback = fallback.strip() if isinstance(fallback, str) else ""
+    if not normalized_fallback:
+        normalized_fallback = DEFAULT_LLM_MODEL
+    if not isinstance(value, str):
+        return normalized_fallback
+    return value.strip() or normalized_fallback
+
+
+if has_invalid_explicit_llm_api_base(DEFAULTS["llm_api_base"]):
+    DEFAULTS["llm_provider"] = "mock"
+    DEFAULTS["llm_api_key"] = ""
+    DEFAULTS["llm_api_base"] = DEFAULT_LLM_API_BASE
+
+
 def get_platform_settings() -> dict[str, Any]:
     payload = dict(DEFAULTS)
     if SETTINGS_PATH.exists():
@@ -108,11 +181,27 @@ def get_platform_settings() -> dict[str, Any]:
                 payload.update({key: stored[key] for key in DEFAULTS if key in stored})
         except json.JSONDecodeError:
             pass
+    llm_provider = str(payload["llm_provider"]).lower()
+    raw_llm_api_base = payload.get("llm_api_base")
+    invalid_llm_api_base = has_invalid_explicit_llm_api_base(raw_llm_api_base)
+    if invalid_llm_api_base:
+        llm_provider = "mock"
     return {
         "market_data_provider": str(payload["market_data_provider"]).lower(),
-        "llm_provider": str(payload["llm_provider"]).lower(),
-        "llm_api_key": str(payload["llm_api_key"] or ""),
-        "llm_api_base": str(payload["llm_api_base"] or DEFAULTS["llm_api_base"]),
+        "llm_provider": llm_provider,
+        "llm_api_key": (
+            payload["llm_api_key"]
+            if not invalid_llm_api_base and isinstance(payload["llm_api_key"], str)
+            else ""
+        ),
+        "llm_api_base": normalize_llm_api_base(
+            raw_llm_api_base,
+            fallback=DEFAULTS["llm_api_base"],
+        ),
+        "llm_model": normalize_llm_model(
+            payload.get("llm_model"),
+            fallback=DEFAULTS["llm_model"],
+        ),
         "akshare_enabled": bool(payload.get("akshare_enabled", False)),
         "tushare_token": str(payload.get("tushare_token", "") or ""),
         "tushare_http_url": str(payload.get("tushare_http_url", "") or ""),
@@ -151,7 +240,7 @@ def get_platform_settings_public() -> dict[str, Any]:
     }
     return {
         **current,
-        "llm_api_key": api_key,
+        "llm_api_key": "",
         "llm_api_key_configured": bool(api_key.strip()),
         "tushare_token": "",
         "tushare_token_configured": bool(tushare_token.strip()),
@@ -204,6 +293,11 @@ def _is_market_data_provider_configured(
 
 def update_platform_settings(updates: dict[str, Any]) -> dict[str, Any]:
     current = get_platform_settings()
+    previous_llm_api_base = current["llm_api_base"]
+    replacement_llm_key = updates.get("llm_api_key")
+    has_replacement_llm_key = isinstance(replacement_llm_key, str) and bool(
+        replacement_llm_key.strip()
+    )
     for key in DEFAULTS:
         if key not in updates or updates[key] is None:
             continue
@@ -215,6 +309,21 @@ def update_platform_settings(updates: dict[str, Any]) -> dict[str, Any]:
         current[key] = updates[key]
     current["market_data_provider"] = str(current["market_data_provider"]).lower()
     current["llm_provider"] = str(current["llm_provider"]).lower()
+    if has_invalid_explicit_llm_api_base(current.get("llm_api_base")):
+        current["llm_provider"] = "mock"
+        current["llm_api_key"] = ""
+    current["llm_api_base"] = normalize_llm_api_base(
+        current.get("llm_api_base"),
+        fallback=DEFAULTS["llm_api_base"],
+    )
+    if current["llm_api_base"] != previous_llm_api_base and not has_replacement_llm_key:
+        current["llm_api_key"] = ""
+    if not isinstance(current.get("llm_api_key"), str):
+        current["llm_api_key"] = ""
+    current["llm_model"] = normalize_llm_model(
+        current.get("llm_model"),
+        fallback=DEFAULTS["llm_model"],
+    )
     current["akshare_enabled"] = bool(current.get("akshare_enabled", False))
     current["tushare_token"] = str(current.get("tushare_token", "") or "")
     current["tushare_http_url"] = str(current.get("tushare_http_url", "") or "")

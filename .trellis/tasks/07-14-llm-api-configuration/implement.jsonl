@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Owns the OpenAI-compatible generation, model metadata, fallback, citation validation, and no-trading contracts used by all affected AI services."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Defines the no-secret boundary for API keys, errors, TaskRuns, and diagnostics."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Defines the existing Settings terminal-card, localized form, accessibility, and server/client composition patterns."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"The additive configuration field crosses Python settings, Next settings, APIs, form actions, provider construction, and displayed metadata."}

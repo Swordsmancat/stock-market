@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from packages.services.source_ingestion import (
     SourceIngestionExtractionInput,
     extract_source_ingestion_payload,
@@ -51,10 +53,25 @@ def test_source_ingestion_uses_deterministic_fallback_without_llm(monkeypatch):
     assert diagnostic["details"]["reason"] == "OpenAI-compatible LLM provider is not configured."
 
 
-def test_source_ingestion_uses_llm_when_configured(monkeypatch):
+@pytest.mark.parametrize(
+    ("configured_model", "expected_model"),
+    [
+        pytest.param(None, "gpt-4o-mini", id="legacy-setting"),
+        pytest.param("   ", "gpt-4o-mini", id="blank-setting"),
+        pytest.param("  deepseek-chat  ", "deepseek-chat", id="configured-setting"),
+    ],
+)
+def test_source_ingestion_uses_llm_when_configured(
+    monkeypatch,
+    configured_model,
+    expected_model,
+):
+    settings = {"llm_provider": "openai", "llm_api_key": "sk-test"}
+    if configured_model is not None:
+        settings["llm_model"] = configured_model
     monkeypatch.setattr(
         "packages.services.source_ingestion.get_platform_settings",
-        lambda: {"llm_provider": "openai", "llm_api_key": "sk-test"},
+        lambda: settings,
     )
 
     class FakeLLM:
@@ -90,7 +107,10 @@ def test_source_ingestion_uses_llm_when_configured(monkeypatch):
                 }
             )
 
-    monkeypatch.setattr("packages.services.source_ingestion.get_llm_provider", lambda: FakeLLM())
+    monkeypatch.setattr(
+        "packages.services.source_ingestion.get_llm_provider",
+        lambda _settings=None: FakeLLM(),
+    )
 
     payload = extract_source_ingestion_payload(
         SourceIngestionExtractionInput(
@@ -103,7 +123,7 @@ def test_source_ingestion_uses_llm_when_configured(monkeypatch):
     assert payload["status"] == "ok"
     assert payload["model"] == {
         "provider": "openai",
-        "name": "gpt-4o-mini",
+        "name": expected_model,
         "used_llm": True,
         "fallback_reason": None,
     }
@@ -122,7 +142,10 @@ def test_source_ingestion_falls_back_on_invalid_llm_output(monkeypatch):
         def generate(self, prompt: str) -> str:
             return "not json"
 
-    monkeypatch.setattr("packages.services.source_ingestion.get_llm_provider", lambda: FakeLLM())
+    monkeypatch.setattr(
+        "packages.services.source_ingestion.get_llm_provider",
+        lambda _settings=None: FakeLLM(),
+    )
 
     payload = extract_source_ingestion_payload(
         SourceIngestionExtractionInput(

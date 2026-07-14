@@ -26,12 +26,13 @@ afterEach(() => {
   getPlatformSettingsMock.mockReset();
 });
 
-it("renders homepage core index preferences in settings", async () => {
-  getPlatformSettingsMock.mockResolvedValue({
+function buildSettings(overrides: Record<string, unknown> = {}) {
+  return {
     market_data_provider: "yfinance",
     llm_provider: "mock",
     llm_api_key: "",
     llm_api_base: "https://api.openai.com/v1",
+    llm_model: "gpt-4o-mini",
     akshare_enabled: false,
     tushare_token: "",
     tushare_http_url: "",
@@ -96,7 +97,12 @@ it("renders homepage core index preferences in settings", async () => {
         citation_caveat: "stored only",
       },
     ],
-  });
+    ...overrides,
+  };
+}
+
+it("renders homepage core index preferences in settings", async () => {
+  getPlatformSettingsMock.mockResolvedValue(buildSettings());
 
   render(
     await SettingsPage({
@@ -126,4 +132,82 @@ it("renders homepage core index preferences in settings", async () => {
     "anspire\nserpapi_baidu\nmock",
   );
   expect(screen.getByLabelText("Max results")).toHaveValue(10);
+  expect(
+    screen.getByText(
+      "Enter an API key when enabling DeepSeek, OpenAI, or a custom endpoint.",
+    ),
+  ).toBeInTheDocument();
+});
+
+it("renders the DeepSeek preset without exposing the stored API key", async () => {
+  getPlatformSettingsMock.mockResolvedValue(
+    buildSettings({
+      llm_provider: "openai",
+      llm_api_key: "secret-that-must-not-render",
+      llm_api_base: "https://api.deepseek.com/v1",
+      llm_model: "deepseek-chat",
+      llm_api_key_configured: true,
+    }),
+  );
+
+  render(
+    await SettingsPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
+
+  expect(screen.getByLabelText("API preset")).toHaveValue("deepseek");
+  expect(screen.getByLabelText("API Key")).toHaveValue("");
+  expect(
+    screen.getByText(/A key is saved on the server/),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Custom endpoint and model").closest("details"),
+  ).not.toHaveAttribute("open");
+
+  const llmPresetSelect = screen.getByLabelText("API preset");
+  const marketDataSelect = document.querySelector(
+    'select[name="market_data_provider"]',
+  );
+  expect(marketDataSelect).not.toBeNull();
+  expect(
+    llmPresetSelect.compareDocumentPosition(marketDataSelect as Element) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
+it("opens custom fields and localizes stable LLM configuration errors", async () => {
+  getPlatformSettingsMock.mockResolvedValue(buildSettings());
+
+  render(
+    await SettingsPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({
+        saved: "error",
+        llm_error: "invalid_base",
+        llm_preset: "custom",
+      }),
+    }),
+  );
+
+  expect(screen.getByLabelText("API preset")).toHaveValue("custom");
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Enter a valid HTTP or HTTPS API Base URL",
+  );
+  expect(screen.getByLabelText("API Base URL")).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  expect(screen.getByLabelText("API Base URL")).toHaveAttribute(
+    "aria-describedby",
+    "llm_api_base_help llm_api_base_error",
+  );
+  expect(screen.getByLabelText("API Base URL")).toHaveAttribute(
+    "type",
+    "text",
+  );
+  expect(
+    screen.getByText("Custom endpoint and model").closest("details"),
+  ).toHaveAttribute("open");
 });

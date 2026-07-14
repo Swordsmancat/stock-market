@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
-ASSISTANT_MODEL_NAME = "gpt-4o-mini"
 FALLBACK_MODEL_NAME = "market-assistant-deterministic-fallback"
 
 ZH_SAFETY_DISCLAIMER = "以下内容仅用于信息整理和投资者教育，不构成投资建议、收益承诺或买卖指令。"

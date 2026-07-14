@@ -20,7 +20,7 @@ from packages.domain.models import (
     ResearchShortlistRun,
     TaskRun,
 )
-from packages.services import research_shortlists
+from packages.services import research_shortlists, stock_discovery as stock_discovery_service
 from packages.services.research_shortlists import (
     ResearchShortlistGenerateInput,
     ResearchShortlistReadinessError,
@@ -190,14 +190,40 @@ def test_generate_persists_ranked_snapshot_and_reuses_idempotent_run(monkeypatch
         calls["selection"] += 1
         return selection_payload()
 
-    def explanation(**_):
+    real_explanation = research_shortlists.generate_stock_discovery_explanation
+
+    def explanation(**kwargs):
         calls["explanation"] += 1
-        return "### Research shortlist\nDeterministic evidence comparison.", {
-            "provider": "deterministic",
-            "name": "test",
-            "used_llm": False,
-            "fallback_reason": "test",
+        return real_explanation(**kwargs)
+
+    class FakeProvider:
+        def generate(self, _prompt: str) -> str:
+            return (
+                "`000001` has stronger deterministic evidence "
+                "[bars_1d:000001:2026-07-10].\n"
+                "`000002` remains in the fixed cohort "
+                "[bars_1d:000002:2026-07-10]."
+            )
+
+    def configured_provider(settings):
+        assert settings["llm_model"] == "deepseek-chat"
+        return FakeProvider()
+
+    monkeypatch.setattr(
+        stock_discovery_service,
+        "get_platform_settings",
+        lambda: {
+            "llm_provider": "openai",
+            "llm_api_key": "configured",
+            "llm_api_base": "https://api.deepseek.com/v1",
+            "llm_model": "deepseek-chat",
         }
+    )
+    monkeypatch.setattr(
+        stock_discovery_service,
+        "get_llm_provider",
+        configured_provider,
+    )
 
     monkeypatch.setattr(research_shortlists, "get_evidence_coverage", coverage)
     monkeypatch.setattr(research_shortlists, "screen_local_stock_selection", selection)
@@ -233,6 +259,14 @@ def test_generate_persists_ranked_snapshot_and_reuses_idempotent_run(monkeypatch
         "decision_date_aligned_count": 2,
         "returned_count": 2,
     }
+    assert first["run"]["model"] == {
+        "provider": "openai",
+        "name": "deepseek-chat",
+        "used_llm": True,
+        "fallback_reason": None,
+    }
+    stored_run = session.query(ResearchShortlistRun).one()
+    assert stored_run.model_json == first["run"]["model"]
     assert session.query(ResearchShortlistRun).count() == 1
     assert session.query(ResearchShortlistCandidate).count() == 2
     assert {candidate.instrument_id for candidate in session.query(ResearchShortlistCandidate)} == {

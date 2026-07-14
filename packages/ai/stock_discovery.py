@@ -4,7 +4,6 @@ import re
 
 SHORTLIST_CITATION_PATTERN = re.compile(r"\[([A-Za-z0-9_:\-./+]+)\]")
 SHORTLIST_SYMBOL_PATTERN = re.compile(r"`([A-Z0-9.\-]{1,16})`")
-SHORTLIST_MODEL_NAME = "stock-discovery-assistant-v1"
 SHORTLIST_FALLBACK_MODEL_NAME = "deterministic-stock-discovery-v1"
 
 

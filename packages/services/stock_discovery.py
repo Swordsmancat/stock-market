@@ -3,13 +3,12 @@ from sqlalchemy.orm import Session
 from packages.ai.llm_factory import get_llm_provider
 from packages.ai.stock_discovery import (
     SHORTLIST_FALLBACK_MODEL_NAME,
-    SHORTLIST_MODEL_NAME,
     build_deterministic_stock_discovery_explanation,
     build_stock_discovery_prompt,
     unknown_stock_discovery_citations,
     unknown_stock_discovery_symbols,
 )
-from packages.services.platform_settings import get_platform_settings
+from packages.services.platform_settings import get_platform_settings, normalize_llm_model
 from packages.services.stock_selection import screen_local_stock_selection
 from packages.services.stock_selection_profiles import resolve_stock_selection_profile
 
@@ -100,11 +99,12 @@ def generate_stock_discovery_explanation(
     settings = get_platform_settings()
     configured_provider = str(settings.get("llm_provider", "mock")).lower()
     configured_api_key = str(settings.get("llm_api_key", "")).strip()
+    configured_model = normalize_llm_model(settings.get("llm_model"))
     if configured_provider != "openai" or not configured_api_key:
         return fallback, _fallback_model("OpenAI-compatible LLM provider is not configured.")
 
     try:
-        generated = get_llm_provider().generate(
+        generated = get_llm_provider(settings).generate(
             build_stock_discovery_prompt(
                 locale=locale,
                 profile=resolved["profile"],
@@ -154,7 +154,7 @@ def generate_stock_discovery_explanation(
 
     return generated, {
         "provider": "openai",
-        "name": SHORTLIST_MODEL_NAME,
+        "name": configured_model,
         "used_llm": True,
         "fallback_reason": None,
     }

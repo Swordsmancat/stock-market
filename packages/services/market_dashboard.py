@@ -16,7 +16,7 @@ from packages.services.market_data import (
 from packages.services.market_indices import DEFAULT_MARKET_INDICES, MarketIndexDefinition, resolve_provider_symbol
 from packages.services.market_indicators import get_macro_indicator_payloads
 from packages.services.market_daily_evidence import list_citable_market_daily_evidence_citations
-from packages.services.platform_settings import get_platform_settings
+from packages.services.platform_settings import get_platform_settings, normalize_llm_model
 from packages.services.research_follow_up_queue import build_research_follow_up_queue
 from packages.services.research_source_notes import (
     list_citable_research_source_note_citations,
@@ -29,7 +29,6 @@ from packages.shared.cache import cache_market_overview
 FOLLOWED_INSTRUMENT_LIMIT = 6
 DASHBOARD_RANGE_DAYS = 92
 MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000
-DASHBOARD_BRIEF_MODEL_NAME = "gpt-4o-mini"
 DASHBOARD_BRIEF_FALLBACK_MODEL_NAME = "dashboard-brief-deterministic-fallback"
 DASHBOARD_BRIEF_CITATION_ID_PATTERN = re.compile(r"\[([A-Za-z0-9_:\-./+]+)\]")
 DASHBOARD_BRIEF_CITATION_ID_PREFIXES = (
@@ -743,6 +742,7 @@ def _build_dashboard_brief_narrative(
     settings = get_platform_settings()
     configured_provider = str(settings.get("llm_provider", "mock")).lower()
     configured_api_key = str(settings.get("llm_api_key", "")).strip()
+    configured_model = normalize_llm_model(settings.get("llm_model"))
     if configured_provider != "openai" or not configured_api_key:
         return build_fallback("OpenAI-compatible LLM provider is not configured.")
 
@@ -753,7 +753,7 @@ def _build_dashboard_brief_narrative(
             information_sources_payload=information_sources_payload,
             source_mix=source_mix,
         )
-        generated_answer = get_llm_provider().generate(prompt).strip()
+        generated_answer = get_llm_provider(settings).generate(prompt).strip()
     except Exception as error:
         return build_fallback(f"LLM generation failed: {error.__class__.__name__}.")
 
@@ -784,7 +784,7 @@ def _build_dashboard_brief_narrative(
         "answer_markdown": generated_answer,
         "model": _build_dashboard_brief_model_metadata(
             provider="openai",
-            name=DASHBOARD_BRIEF_MODEL_NAME,
+            name=configured_model,
             used_llm=True,
             fallback_reason=None,
         ),

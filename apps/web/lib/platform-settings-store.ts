@@ -1,6 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import {
+  OPENAI_API_BASE,
+  OPENAI_MODEL,
+  isValidLlmApiBase,
+  normalizeLlmApiBase,
+  normalizeLlmModel,
+} from "@/lib/llm-api-presets";
+
 /** Shared with Python backend at repo/data/platform_settings.json */
 
 export type ColorScheme = "china" | "international";
@@ -75,6 +83,7 @@ export type PlatformSettings = {
   llm_provider: string;
   llm_api_key: string;
   llm_api_base: string;
+  llm_model: string;
   akshare_enabled: boolean;
   tushare_token: string;
   tushare_http_url: string;
@@ -132,12 +141,34 @@ type StoredPlatformSettings = Omit<
   | "news_search_provider_capabilities"
 >;
 
+const configuredDefaultLlmApiBase = normalizeLlmApiBase(
+  process.env.LLM_API_BASE ?? "",
+);
+const hasInvalidConfiguredDefaultLlmApiBase = Boolean(
+  configuredDefaultLlmApiBase &&
+    !isValidLlmApiBase(configuredDefaultLlmApiBase),
+);
+const DEFAULT_LLM_API_BASE = isValidLlmApiBase(configuredDefaultLlmApiBase)
+  ? configuredDefaultLlmApiBase
+  : OPENAI_API_BASE;
+const DEFAULT_LLM_MODEL =
+  normalizeLlmModel(process.env.LLM_MODEL) || OPENAI_MODEL;
+const DEFAULT_LLM_PROVIDER =
+  process.env.LLM_PROVIDER?.trim().toLowerCase() === "openai"
+    ? "openai"
+    : "mock";
+
 const DEFAULTS: StoredPlatformSettings = {
   market_data_provider:
     process.env.NEXT_PUBLIC_MARKET_DATA_PROVIDER ?? "yfinance",
-  llm_provider: process.env.LLM_PROVIDER ?? "mock",
-  llm_api_key: process.env.LLM_API_KEY ?? "",
-  llm_api_base: "https://api.openai.com/v1",
+  llm_provider: hasInvalidConfiguredDefaultLlmApiBase
+    ? "mock"
+    : DEFAULT_LLM_PROVIDER,
+  llm_api_key: hasInvalidConfiguredDefaultLlmApiBase
+    ? ""
+    : (process.env.LLM_API_KEY ?? ""),
+  llm_api_base: DEFAULT_LLM_API_BASE,
+  llm_model: DEFAULT_LLM_MODEL,
   akshare_enabled: false,
   tushare_token: "",
   tushare_http_url: "",
@@ -340,10 +371,13 @@ function settingsPath(): string {
   return join(process.cwd(), "..", "..", "data", "platform_settings.json");
 }
 
-async function readSettingsFile(): Promise<Partial<StoredPlatformSettings>> {
+async function readSettingsFile(): Promise<Record<string, unknown>> {
   try {
     const raw = await readFile(settingsPath(), "utf-8");
-    return JSON.parse(raw) as Partial<StoredPlatformSettings>;
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
   } catch {
     return {};
   }
@@ -490,17 +524,57 @@ function normalizeBoundedNumber(
 }
 
 function buildStoredPlatformSettings(
-  stored: Partial<StoredPlatformSettings>,
+  stored: Record<string, unknown>,
 ): StoredPlatformSettings {
+  const storedLlmApiBase =
+    typeof stored.llm_api_base === "string"
+      ? normalizeLlmApiBase(stored.llm_api_base)
+      : "";
+  const hasExplicitStoredLlmApiBase =
+    stored.llm_api_base !== undefined && stored.llm_api_base !== null;
+  const hasInvalidStoredLlmApiBase = Boolean(
+    hasExplicitStoredLlmApiBase &&
+      (typeof stored.llm_api_base !== "string" ||
+        (storedLlmApiBase && !isValidLlmApiBase(storedLlmApiBase))),
+  );
+  const llmApiBase = isValidLlmApiBase(storedLlmApiBase)
+    ? storedLlmApiBase
+    : DEFAULTS.llm_api_base;
+  const storedLlmProvider =
+    typeof stored.llm_provider === "string"
+      ? stored.llm_provider.trim().toLowerCase()
+      : DEFAULTS.llm_provider;
+  const storedLlmApiKey =
+    typeof stored.llm_api_key === "string"
+      ? stored.llm_api_key
+      : DEFAULTS.llm_api_key;
   return {
     market_data_provider:
-      stored.market_data_provider ?? DEFAULTS.market_data_provider,
-    llm_provider: stored.llm_provider ?? DEFAULTS.llm_provider,
-    llm_api_key: stored.llm_api_key ?? DEFAULTS.llm_api_key,
-    llm_api_base: stored.llm_api_base ?? DEFAULTS.llm_api_base,
-    akshare_enabled: stored.akshare_enabled ?? DEFAULTS.akshare_enabled,
-    tushare_token: stored.tushare_token ?? DEFAULTS.tushare_token,
-    tushare_http_url: stored.tushare_http_url ?? DEFAULTS.tushare_http_url,
+      typeof stored.market_data_provider === "string"
+        ? stored.market_data_provider
+        : DEFAULTS.market_data_provider,
+    llm_provider:
+      hasInvalidStoredLlmApiBase || storedLlmProvider !== "openai"
+        ? "mock"
+        : "openai",
+    llm_api_key: hasInvalidStoredLlmApiBase ? "" : storedLlmApiKey,
+    llm_api_base: llmApiBase,
+    llm_model:
+      (typeof stored.llm_model === "string"
+        ? normalizeLlmModel(stored.llm_model)
+        : "") || DEFAULTS.llm_model,
+    akshare_enabled:
+      typeof stored.akshare_enabled === "boolean"
+        ? stored.akshare_enabled
+        : DEFAULTS.akshare_enabled,
+    tushare_token:
+      typeof stored.tushare_token === "string"
+        ? stored.tushare_token
+        : DEFAULTS.tushare_token,
+    tushare_http_url:
+      typeof stored.tushare_http_url === "string"
+        ? stored.tushare_http_url
+        : DEFAULTS.tushare_http_url,
     color_scheme: normalizeColorScheme(
       stored.color_scheme ?? DEFAULTS.color_scheme,
     ),
@@ -631,6 +705,7 @@ function toPublicPlatformSettings(
 ): PlatformSettings {
   return {
     ...settings,
+    llm_api_key: "",
     tushare_token: "",
     news_search_provider_keys: {},
     llm_api_key_configured: Boolean(settings.llm_api_key.trim()),
@@ -653,7 +728,7 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
   return toPublicPlatformSettings(await getStoredPlatformSettings());
 }
 
-type PlatformSettingsUpdate = Partial<
+export type PlatformSettingsUpdate = Partial<
   Omit<
     StoredPlatformSettings,
     | "favorite_macro_indicator_codes"
@@ -676,19 +751,133 @@ type PlatformSettingsUpdate = Partial<
   news_search_timeout_seconds?: unknown;
 };
 
+export function isPlatformSettingsUpdatePayload(
+  value: unknown,
+): value is PlatformSettingsUpdate {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export class PlatformSettingsValidationError extends Error {
+  constructor(
+    readonly code:
+      | "invalid_provider"
+      | "invalid_base"
+      | "invalid_model"
+      | "invalid_key",
+    readonly field:
+      | "llm_provider"
+      | "llm_api_base"
+      | "llm_model"
+      | "llm_api_key",
+    message: string,
+  ) {
+    super(message);
+    this.name = "PlatformSettingsValidationError";
+  }
+}
+
+function normalizeLlmProviderUpdate(value: unknown): "mock" | "openai" {
+  if (typeof value !== "string") {
+    throw new PlatformSettingsValidationError(
+      "invalid_provider",
+      "llm_provider",
+      "llm_provider must be 'mock' or 'openai'",
+    );
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized !== "mock" && normalized !== "openai") {
+    throw new PlatformSettingsValidationError(
+      "invalid_provider",
+      "llm_provider",
+      "llm_provider must be 'mock' or 'openai'",
+    );
+  }
+  return normalized;
+}
+
+function normalizeLlmApiBaseUpdate(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new PlatformSettingsValidationError(
+      "invalid_base",
+      "llm_api_base",
+      "llm_api_base must be an absolute HTTP(S) URL without credentials, query, or fragment",
+    );
+  }
+  const normalized = normalizeLlmApiBase(value);
+  if (!isValidLlmApiBase(normalized)) {
+    throw new PlatformSettingsValidationError(
+      "invalid_base",
+      "llm_api_base",
+      "llm_api_base must be an absolute HTTP(S) URL without credentials, query, or fragment",
+    );
+  }
+  return normalized;
+}
+
+function normalizeLlmModelUpdate(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new PlatformSettingsValidationError(
+      "invalid_model",
+      "llm_model",
+      "llm_model must contain 1 to 128 characters",
+    );
+  }
+  const normalized = normalizeLlmModel(value);
+  if (!normalized || normalized.length > 128) {
+    throw new PlatformSettingsValidationError(
+      "invalid_model",
+      "llm_model",
+      "llm_model must contain 1 to 128 characters",
+    );
+  }
+  return normalized;
+}
+
+function resolveLlmApiKeyUpdate(value: unknown, current: string): string {
+  if (value === undefined || value === null) {
+    return current;
+  }
+  if (typeof value !== "string") {
+    throw new PlatformSettingsValidationError(
+      "invalid_key",
+      "llm_api_key",
+      "llm_api_key must be a string",
+    );
+  }
+  return value.trim() ? value : current;
+}
+
 export async function savePlatformSettings(
   updates: PlatformSettingsUpdate,
 ): Promise<PlatformSettings> {
   const current = await getStoredPlatformSettings();
+  const nextLlmApiBase =
+    updates.llm_api_base === undefined
+      ? current.llm_api_base
+      : normalizeLlmApiBaseUpdate(updates.llm_api_base);
+  const resolvedLlmApiKey = resolveLlmApiKeyUpdate(
+    updates.llm_api_key,
+    current.llm_api_key,
+  );
+  const hasReplacementLlmApiKey =
+    typeof updates.llm_api_key === "string" &&
+    Boolean(updates.llm_api_key.trim());
   const next: StoredPlatformSettings = {
     market_data_provider:
       updates.market_data_provider ?? current.market_data_provider,
-    llm_provider: updates.llm_provider ?? current.llm_provider,
+    llm_provider:
+      updates.llm_provider === undefined
+        ? current.llm_provider
+        : normalizeLlmProviderUpdate(updates.llm_provider),
     llm_api_key:
-      updates.llm_api_key !== undefined && updates.llm_api_key.trim()
-        ? updates.llm_api_key
-        : current.llm_api_key,
-    llm_api_base: updates.llm_api_base ?? current.llm_api_base,
+      nextLlmApiBase !== current.llm_api_base && !hasReplacementLlmApiKey
+        ? ""
+        : resolvedLlmApiKey,
+    llm_api_base: nextLlmApiBase,
+    llm_model:
+      updates.llm_model === undefined
+        ? current.llm_model
+        : normalizeLlmModelUpdate(updates.llm_model),
     akshare_enabled: updates.akshare_enabled ?? current.akshare_enabled,
     tushare_token:
       updates.tushare_token !== undefined && updates.tushare_token.trim()

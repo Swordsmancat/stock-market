@@ -13,6 +13,12 @@ import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  inferLlmApiPreset,
+  normalizeLlmApiPresetId,
+  type LlmApiPresetId,
+  type LlmConfigErrorCode,
+} from "@/lib/llm-api-presets";
+import {
   DEFAULT_FAVORITE_HOME_INDEX_CODES,
   DEFAULT_HOME_INDEX_DISPLAY_FIELDS,
   HOME_INDEX_DISPLAY_FIELD_VALUES,
@@ -26,10 +32,18 @@ export default async function SettingsPage({
   searchParams = Promise.resolve({}),
 }: {
   params: Promise<{ locale: string }>;
-  searchParams?: Promise<{ saved?: string }>;
+  searchParams?: Promise<{
+    saved?: string;
+    llm_error?: string;
+    llm_preset?: string;
+  }>;
 }) {
   const { locale } = await params;
-  const { saved } = await searchParams;
+  const {
+    saved,
+    llm_error: llmError,
+    llm_preset: requestedLlmPreset,
+  } = await searchParams;
   const settings = await getPlatformSettings();
   const t = await getTranslations("Settings");
   const displayColorScheme =
@@ -72,6 +86,28 @@ export default async function SettingsPage({
   const newsEnabledCount = settings.news_search_provider_capabilities.filter(
     (capability) => capability.enabled,
   ).length;
+  const persistedLlmPreset = inferLlmApiPreset(settings);
+  const llmPreset =
+    llmError && requestedLlmPreset
+      ? normalizeLlmApiPresetId(requestedLlmPreset)
+      : persistedLlmPreset;
+  const llmPresetLabels: Record<LlmApiPresetId, string> = {
+    disabled: t("llmPresetDisabled"),
+    deepseek: t("llmPresetDeepSeek"),
+    openai: t("llmPresetOpenAI"),
+    custom: t("llmPresetCustom"),
+  };
+  const llmErrorMessages: Record<LlmConfigErrorCode, string> = {
+    invalid_base: t("llmErrorInvalidBase"),
+    missing_model: t("llmErrorMissingModel"),
+    missing_key: t("llmErrorMissingKey"),
+  };
+  const llmErrorMessage = Object.hasOwn(llmErrorMessages, llmError ?? "")
+    ? llmErrorMessages[llmError as LlmConfigErrorCode]
+    : null;
+  const llmApiKeyHelp = settings.llm_api_key_configured
+    ? t("llmApiKeyConfigured")
+    : t("llmApiKeyRequired");
 
   return (
     <div className="space-y-6">
@@ -112,10 +148,13 @@ export default async function SettingsPage({
             },
             {
               label: t("llmProvider"),
-              value: settings.llm_provider,
-              description: settings.llm_api_key_configured
-                ? t("providerConfigured")
-                : t("providerNeedsSetup"),
+              value: llmPresetLabels[llmPreset],
+              description:
+                llmPreset === "disabled"
+                  ? t("llmDisabledStatus")
+                  : settings.llm_api_key_configured
+                    ? t("providerConfigured")
+                    : t("providerNeedsSetup"),
             },
             {
               label: t("newsSourcesTitle"),
@@ -141,6 +180,173 @@ export default async function SettingsPage({
         />
 
         <div className="grid gap-4 xl:grid-cols-2">
+          <FinancialTerminalCard className="xl:col-span-2">
+            <FinancialTerminalCardHeader>
+              <CardTitle>{t("llmTitle")}</CardTitle>
+              <CardDescription>{t("llmDesc")}</CardDescription>
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-2">
+                  <label
+                    className="text-sm font-medium"
+                    htmlFor="llm_api_preset"
+                  >
+                    {t("llmPreset")}
+                  </label>
+                  <select
+                    id="llm_api_preset"
+                    name="llm_api_preset"
+                    defaultValue={llmPreset}
+                    aria-describedby="llm_api_preset_help"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="disabled">
+                      {llmPresetLabels.disabled}
+                    </option>
+                    <option value="deepseek">
+                      {llmPresetLabels.deepseek}
+                    </option>
+                    <option value="openai">{llmPresetLabels.openai}</option>
+                    <option value="custom">{llmPresetLabels.custom}</option>
+                  </select>
+                  <p
+                    id="llm_api_preset_help"
+                    className="text-xs text-muted-foreground"
+                  >
+                    {t("llmPresetHint")}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="llm_api_key">
+                    {t("llmApiKey")}
+                  </label>
+                  <Input
+                    id="llm_api_key"
+                    name="llm_api_key"
+                    type="password"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    aria-describedby={
+                      llmError === "missing_key"
+                        ? "llm_api_key_help llm_api_key_error"
+                        : "llm_api_key_help"
+                    }
+                    aria-invalid={
+                      llmError === "missing_key" ? true : undefined
+                    }
+                    autoFocus={llmError === "missing_key"}
+                    placeholder={t("llmApiKeyPlaceholder")}
+                  />
+                  <p
+                    id="llm_api_key_help"
+                    className="text-xs text-muted-foreground"
+                  >
+                    {llmApiKeyHelp}
+                  </p>
+                  {llmError === "missing_key" && llmErrorMessage ? (
+                    <p
+                      id="llm_api_key_error"
+                      role="alert"
+                      className="text-xs text-destructive"
+                    >
+                      {llmErrorMessage}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <details
+                open={llmPreset === "custom"}
+                className="rounded-md border border-dashed border-border/80 bg-background/50 p-3"
+              >
+                <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                  {t("llmAdvancedSummary")}
+                </summary>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium"
+                      htmlFor="llm_api_base"
+                    >
+                      {t("llmApiBase")}
+                    </label>
+                    <Input
+                      id="llm_api_base"
+                      name="llm_api_base"
+                      type="text"
+                      inputMode="url"
+                      defaultValue={settings.llm_api_base}
+                      aria-describedby={
+                        llmError === "invalid_base"
+                          ? "llm_api_base_help llm_api_base_error"
+                          : "llm_api_base_help"
+                      }
+                      aria-invalid={
+                        llmError === "invalid_base" ? true : undefined
+                      }
+                      autoFocus={llmError === "invalid_base"}
+                      placeholder="https://api.example.com/v1"
+                    />
+                    <p
+                      id="llm_api_base_help"
+                      className="text-xs text-muted-foreground"
+                    >
+                      {t("llmApiBaseHint")}
+                    </p>
+                    {llmError === "invalid_base" && llmErrorMessage ? (
+                      <p
+                        id="llm_api_base_error"
+                        role="alert"
+                        className="text-xs text-destructive"
+                      >
+                        {llmErrorMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="llm_model">
+                      {t("llmModel")}
+                    </label>
+                    <Input
+                      id="llm_model"
+                      name="llm_model"
+                      defaultValue={settings.llm_model}
+                      maxLength={128}
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-describedby={
+                        llmError === "missing_model"
+                          ? "llm_model_help llm_model_error"
+                          : "llm_model_help"
+                      }
+                      aria-invalid={
+                        llmError === "missing_model" ? true : undefined
+                      }
+                      autoFocus={llmError === "missing_model"}
+                      placeholder="model-name"
+                    />
+                    <p
+                      id="llm_model_help"
+                      className="text-xs text-muted-foreground"
+                    >
+                      {t("llmModelHint")}
+                    </p>
+                    {llmError === "missing_model" && llmErrorMessage ? (
+                      <p
+                        id="llm_model_error"
+                        role="alert"
+                        className="text-xs text-destructive"
+                      >
+                        {llmErrorMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </details>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
+
           <FinancialTerminalCard>
             <FinancialTerminalCardHeader>
               <CardTitle>{t("dataProviderTitle")}</CardTitle>
@@ -442,56 +648,6 @@ export default async function SettingsPage({
                 <p className="text-xs text-muted-foreground">
                   {t("newsSourcesQuotaHint")}
                 </p>
-              </div>
-            </FinancialTerminalCardContent>
-          </FinancialTerminalCard>
-
-          <FinancialTerminalCard>
-            <FinancialTerminalCardHeader>
-              <CardTitle>{t("llmTitle")}</CardTitle>
-              <CardDescription>{t("llmDesc")}</CardDescription>
-            </FinancialTerminalCardHeader>
-            <FinancialTerminalCardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="llm_provider">
-                  {t("llmProvider")}
-                </label>
-                <select
-                  id="llm_provider"
-                  name="llm_provider"
-                  defaultValue={settings.llm_provider}
-                  className="flex h-10 w-full max-w-sm rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="mock">mock</option>
-                  <option value="openai">openai</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="llm_api_base">
-                  {t("llmApiBase")}
-                </label>
-                <Input
-                  id="llm_api_base"
-                  name="llm_api_base"
-                  defaultValue={settings.llm_api_base}
-                  placeholder="https://api.openai.com/v1"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="llm_api_key">
-                  {t("llmApiKey")}
-                </label>
-                <Input
-                  id="llm_api_key"
-                  name="llm_api_key"
-                  type="password"
-                  defaultValue={settings.llm_api_key}
-                  placeholder={
-                    settings.llm_api_key_configured
-                      ? t("llmApiKeyConfigured")
-                      : t("llmApiKeyPlaceholder")
-                  }
-                />
               </div>
             </FinancialTerminalCardContent>
           </FinancialTerminalCard>

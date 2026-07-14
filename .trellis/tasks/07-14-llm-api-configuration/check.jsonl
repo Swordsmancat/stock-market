@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Requires focused API/service/provider tests and non-live network behavior for the default suite."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Requires synchronized localization, interaction/page/route tests, TypeScript, and full web verification."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Locks deterministic shortlist membership/ranking, citation validation, fallback behavior, and 95/90/80 readiness thresholds."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Checks that preset/default constants and payload normalization are not duplicated within each language layer."}

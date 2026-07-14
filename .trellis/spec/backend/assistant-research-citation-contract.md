@@ -1,5 +1,107 @@
 # Assistant Research Citation Contract
 
+## Scenario: OpenAI-Compatible Model Configuration
+
+### 1. Scope / Trigger
+
+- Trigger: a personal installation configures the existing LLM integration
+  from Settings or `PUT /settings/platform`.
+- Scope: Python and Next platform-settings readers/writers, the Settings form
+  and Server Action, FastAPI/Next settings responses, `llm_factory`, the
+  OpenAI-compatible HTTP provider, and model metadata returned by existing AI
+  research services.
+- Non-goals: provider discovery/registry, multiple profiles or keys, streaming,
+  quota/cost reporting, a paid connection-test endpoint, secret-manager
+  infrastructure, prompt/ranking changes, or new AI workflows.
+
+### 2. Signatures
+
+- Private settings: `llm_provider`, `llm_api_key`, `llm_api_base`, `llm_model`.
+- Public settings: the same additive shape, except `llm_api_key` is always an
+  empty string and `llm_api_key_configured` reports whether a private key is
+  present.
+- Supported execution providers: `mock` and `openai`; `openai` means any
+  compatible chat-completions endpoint.
+- UI presets:
+  - DeepSeek -> `openai`, `https://api.deepseek.com/v1`, `deepseek-chat`
+  - OpenAI -> `openai`, `https://api.openai.com/v1`, `gpt-4o-mini`
+  - custom -> `openai` plus validated user base/model
+  - disabled -> `mock`
+
+### 3. Contracts
+
+- `llm_model` is additive. Legacy settings that omit it use
+  `gpt-4o-mini`; no database migration is required.
+- Python and Next writers share `data/platform_settings.json` and must both
+  preserve `llm_model` during partial or full settings saves.
+- A blank key update preserves the existing private key. Public APIs and page
+  HTML never return or prefill the stored key.
+- A missing or blank legacy base/model uses the validated environment default.
+  A non-empty invalid stored or environment base fails closed to `mock`; it
+  must never reroute the existing key to the default OpenAI host.
+- Explicit non-string bases also fail closed. Changing a normalized API host
+  without a non-blank replacement key invalidates the old key at the writer
+  boundary; disabling LLM execution alone preserves the existing host/model
+  association.
+- Model and base values are trimmed. Custom bases are absolute HTTP(S) URLs
+  without embedded credentials, query parameters, or fragments; custom models
+  are non-empty.
+- `OpenAICompatibleLLMProvider` sends the configured model to
+  `/chat/completions`; it does not infer a model from the provider label.
+- Successful market assistant, dashboard brief, saved research brief, source
+  ingestion, and stock-discovery metadata report the configured physical model
+  in `model.name`. Existing deterministic fallback names remain stable.
+- DeepSeek is a Settings preset over the existing `openai` compatibility path,
+  not a new persisted provider value.
+- LLM configuration never changes evidence readiness, citation allowlists,
+  shortlist membership/score/rank, or the no-trading boundary.
+
+### 4. Validation & Error Matrix
+
+- Missing provider/model in a legacy file -> normalized defaults.
+- Custom base is empty, relative, not HTTP(S), contains credentials/query/
+  fragment data, or has an invalid port -> localized field error; no settings
+  write and no submitted value is echoed in validation payloads.
+- Non-empty invalid persisted/environment base -> normalize the public base for
+  repair display, disable LLM execution, and mark the associated key as not
+  configured/reusable without making a provider request.
+- Custom model is empty -> localized field error; no settings write.
+- External preset/custom selected with neither a stored nor submitted key ->
+  localized key error; no settings write.
+- Blank key with an existing key -> preserve the private key.
+- Provider request fails, returns empty content, or violates a service citation
+  or symbol contract -> retain that service's sanitized deterministic fallback.
+- Public GET/PUT -> `llm_api_key=""` plus configured boolean; never serialize
+  an authorization header or secret.
+
+### 5. Good/Base/Bad Cases
+
+- Good: the DeepSeek preset sends `deepseek-chat`, returns `used_llm=true`, and
+  reports `model.name=deepseek-chat` without changing a deterministic shortlist.
+- Base: an old OpenAI-compatible config has no model field and continues with
+  `gpt-4o-mini`.
+- Base: LLM mode is disabled and existing deterministic research output remains
+  available.
+- Bad: the Settings page renders a saved key as a password-input value.
+- Bad: the API base points to DeepSeek while the provider silently sends an
+  unrelated hard-coded OpenAI model.
+- Bad: selecting a preset creates a new provider branch or weakens citation,
+  symbol, readiness, or safety validation.
+
+### 6. Tests Required
+
+- Python and Next settings tests cover legacy default, model round-trip, blank
+  key preservation, replacement, and secret-safe public GET/PUT payloads.
+- Provider/factory tests assert normalized base and configured request model
+  without real network access, plus fail-closed behavior for invalid explicit
+  bases.
+- Settings page/action tests cover all presets, custom validation, configured
+  key guidance, blank input, localization, and field-level errors.
+- Existing AI service success tests assert configured physical model metadata;
+  fallback/citation/symbol/rank/safety regressions remain unchanged.
+- Live acceptance compares deterministic and LLM discovery membership/rank and
+  verifies one market-assistant response uses only returned citation IDs.
+
 ## Scenario: Research Evidence and Citation-Enriched Market Assistant
 
 ### 1. Scope / Trigger

@@ -333,11 +333,12 @@ def test_market_overview_brief_uses_llm_when_configured(monkeypatch):
             "llm_provider": "openai",
             "llm_api_key": "test-key",
             "llm_api_base": "https://example.test/v1",
+            "llm_model": "  deepseek-chat  ",
         },
     )
     monkeypatch.setattr(
         "packages.services.market_dashboard.get_llm_provider",
-        lambda: FakeDashboardLLMProvider(),
+        lambda _settings=None: FakeDashboardLLMProvider(),
     )
 
     payload = get_market_overview_payload(
@@ -350,7 +351,7 @@ def test_market_overview_brief_uses_llm_when_configured(monkeypatch):
     assert narrative["answer_markdown"].startswith("### Summary\nGenerated dashboard synthesis")
     assert narrative["model"] == {
         "provider": "openai",
-        "name": "gpt-4o-mini",
+        "name": "deepseek-chat",
         "used_llm": True,
         "fallback_reason": None,
     }
@@ -388,7 +389,7 @@ def test_market_overview_brief_rejects_unknown_llm_citation(monkeypatch):
     )
     monkeypatch.setattr(
         "packages.services.market_dashboard.get_llm_provider",
-        lambda: FakeDashboardLLMProvider(),
+        lambda _settings=None: FakeDashboardLLMProvider(),
     )
 
     payload = get_market_overview_payload(

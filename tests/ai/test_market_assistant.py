@@ -100,6 +100,62 @@ def test_market_assistant_returns_traceable_fallback_answer(monkeypatch):
     assert "不构成投资建议" in payload["answer_markdown"]
 
 
+def test_market_assistant_reports_configured_physical_model(monkeypatch):
+    class FakeProvider:
+        def generate(self, prompt: str) -> str:
+            assert "bars_1d:AAPL:2026-01-03" in prompt
+            return "### Summary\nAAPL rose over the period. [bars_1d:AAPL:2026-01-03]"
+
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "AAPL",
+            "timeframe": "1d",
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "items": [
+                {"timestamp": "2026-01-01", "close": 100.0},
+                {"timestamp": "2026-01-03", "close": 105.0},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {
+            "llm_provider": "openai",
+            "llm_api_key": "configured",
+            "llm_model": "  deepseek-chat  ",
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_llm_provider",
+        lambda _settings=None: FakeProvider(),
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="AAPL",
+        question="What changed recently?",
+        locale="en",
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 3),
+        provider_name="mock",
+        session=None,
+    )
+
+    assert payload["model"] == {
+        "provider": "openai",
+        "name": "deepseek-chat",
+        "used_llm": True,
+        "fallback_reason": None,
+    }
+    assert payload["citations"][0]["id"] == "bars_1d:AAPL:2026-01-03"
+
+
 def test_market_assistant_citation_payload_keeps_old_fields_and_optional_metadata():
     citation = MarketAssistantCitation(
         id="news:AAPL:2026-01-03:abc123",
@@ -610,7 +666,11 @@ def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):
         "get_platform_settings",
         lambda: {"llm_provider": "openai", "llm_api_key": "configured", "llm_api_base": ""},
     )
-    monkeypatch.setattr(market_assistant_service, "get_llm_provider", lambda: HallucinatingProvider())
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_llm_provider",
+        lambda _settings=None: HallucinatingProvider(),
+    )
 
     payload = market_assistant_service.answer_market_assistant_question(
         symbol="AAPL",
@@ -659,7 +719,11 @@ def test_market_assistant_detects_unknown_macro_indicator_llm_citation_ids(monke
         "get_platform_settings",
         lambda: {"llm_provider": "openai", "llm_api_key": "configured", "llm_api_base": ""},
     )
-    monkeypatch.setattr(market_assistant_service, "get_llm_provider", lambda: HallucinatingProvider())
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_llm_provider",
+        lambda _settings=None: HallucinatingProvider(),
+    )
 
     payload = market_assistant_service.answer_market_assistant_question(
         symbol="AAPL",
@@ -703,7 +767,11 @@ def test_market_assistant_returns_no_data_without_llm(monkeypatch):
         "get_platform_settings",
         lambda: {"llm_provider": "openai", "llm_api_key": "configured", "llm_api_base": ""},
     )
-    monkeypatch.setattr(market_assistant_service, "get_llm_provider", lambda: UnexpectedProvider())
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_llm_provider",
+        lambda _settings=None: UnexpectedProvider(),
+    )
 
     payload = market_assistant_service.answer_market_assistant_question(
         symbol="AAPL",
@@ -748,7 +816,11 @@ def test_market_assistant_falls_back_when_llm_generation_fails(monkeypatch):
         "get_platform_settings",
         lambda: {"llm_provider": "openai", "llm_api_key": "configured", "llm_api_base": ""},
     )
-    monkeypatch.setattr(market_assistant_service, "get_llm_provider", lambda: FailingProvider())
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_llm_provider",
+        lambda _settings=None: FailingProvider(),
+    )
 
     payload = market_assistant_service.answer_market_assistant_question(
         symbol="AAPL",

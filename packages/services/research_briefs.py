@@ -9,10 +9,9 @@ from sqlalchemy.orm import Session
 from packages.ai.llm_factory import get_llm_provider
 from packages.domain.models import ResearchBrief
 from packages.services.market_dashboard import get_market_overview_payload
-from packages.services.platform_settings import get_platform_settings
+from packages.services.platform_settings import get_platform_settings, normalize_llm_model
 
 
-RESEARCH_BRIEF_MODEL_NAME = "gpt-4o-mini"
 RESEARCH_BRIEF_FALLBACK_MODEL_NAME = "research-brief-deterministic-fallback"
 RESEARCH_BRIEF_CITATION_ID_PATTERN = re.compile(r"\[([A-Za-z0-9_:\-./+]+)\]")
 RESEARCH_BRIEF_CITATION_ID_PREFIXES = (
@@ -195,11 +194,12 @@ def _generate_research_brief_content(context: dict[str, object]) -> dict[str, ob
     settings = get_platform_settings()
     configured_provider = str(settings.get("llm_provider", "mock")).lower()
     configured_api_key = str(settings.get("llm_api_key", "")).strip()
+    configured_model = normalize_llm_model(settings.get("llm_model"))
     if configured_provider != "openai" or not configured_api_key:
         return fallback("OpenAI-compatible LLM provider is not configured.")
 
     try:
-        answer = get_llm_provider().generate(_build_llm_prompt(context)).strip()
+        answer = get_llm_provider(settings).generate(_build_llm_prompt(context)).strip()
     except Exception as error:
         return fallback(f"LLM generation failed: {error.__class__.__name__}.")
 
@@ -227,7 +227,7 @@ def _generate_research_brief_content(context: dict[str, object]) -> dict[str, ob
         "diagnostics": _dict_list(context.get("diagnostics")),
         "model": _model_payload(
             provider="openai",
-            name=RESEARCH_BRIEF_MODEL_NAME,
+            name=configured_model,
             used_llm=True,
             fallback_reason=None,
         ),

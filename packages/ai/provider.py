@@ -2,6 +2,8 @@ from typing import Protocol
 
 import httpx
 
+from packages.shared.config import DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL
+
 
 class LLMProvider(Protocol):
     def generate(self, prompt: str) -> str:
@@ -14,9 +16,15 @@ class MockLLMProvider:
 
 
 class OpenAICompatibleLLMProvider:
-    def __init__(self, api_key: str, api_base: str = "https://api.openai.com/v1") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        api_base: str = DEFAULT_LLM_API_BASE,
+        model: str = DEFAULT_LLM_MODEL,
+    ) -> None:
         self.api_key = api_key.strip()
-        self.api_base = api_base.rstrip("/")
+        self.api_base = (api_base.strip() or DEFAULT_LLM_API_BASE).rstrip("/")
+        self.model = model.strip() or DEFAULT_LLM_MODEL
 
     def generate(self, prompt: str) -> str:
         if not self.api_key:
@@ -30,7 +38,7 @@ class OpenAICompatibleLLMProvider:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "gpt-4o-mini",
+                "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2,
             },

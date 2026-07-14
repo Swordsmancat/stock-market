@@ -123,7 +123,12 @@ def test_generate_research_brief_stores_valid_llm_answer(monkeypatch):
     monkeypatch.setattr(
         research_briefs,
         "get_platform_settings",
-        lambda: {"llm_provider": "openai", "llm_api_key": "test-key", "llm_api_base": "http://llm.test"},
+        lambda: {
+            "llm_provider": "openai",
+            "llm_api_key": "test-key",
+            "llm_api_base": "http://llm.test",
+            "llm_model": "  deepseek-chat  ",
+        },
     )
 
     class FakeProvider:
@@ -136,7 +141,11 @@ def test_generate_research_brief_stores_valid_llm_answer(monkeypatch):
                 "- Research only."
             )
 
-    monkeypatch.setattr(research_briefs, "get_llm_provider", lambda: FakeProvider())
+    monkeypatch.setattr(
+        research_briefs,
+        "get_llm_provider",
+        lambda _settings=None: FakeProvider(),
+    )
 
     payload = generate_and_store_research_brief(
         ResearchBriefGenerateInput(provider_name="mock", locale="en", title="Weekly macro note"),
@@ -146,6 +155,7 @@ def test_generate_research_brief_stores_valid_llm_answer(monkeypatch):
     assert payload["title"] == "Weekly macro note"
     assert payload["model"]["used_llm"] is True
     assert payload["model"]["provider"] == "openai"
+    assert payload["model"]["name"] == "deepseek-chat"
     assert "Buffett context is available" in payload["content_markdown"]
 
 
@@ -162,7 +172,11 @@ def test_generate_research_brief_falls_back_on_unknown_llm_citation(monkeypatch)
         def generate(self, prompt: str) -> str:
             return "Invented evidence [market_daily_event:hot_sector:not-present:2026-07-01]."
 
-    monkeypatch.setattr(research_briefs, "get_llm_provider", lambda: FakeProvider())
+    monkeypatch.setattr(
+        research_briefs,
+        "get_llm_provider",
+        lambda _settings=None: FakeProvider(),
+    )
 
     payload = generate_and_store_research_brief(
         ResearchBriefGenerateInput(provider_name="mock", locale="en"),

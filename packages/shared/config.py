@@ -1,12 +1,18 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+DEFAULT_LLM_API_BASE = "https://api.openai.com/v1"
+DEFAULT_LLM_MODEL = "gpt-4o-mini"
+
+
 class Settings(BaseSettings):
     app_env: str = "local"
     database_url: str = "postgresql+psycopg://stock:stock@localhost:5432/stock"
     redis_url: str = "redis://localhost:6379/0"
     llm_provider: str = "mock"
     llm_api_key: str | None = None
+    llm_api_base: str = DEFAULT_LLM_API_BASE
+    llm_model: str = DEFAULT_LLM_MODEL
     daily_report_watchlist: str = "AAPL:US"
     daily_report_symbol: str = "AAPL"
     daily_report_market: str = "US"

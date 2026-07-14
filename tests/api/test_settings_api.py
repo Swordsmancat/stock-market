@@ -1,6 +1,19 @@
+import json
+
+import pytest
 from fastapi.testclient import TestClient
 
 from apps.api.main import app
+import packages.services.platform_settings as platform_settings_service
+from packages.shared.config import DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL
+
+
+def test_normalize_llm_model_uses_legacy_default():
+    assert platform_settings_service.normalize_llm_model(None) == DEFAULT_LLM_MODEL
+    assert platform_settings_service.normalize_llm_model(False) == DEFAULT_LLM_MODEL
+    assert platform_settings_service.normalize_llm_model({}) == DEFAULT_LLM_MODEL
+    assert platform_settings_service.normalize_llm_model("   ") == DEFAULT_LLM_MODEL
+    assert platform_settings_service.normalize_llm_model("  deepseek-chat  ") == "deepseek-chat"
 
 
 def test_platform_settings_round_trip(tmp_path, monkeypatch):
@@ -14,6 +27,7 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
     initial = client.get("/settings/platform")
     assert initial.status_code == 200
     assert initial.json()["market_data_provider"] == "yfinance"
+    assert initial.json()["llm_model"] == DEFAULT_LLM_MODEL
     assert initial.json()["news_search_enabled_providers"] == ["anspire", "serpapi_baidu"]
     assert initial.json()["news_search_provider_keys"] == {}
     assert initial.json()["favorite_macro_indicator_codes"][:2] == [
@@ -48,6 +62,7 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
     assert payload["market_data_provider"] == "mock"
     assert payload["llm_provider"] == "openai"
     assert payload["llm_api_base"] == "https://example.com/v1"
+    assert payload["llm_model"] == DEFAULT_LLM_MODEL
     assert payload["news_search_provider_order"][:2] == ["serpapi_baidu", "anspire"]
     assert payload["news_search_enabled_providers"] == ["serpapi_baidu"]
     assert payload["news_search_provider_keys"] == {}
@@ -63,6 +78,259 @@ def test_platform_settings_round_trip(tmp_path, monkeypatch):
         "buffett_indicator_cn",
         "us_10y_yield",
     ]
+
+
+def test_platform_settings_llm_config_is_normalized_redacted_and_preserved(
+    tmp_path,
+    monkeypatch,
+):
+    settings_file = tmp_path / "platform_settings.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "llm_provider": "openai",
+                "llm_api_key": "legacy-secret",
+                "llm_api_base": "https://user:base-secret@llm.example.com/v1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+    monkeypatch.setitem(platform_settings_service.DEFAULTS, "llm_model", DEFAULT_LLM_MODEL)
+
+    client = TestClient(app)
+    legacy = client.get("/settings/platform")
+    assert legacy.status_code == 200
+    assert legacy.json()["llm_model"] == DEFAULT_LLM_MODEL
+    assert legacy.json()["llm_api_base"] == DEFAULT_LLM_API_BASE
+    assert legacy.json()["llm_provider"] == "mock"
+    assert legacy.json()["llm_api_key"] == ""
+    assert legacy.json()["llm_api_key_configured"] is False
+    assert "legacy-secret" not in str(legacy.json())
+
+    updated = client.put(
+        "/settings/platform",
+        json={
+            "llm_api_key": "deepseek-secret",
+            "llm_api_base": "  https://api.deepseek.com/v1/  ",
+            "llm_model": "  deepseek-chat  ",
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["llm_api_base"] == "https://api.deepseek.com/v1"
+    assert updated.json()["llm_model"] == "deepseek-chat"
+    assert updated.json()["llm_api_key"] == ""
+    assert updated.json()["llm_api_key_configured"] is True
+    assert "deepseek-secret" not in str(updated.json())
+
+    preserved = client.put(
+        "/settings/platform",
+        json={"llm_api_key": "   "},
+    )
+    assert preserved.status_code == 200
+    stored = json.loads(settings_file.read_text(encoding="utf-8"))
+    assert stored["llm_api_key"] == "deepseek-secret"
+    assert stored["llm_api_base"] == "https://api.deepseek.com/v1"
+    assert stored["llm_model"] == "deepseek-chat"
+
+    switched_without_key = client.put(
+        "/settings/platform",
+        json={
+            "llm_provider": "openai",
+            "llm_api_key": " ",
+            "llm_api_base": "https://api.openai.com/v1",
+            "llm_model": DEFAULT_LLM_MODEL,
+        },
+    )
+    assert switched_without_key.status_code == 200
+    assert switched_without_key.json()["llm_api_key_configured"] is False
+    assert json.loads(settings_file.read_text(encoding="utf-8"))["llm_api_key"] == ""
+
+
+@pytest.mark.parametrize("invalid_stored_base", [False, 0, [], {}])
+def test_platform_settings_fails_closed_for_non_string_stored_base(
+    tmp_path,
+    monkeypatch,
+    invalid_stored_base,
+):
+    settings_file = tmp_path / "platform_settings.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "llm_provider": "openai",
+                "llm_api_key": "custom-service-secret",
+                "llm_api_base": invalid_stored_base,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+
+    payload = TestClient(app).get("/settings/platform").json()
+
+    assert payload["llm_provider"] == "mock"
+    assert payload["llm_api_base"] == DEFAULT_LLM_API_BASE
+    assert payload["llm_api_key"] == ""
+    assert payload["llm_api_key_configured"] is False
+    assert "custom-service-secret" not in str(payload)
+
+
+def test_platform_settings_uses_configured_defaults_for_blank_legacy_llm_fields(
+    tmp_path,
+    monkeypatch,
+):
+    settings_file = tmp_path / "platform_settings.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "llm_provider": "openai",
+                "llm_api_key": "stored-secret",
+                "llm_api_base": " ",
+                "llm_model": " ",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+    monkeypatch.setitem(
+        platform_settings_service.DEFAULTS,
+        "llm_api_base",
+        "https://env-llm.example.test/v1",
+    )
+    monkeypatch.setitem(platform_settings_service.DEFAULTS, "llm_model", "env-model")
+
+    payload = TestClient(app).get("/settings/platform").json()
+
+    assert payload["llm_provider"] == "openai"
+    assert payload["llm_api_base"] == "https://env-llm.example.test/v1"
+    assert payload["llm_model"] == "env-model"
+    assert payload["llm_api_key_configured"] is True
+
+
+@pytest.mark.parametrize(
+    "invalid_update",
+    [
+        {"llm_provider": "deepseek"},
+        {"llm_model": "   "},
+        {"llm_model": "x" * 129},
+        {"llm_api_base": "ftp://llm.example.com/v1"},
+        {"llm_api_base": "/v1/chat/completions"},
+        {"llm_api_base": "https://user:secret@llm.example.com/v1"},
+        {"llm_api_base": "https://llm.example.com/v1?api_key=secret"},
+        {"llm_api_base": "https://llm.example.com:bad/v1"},
+        {"llm_api_base": "https://llm.example.com/v1?"},
+        {"llm_api_base": "https://exa mple.com/v1"},
+        {"llm_api_base": "https:\\example.com\\v1"},
+        {"llm_api_base": "https://%zz/v1"},
+        {"llm_api_base": "https://%2F/v1"},
+        {"llm_api_base": "https:example.com/v1"},
+        {"llm_api_base": "http:///example.com/v1"},
+        {"llm_api_base": "https://exa^mple.com/v1"},
+        {"llm_api_base": "https://exa|mple.com/v1"},
+        {"llm_api_base": "https://[v1.fe80::]/v1"},
+    ],
+)
+def test_platform_settings_rejects_invalid_llm_config_without_writing(
+    tmp_path,
+    monkeypatch,
+    invalid_update,
+):
+    settings_file = tmp_path / "platform_settings.json"
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+
+    response = TestClient(app).put("/settings/platform", json=invalid_update)
+
+    assert response.status_code == 422
+    assert not settings_file.exists()
+    assert "secret" not in response.text
+
+
+def test_platform_settings_validation_errors_do_not_echo_invalid_key(tmp_path, monkeypatch):
+    settings_file = tmp_path / "platform_settings.json"
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+
+    response = TestClient(app).put(
+        "/settings/platform",
+        json={"llm_api_key": {"value": "fake-secret"}},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": [
+            {
+                "type": "invalid_key",
+                "loc": ["body", "llm_api_key"],
+                "msg": "Invalid value for llm_api_key.",
+            }
+        ]
+    }
+    assert "fake-secret" not in response.text
+    assert not settings_file.exists()
+
+
+def test_platform_settings_validation_errors_do_not_echo_nested_keys(tmp_path, monkeypatch):
+    settings_file = tmp_path / "platform_settings.json"
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+
+    response = TestClient(app).put(
+        "/settings/platform",
+        json={"news_search_provider_keys": {"fake-secret-key": {"nested": "value"}}},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "news_search_provider_keys"]
+    assert "fake-secret-key" not in response.text
+    assert not settings_file.exists()
+
+
+def test_platform_settings_accepts_normalized_llm_config_and_legacy_omission(
+    tmp_path,
+    monkeypatch,
+):
+    settings_file = tmp_path / "platform_settings.json"
+    monkeypatch.setattr(
+        "packages.services.platform_settings.SETTINGS_PATH",
+        settings_file,
+    )
+
+    response = TestClient(app).put(
+        "/settings/platform",
+        json={
+            "llm_provider": " OPENAI ",
+            "llm_api_base": " http://localhost:11434/v1/ ",
+            "llm_model": " local-model ",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["llm_provider"] == "openai"
+    assert response.json()["llm_api_base"] == "http://localhost:11434/v1"
+    assert response.json()["llm_model"] == "local-model"
+
+    legacy = TestClient(app).put(
+        "/settings/platform",
+        json={"market_data_provider": "mock"},
+    )
+    assert legacy.status_code == 200
+    assert legacy.json()["llm_model"] == "local-model"
 
 
 def test_platform_settings_public_response_masks_tushare_token(tmp_path, monkeypatch):

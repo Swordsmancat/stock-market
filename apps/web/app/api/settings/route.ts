@@ -1,5 +1,7 @@
 import {
   getPlatformSettings,
+  isPlatformSettingsUpdatePayload,
+  PlatformSettingsValidationError,
   savePlatformSettings,
 } from "@/lib/platform-settings-store";
 
@@ -8,6 +10,7 @@ type PlatformSettingsRoutePayload = {
   llm_provider?: string;
   llm_api_key?: string;
   llm_api_base?: string;
+  llm_model?: string;
   akshare_enabled?: boolean;
   tushare_token?: string;
   tushare_http_url?: string;
@@ -42,6 +45,7 @@ function buildPublicSettingsPayload(
 
   return {
     ...settings,
+    llm_api_key: "",
     llm_api_key_configured:
       settings.llm_api_key_configured ?? Boolean(llmApiKey.trim()),
     tushare_token: "",
@@ -67,27 +71,35 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const body = (await request.json()) as {
-    market_data_provider?: string;
-    llm_provider?: string;
-    llm_api_key?: string;
-    llm_api_base?: string;
-    akshare_enabled?: boolean;
-    tushare_token?: string;
-    tushare_http_url?: string;
-    color_scheme?: "china" | "international";
-    favorite_home_index_codes?: string[] | string;
-    home_index_display_fields?: string[] | string;
-    favorite_macro_indicator_codes?: string[] | string;
-    news_search_provider_order?: string[] | string;
-    news_search_enabled_providers?: string[] | string;
-    news_search_provider_keys?: Record<string, string>;
-    news_search_max_results?: number | string;
-    news_search_timeout_seconds?: number | string;
-  };
-  const saved = await savePlatformSettings(body);
-  return Response.json({
-    source: "platform_settings",
-    ...buildPublicSettingsPayload(saved),
-  });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    body = null;
+  }
+  if (!isPlatformSettingsUpdatePayload(body)) {
+    return Response.json(
+      {
+        code: "invalid_payload",
+        field: "body",
+        detail: "Platform settings payload must be a JSON object.",
+      },
+      { status: 422 },
+    );
+  }
+  try {
+    const saved = await savePlatformSettings(body);
+    return Response.json({
+      source: "platform_settings",
+      ...buildPublicSettingsPayload(saved),
+    });
+  } catch (error) {
+    if (error instanceof PlatformSettingsValidationError) {
+      return Response.json(
+        { code: error.code, field: error.field, detail: error.message },
+        { status: 422 },
+      );
+    }
+    throw error;
+  }
 }

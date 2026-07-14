@@ -7,12 +7,19 @@ const { getPlatformSettingsMock, savePlatformSettingsMock } = vi.hoisted(
   }),
 );
 
-vi.mock("@/lib/platform-settings-store", () => ({
-  getPlatformSettings: getPlatformSettingsMock,
-  savePlatformSettings: savePlatformSettingsMock,
-}));
+vi.mock("@/lib/platform-settings-store", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/lib/platform-settings-store")
+  >();
+  return {
+    ...actual,
+    getPlatformSettings: getPlatformSettingsMock,
+    savePlatformSettings: savePlatformSettingsMock,
+  };
+});
 
 import { GET, PUT } from "./route";
+import { PlatformSettingsValidationError } from "@/lib/platform-settings-store";
 
 afterEach(() => {
   getPlatformSettingsMock.mockReset();
@@ -25,6 +32,7 @@ it("returns persisted platform settings with route source metadata", async () =>
     llm_provider: "openai",
     llm_api_key: "sk-test",
     llm_api_base: "https://llm.example/v1",
+    llm_model: "custom-model",
     akshare_enabled: true,
     tushare_token: "tushare-token",
     tushare_http_url: "https://tushare.example",
@@ -51,6 +59,7 @@ it("returns persisted platform settings with route source metadata", async () =>
   await expect(response.json()).resolves.toEqual({
     source: "platform_settings",
     ...storedSettings,
+    llm_api_key: "",
     tushare_token: "",
     tushare_token_configured: true,
     news_search_provider_keys: {},
@@ -64,6 +73,7 @@ it("saves platform settings and reports whether an LLM API key is configured", a
     llm_provider: "openai",
     llm_api_key: "sk-updated",
     llm_api_base: "https://api.openai.com/v1",
+    llm_model: "gpt-4o-mini",
     akshare_enabled: false,
     tushare_token: "token-updated",
     tushare_http_url: "https://tushare.example",
@@ -97,6 +107,7 @@ it("saves platform settings and reports whether an LLM API key is configured", a
   await expect(response.json()).resolves.toEqual({
     source: "platform_settings",
     ...updatePayload,
+    llm_api_key: "",
     llm_api_key_configured: true,
     tushare_token: "",
     tushare_token_configured: true,
@@ -114,6 +125,7 @@ it("marks saved settings as not configured when the stored LLM API key is blank"
     llm_provider: "mock",
     llm_api_key: "   ",
     llm_api_base: "https://api.openai.com/v1",
+    llm_model: "gpt-4o-mini",
     akshare_enabled: false,
     tushare_token: "",
     tushare_http_url: "",
@@ -144,10 +156,54 @@ it("marks saved settings as not configured when the stored LLM API key is blank"
   await expect(response.json()).resolves.toEqual({
     source: "platform_settings",
     ...savedSettings,
+    llm_api_key: "",
     llm_api_key_configured: false,
     tushare_token: "",
     tushare_token_configured: false,
     news_search_provider_keys: {},
     news_search_provider_keys_configured: {},
   });
+});
+
+it("maps invalid direct LLM settings updates to a field-level 422", async () => {
+  savePlatformSettingsMock.mockRejectedValue(
+    new PlatformSettingsValidationError(
+      "invalid_base",
+      "llm_api_base",
+      "llm_api_base must be an absolute HTTP(S) URL",
+    ),
+  );
+
+  const response = await PUT(
+    new Request("http://localhost/api/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ llm_api_base: "file:///tmp/model" }),
+    }),
+  );
+
+  expect(response.status).toBe(422);
+  await expect(response.json()).resolves.toEqual({
+    code: "invalid_base",
+    field: "llm_api_base",
+    detail: "llm_api_base must be an absolute HTTP(S) URL",
+  });
+});
+
+it.each([[null], [[]]])("rejects a non-object settings payload: %j", async (body) => {
+  const response = await PUT(
+    new Request("http://localhost/api/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+
+  expect(response.status).toBe(422);
+  await expect(response.json()).resolves.toEqual({
+    code: "invalid_payload",
+    field: "body",
+    detail: "Platform settings payload must be a JSON object.",
+  });
+  expect(savePlatformSettingsMock).not.toHaveBeenCalled();
 });

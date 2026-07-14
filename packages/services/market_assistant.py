@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from packages.ai.llm_factory import get_llm_provider
 from packages.ai.market_assistant import (
-    ASSISTANT_MODEL_NAME,
     FALLBACK_MODEL_NAME,
     MarketAssistantCitation,
     MarketAssistantPromptContext,
@@ -28,7 +27,7 @@ from packages.services.official_disclosure_documents import (
     list_citable_official_disclosure_section_citations,
 )
 from packages.services.official_disclosures import list_citable_official_disclosure_citations
-from packages.services.platform_settings import get_platform_settings
+from packages.services.platform_settings import get_platform_settings, normalize_llm_model
 from packages.services.research_source_notes import list_citable_research_source_note_citations
 from packages.services.reports import list_reports_payload
 
@@ -686,13 +685,14 @@ def _generate_answer_or_fallback(
     settings = get_platform_settings()
     configured_provider = str(settings.get("llm_provider", "mock")).lower()
     configured_api_key = str(settings.get("llm_api_key", "")).strip()
+    configured_model = normalize_llm_model(settings.get("llm_model"))
     if configured_provider != "openai" or not configured_api_key:
         fallback_reason = "OpenAI-compatible LLM provider is not configured."
         _append_fallback_diagnostic(prompt_context, fallback_reason)
         return build_deterministic_market_answer(prompt_context), _build_fallback_model_metadata(fallback_reason)
 
     try:
-        llm_provider = get_llm_provider()
+        llm_provider = get_llm_provider(settings)
         generated_answer = llm_provider.generate(build_market_assistant_prompt(prompt_context)).strip()
     except Exception as error:
         fallback_reason = f"LLM generation failed: {error.__class__.__name__}."
@@ -722,7 +722,7 @@ def _generate_answer_or_fallback(
 
     return generated_answer, {
         "provider": "openai",
-        "name": ASSISTANT_MODEL_NAME,
+        "name": configured_model,
         "used_llm": True,
         "fallback_reason": None,
     }

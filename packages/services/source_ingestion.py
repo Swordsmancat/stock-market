@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from packages.ai.llm_factory import get_llm_provider
-from packages.services.platform_settings import get_platform_settings
+from packages.services.platform_settings import get_platform_settings, normalize_llm_model
 
 
-SOURCE_INGESTION_LLM_MODEL_NAME = "gpt-4o-mini"
 SOURCE_INGESTION_FALLBACK_MODEL_NAME = "source-ingestion-deterministic-fallback"
 MAX_CONTENT_CHARS = 12000
 MAX_PROMPT_CONTENT_CHARS = 6000
@@ -108,6 +107,7 @@ def extract_source_ingestion_payload(payload: SourceIngestionExtractionInput) ->
     settings = get_platform_settings()
     provider_name = str(settings.get("llm_provider", "mock")).lower()
     api_key = str(settings.get("llm_api_key", "")).strip()
+    configured_model = normalize_llm_model(settings.get("llm_model"))
     if provider_name != "openai" or not api_key:
         return _with_fallback_model(
             fallback,
@@ -115,7 +115,7 @@ def extract_source_ingestion_payload(payload: SourceIngestionExtractionInput) ->
         )
 
     try:
-        answer = get_llm_provider().generate(_build_llm_prompt(normalized)).strip()
+        answer = get_llm_provider(settings).generate(_build_llm_prompt(normalized)).strip()
     except Exception as error:
         return _with_fallback_model(
             fallback,
@@ -133,7 +133,7 @@ def extract_source_ingestion_payload(payload: SourceIngestionExtractionInput) ->
     normalized_llm["status"] = "ok"
     normalized_llm["model"] = _model_payload(
         provider="openai",
-        name=SOURCE_INGESTION_LLM_MODEL_NAME,
+        name=configured_model,
         used_llm=True,
         fallback_reason=None,
     )

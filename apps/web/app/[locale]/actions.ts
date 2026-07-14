@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 
 import { backendFetch } from "@/lib/backend-api";
 import {
+  normalizeLlmApiBase,
+  normalizeLlmApiPresetId,
+  resolveLlmApiPreset,
+} from "@/lib/llm-api-presets";
+import {
   getPlatformSettings,
   savePlatformSettings,
 } from "@/lib/platform-settings-store";
@@ -74,7 +79,7 @@ function flashRedirect(locale: string, params: Record<string, string>) {
   redirect(`/${locale}?${query}`);
 }
 
-function pageRedirect(path: string, params: Record<string, string>) {
+function pageRedirect(path: string, params: Record<string, string>): never {
   const query = new URLSearchParams(params).toString();
   redirect(`${path}?${query}`);
 }
@@ -280,16 +285,57 @@ export async function generateDailyReportAction(formData: FormData) {
 
 export async function savePlatformSettingsAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "zh");
+  const settingsPath = `/${locale}/settings`;
+  const llmApiKey = String(formData.get("llm_api_key") ?? "").trim();
+  const llmApiPreset = normalizeLlmApiPresetId(
+    formData.get("llm_api_preset"),
+  );
+  const llmResolution = resolveLlmApiPreset(
+    llmApiPreset,
+    formData.get("llm_api_base"),
+    formData.get("llm_model"),
+  );
+  if (llmResolution.ok === false) {
+    pageRedirect(settingsPath, {
+      saved: "error",
+      llm_error: llmResolution.error,
+      llm_preset: llmApiPreset,
+    });
+  }
+
+  let llmApiKeyConfigured = false;
+  let existingLlmApiBase = "";
+  try {
+    const currentSettings = await getPlatformSettings();
+    llmApiKeyConfigured = currentSettings.llm_api_key_configured;
+    existingLlmApiBase = normalizeLlmApiBase(currentSettings.llm_api_base);
+  } catch {
+    pageRedirect(settingsPath, { saved: "error" });
+  }
+  if (
+    llmResolution.settings.llm_provider !== "mock" &&
+    !llmApiKey &&
+    (!llmApiKeyConfigured ||
+      existingLlmApiBase !== llmResolution.settings.llm_api_base)
+  ) {
+    pageRedirect(settingsPath, {
+      saved: "error",
+      llm_error: "missing_key",
+      llm_preset: llmApiPreset,
+    });
+  }
+  const llmSettingsUpdate =
+    llmResolution.settings.llm_provider === "mock"
+      ? { llm_provider: "mock" as const }
+      : llmResolution.settings;
+
   try {
     await savePlatformSettings({
       market_data_provider: String(
         formData.get("market_data_provider") ?? "yfinance",
       ),
-      llm_provider: String(formData.get("llm_provider") ?? "mock"),
-      llm_api_key: String(formData.get("llm_api_key") ?? ""),
-      llm_api_base: String(
-        formData.get("llm_api_base") ?? "https://api.openai.com/v1",
-      ),
+      ...llmSettingsUpdate,
+      llm_api_key: llmApiKey,
       akshare_enabled: formData.get("akshare_enabled") === "on",
       tushare_token: String(formData.get("tushare_token") ?? ""),
       tushare_http_url: String(formData.get("tushare_http_url") ?? ""),
@@ -325,11 +371,11 @@ export async function savePlatformSettingsAction(formData: FormData) {
         formData.get("news_search_timeout_seconds") ?? "",
       ),
     });
-    revalidatePath(`/${locale}/settings`);
+    revalidatePath(settingsPath);
   } catch {
-    pageRedirect(`/${locale}/settings`, { saved: "error" });
+    pageRedirect(settingsPath, { saved: "error" });
   }
-  pageRedirect(`/${locale}/settings`, { saved: "ok" });
+  pageRedirect(settingsPath, { saved: "ok" });
 }
 
 export async function searchInstrumentAction(formData: FormData) {
