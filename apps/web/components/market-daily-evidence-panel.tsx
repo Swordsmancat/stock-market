@@ -71,6 +71,7 @@ type MarketDailyEvidenceImportResult = {
 export type MarketDailyEvidencePanelLabels = {
   title: string;
   description: string;
+  maintenanceSummary: string;
   refreshAction: string;
   refreshing: string;
   totalRows: string;
@@ -245,43 +246,11 @@ export function MarketDailyEvidencePanel({
   return (
     <FinancialTerminalCard>
       <FinancialTerminalCardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Database className="h-5 w-5" />
-              {labels.title}
-            </CardTitle>
-            <CardDescription className="mt-1">{labels.description}</CardDescription>
-          </div>
-          <div className="flex flex-col gap-2 sm:items-end">
-            <Button type="button" onClick={() => void refreshEvidence()} disabled={pending}>
-              <RefreshCw className={pending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              {pending ? labels.refreshing : labels.refreshAction}
-            </Button>
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="space-y-1 text-xs text-muted-foreground">
-                <span>{labels.corporateReportPeriod}</span>
-                <Input
-                  type="date"
-                  className="h-9 w-[160px]"
-                  value={corporateReportPeriod}
-                  onChange={(event) => setCorporateReportPeriod(event.target.value)}
-                />
-              </label>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void refreshCorporateActions()}
-                disabled={corporatePending || !corporateReportPeriod}
-              >
-                <RefreshCw className={corporatePending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-                {corporatePending
-                  ? labels.refreshingCorporateActions
-                  : labels.refreshCorporateActions}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <CardTitle className="flex items-center gap-2 text-xl">
+          <Database className="h-5 w-5" />
+          {labels.title}
+        </CardTitle>
+        <CardDescription className="mt-1">{labels.description}</CardDescription>
       </FinancialTerminalCardHeader>
       <FinancialTerminalCardContent className="space-y-4">
         {loadFailed && payload === null ? (
@@ -352,56 +321,92 @@ export function MarketDailyEvidencePanel({
           <Badge variant="secondary">{labels.notAdvice}</Badge>
         </div>
 
-        {error ? (
-          <div className="flex items-start gap-2 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error}</span>
+        <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-foreground">
+            {labels.maintenanceSummary}
+          </summary>
+          <div className="mt-4 space-y-4">
+            <div className="flex flex-col gap-2 sm:items-start">
+              <Button type="button" onClick={() => void refreshEvidence()} disabled={pending}>
+                <RefreshCw className={pending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                {pending ? labels.refreshing : labels.refreshAction}
+              </Button>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="space-y-1 text-xs text-muted-foreground">
+                  <span>{labels.corporateReportPeriod}</span>
+                  <Input
+                    type="date"
+                    className="h-9 w-[160px]"
+                    value={corporateReportPeriod}
+                    onChange={(event) => setCorporateReportPeriod(event.target.value)}
+                  />
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void refreshCorporateActions()}
+                  disabled={corporatePending || !corporateReportPeriod}
+                >
+                  <RefreshCw className={corporatePending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                  {corporatePending
+                    ? labels.refreshingCorporateActions
+                    : labels.refreshCorporateActions}
+                </Button>
+              </div>
+            </div>
+
+            {error ? (
+              <div className="flex items-start gap-2 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            ) : null}
+
+            {corporateTaskRunId ? (
+              <FinancialTerminalSurface className="flex flex-wrap items-center justify-between gap-2 border-primary/30 bg-primary/5 p-3 text-sm">
+                <span>{labels.corporateActionQueued}</span>
+                <Button size="sm" variant="outline" asChild>
+                  <a href={`/task-runs/${corporateTaskRunId}`}>{labels.openTaskRun}</a>
+                </Button>
+              </FinancialTerminalSurface>
+            ) : null}
+
+            {result ? (
+              <FinancialTerminalSurface className="border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {labels.refreshSuccess}
+                  </Badge>
+                  <Badge variant="outline">
+                    {formatLabel(labels.insertedCount, { count: numberValue(result.inserted) })}
+                  </Badge>
+                  <Badge variant="outline">
+                    {formatLabel(labels.updatedCount, { count: numberValue(result.updated) })}
+                  </Badge>
+                  <Badge variant="outline">
+                    {formatLabel(labels.skippedCount, { count: numberValue(result.skipped) })}
+                  </Badge>
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  <div className="font-semibold text-foreground">{labels.diagnosticsTitle}</div>
+                  {diagnostics.length > 0 ? (
+                    <ul className="mt-1 list-disc space-y-1 pl-4">
+                      {diagnostics.map((diagnostic, index) => (
+                        <li key={`${diagnostic.code ?? diagnostic.source ?? "diagnostic"}-${index}`}>
+                          {diagnostic.code ? `${diagnostic.code}: ` : null}
+                          {diagnostic.message ?? diagnostic.status ?? labels.unavailableShort}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1">{labels.diagnosticsEmpty}</p>
+                  )}
+                </div>
+              </FinancialTerminalSurface>
+            ) : null}
           </div>
-        ) : null}
-
-        {corporateTaskRunId ? (
-          <FinancialTerminalSurface className="flex flex-wrap items-center justify-between gap-2 border-primary/30 bg-primary/5 p-3 text-sm">
-            <span>{labels.corporateActionQueued}</span>
-            <Button size="sm" variant="outline" asChild>
-              <a href={`/task-runs/${corporateTaskRunId}`}>{labels.openTaskRun}</a>
-            </Button>
-          </FinancialTerminalSurface>
-        ) : null}
-
-        {result ? (
-          <FinancialTerminalSurface className="border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">
-                <CheckCircle2 className="h-3 w-3" />
-                {labels.refreshSuccess}
-              </Badge>
-              <Badge variant="outline">
-                {formatLabel(labels.insertedCount, { count: numberValue(result.inserted) })}
-              </Badge>
-              <Badge variant="outline">
-                {formatLabel(labels.updatedCount, { count: numberValue(result.updated) })}
-              </Badge>
-              <Badge variant="outline">
-                {formatLabel(labels.skippedCount, { count: numberValue(result.skipped) })}
-              </Badge>
-            </div>
-            <div className="mt-3 text-xs text-muted-foreground">
-              <div className="font-semibold text-foreground">{labels.diagnosticsTitle}</div>
-              {diagnostics.length > 0 ? (
-                <ul className="mt-1 list-disc space-y-1 pl-4">
-                  {diagnostics.map((diagnostic, index) => (
-                    <li key={`${diagnostic.code ?? diagnostic.source ?? "diagnostic"}-${index}`}>
-                      {diagnostic.code ? `${diagnostic.code}: ` : null}
-                      {diagnostic.message ?? diagnostic.status ?? labels.unavailableShort}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-1">{labels.diagnosticsEmpty}</p>
-              )}
-            </div>
-          </FinancialTerminalSurface>
-        ) : null}
+        </details>
       </FinancialTerminalCardContent>
     </FinancialTerminalCard>
   );

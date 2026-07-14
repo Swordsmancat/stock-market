@@ -19,6 +19,10 @@ it("forwards instrument queries to the backend without caching", async () => {
   const responsePayload = {
     source: "database",
     items: [{ symbol: "AAPL", market: "US", name: "Apple Inc." }],
+    total: 1,
+    limit: 25,
+    offset: 25,
+    has_more: false,
   };
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify(responsePayload), {
@@ -30,11 +34,13 @@ it("forwards instrument queries to the backend without caching", async () => {
   );
 
   const response = await GET(
-    new Request("http://localhost/api/instruments?market=US&exchange=NASDAQ&q=AAPL"),
+    new Request(
+      "http://localhost/api/instruments?market=US&exchange=NASDAQ&q=AAPL&limit=25&offset=25",
+    ),
   );
 
   expect(fetchMock).toHaveBeenCalledWith(
-    "https://backend.example/instruments?market=US&exchange=NASDAQ&q=AAPL",
+    "https://backend.example/instruments?market=US&exchange=NASDAQ&q=AAPL&limit=25&offset=25",
     { cache: "no-store" },
   );
   expect(response.status).toBe(200);

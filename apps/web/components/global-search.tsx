@@ -21,6 +21,9 @@ type Instrument = {
   market: string;
 };
 
+const SEARCH_RESULT_LIMIT = 10;
+const SEARCH_DEBOUNCE_MS = 250;
+
 export function GlobalSearch() {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -30,6 +33,7 @@ export function GlobalSearch() {
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations("TopNav");
+  const searchLoadFailedMessage = t("searchLoadFailed");
 
   React.useEffect(() => {
     const down = (event: KeyboardEvent) => {
@@ -43,27 +47,46 @@ export function GlobalSearch() {
   }, []);
 
   React.useEffect(() => {
-    if (!open || instruments.length > 0) {
+    const normalizedQuery = query.trim();
+    if (!open || !normalizedQuery) {
+      setInstruments([]);
+      setIsLoading(false);
+      setLoadError(null);
       return;
     }
+
+    let active = true;
     setIsLoading(true);
     setLoadError(null);
-    fetch("/api/instruments")
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error("load failed");
-        }
-        const data = (await response.json()) as { items?: Instrument[] };
-        setInstruments(data.items ?? []);
-      })
-      .catch(() => setLoadError(t("searchLoadFailed")))
-      .finally(() => setIsLoading(false));
-  }, [open, instruments.length, t]);
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        q: normalizedQuery,
+        limit: String(SEARCH_RESULT_LIMIT),
+        offset: "0",
+      });
+      void fetch(`/api/instruments?${params.toString()}`)
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error("load failed");
+          }
+          const data = (await response.json()) as { items?: Instrument[] };
+          if (active) setInstruments(data.items ?? []);
+        })
+        .catch(() => {
+          if (active) setLoadError(searchLoadFailedMessage);
+        })
+        .finally(() => {
+          if (active) setIsLoading(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
 
-  const filtered = instruments.filter((item) => {
-    const haystack = `${item.symbol} ${item.name} ${item.market}`.toLowerCase();
-    return haystack.includes(query.trim().toLowerCase());
-  });
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [open, query, searchLoadFailedMessage]);
+
+  const hasQuery = query.trim().length > 0;
 
   return (
     <>
@@ -107,12 +130,12 @@ export function GlobalSearch() {
 
           {loadError ? <p className="py-2 text-sm text-destructive">{loadError}</p> : null}
 
-          {!isLoading && !loadError ? (
+          {hasQuery && !isLoading && !loadError ? (
             <ul className="max-h-72 space-y-1 overflow-y-auto">
-              {filtered.length === 0 ? (
+              {instruments.length === 0 ? (
                 <li className="py-4 text-center text-sm text-muted-foreground">{t("noResults")}</li>
               ) : (
-                filtered.map((instrument) => (
+                instruments.map((instrument) => (
                   <li key={`${instrument.symbol}-${instrument.market}`}>
                     <button
                       type="button"

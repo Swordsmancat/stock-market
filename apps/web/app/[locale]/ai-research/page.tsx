@@ -28,6 +28,7 @@ import type { DailyResearchShortlistPayload } from "@/lib/daily-research-shortli
 import { withProviderQuery } from "@/lib/market-data";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
 import type { ResearchShortlistOutcomeTrackingPayload } from "@/lib/research-shortlist-outcomes";
+import { getTranslations } from "next-intl/server";
 
 type WatchlistPayload = {
   items?: AiResearchWatchlistItem[];
@@ -76,6 +77,7 @@ export default async function AiResearchPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const t = await getTranslations("AiResearchDesk");
   const settings = await getPlatformSettings();
   const provider = settings.market_data_provider;
 
@@ -148,17 +150,17 @@ export default async function AiResearchPage({
         }
         initialLoadFailed={dailyShortlistResult.status === "failed"}
       />
-      <ResearchShortlistOutcomePanel
-        key={
-          outcomeTrackingResult.status === "loaded"
-            ? outcomeTrackingResult.payload.latest?.run.id ?? "no-outcomes"
-            : "outcome-load-failed"
+      <StockDiscoveryPanel
+        initialProfiles={
+          stockSelectionProfilesResult.status === "loaded"
+            ? stockSelectionProfilesResult.payload
+            : null
         }
-        locale={locale}
-        initialPayload={
-          outcomeTrackingResult.status === "loaded" ? outcomeTrackingResult.payload : null
+        initialUniverseStatus={
+          stockUniverseStatusResult.status === "loaded"
+            ? stockUniverseStatusResult.payload
+            : null
         }
-        initialLoadFailed={outcomeTrackingResult.status === "failed"}
       />
       <AiResearchDesk
         locale={locale}
@@ -201,23 +203,30 @@ export default async function AiResearchPage({
           ...(marketOverviewPayload?.diagnostics ?? []),
         ]}
       />
-      <AshareEvidenceCoveragePanel
-        initialCoverage={
-          evidenceCoverageResult.status === "loaded" ? evidenceCoverageResult.payload : null
+      <ResearchShortlistOutcomePanel
+        key={
+          outcomeTrackingResult.status === "loaded"
+            ? outcomeTrackingResult.payload.latest?.run.id ?? "no-outcomes"
+            : "outcome-load-failed"
         }
+        locale={locale}
+        initialPayload={
+          outcomeTrackingResult.status === "loaded" ? outcomeTrackingResult.payload : null
+        }
+        initialLoadFailed={outcomeTrackingResult.status === "failed"}
       />
-      <StockDiscoveryPanel
-        initialProfiles={
-          stockSelectionProfilesResult.status === "loaded"
-            ? stockSelectionProfilesResult.payload
-            : null
-        }
-        initialUniverseStatus={
-          stockUniverseStatusResult.status === "loaded"
-            ? stockUniverseStatusResult.payload
-            : null
-        }
-      />
+      <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground">
+          {t("advancedMaintenanceSummary")}
+        </summary>
+        <div className="mt-4">
+          <AshareEvidenceCoveragePanel
+            initialCoverage={
+              evidenceCoverageResult.status === "loaded" ? evidenceCoverageResult.payload : null
+            }
+          />
+        </div>
+      </details>
     </div>
   );
 }

@@ -332,20 +332,13 @@ export function InstrumentDetailClient({
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.85fr)]">
-        <MarketAssistantCard
-          symbol={assistantSymbol}
-          locale={locale}
-          provider={assistantProvider}
-          start={data.range?.start ?? null}
-          end={data.range?.end ?? null}
-        />
-
-        <MarketDepthCard
-          marketDepth={data.market_depth ?? null}
-          className={financialTerminalCardClassName}
-        />
-      </div>
+      <MarketAssistantCard
+        symbol={assistantSymbol}
+        locale={locale}
+        provider={assistantProvider}
+        start={data.range?.start ?? null}
+        end={data.range?.end ?? null}
+      />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <FinancialTerminalCard>
@@ -675,6 +668,18 @@ export function InstrumentDetailClient({
           )}
         </FinancialTerminalCardContent>
       </FinancialTerminalCard>
+
+      <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground">
+          {t("advancedMarketDataSummary")}
+        </summary>
+        <div className="mt-4">
+          <MarketDepthCard
+            marketDepth={data.market_depth ?? null}
+            className={financialTerminalCardClassName}
+          />
+        </div>
+      </details>
     </div>
   );
 }

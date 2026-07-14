@@ -182,10 +182,6 @@ export function StockDiscoveryPanel({
             <CardDescription className="mt-1">{t("description")}</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => void refreshUniverse()} disabled={universePending}>
-              <RefreshCw className={universePending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              {universePending ? t("refreshing") : t("refreshUniverse")}
-            </Button>
             <Button type="button" onClick={() => void runDiscovery()} disabled={discoveryPending || !selectedProfile}>
               <Search className={discoveryPending ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
               {discoveryPending ? t("discovering") : t("discover")}
@@ -194,25 +190,6 @@ export function StockDiscoveryPanel({
         </div>
       </FinancialTerminalCardHeader>
       <FinancialTerminalCardContent className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label={t("universeStatus")} value={universeStatus?.status ?? t("unavailable")} />
-          <Metric label={t("activeInstruments")} value={formatNumber(universeStatus?.active_instrument_count)} />
-          <Metric label={t("managedInstruments")} value={formatNumber(universeStatus?.managed_instrument_count)} />
-          <Metric
-            label={t("latestSync")}
-            value={universeStatus?.latest_sync?.created_at ?? universeStatus?.latest_sync?.as_of ?? t("unavailable")}
-          />
-        </div>
-
-        {taskRunId ? (
-          <FinancialTerminalSurface className="flex flex-wrap items-center justify-between gap-2 border-primary/30 bg-primary/5 p-3 text-sm">
-            <span>{t("refreshQueued")}</span>
-            <Button size="sm" variant="outline" asChild>
-              <Link href={`/task-runs/${taskRunId}`}>{t("openTaskRun")}</Link>
-            </Button>
-          </FinancialTerminalSurface>
-        ) : null}
-
         <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
           <div className="space-y-2">
             <label className="text-sm font-semibold" htmlFor="stock-discovery-profile">
@@ -358,6 +335,47 @@ export function StockDiscoveryPanel({
             </div>
           </div>
         ) : null}
+
+        <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-foreground">
+            <span className="inline-flex items-center gap-2">
+              <Database className="h-4 w-4" aria-hidden="true" />
+              {t("universeStatus")}
+            </span>
+          </summary>
+          <div className="mt-4 space-y-4">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void refreshUniverse()}
+                disabled={universePending}
+              >
+                <RefreshCw className={universePending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                {universePending ? t("refreshing") : t("refreshUniverse")}
+              </Button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Metric label={t("universeStatus")} value={universeStatus?.status ?? t("unavailable")} />
+              <Metric label={t("activeInstruments")} value={formatNumber(universeStatus?.active_instrument_count)} />
+              <Metric label={t("managedInstruments")} value={formatNumber(universeStatus?.managed_instrument_count)} />
+              <Metric
+                label={t("latestSync")}
+                value={universeStatus?.latest_sync?.created_at ?? universeStatus?.latest_sync?.as_of ?? t("unavailable")}
+              />
+            </div>
+
+            {taskRunId ? (
+              <FinancialTerminalSurface className="flex flex-wrap items-center justify-between gap-2 border-primary/30 bg-primary/5 p-3 text-sm">
+                <span>{t("refreshQueued")}</span>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={`/task-runs/${taskRunId}`}>{t("openTaskRun")}</Link>
+                </Button>
+              </FinancialTerminalSurface>
+            ) : null}
+          </div>
+        </details>
       </FinancialTerminalCardContent>
     </FinancialTerminalCard>
   );

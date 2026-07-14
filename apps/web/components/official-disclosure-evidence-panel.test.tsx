@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { OfficialDisclosureEvidencePanel } from "./official-disclosure-evidence-panel";
@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 const labels = {
   title: "Official disclosure document evidence",
   description: "Watchlist disclosure coverage",
+  maintenanceSummary: "Disclosure ingestion operations",
   batchAction: "Ingest watchlist disclosures",
   batchPending: "Queueing...",
   batchQueued: "Batch queued",
@@ -86,6 +87,21 @@ const payload = {
   }],
 };
 
+function getMaintenanceDetails(): HTMLDetailsElement {
+  const summary = screen.getByText(labels.maintenanceSummary).closest("summary");
+  const details = summary?.closest("details");
+  if (!details) throw new Error("Disclosure maintenance details not found");
+  return details;
+}
+
+function openMaintenanceDetails(): HTMLDetailsElement {
+  const details = getMaintenanceDetails();
+  expect(details).not.toHaveAttribute("open");
+  fireEvent.click(details.querySelector("summary")!);
+  expect(details).toHaveAttribute("open");
+  return details;
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
   refresh.mockReset();
@@ -93,11 +109,36 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+it("keeps disclosure rows visible while grouping mutation controls in closed maintenance", () => {
+  render(<OfficialDisclosureEvidencePanel initialPayload={payload} loadFailed={false} labels={labels} />);
+
+  const maintenanceDetails = getMaintenanceDetails();
+  const disclosureLink = screen.getByRole("link", { name: "2025 Annual Report" });
+  expect(maintenanceDetails).not.toHaveAttribute("open");
+  expect(maintenanceDetails).not.toContainElement(disclosureLink);
+  expect(
+    within(maintenanceDetails).getByRole("button", {
+      name: "Ingest watchlist disclosures",
+      hidden: true,
+    }),
+  ).toBeInTheDocument();
+  expect(
+    within(maintenanceDetails).getByRole("button", {
+      name: "Run incremental monitor",
+      hidden: true,
+    }),
+  ).toBeInTheDocument();
+  expect(
+    within(maintenanceDetails).getByRole("button", { name: "Ingest PDF", hidden: true }),
+  ).toBeInTheDocument();
+});
+
 it("queues a bounded watchlist batch and links the task run", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ status: "dispatched", task_run: { id: "task-123" } })),
   );
   render(<OfficialDisclosureEvidencePanel initialPayload={payload} loadFailed={false} labels={labels} />);
+  openMaintenanceDetails();
 
   fireEvent.click(screen.getByRole("button", { name: "Ingest watchlist disclosures" }));
 
@@ -115,6 +156,7 @@ it("shows freshness and queues an incremental monitor", async () => {
     new Response(JSON.stringify({ status: "dispatched", task_run: { id: "task-monitor" } })),
   );
   render(<OfficialDisclosureEvidencePanel initialPayload={payload} loadFailed={false} labels={labels} />);
+  openMaintenanceDetails();
 
   expect(screen.getByText("Incremental monitoring freshness")).toBeInTheDocument();
   expect(screen.getByText("New on last run")).toBeInTheDocument();
@@ -136,6 +178,7 @@ it("ingests one exact disclosure and refreshes server state", async () => {
     new Response(JSON.stringify({ status: "ok", action: "created" })),
   );
   render(<OfficialDisclosureEvidencePanel initialPayload={payload} loadFailed={false} labels={labels} />);
+  openMaintenanceDetails();
 
   fireEvent.click(screen.getByRole("button", { name: "Ingest PDF" }));
 

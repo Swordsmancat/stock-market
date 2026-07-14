@@ -152,6 +152,37 @@ import {
 
 Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics, or preview blocks. Keep numeric values in `font-mono` where they are scan-first data. If the change only touches visual classes and no visible behavior changes, keep tests focused on existing route actions, headings, forms, empty/error states, and run Chrome visual checks at desktop and tall mobile sizes.
 
+### Convention: Personal Research Core Before Maintenance
+
+**What**: Keep repeated personal research actions and independently loaded
+read-only evidence directly visible. Put provider refreshes, backfills, bulk
+ingestion, raw status, and other mutation-heavy operations in native
+`<details>` elements that are closed by default. The primary navigation is
+limited to Home, AI Research, Instruments, Watchlist, and Settings; hidden
+routes remain directly addressable and their services/data are not deleted.
+
+**Why**: This installation is a personal research workspace. Operational
+controls must remain available without dominating candidate review, cited
+analysis, watchlist use, or saved evidence. A failure in one aggregate request
+must not hide notes, briefs, disclosures, or other independently loaded data.
+
+**Example**:
+
+```tsx
+<ReadOnlyEvidence payload={loadedEvidence} />
+<details>
+  <summary>{labels.maintenanceSummary}</summary>
+  <RefreshAndIngestionActions />
+</details>
+```
+
+Do not place read-only evidence inside the maintenance disclosure merely
+because the same component also owns refresh actions. Keep the protected
+homepage page source and its main content unchanged when simplifying the shared
+shell. Tests should assert core/maintenance DOM ownership, the missing `open`
+attribute, mixed-success rendering, five-item responsive navigation, and no
+horizontal page overflow.
+
 ---
 
 ## Accessibility

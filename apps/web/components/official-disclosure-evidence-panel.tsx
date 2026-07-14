@@ -66,6 +66,7 @@ export type OfficialDisclosureEvidencePayload = {
 export type OfficialDisclosureEvidenceLabels = {
   title: string;
   description: string;
+  maintenanceSummary: string;
   batchAction: string;
   batchPending: string;
   batchQueued: string;
@@ -210,25 +211,11 @@ export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, la
   return (
     <FinancialTerminalCard>
       <FinancialTerminalCardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <FileCheck2 className="h-5 w-5" />
-              {labels.title}
-            </CardTitle>
-            <CardDescription className="mt-1">{labels.description}</CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => void monitorWatchlist()} disabled={monitorPending}>
-              <RefreshCw className={monitorPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              {monitorPending ? labels.monitorPending : labels.monitorAction}
-            </Button>
-            <Button type="button" onClick={() => void ingestBatch()} disabled={batchPending}>
-              <RefreshCw className={batchPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              {batchPending ? labels.batchPending : labels.batchAction}
-            </Button>
-          </div>
-        </div>
+        <CardTitle className="flex items-center gap-2 text-xl">
+          <FileCheck2 className="h-5 w-5" />
+          {labels.title}
+        </CardTitle>
+        <CardDescription className="mt-1">{labels.description}</CardDescription>
       </FinancialTerminalCardHeader>
       <FinancialTerminalCardContent className="space-y-4">
         {loadFailed && initialPayload === null ? (
@@ -287,7 +274,7 @@ export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, la
             ) : (
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>{labels.symbol}</TableHead><TableHead>{labels.disclosure}</TableHead><TableHead>{labels.publishedAt}</TableHead><TableHead>{labels.status}</TableHead><TableHead>{labels.sections}</TableHead><TableHead>{labels.action}</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>{labels.symbol}</TableHead><TableHead>{labels.disclosure}</TableHead><TableHead>{labels.publishedAt}</TableHead><TableHead>{labels.status}</TableHead><TableHead>{labels.sections}</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {items.map((item) => (
                       <TableRow key={item.id}>
@@ -296,7 +283,6 @@ export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, la
                         <TableCell>{item.published_at?.slice(0, 10) ?? "—"}</TableCell>
                         <TableCell><Badge variant={item.content_citable ? "secondary" : "outline"}>{labels.statusLabels[item.status] ?? item.status}</Badge></TableCell>
                         <TableCell className="font-mono">{item.section_count}</TableCell>
-                        <TableCell><Button size="sm" variant="outline" disabled={pendingDisclosureId === item.id} onClick={() => void ingestOne(item.id)}>{pendingDisclosureId === item.id ? labels.ingestPending : labels.ingestAction}</Button></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -306,8 +292,51 @@ export function OfficialDisclosureEvidencePanel({ initialPayload, loadFailed, la
           </>
         )}
         <div className="flex flex-wrap gap-2 text-xs"><Badge variant="secondary"><ShieldCheck className="h-3 w-3" />{labels.watchlistOnly}</Badge><Badge variant="outline">{labels.metadataBoundary}</Badge><Badge variant="outline">{labels.contentBoundary}</Badge></div>
-        {taskRunId ? <FinancialTerminalSurface className="flex items-center justify-between gap-2 border-primary/30 bg-primary/5 p-3 text-sm"><span>{labels.batchQueued}</span><Button size="sm" variant="outline" asChild><a href={`/task-runs/${taskRunId}`}>{labels.openTaskRun}</a></Button></FinancialTerminalSurface> : null}
-        {error ? <div className="flex gap-2 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertTriangle className="h-4 w-4" />{error}</div> : null}
+        <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-foreground">
+            {labels.maintenanceSummary}
+          </summary>
+          <div className="mt-4 space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => void monitorWatchlist()} disabled={monitorPending}>
+                <RefreshCw className={monitorPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                {monitorPending ? labels.monitorPending : labels.monitorAction}
+              </Button>
+              <Button type="button" onClick={() => void ingestBatch()} disabled={batchPending}>
+                <RefreshCw className={batchPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                {batchPending ? labels.batchPending : labels.batchAction}
+              </Button>
+            </div>
+
+            {items.length > 0 ? (
+              <div className="space-y-2">
+                <div className="text-sm font-semibold">{labels.action}</div>
+                {items.map((item) => (
+                  <FinancialTerminalSurface
+                    key={item.id}
+                    className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{item.title}</div>
+                      <div className="font-mono text-xs text-muted-foreground">{item.symbol}</div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={pendingDisclosureId === item.id}
+                      onClick={() => void ingestOne(item.id)}
+                    >
+                      {pendingDisclosureId === item.id ? labels.ingestPending : labels.ingestAction}
+                    </Button>
+                  </FinancialTerminalSurface>
+                ))}
+              </div>
+            ) : null}
+
+            {taskRunId ? <FinancialTerminalSurface className="flex items-center justify-between gap-2 border-primary/30 bg-primary/5 p-3 text-sm"><span>{labels.batchQueued}</span><Button size="sm" variant="outline" asChild><a href={`/task-runs/${taskRunId}`}>{labels.openTaskRun}</a></Button></FinancialTerminalSurface> : null}
+            {error ? <div className="flex gap-2 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertTriangle className="h-4 w-4" />{error}</div> : null}
+          </div>
+        </details>
       </FinancialTerminalCardContent>
     </FinancialTerminalCard>
   );

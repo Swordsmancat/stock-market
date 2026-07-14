@@ -675,11 +675,11 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   const deskHeading = screen.getByRole("heading", { name: "AI Research Desk" });
   const coverageHeading = screen.getByRole("heading", { name: "A-share evidence coverage" });
   const discoveryHeading = screen.getByText("Full A-share discovery");
-  expect(shortlistHeading.compareDocumentPosition(deskHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(shortlistHeading.compareDocumentPosition(outcomeHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(outcomeHeading.compareDocumentPosition(deskHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(shortlistHeading.compareDocumentPosition(discoveryHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(discoveryHeading.compareDocumentPosition(deskHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(deskHeading.compareDocumentPosition(outcomeHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(deskHeading.compareDocumentPosition(coverageHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(coverageHeading.compareDocumentPosition(discoveryHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText("Evidence coverage and backfill operations")).toBeInTheDocument();
 });
 
 it("adds a manual symbol and submits the active symbol through the existing market assistant", async () => {

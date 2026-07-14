@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 const { routerRefreshMock } = vi.hoisted(() => ({
@@ -18,6 +18,7 @@ import {
 const labels: MarketDailyEvidencePanelLabels = {
   title: "Stored market daily evidence",
   description: "Persist provider-normalized daily market rows before AI citation.",
+  maintenanceSummary: "Market evidence refresh and import",
   refreshAction: "Refresh today's market evidence",
   refreshing: "Refreshing market evidence...",
   totalRows: "Stored rows",
@@ -72,6 +73,21 @@ function payload(total = 2): MarketDailyEvidencePayload {
   };
 }
 
+function getMaintenanceDetails(): HTMLDetailsElement {
+  const summary = screen.getByText(labels.maintenanceSummary).closest("summary");
+  const details = summary?.closest("details");
+  if (!details) throw new Error("Market evidence maintenance details not found");
+  return details;
+}
+
+function openMaintenanceDetails(): HTMLDetailsElement {
+  const details = getMaintenanceDetails();
+  expect(details).not.toHaveAttribute("open");
+  fireEvent.click(details.querySelector("summary")!);
+  expect(details).toHaveAttribute("open");
+  return details;
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -90,6 +106,18 @@ it("renders stored counts, latest import metadata, and citation IDs", () => {
     screen.getByText("market_daily_event:stock_fund_flow:000001:2026-07-10"),
   ).toBeInTheDocument();
   expect(screen.getByText("Only persisted rows are citable")).toBeInTheDocument();
+
+  const maintenanceDetails = getMaintenanceDetails();
+  expect(maintenanceDetails).not.toHaveAttribute("open");
+  expect(maintenanceDetails).not.toContainElement(
+    screen.getByText("market_daily_event:stock_fund_flow:000001:2026-07-10"),
+  );
+  expect(
+    within(maintenanceDetails).getByRole("button", {
+      name: "Refresh today's market evidence",
+      hidden: true,
+    }),
+  ).toBeInTheDocument();
 });
 
 it("refreshes today's default event types and replaces the visible summary", async () => {
@@ -115,6 +143,7 @@ it("refreshes today's default event types and replaces the visible summary", asy
     );
 
   render(<MarketDailyEvidencePanel initialPayload={payload()} loadFailed={false} labels={labels} />);
+  openMaintenanceDetails();
   fireEvent.click(screen.getByRole("button", { name: "Refresh today's market evidence" }));
 
   await waitFor(() => {
@@ -146,6 +175,7 @@ it("shows sanitized import errors without replacing stored evidence", async () =
   );
 
   render(<MarketDailyEvidencePanel initialPayload={payload()} loadFailed={false} labels={labels} />);
+  openMaintenanceDetails();
   fireEvent.click(screen.getByRole("button", { name: "Refresh today's market evidence" }));
 
   expect(await screen.findByText("Provider is not configured.")).toBeInTheDocument();
@@ -165,6 +195,7 @@ it("queues a report-period corporate-action batch and exposes its task run", asy
   );
 
   render(<MarketDailyEvidencePanel initialPayload={payload()} loadFailed={false} labels={labels} />);
+  openMaintenanceDetails();
   fireEvent.change(screen.getByLabelText("Corporate-action report period"), {
     target: { value: "2025-12-31" },
   });

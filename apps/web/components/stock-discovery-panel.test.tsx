@@ -31,7 +31,7 @@ const universeStatus = {
   latest_sync: { created_at: "2026-07-10T08:00:00+00:00", total_count: 5198 },
 };
 
-it("renders full-universe coverage and a validated deterministic shortlist", async () => {
+it("keeps discovery visible while universe maintenance starts collapsed", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(
       JSON.stringify({
@@ -70,10 +70,25 @@ it("renders full-universe coverage and a validated deterministic shortlist", asy
     />,
   );
 
-  expect(screen.getByText("5,200")).toBeInTheDocument();
+  const maintenanceSummary = screen
+    .getByText("Universe status", { selector: "span" })
+    .closest("summary")!;
+  const maintenanceDetails = maintenanceSummary.closest("details");
+  const refreshButton = screen.getByRole("button", {
+    name: "Refresh A-share universe",
+  });
+  const discoveryButton = screen.getByRole("button", {
+    name: "Run full-universe discovery",
+  });
+
+  expect(maintenanceDetails).not.toHaveAttribute("open");
+  expect(maintenanceDetails).toContainElement(screen.getByText("5,200"));
+  expect(maintenanceDetails).toContainElement(refreshButton);
+  expect(refreshButton).not.toBeVisible();
+  expect(discoveryButton).toBeVisible();
   expect(screen.getByText("Balanced research")).toBeInTheDocument();
   expect(screen.getByText("Visible, editable criteria")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Run full-universe discovery" }));
+  fireEvent.click(discoveryButton);
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
   const [, request] = fetchMock.mock.calls[0];
@@ -119,7 +134,20 @@ it("queues an A-share universe refresh and links to its TaskRun", async () => {
       initialUniverseStatus={universeStatus}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Refresh A-share universe" }));
+  const maintenanceSummary = screen
+    .getByText("Universe status", { selector: "span" })
+    .closest("summary")!;
+  const maintenanceDetails = maintenanceSummary.closest("details");
+  expect(maintenanceDetails).not.toHaveAttribute("open");
+
+  fireEvent.click(maintenanceSummary);
+  expect(maintenanceDetails).toHaveAttribute("open");
+
+  const refreshButton = screen.getByRole("button", {
+    name: "Refresh A-share universe",
+  });
+  expect(refreshButton).toBeVisible();
+  fireEvent.click(refreshButton);
 
   expect(await screen.findByText(/universe refresh task was created/i)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open task run" })).toHaveAttribute(
@@ -128,6 +156,9 @@ it("queues an A-share universe refresh and links to its TaskRun", async () => {
   );
   expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/ingestion/instrument-universe", {
     method: "POST",
+  });
+  expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/stock-selection/universe-status", {
+    cache: "no-store",
   });
 });
 

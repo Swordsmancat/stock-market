@@ -34,7 +34,7 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
 
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
-    if (url.endsWith("/instruments")) {
+    if (url === "/instruments?limit=25&offset=0") {
       return Promise.resolve(
         new Response(
           JSON.stringify({
@@ -59,6 +59,10 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
                 source: "database",
               },
             ],
+            total: 2,
+            limit: 25,
+            offset: 0,
+            has_more: false,
           }),
         ),
       );
@@ -153,13 +157,103 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
   expect(screen.getByText("Comparison analysis")).toBeInTheDocument();
   expect(screen.getByText("Return comparison")).toBeInTheDocument();
   expect(screen.getByText("Pearson correlation")).toBeInTheDocument();
+  expect(screen.getByText("Page 1 · showing 2 of 2")).toBeInTheDocument();
+});
+
+it("requests a bounded page and preserves filters in pagination links", async () => {
+  const fetchedUrls: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    fetchedUrls.push(url);
+    if (url === "/instruments?q=bank&market=CN&limit=25&offset=25") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            source: "database",
+            items: [
+              {
+                symbol: "600000",
+                name: "Shanghai Pudong Development Bank",
+                market: "CN",
+                exchange: "SSE",
+                asset_type: "stock",
+                currency: "CNY",
+                source: "database",
+              },
+            ],
+            total: 76,
+            limit: 25,
+            offset: 25,
+            has_more: true,
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/600000/latest")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "600000",
+            source: "database",
+            provider: "yfinance",
+            effective_provider: "yfinance",
+            status: "ok",
+            item: { timestamp: "2026-01-21", close: 10.5 },
+          }),
+        ),
+      );
+    }
+    if (url.includes("/market-data/600000/bars")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            symbol: "600000",
+            source: "database",
+            items: [{ timestamp: "2026-01-21", close: 10.5 }],
+          }),
+        ),
+      );
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  render(
+    await InstrumentsPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({ q: "bank", market: "CN", page: "2" }),
+    }),
+  );
+
+  expect(fetchedUrls[0]).toBe(
+    "/instruments?q=bank&market=CN&limit=25&offset=25",
+  );
+  expect(screen.getByText("Page 2 · showing 1 of 76")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute(
+    "href",
+    "/instruments?q=bank&market=CN",
+  );
+  expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute(
+    "href",
+    "/instruments?q=bank&market=CN&page=3",
+  );
 });
 
 it("renders an actionable empty state when the instrument list is empty", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
-    if (url.endsWith("/instruments")) {
-      return Promise.resolve(new Response(JSON.stringify({ source: "seed", items: [] })));
+    if (url === "/instruments?limit=25&offset=0") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            source: "seed",
+            items: [],
+            total: 0,
+            limit: 25,
+            offset: 0,
+            has_more: false,
+          }),
+        ),
+      );
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
@@ -177,10 +271,45 @@ it("renders an actionable empty state when the instrument list is empty", async 
   ).toBeInTheDocument();
 });
 
+it("distinguishes an empty filtered result from an unavailable instrument catalog", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url === "/instruments?q=missing&market=CN&limit=25&offset=0") {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            source: "database",
+            items: [],
+            total: 0,
+            limit: 25,
+            offset: 0,
+            has_more: false,
+          }),
+        ),
+      );
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`));
+  });
+
+  render(
+    await InstrumentsPage({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({ q: "missing", market: "CN" }),
+    }),
+  );
+
+  expect(screen.getByText("No matching instruments.")).toBeInTheDocument();
+  expect(
+    screen.getByText("Try another symbol or name, or clear the current filters."),
+  ).toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: "Reset" })).not.toHaveLength(0);
+  expect(screen.queryByText("No instruments yet.")).not.toBeInTheDocument();
+});
+
 it("renders an error state when instruments cannot be loaded", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
-    if (url.endsWith("/instruments")) {
+    if (url === "/instruments?limit=25&offset=0") {
       return Promise.resolve(new Response("", { status: 503 }));
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));

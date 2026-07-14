@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/platform-settings-store", () => ({
@@ -473,6 +473,30 @@ function createMarketDailyEvidencePayload() {
   };
 }
 
+function createOfficialDisclosureEvidencePayload() {
+  return {
+    status: "ok",
+    symbols: ["000001"],
+    summary: {
+      eligible_symbol_count: 1,
+      metadata_disclosure_count: 1,
+      extracted_document_count: 1,
+      citable_section_count: 3,
+    },
+    items: [{
+      id: "11111111-2222-3333-4444-555555555555",
+      symbol: "000001",
+      title: "2025 Annual Report",
+      published_at: "2026-03-21T00:00:00+00:00",
+      source_url: "https://www.cninfo.com.cn/disclosure/1",
+      citation_id: "official_disclosure:11111111-2222-3333-4444-555555555555",
+      status: "extracted",
+      section_count: 3,
+      content_citable: true,
+    }],
+  };
+}
+
 it("renders macro evidence first, keeps advanced source tools reachable, and resolves template labels", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
@@ -492,27 +516,7 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
       return Promise.resolve(new Response(JSON.stringify(createMarketDailyEvidencePayload())));
     }
     if (url.endsWith("/official-disclosures/evidence-status?limit=50")) {
-      return Promise.resolve(new Response(JSON.stringify({
-        status: "ok",
-        symbols: ["000001"],
-        summary: {
-          eligible_symbol_count: 1,
-          metadata_disclosure_count: 1,
-          extracted_document_count: 1,
-          citable_section_count: 3,
-        },
-        items: [{
-          id: "11111111-2222-3333-4444-555555555555",
-          symbol: "000001",
-          title: "2025 Annual Report",
-          published_at: "2026-03-21T00:00:00+00:00",
-          source_url: "https://www.cninfo.com.cn/disclosure/1",
-          citation_id: "official_disclosure:11111111-2222-3333-4444-555555555555",
-          status: "extracted",
-          section_count: 3,
-          content_citable: true,
-        }],
-      })));
+      return Promise.resolve(new Response(JSON.stringify(createOfficialDisclosureEvidencePayload())));
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
@@ -530,6 +534,14 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   expect(screen.getAllByText("Deterministic fallback").length).toBeGreaterThan(0);
   expect(screen.getByText("Macro evidence: 1")).toBeInTheDocument();
   expect(screen.getByText("Source gaps: 2")).toBeInTheDocument();
+
+  const sourceMaintenanceSummary = screen.getByText("Data sources and maintenance").closest("summary");
+  const sourceMaintenanceDetails = sourceMaintenanceSummary?.closest("details");
+  expect(sourceMaintenanceDetails).not.toBeNull();
+  expect(sourceMaintenanceDetails).not.toHaveAttribute("open");
+  fireEvent.click(sourceMaintenanceSummary!);
+  expect(sourceMaintenanceDetails).toHaveAttribute("open");
+
   expect(screen.getByText("Official macro refresh status")).toBeInTheDocument();
   expect(screen.getByText("Manual runbook")).toBeInTheDocument();
   expect(screen.getByText("Browser refresh enabled")).toBeInTheDocument();
@@ -559,16 +571,20 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   expect(screen.getAllByText("7/7 checks").length).toBeGreaterThan(0);
 
   const pageText = document.body.textContent ?? "";
-  expect(pageText.indexOf("Official macro refresh status")).toBeLessThan(pageText.indexOf("AI evidence summary"));
-  expect(pageText.indexOf("AI evidence summary")).toBeLessThan(pageText.indexOf("Macro and valuation evidence"));
-  expect(pageText.indexOf("Saved research brief inbox")).toBeLessThan(pageText.indexOf("Macro and valuation evidence"));
+  expect(pageText.indexOf("AI evidence summary")).toBeLessThan(pageText.indexOf("Saved research brief inbox"));
+  expect(pageText.indexOf("Saved research brief inbox")).toBeLessThan(pageText.indexOf("Source notebook"));
+  expect(pageText.indexOf("Source notebook")).toBeLessThan(pageText.indexOf("Stored market daily evidence"));
+  expect(pageText.indexOf("Official disclosure document evidence")).toBeLessThan(
+    pageText.indexOf("Official macro refresh status"),
+  );
+  expect(pageText.indexOf("Official macro refresh status")).toBeLessThan(pageText.indexOf("Macro and valuation evidence"));
   expect(pageText.indexOf("Macro and valuation evidence")).toBeLessThan(
     pageText.indexOf("Source readiness and collection workflow"),
   );
   expect(pageText.indexOf("Source readiness and collection workflow")).toBeLessThan(
     pageText.indexOf("Advanced source review tools"),
   );
-  expect(screen.getByText("Open manual source-review tools")).toBeInTheDocument();
+  expect(screen.getByText("Data sources and maintenance")).toBeInTheDocument();
 
   const ratesRow = screen
     .getAllByText("US 10Y Treasury Yield")
@@ -620,8 +636,49 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   ).toBeInTheDocument();
   expect(screen.getByText("Only persisted rows are citable")).toBeInTheDocument();
   expect(screen.getByText("Official disclosure document evidence")).toBeInTheDocument();
-  expect(screen.getByText("2025 Annual Report")).toBeInTheDocument();
+  expect(screen.getAllByText("2025 Annual Report").length).toBeGreaterThan(0);
   expect(screen.getByText("Watchlist-only, sequential CNINFO requests")).toBeInTheDocument();
+
+  const marketMaintenanceDetails = screen
+    .getByText("Market evidence refresh and import")
+    .closest("details");
+  const disclosureMaintenanceDetails = screen
+    .getByText("Disclosure ingestion operations")
+    .closest("details");
+  expect(marketMaintenanceDetails).not.toBeNull();
+  expect(marketMaintenanceDetails).not.toHaveAttribute("open");
+  expect(marketMaintenanceDetails).not.toContainElement(
+    screen.getByText("market_daily_event:hot_sector:semiconductor:2026-01-02"),
+  );
+  expect(
+    within(marketMaintenanceDetails!).getByRole("button", {
+      name: "Refresh today's market evidence",
+      hidden: true,
+    }),
+  ).toBeInTheDocument();
+  expect(disclosureMaintenanceDetails).not.toBeNull();
+  expect(disclosureMaintenanceDetails).not.toHaveAttribute("open");
+  expect(disclosureMaintenanceDetails).not.toContainElement(
+    screen.getByRole("link", { name: "2025 Annual Report" }),
+  );
+  expect(
+    within(disclosureMaintenanceDetails!).getByRole("button", {
+      name: "Ingest watchlist disclosures",
+      hidden: true,
+    }),
+  ).toBeInTheDocument();
+  expect(
+    within(disclosureMaintenanceDetails!).getByRole("button", {
+      name: "Ingest PDF",
+      hidden: true,
+    }),
+  ).toBeInTheDocument();
+  expect(sourceMaintenanceDetails).not.toContainElement(
+    screen.getByText("Stored market daily evidence"),
+  );
+  expect(sourceMaintenanceDetails).not.toContainElement(
+    screen.getByText("Official disclosure document evidence"),
+  );
 
   const fredLink = screen.getByRole("link", { name: /FRED DGS10/, hidden: true });
   expect(fredLink).toHaveAttribute("href", "https://fred.stlouisfed.org/series/DGS10");
@@ -633,11 +690,20 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   expect(screen.getAllByText("Not investment advice").length).toBeGreaterThan(0);
 });
 
-it("renders a failed-load state when the market overview endpoint fails", async () => {
+it("keeps independently loaded notes and briefs visible when market overview fails", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
     if (url.endsWith("/research-source-notes?limit=50")) {
-      return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+      return Promise.resolve(new Response(JSON.stringify(createResearchSourceNotesPayload())));
+    }
+    if (url.endsWith("/research-briefs?limit=10")) {
+      return Promise.resolve(new Response(JSON.stringify(createResearchBriefsPayload())));
+    }
+    if (url.endsWith("/market-daily-evidence?limit=12&citable_only=true")) {
+      return Promise.resolve(new Response(JSON.stringify(createMarketDailyEvidencePayload())));
+    }
+    if (url.endsWith("/official-disclosures/evidence-status?limit=50")) {
+      return Promise.resolve(new Response(JSON.stringify(createOfficialDisclosureEvidencePayload())));
     }
     return Promise.resolve(new Response("", { status: 503 }));
   });
@@ -650,6 +716,12 @@ it("renders a failed-load state when the market overview endpoint fails", async 
   );
 
   expect(screen.getByText("Macro Research is unavailable")).toBeInTheDocument();
-  expect(screen.getByText("Could not load the market overview research payload. Check the API service and provider settings.")).toBeInTheDocument();
+  expect(screen.getByText("The market overview could not be loaded. Independently available notes, briefs, and stored evidence remain visible below.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Provider settings" })).toHaveAttribute("href", "/settings");
+  expect(screen.getByText("Morning macro evidence")).toBeInTheDocument();
+  expect(screen.getAllByText("AAPL valuation source note").length).toBeGreaterThan(0);
+  expect(
+    screen.getByText("market_daily_event:hot_sector:semiconductor:2026-01-02"),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "2025 Annual Report" })).toBeInTheDocument();
 });

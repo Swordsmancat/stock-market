@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { savePlatformSettingsAction } from "@/app/[locale]/actions";
 import { FlashBanner } from "@/components/flash-banner";
 import { FinancialPageHeader } from "@/components/financial-page-header";
+import { LlmSettingsControl } from "@/components/llm-settings-control";
 import {
   FinancialTerminalCard,
   FinancialTerminalCardContent,
@@ -26,6 +27,7 @@ import {
   type HomeIndexDisplayField,
   type NewsSearchProviderId,
 } from "@/lib/platform-settings-store";
+import { Link } from "@/src/i18n/routing";
 
 export default async function SettingsPage({
   params,
@@ -186,167 +188,54 @@ export default async function SettingsPage({
               <CardDescription>{t("llmDesc")}</CardDescription>
             </FinancialTerminalCardHeader>
             <FinancialTerminalCardContent className="space-y-4">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <label
-                    className="text-sm font-medium"
-                    htmlFor="llm_api_preset"
-                  >
-                    {t("llmPreset")}
-                  </label>
-                  <select
-                    id="llm_api_preset"
-                    name="llm_api_preset"
-                    defaultValue={llmPreset}
-                    aria-describedby="llm_api_preset_help"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="disabled">
-                      {llmPresetLabels.disabled}
-                    </option>
-                    <option value="deepseek">
-                      {llmPresetLabels.deepseek}
-                    </option>
-                    <option value="openai">{llmPresetLabels.openai}</option>
-                    <option value="custom">{llmPresetLabels.custom}</option>
-                  </select>
-                  <p
-                    id="llm_api_preset_help"
-                    className="text-xs text-muted-foreground"
-                  >
-                    {t("llmPresetHint")}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="llm_api_key">
-                    {t("llmApiKey")}
-                  </label>
-                  <Input
-                    id="llm_api_key"
-                    name="llm_api_key"
-                    type="password"
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    aria-describedby={
-                      llmError === "missing_key"
-                        ? "llm_api_key_help llm_api_key_error"
-                        : "llm_api_key_help"
-                    }
-                    aria-invalid={
-                      llmError === "missing_key" ? true : undefined
-                    }
-                    autoFocus={llmError === "missing_key"}
-                    placeholder={t("llmApiKeyPlaceholder")}
-                  />
-                  <p
-                    id="llm_api_key_help"
-                    className="text-xs text-muted-foreground"
-                  >
-                    {llmApiKeyHelp}
-                  </p>
-                  {llmError === "missing_key" && llmErrorMessage ? (
-                    <p
-                      id="llm_api_key_error"
-                      role="alert"
-                      className="text-xs text-destructive"
-                    >
-                      {llmErrorMessage}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-              <details
-                open={llmPreset === "custom"}
-                className="rounded-md border border-dashed border-border/80 bg-background/50 p-3"
-              >
-                <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                  {t("llmAdvancedSummary")}
-                </summary>
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <label
-                      className="text-sm font-medium"
-                      htmlFor="llm_api_base"
-                    >
-                      {t("llmApiBase")}
-                    </label>
-                    <Input
-                      id="llm_api_base"
-                      name="llm_api_base"
-                      type="text"
-                      inputMode="url"
-                      defaultValue={settings.llm_api_base}
-                      aria-describedby={
-                        llmError === "invalid_base"
-                          ? "llm_api_base_help llm_api_base_error"
-                          : "llm_api_base_help"
-                      }
-                      aria-invalid={
-                        llmError === "invalid_base" ? true : undefined
-                      }
-                      autoFocus={llmError === "invalid_base"}
-                      placeholder="https://api.example.com/v1"
-                    />
-                    <p
-                      id="llm_api_base_help"
-                      className="text-xs text-muted-foreground"
-                    >
-                      {t("llmApiBaseHint")}
-                    </p>
-                    {llmError === "invalid_base" && llmErrorMessage ? (
-                      <p
-                        id="llm_api_base_error"
-                        role="alert"
-                        className="text-xs text-destructive"
-                      >
-                        {llmErrorMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="llm_model">
-                      {t("llmModel")}
-                    </label>
-                    <Input
-                      id="llm_model"
-                      name="llm_model"
-                      defaultValue={settings.llm_model}
-                      maxLength={128}
-                      autoComplete="off"
-                      spellCheck={false}
-                      aria-describedby={
-                        llmError === "missing_model"
-                          ? "llm_model_help llm_model_error"
-                          : "llm_model_help"
-                      }
-                      aria-invalid={
-                        llmError === "missing_model" ? true : undefined
-                      }
-                      autoFocus={llmError === "missing_model"}
-                      placeholder="model-name"
-                    />
-                    <p
-                      id="llm_model_help"
-                      className="text-xs text-muted-foreground"
-                    >
-                      {t("llmModelHint")}
-                    </p>
-                    {llmError === "missing_model" && llmErrorMessage ? (
-                      <p
-                        id="llm_model_error"
-                        role="alert"
-                        className="text-xs text-destructive"
-                      >
-                        {llmErrorMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </details>
+              <LlmSettingsControl
+                initialPreset={llmPreset}
+                initialApiBase={settings.llm_api_base}
+                initialModel={settings.llm_model}
+                initialErrorCode={
+                  llmError && Object.hasOwn(llmErrorMessages, llmError)
+                    ? (llmError as LlmConfigErrorCode)
+                    : null
+                }
+                initialErrorMessage={llmErrorMessage}
+                labels={{
+                  preset: t("llmPreset"),
+                  presetHint: t("llmPresetHint"),
+                  presetOptions: llmPresetLabels,
+                  apiKey: t("llmApiKey"),
+                  apiKeyPlaceholder: t("llmApiKeyPlaceholder"),
+                  apiKeyHelp: llmApiKeyHelp,
+                  apiBase: t("llmApiBase"),
+                  apiBaseHint: t("llmApiBaseHint"),
+                  apiBasePlaceholder: "https://api.example.com/v1",
+                  model: t("llmModel"),
+                  modelHint: t("llmModelHint"),
+                  modelPlaceholder: "model-name",
+                  testConnection: t("llmTestConnection"),
+                  testing: t("llmTesting"),
+                  testHint: t("llmTestHint"),
+                  testConnected: t("llmTestConnected"),
+                  testProvider: t("llmTestProvider"),
+                  testModel: t("llmTestModel"),
+                  testLatency: t("llmTestLatency"),
+                  testErrors: {
+                    provider_disabled: t("llmTestProviderDisabled"),
+                    key_not_configured: t("llmTestKeyNotConfigured"),
+                    invalid_configuration: t("llmTestInvalidConfiguration"),
+                    provider_unavailable: t("llmTestProviderUnavailable"),
+                    invalid_provider_response: t("llmTestInvalidResponse"),
+                    request_failed: t("llmTestRequestFailed"),
+                  },
+                }}
+              />
             </FinancialTerminalCardContent>
           </FinancialTerminalCard>
 
+          <details className="xl:col-span-2 rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
+              {t("advancedSettingsSummary")}
+            </summary>
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <FinancialTerminalCard>
             <FinancialTerminalCardHeader>
               <CardTitle>{t("dataProviderTitle")}</CardTitle>
@@ -812,9 +701,25 @@ export default async function SettingsPage({
               </p>
             </FinancialTerminalCardContent>
           </FinancialTerminalCard>
+
+          <FinancialTerminalCard className="xl:col-span-2">
+            <FinancialTerminalCardHeader>
+              <CardTitle>{t("maintenanceLinksTitle")}</CardTitle>
+              <CardDescription>{t("maintenanceLinksDesc")}</CardDescription>
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" asChild>
+                <Link href="/evidence">{t("openEvidence")}</Link>
+              </Button>
+              <Button type="button" variant="outline" size="sm" asChild>
+                <Link href="/task-runs">{t("openTaskRuns")}</Link>
+              </Button>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
+            </div>
+          </details>
         </div>
 
-        <Button type="submit">{t("save")}</Button>
       </form>
     </div>
   );

@@ -11,8 +11,8 @@
   OpenAI-compatible HTTP provider, and model metadata returned by existing AI
   research services.
 - Non-goals: provider discovery/registry, multiple profiles or keys, streaming,
-  quota/cost reporting, a paid connection-test endpoint, secret-manager
-  infrastructure, prompt/ranking changes, or new AI workflows.
+  quota/cost reporting, secret-manager infrastructure, prompt/ranking changes,
+  or new AI workflows. The bounded manual connection test is documented below.
 
 ### 2. Signatures
 
@@ -101,6 +101,128 @@
   fallback/citation/symbol/rank/safety regressions remain unchanged.
 - Live acceptance compares deterministic and LLM discovery membership/rank and
   verifies one market-assistant response uses only returned citation IDs.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+provider = "deepseek"
+```
+
+This creates a second persisted provider branch for a host/model preset.
+
+#### Correct
+
+```python
+provider = "openai"
+api_base = "https://api.deepseek.com/v1"
+model = "deepseek-chat"
+```
+
+DeepSeek remains a preset over the existing OpenAI-compatible provider path.
+
+## Scenario: Manual LLM Connection Test
+
+### 1. Scope / Trigger
+
+- Trigger: a personal installation explicitly clicks the Settings connection
+  test after saving an OpenAI-compatible configuration.
+- Scope: `packages/services/llm_connection.py`, `POST /settings/llm/test`, the
+  same-origin Next proxy, and `LlmSettingsControl` pending/result states.
+- Non-goals: background health polling, save-time validation calls, retries,
+  prompt or answer display, settings writes, provider discovery, or cost/quota
+  reporting.
+
+### 2. Signatures
+
+- Service: `run_llm_connection_test() -> dict[str, object]`.
+- FastAPI: `POST /settings/llm/test` with no request body.
+- Next proxy: `POST /api/settings/llm/test` with no request body.
+- Success payload fields: `status="ok"`, `code="connected"`, `provider`,
+  `model`, `latency_ms`.
+- Error payload fields: `status="error"`, stable `code`, sanitized `message`,
+  and safe `provider`, `model`, or `latency_ms` when available.
+
+### 3. Contracts
+
+- The test reads the saved private settings; unsaved browser fields are not
+  sent to the endpoint.
+- One click calls `get_llm_provider(settings).generate(...)` once. The service
+  has no retry loop, and `OpenAICompatibleLLMProvider.generate()` issues one
+  `httpx.post` without an automatic retry client.
+- The prompt is fixed and minimal. The generated answer is checked only for a
+  non-empty string, then discarded. Prompt and answer are never serialized.
+- Elapsed time uses `time.monotonic()` and is returned as a non-negative whole
+  number of milliseconds.
+- The endpoint does not call a settings writer or mutate the saved file. The
+  Settings save action never invokes the test endpoint.
+- The Next proxy preserves the upstream status and content type and applies
+  `cache-control: no-store`; transport failures become a generic secret-safe
+  502 payload.
+- Built-in DeepSeek/OpenAI presets render only the key field. Base URL and
+  model fields render only for the custom preset. A failed test does not change
+  the selected or saved configuration.
+
+### 4. Validation & Error Matrix
+
+- Disabled/mock provider -> HTTP 400, `provider_disabled`, no provider call.
+- Missing or blank key -> HTTP 400, `key_not_configured`, no provider call.
+- Unknown provider, invalid base, or invalid model -> HTTP 400,
+  `invalid_configuration`, no provider call.
+- Provider exception or HTTP failure -> HTTP 502, `provider_unavailable`.
+- Empty or malformed generation -> HTTP 502, `invalid_provider_response`.
+- Every error path omits API keys, authorization headers, credential-bearing
+  URLs, prompts, answers, upstream bodies, and stack traces.
+
+### 5. Good/Base/Bad Cases
+
+- Good: one manual DeepSeek click returns `openai`, `deepseek-chat`, and a
+  measured latency; only the sanitized metadata is rendered.
+- Base: no key is configured, so the button returns a localized stable error
+  without constructing a provider.
+- Bad: saving Settings silently sends a paid model request.
+- Bad: a provider exception body or generated `OK` answer is returned to the
+  browser.
+- Bad: a failed test clears, replaces, or persists configuration fields.
+
+### 6. Tests Required
+
+- Service tests assert one provider call, monotonic latency, discarded output,
+  no file write, invalid preconditions, provider failure, and malformed output.
+- API tests assert the exact status/code matrix and scan serialized payloads
+  for keys, authorization text, prompt text, upstream bodies, and answers.
+- Next proxy tests assert one POST, no-store behavior, status/content-type
+  preservation, and a generic transport failure.
+- Client tests assert built-in/custom field visibility, no request on render or
+  form save, one request per click, pending disablement, localized errors, and
+  sanitized success metadata.
+- Automated suites use fake providers only. A real provider acceptance is an
+  explicit one-click manual run whose evidence records no credential or answer.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+for attempt in range(3):
+    answer = provider.generate(prompt)
+return {"answer": answer, "error": str(error)}
+```
+
+This creates hidden paid retries and leaks provider content or errors.
+
+#### Correct
+
+```python
+answer = get_llm_provider(settings).generate(LLM_CONNECTION_TEST_PROMPT)
+if not isinstance(answer, str) or not answer.strip():
+    raise LLMConnectionTestError(code="invalid_provider_response", http_status_code=502)
+return {"status": "ok", "code": "connected", "provider": provider, "model": model, "latency_ms": latency_ms}
+```
+
+The provider is called once and only sanitized connection metadata crosses the
+HTTP boundary.
 
 ## Scenario: Research Evidence and Citation-Enriched Market Assistant
 

@@ -162,9 +162,18 @@ it("renders the DeepSeek preset without exposing the stored API key", async () =
   expect(
     screen.getByText(/A key is saved on the server/),
   ).toBeInTheDocument();
-  expect(
-    screen.getByText("Custom endpoint and model").closest("details"),
-  ).not.toHaveAttribute("open");
+  expect(screen.queryByLabelText("API Base URL")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Model")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Test connection" })).toHaveAttribute(
+    "type",
+    "button",
+  );
+  expect(screen.getAllByRole("button", { name: "Save Settings" })).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Save Settings" })).toHaveAttribute(
+    "type",
+    "submit",
+  );
+  expect(screen.getByText("Data providers, display preferences, and maintenance")).toBeInTheDocument();
 
   const llmPresetSelect = screen.getByLabelText("API preset");
   const marketDataSelect = document.querySelector(
@@ -207,7 +216,5 @@ it("opens custom fields and localizes stable LLM configuration errors", async ()
     "type",
     "text",
   );
-  expect(
-    screen.getByText("Custom endpoint and model").closest("details"),
-  ).toHaveAttribute("open");
+  expect(screen.getByLabelText("Model")).toBeInTheDocument();
 });

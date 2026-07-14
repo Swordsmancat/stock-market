@@ -1466,6 +1466,7 @@ function buildMarketDailyEvidenceLabels(
   return {
     title: t("title"),
     description: t("description"),
+    maintenanceSummary: t("maintenanceSummary"),
     refreshAction: t("refreshAction"),
     refreshing: t("refreshing"),
     totalRows: t("totalRows"),
@@ -1509,6 +1510,7 @@ function buildOfficialDisclosureEvidenceLabels(
   return {
     title: t("title"),
     description: t("description"),
+    maintenanceSummary: t("maintenanceSummary"),
     batchAction: t("batchAction"),
     batchPending: t("batchPending"),
     batchQueued: t("batchQueued"),
@@ -1603,53 +1605,16 @@ export default async function EvidenceCenterPage({
     fetchOfficialDisclosureEvidence(),
   ]);
 
-  if (marketOverviewResult.status === "failed") {
-    return (
-      <div className="space-y-6">
-        <FinancialPageHeader
-          title={t("title")}
-          description={t("description")}
-          badges={[
-            { label: t("badge"), variant: "secondary" },
-            { label: t("activeProvider", { provider }) },
-          ]}
-          metrics={[
-            {
-              label: t("metricIndicators"),
-              value: t("unavailableShort"),
-              description: t("metricIndicatorsDesc"),
-            },
-            {
-              label: t("metricCitable"),
-              value: t("unavailableShort"),
-              description: t("metricCitableDesc"),
-            },
-            {
-              label: t("metricMissing"),
-              value: t("unavailableShort"),
-              description: t("metricMissingDesc"),
-            },
-            {
-              label: t("metricSourcesNeedAction"),
-              value: t("unavailableShort"),
-              description: t("metricSourcesNeedActionDesc"),
-            },
-          ]}
-          actions={
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/settings">{t("openSettings")}</Link>
-            </Button>
-          }
-        />
-        <ErrorState
-          title={t("loadFailedTitle")}
-          description={t("loadFailedDescription")}
-        />
-      </div>
-    );
-  }
-
-  const payload = marketOverviewResult.payload;
+  const marketOverviewUnavailable = marketOverviewResult.status === "failed";
+  const payload: MarketOverviewPayload =
+    marketOverviewResult.status === "loaded"
+      ? marketOverviewResult.payload
+      : {
+          generated_at: "",
+          provider,
+          macro_indicators: { items: [] },
+          valuation_indicators: { items: [] },
+        };
   const indicators = getIndicatorItems(payload);
   const dashboardBrief = payload.dashboard_brief ?? null;
   const informationSources = payload.information_sources ?? null;
@@ -1685,40 +1650,51 @@ export default async function EvidenceCenterPage({
         badges={[
           { label: t("badge"), variant: "secondary" },
           { label: t("activeProvider", { provider }) },
-          {
-            label: t("generatedAt", {
-              date: formatDate(
-                payload.generated_at,
-                locale,
-                t("unavailableShort"),
-              ),
-            }),
-          },
+          ...(!marketOverviewUnavailable
+            ? [
+                {
+                  label: t("generatedAt", {
+                    date: formatDate(
+                      payload.generated_at,
+                      locale,
+                      t("unavailableShort"),
+                    ),
+                  }),
+                },
+              ]
+            : []),
         ]}
         metrics={[
           {
             label: t("metricIndicators"),
-            value: indicators.length,
+            value: marketOverviewUnavailable ? t("unavailableShort") : indicators.length,
             description: t("metricIndicatorsDesc"),
           },
           {
             label: t("metricCitable"),
-            value: citableIndicatorCount,
+            value: marketOverviewUnavailable ? t("unavailableShort") : citableIndicatorCount,
             description: t("metricCitableDesc"),
           },
           {
             label: t("metricMissing"),
-            value: missingIndicatorCount,
+            value: marketOverviewUnavailable ? t("unavailableShort") : missingIndicatorCount,
             description: t("metricMissingDesc"),
           },
           {
             label: t("metricSourcesNeedAction"),
-            value: informationSources?.summary?.needs_action ?? 0,
+            value: marketOverviewUnavailable
+              ? t("unavailableShort")
+              : (informationSources?.summary?.needs_action ?? 0),
             description: t("metricSourcesNeedActionDesc"),
           },
         ]}
         actions={
           <>
+            {marketOverviewUnavailable ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link href="/settings">{t("openSettings")}</Link>
+              </Button>
+            ) : null}
             <Button size="sm" variant="outline" asChild>
               <Link href="/reports">{t("openReports")}</Link>
             </Button>
@@ -1729,14 +1705,12 @@ export default async function EvidenceCenterPage({
         }
       />
 
-      {renderOfficialRefreshGuidance(
-        indicators,
-        informationSources,
-        officialSourceStatus,
-        t,
-        locale,
-        sourceStatusLabels,
-      )}
+      {marketOverviewUnavailable ? (
+        <ErrorState
+          title={t("loadFailedTitle")}
+          description={t("partialLoadDescription")}
+        />
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <FinancialTerminalCard>
@@ -1927,6 +1901,19 @@ export default async function EvidenceCenterPage({
         locale={locale}
       />
 
+      <ResearchSourceNotebook
+        labels={buildNotebookLabels(notebookT)}
+        initialNotes={researchSourceNotesResult.items}
+        sourceTargets={sourceTargetOptions}
+        loadFailed={researchSourceNotesResult.status === "failed"}
+      />
+
+      {renderResearchFollowUpQueue(
+        payload.research_follow_up_queue,
+        t,
+        locale,
+      )}
+
       <MarketDailyEvidencePanel
         labels={buildMarketDailyEvidenceLabels(marketDailyEvidenceT)}
         initialPayload={marketDailyEvidenceResult.payload}
@@ -1939,7 +1926,21 @@ export default async function EvidenceCenterPage({
         loadFailed={officialDisclosureEvidenceResult.status === "failed"}
       />
 
-      <FinancialTerminalCard>
+      <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground">
+          {t("advancedMaintenanceSummary")}
+        </summary>
+        <div className="mt-4 space-y-4">
+          {renderOfficialRefreshGuidance(
+            indicators,
+            informationSources,
+            officialSourceStatus,
+            t,
+            locale,
+            sourceStatusLabels,
+          )}
+
+          <FinancialTerminalCard>
         <FinancialTerminalCardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Database className="h-5 w-5" />
@@ -2378,30 +2379,12 @@ export default async function EvidenceCenterPage({
             {t("advancedToolsDescription")}
           </p>
         </div>
-        <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-foreground">
-            {t("advancedToolsSummary")}
-          </summary>
-          <div className="mt-4 space-y-4">
-            <EvidenceSeedImportReview
-              labels={buildSeedImportLabels(seedImportT)}
-            />
-
-            <ResearchSourceNotebook
-              labels={buildNotebookLabels(notebookT)}
-              initialNotes={researchSourceNotesResult.items}
-              sourceTargets={sourceTargetOptions}
-              loadFailed={researchSourceNotesResult.status === "failed"}
-            />
-
-            {renderResearchFollowUpQueue(
-              payload.research_follow_up_queue,
-              t,
-              locale,
-            )}
-          </div>
-        </details>
+        <EvidenceSeedImportReview
+          labels={buildSeedImportLabels(seedImportT)}
+        />
       </section>
+        </div>
+      </details>
 
       <FinancialTerminalCard>
         <FinancialTerminalCardHeader>

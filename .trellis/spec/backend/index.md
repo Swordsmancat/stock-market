@@ -40,7 +40,8 @@ Primary examples:
 | [Error Handling](./error-handling.md) | HTTPException mapping, provider boundary errors, and diagnostic WARN/FAIL semantics | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Focused pytest, non-mutating diagnostics, and subagent safety boundaries | Filled |
 | [Logging Guidelines](./logging-guidelines.md) | Current logging state and sensitive-data boundaries | Filled |
-| [Assistant Research Citation Contract](./assistant-research-citation-contract.md) | `/assistant/market` research-evidence citations, diagnostics, LLM citation validation, and safety boundaries | Filled |
+| [Assistant Research Citation Contract](./assistant-research-citation-contract.md) | OpenAI-compatible configuration, one-click secret-safe connection testing, `/assistant/market` citations, diagnostics, and safety boundaries | Filled |
+| [Instrument List Query Contract](./instrument-list-query-contract.md) | Additive bounded instrument filtering/pagination with legacy complete-list compatibility | Filled |
 | [News Search Provider Contract](./news-search-provider-contract.md) | Configurable search provider settings, adapter diagnostics, storage/citation boundary, and no-secret payload rules | Filled |
 | [InStock-Inspired Analysis Pattern Contract](./instock-analysis-pattern-contract.md) | Stored InStock-inspired technical indicators, candlestick patterns, chip distribution, attribution boundary, and no-trading rules | Filled |
 | [InStock-Inspired Composite Stock Selection Contract](./instock-composite-stock-selection-contract.md) | Research-only local composite stock selection over stored technical/fundamental evidence | Filled |

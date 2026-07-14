@@ -31,7 +31,7 @@ import type { ComparisonInstrument } from "@/lib/comparison-utils";
 import { getPlatformSettings } from "@/lib/platform-settings-store";
 import { Link } from "@/src/i18n/routing";
 
-const MAX_LATEST_DAILY_BAR_REQUESTS = 25;
+const INSTRUMENTS_PAGE_SIZE = 25;
 const MAX_COMPARISON_BAR_REQUESTS = 8;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -48,6 +48,10 @@ type Instrument = {
 type InstrumentsPayload = {
   source: string;
   items: Instrument[];
+  total: number;
+  limit: number | null;
+  offset: number;
+  has_more: boolean;
 };
 
 type LatestDailyBarPayload = {
@@ -86,16 +90,19 @@ type InstrumentsPageProps = {
   searchParams?: Promise<{
     q?: string;
     market?: string;
+    page?: string;
   }>;
 };
 
 async function fetchInstrumentsPayload(searchParams: {
   q?: string;
   market?: string;
+  page?: string;
 }): Promise<InstrumentsLoadResult> {
   const upstreamParams = new URLSearchParams();
   const query = searchParams.q?.trim();
   const market = searchParams.market?.trim();
+  const page = parsePageNumber(searchParams.page);
 
   if (query) {
     upstreamParams.set("q", query);
@@ -103,11 +110,13 @@ async function fetchInstrumentsPayload(searchParams: {
   if (market) {
     upstreamParams.set("market", market);
   }
+  upstreamParams.set("limit", String(INSTRUMENTS_PAGE_SIZE));
+  upstreamParams.set(
+    "offset",
+    String((page - 1) * INSTRUMENTS_PAGE_SIZE),
+  );
 
-  const queryString = upstreamParams.toString();
-  const requestPath = queryString
-    ? `/instruments?${queryString}`
-    : "/instruments";
+  const requestPath = `/instruments?${upstreamParams.toString()}`;
 
   try {
     const response = await backendFetch(requestPath, { cache: "no-store" });
@@ -122,6 +131,25 @@ async function fetchInstrumentsPayload(searchParams: {
   } catch {
     return { status: "failed" };
   }
+}
+
+function parsePageNumber(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function buildPageHref(
+  page: number,
+  searchParams: { q?: string; market?: string },
+): string {
+  const params = new URLSearchParams();
+  const query = searchParams.q?.trim();
+  const market = searchParams.market?.trim();
+  if (query) params.set("q", query);
+  if (market) params.set("market", market);
+  if (page > 1) params.set("page", String(page));
+  const queryString = params.toString();
+  return queryString ? `/instruments?${queryString}` : "/instruments";
 }
 
 async function fetchLatestDailyBar(
@@ -362,6 +390,10 @@ export default async function InstrumentsPage({
     params,
     searchParams,
   ]);
+  const currentPage = parsePageNumber(resolvedSearchParams.page);
+  const hasActiveFilters = Boolean(
+    resolvedSearchParams.q?.trim() || resolvedSearchParams.market?.trim(),
+  );
   const [t, platformSettings, instrumentsResult] = await Promise.all([
     getTranslations("Instruments"),
     getPlatformSettings(),
@@ -418,10 +450,8 @@ export default async function InstrumentsPage({
   }
 
   const instruments = instrumentsResult.payload.items;
-  const visibleInstruments = instruments.slice(
-    0,
-    MAX_LATEST_DAILY_BAR_REQUESTS,
-  );
+  const visibleInstruments = instruments.slice(0, INSTRUMENTS_PAGE_SIZE);
+  const totalInstruments = instrumentsResult.payload.total;
   const { analysis } = getDashboardDateRanges();
   const latestDailyBars = await Promise.all(
     visibleInstruments.map((instrument) =>
@@ -434,6 +464,8 @@ export default async function InstrumentsPage({
     analysis,
   );
   const latestDailyBarHealthCounts = countLatestDailyBarHealth(latestDailyBars);
+  const hasPreviousPage = currentPage > 1;
+  const hasNextPage = instrumentsResult.payload.has_more;
 
   return (
     <div className="space-y-6">
@@ -455,7 +487,7 @@ export default async function InstrumentsPage({
             value: visibleInstruments.length,
             description: t("tableDescription", {
               visible: visibleInstruments.length,
-              total: instruments.length,
+              total: totalInstruments,
             }),
           },
           { label: t("fresh"), value: latestDailyBarHealthCounts.fresh },
@@ -518,7 +550,7 @@ export default async function InstrumentsPage({
           <CardDescription>
             {t("healthSummaryDesc", {
               visible: visibleInstruments.length,
-              total: instruments.length,
+              total: totalInstruments,
               provider: activeProvider,
             })}
           </CardDescription>
@@ -571,14 +603,26 @@ export default async function InstrumentsPage({
           <CardDescription>
             {t("tableDescription", {
               visible: visibleInstruments.length,
-              total: instruments.length,
+              total: totalInstruments,
             })}
           </CardDescription>
         </FinancialTerminalCardHeader>
         <FinancialTerminalCardContent className="p-0">
           {instruments.length === 0 ? (
             <div className="p-4">
-              <EmptyState title={t("noData")} description={t("emptyHint")} />
+              <EmptyState
+                title={hasActiveFilters ? t("noMatches") : t("noData")}
+                description={
+                  hasActiveFilters ? t("noMatchesHint") : t("emptyHint")
+                }
+              />
+              {hasActiveFilters ? (
+                <div className="flex justify-center">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/instruments">{t("reset")}</Link>
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -706,6 +750,53 @@ export default async function InstrumentsPage({
               </Table>
             </div>
           )}
+          <div className="flex flex-col gap-3 border-t border-border/70 px-3 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {t("pageStatus", {
+                page: currentPage,
+                visible: visibleInstruments.length,
+                total: totalInstruments,
+              })}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasPreviousPage}
+                asChild={hasPreviousPage}
+              >
+                {hasPreviousPage ? (
+                  <Link
+                    href={
+                      buildPageHref(currentPage - 1, resolvedSearchParams) as any
+                    }
+                  >
+                    {t("previousPage")}
+                  </Link>
+                ) : (
+                  <span>{t("previousPage")}</span>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasNextPage}
+                asChild={hasNextPage}
+              >
+                {hasNextPage ? (
+                  <Link
+                    href={
+                      buildPageHref(currentPage + 1, resolvedSearchParams) as any
+                    }
+                  >
+                    {t("nextPage")}
+                  </Link>
+                ) : (
+                  <span>{t("nextPage")}</span>
+                )}
+              </Button>
+            </div>
+          </div>
         </FinancialTerminalCardContent>
       </FinancialTerminalCard>
 

@@ -4,6 +4,10 @@ from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field, field_validator
 from starlette.responses import JSONResponse
 
+from packages.services.llm_connection import (
+    LLMConnectionTestError,
+    run_llm_connection_test,
+)
 from packages.services.platform_settings import (
     get_platform_settings_public,
     is_valid_llm_api_base,
@@ -134,3 +138,15 @@ def read_platform_settings() -> dict[str, object]:
 def write_platform_settings(body: PlatformSettingsUpdate) -> dict[str, object]:
     updates = body.model_dump(exclude_unset=True)
     return {"source": "platform_settings", **update_platform_settings(updates)}
+
+
+@router.post("/llm/test")
+def test_llm_connection() -> JSONResponse:
+    try:
+        payload = run_llm_connection_test()
+    except LLMConnectionTestError as error:
+        return JSONResponse(
+            status_code=error.http_status_code,
+            content=error.to_payload(),
+        )
+    return JSONResponse(status_code=200, content=payload)

@@ -126,7 +126,6 @@ export default async function WatchlistPage({
           { label: t("summarySource", { source: payload.source }) },
         ]}
         metrics={summaryMetrics}
-        actions={<WatchlistAddForm locale={locale} className="w-full xl:w-auto" />}
       />
 
       <Card className="overflow-hidden rounded-md border-primary/10 shadow-none">
@@ -151,7 +150,17 @@ export default async function WatchlistPage({
               {payload.items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="p-6">
-                    <EmptyState title={t("noData")} description={t("emptyHint")} />
+                    <div className="space-y-4">
+                      <EmptyState title={t("noData")} description={t("emptyHint")} />
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <Button size="sm" asChild>
+                          <Link href="/ai-research">{t("discoverCandidates")}</Link>
+                        </Button>
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href="/instruments">{t("browseInstruments")}</Link>
+                        </Button>
+                      </div>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -186,27 +195,20 @@ export default async function WatchlistPage({
                       )}
                     </TableCell>
                     <TableCell className="px-3 py-2">
-                      <div className="space-y-2">
-                        {item.alert_status?.rules?.length ? (
-                          <div className="flex flex-wrap gap-1">
-                            {item.alert_status.rules.map((rule) => (
-                              <Badge
-                                key={`${item.symbol}-${rule.key}`}
-                                variant={rule.triggered ? "destructive" : "secondary"}
-                              >
-                                {formatRuleLabel(rule, t)}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : null}
-                        <WatchlistEditAlertRulesForm
-                          locale={locale}
-                          symbol={item.symbol}
-                          market={item.market}
-                          name={item.name}
-                          alertRules={item.alert_rules}
-                        />
-                      </div>
+                      {item.alert_status?.rules?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {item.alert_status.rules.map((rule) => (
+                            <Badge
+                              key={`${item.symbol}-${rule.key}`}
+                              variant={rule.triggered ? "destructive" : "secondary"}
+                            >
+                              {formatRuleLabel(rule, t)}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">{t("noAlertRules")}</span>
+                      )}
                     </TableCell>
                     <TableCell className="px-3 py-2 text-right">
                       <div className="flex justify-end gap-2">
@@ -226,6 +228,45 @@ export default async function WatchlistPage({
           </Table>
         </CardContent>
       </Card>
+
+      <details className="rounded-md border border-dashed border-border/80 bg-card/95 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground">
+          {t("advancedControls")}
+        </summary>
+        <div className="mt-4 space-y-4">
+          <div className="flex flex-col gap-3 border-b border-border/70 pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <WatchlistAddForm locale={locale} className="w-full lg:max-w-3xl" />
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/alerts">{t("viewAlertHistory")}</Link>
+            </Button>
+          </div>
+          {payload.items.length > 0 ? (
+            <div className="grid gap-3 xl:grid-cols-2">
+              {payload.items.map((item) => (
+                <div
+                  key={`alert-editor-${item.market}-${item.symbol}`}
+                  className="space-y-3 rounded-md border border-border/70 bg-background/60 p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-mono text-sm font-semibold">{item.symbol}</div>
+                      <div className="text-xs text-muted-foreground">{item.name}</div>
+                    </div>
+                    <Badge variant="outline">{item.market}</Badge>
+                  </div>
+                  <WatchlistEditAlertRulesForm
+                    locale={locale}
+                    symbol={item.symbol}
+                    market={item.market}
+                    name={item.name}
+                    alertRules={item.alert_rules}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </details>
     </div>
   );
 }

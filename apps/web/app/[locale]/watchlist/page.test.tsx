@@ -120,7 +120,7 @@ it("renders watchlist instruments with alert status from enriched API payload", 
   expect(screen.getByRole("link", { name: "600519" })).toHaveAttribute("href", "/instruments/600519");
   expect(screen.getByRole("link", { name: "0700" })).toHaveAttribute("href", "/instruments/0700");
   expect(screen.getByRole("link", { name: "AAPL" })).toHaveAttribute("href", "/instruments/AAPL");
-  expect(screen.getByText("Tencent Holdings")).toBeInTheDocument();
+  expect(screen.getAllByText("Tencent Holdings").length).toBeGreaterThan(0);
   expect(screen.getByDisplayValue("400")).toBeInTheDocument();
   expect(screen.getByDisplayValue("30")).toBeInTheDocument();
   expect(screen.getByText("Alert")).toBeInTheDocument();
@@ -129,6 +129,7 @@ it("renders watchlist instruments with alert status from enriched API payload", 
   expect(screen.getByText("$102.00")).toBeInTheDocument();
   expect(screen.getByText("35.0")).toBeInTheDocument();
   expect(screen.getByText("Edit alerts 0700 HK")).toBeInTheDocument();
+  expect(screen.getByText("Manual entry and alert settings")).toBeInTheDocument();
   expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(3);
   expect(screen.getAllByTitle("Remove")).toHaveLength(3);
 });

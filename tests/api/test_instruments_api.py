@@ -37,6 +37,10 @@ def test_list_instruments_returns_seed_scope():
     assert payload["source"] == "seed"
     symbols = {item["symbol"] for item in payload["items"]}
     assert symbols == {"600519", "0700", "AAPL"}
+    assert payload["total"] == 3
+    assert payload["limit"] is None
+    assert payload["offset"] == 0
+    assert payload["has_more"] is False
 
 
 def test_list_instruments_reads_database_and_filters_results():
@@ -67,3 +71,35 @@ def test_list_instruments_reads_database_and_filters_results():
             "source": "database",
         }
     ]
+    assert payload["total"] == 1
+    assert payload["limit"] is None
+    assert payload["offset"] == 0
+    assert payload["has_more"] is False
+
+
+def test_list_instruments_forwards_valid_pagination_to_seed_scope():
+    def override_session():
+        yield None
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        response = client.get("/instruments", params={"limit": 1, "offset": 1})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["symbol"] for item in payload["items"]] == ["0700"]
+    assert payload["total"] == 3
+    assert payload["limit"] == 1
+    assert payload["offset"] == 1
+    assert payload["has_more"] is True
+
+
+def test_list_instruments_rejects_invalid_pagination_bounds():
+    client = TestClient(app)
+
+    assert client.get("/instruments", params={"limit": 0}).status_code == 422
+    assert client.get("/instruments", params={"limit": 101}).status_code == 422
+    assert client.get("/instruments", params={"offset": -1}).status_code == 422

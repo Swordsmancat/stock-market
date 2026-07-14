@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Bell, BrainCircuit, FileSearch, Home, List, PieChart, Settings, TrendingUp } from "lucide-react";
+import { BrainCircuit, Home, List, Settings, TrendingUp } from "lucide-react";
 
 export const NAVIGATION_ITEMS = [
   {
@@ -7,44 +7,19 @@ export const NAVIGATION_ITEMS = [
     icon: Home,
   },
   {
-    titleKey: "instruments",
-    href: "/instruments",
-    icon: TrendingUp,
-  },
-  {
     titleKey: "aiResearch",
     href: "/ai-research",
     icon: BrainCircuit,
   },
   {
-    titleKey: "evidence",
-    href: "/evidence",
-    icon: FileSearch,
+    titleKey: "instruments",
+    href: "/instruments",
+    icon: TrendingUp,
   },
   {
     titleKey: "watchlist",
     href: "/watchlist",
     icon: List,
-  },
-  {
-    titleKey: "portfolios",
-    href: "/portfolios",
-    icon: PieChart,
-  },
-  {
-    titleKey: "reports",
-    href: "/reports",
-    icon: BarChart3,
-  },
-  {
-    titleKey: "alerts",
-    href: "/alerts",
-    icon: Bell,
-  },
-  {
-    titleKey: "taskRuns",
-    href: "/task-runs",
-    icon: Activity,
   },
   {
     titleKey: "settings",

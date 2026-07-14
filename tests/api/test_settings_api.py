@@ -402,3 +402,160 @@ def test_platform_settings_preserves_blank_news_provider_keys(tmp_path, monkeypa
     raw_file = settings_file.read_text(encoding="utf-8")
     assert "first-anspire-key" in raw_file
     assert "updated-serpapi-key" in raw_file
+
+
+def test_llm_connection_endpoint_returns_only_safe_connection_metadata(monkeypatch):
+    calls = 0
+
+    class FakeLLM:
+        def generate(self, prompt: str) -> str:
+            nonlocal calls
+            calls += 1
+            return "private answer that is intentionally discarded"
+
+    settings = {
+        "llm_provider": "openai",
+        "llm_api_key": "private-api-key",
+        "llm_api_base": "https://api.deepseek.com/v1",
+        "llm_model": "deepseek-chat",
+    }
+    monotonic_values = iter((50.0, 50.2))
+    monkeypatch.setattr(
+        "packages.services.llm_connection.get_platform_settings",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        "packages.services.llm_connection.get_llm_provider",
+        lambda _settings: FakeLLM(),
+    )
+    monkeypatch.setattr(
+        "packages.services.llm_connection.monotonic",
+        lambda: next(monotonic_values),
+    )
+
+    response = TestClient(app).post("/settings/llm/test")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "code": "connected",
+        "provider": "openai",
+        "model": "deepseek-chat",
+        "latency_ms": 200,
+    }
+    assert calls == 1
+    assert "private-api-key" not in response.text
+    assert "private answer" not in response.text
+    assert "Reply with exactly OK" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("settings", "expected_status", "expected_code"),
+    [
+        pytest.param(
+            {
+                "llm_provider": "mock",
+                "llm_api_key": "",
+                "llm_api_base": DEFAULT_LLM_API_BASE,
+                "llm_model": DEFAULT_LLM_MODEL,
+            },
+            400,
+            "provider_disabled",
+            id="disabled",
+        ),
+        pytest.param(
+            {
+                "llm_provider": "openai",
+                "llm_api_key": "",
+                "llm_api_base": DEFAULT_LLM_API_BASE,
+                "llm_model": DEFAULT_LLM_MODEL,
+            },
+            400,
+            "key_not_configured",
+            id="missing-key",
+        ),
+        pytest.param(
+            {
+                "llm_provider": "openai",
+                "llm_api_key": "private-api-key",
+                "llm_api_base": "https://user:password@example.test/v1",
+                "llm_model": DEFAULT_LLM_MODEL,
+            },
+            400,
+            "invalid_configuration",
+            id="invalid-configuration",
+        ),
+    ],
+)
+def test_llm_connection_endpoint_maps_precondition_errors(
+    monkeypatch,
+    settings,
+    expected_status,
+    expected_code,
+):
+    monkeypatch.setattr(
+        "packages.services.llm_connection.get_platform_settings",
+        lambda: settings,
+    )
+
+    response = TestClient(app).post("/settings/llm/test")
+
+    assert response.status_code == expected_status
+    assert response.json()["status"] == "error"
+    assert response.json()["code"] == expected_code
+    assert "private-api-key" not in response.text
+    assert "user:password" not in response.text
+
+
+def test_llm_connection_endpoint_sanitizes_provider_errors(monkeypatch):
+    calls = 0
+
+    class FailingLLM:
+        def generate(self, prompt: str) -> str:
+            nonlocal calls
+            calls += 1
+            raise RuntimeError(
+                "private-api-key Authorization: Bearer private-api-key "
+                f"upstream-body prompt={prompt}"
+            )
+
+    settings = {
+        "llm_provider": "openai",
+        "llm_api_key": "private-api-key",
+        "llm_api_base": "https://api.deepseek.com/v1",
+        "llm_model": "deepseek-chat",
+    }
+    monotonic_values = iter((10.0, 10.5))
+    monkeypatch.setattr(
+        "packages.services.llm_connection.get_platform_settings",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        "packages.services.llm_connection.get_llm_provider",
+        lambda _settings: FailingLLM(),
+    )
+    monkeypatch.setattr(
+        "packages.services.llm_connection.monotonic",
+        lambda: next(monotonic_values),
+    )
+
+    response = TestClient(app).post("/settings/llm/test")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "status": "error",
+        "code": "provider_unavailable",
+        "provider": "openai",
+        "model": "deepseek-chat",
+        "latency_ms": 500,
+        "message": "LLM provider is unavailable.",
+    }
+    assert calls == 1
+    for secret in (
+        "private-api-key",
+        "Authorization",
+        "Bearer",
+        "upstream-body",
+        "Reply with exactly OK",
+    ):
+        assert secret not in response.text
