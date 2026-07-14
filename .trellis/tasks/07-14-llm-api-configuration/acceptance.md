@@ -33,12 +33,24 @@ Date: 2026-07-14 (Asia/Shanghai)
   overflow. The page selected the DeepSeek preset, left the password input
   empty, displayed the configured-key guidance, and kept advanced fields
   collapsed for the built-in preset.
-- The active A-share evidence backfill was not interrupted for rollout. At the
-  final audit it was healthy in `daily_bars` at cursor `2725/5530`, with a
-  fresh heartbeat, four sanitized per-symbol processing diagnostics, and one
-  retry item. The primary AkShare source remained circuit-open while the
-  controlled secondary AkShare source continued producing rows; the solo
-  Celery worker and Beat were not restarted.
+- The A-share incremental backfill continued in the normal personal `stock`
+  database, not the stopped `stock-acceptance` stack. It reached checkpoint
+  `4650/5530` before its provider call exceeded the configured 30-minute stale
+  threshold. Cooperative cancellation preserved the checkpoint and rows. The
+  blocked solo worker was replaced without restarting API, Web, Beat, or the
+  database; the backfill then reached `cancelled` and its TaskRun reached
+  `succeeded`.
+- Beat's already queued normal rotation then ran fundamental shard `1/5` as the
+  sole active AkShare backfill. It completed `1106/1106` with `1103` successes,
+  three valid no-data results, zero failures, and no diagnostics.
+- Final personal coverage remained `ok`: daily bars `5508/5530` (`99.60%`),
+  technical indicators `5516/5530` (`99.75%`), and fundamentals `5530/5530`
+  (`100%`). All fixed `95/90/80` gates pass, all SSE/SZSE/BSE universe counts
+  are present, and active backfill count returned to zero. No extra technical
+  baseline or fundamental shards were started because they would add redundant
+  provider load.
+- Sanitized terminal evidence:
+  `evidence/20260714T140010Z-personal-coverage-terminal.json`.
 
 ## Live DeepSeek canaries
 

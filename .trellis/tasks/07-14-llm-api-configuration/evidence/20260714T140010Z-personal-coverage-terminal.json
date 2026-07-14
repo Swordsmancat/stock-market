@@ -1,0 +1,776 @@
+{
+  "active_backfill_count": 0,
+  "coverage": {
+    "as_of": "2026-07-14",
+    "evidence": {
+      "daily_bars": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.963302752293578,
+            "ready_count": 315,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.9987001733102253,
+            "ready_count": 2305,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.9975820379965458,
+            "ready_count": 2888,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.9960216998191682,
+        "missing_count": 22,
+        "passes_threshold": true,
+        "ready_count": 5508,
+        "source_distribution": [
+          {
+            "instrument_count": 5527,
+            "provider": "akshare",
+            "row_count": 1951839,
+            "source": "akshare.stock_zh_a_daily"
+          },
+          {
+            "instrument_count": 4,
+            "provider": "akshare",
+            "row_count": 1244,
+            "source": "akshare.stock_zh_a_hist"
+          }
+        ],
+        "threshold": 0.95,
+        "total_count": 5530
+      },
+      "fundamentals": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 1.0,
+            "ready_count": 327,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 1.0,
+            "ready_count": 2308,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 1.0,
+            "ready_count": 2895,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 1.0,
+        "missing_count": 0,
+        "passes_threshold": true,
+        "ready_count": 5530,
+        "threshold": 0.8,
+        "total_count": 5530
+      },
+      "technical_indicators": {
+        "by_exchange": {
+          "BSE": {
+            "coverage_ratio": 0.981651376146789,
+            "ready_count": 321,
+            "total_count": 327
+          },
+          "SSE": {
+            "coverage_ratio": 0.9991334488734835,
+            "ready_count": 2306,
+            "total_count": 2308
+          },
+          "SZSE": {
+            "coverage_ratio": 0.9979274611398964,
+            "ready_count": 2889,
+            "total_count": 2895
+          }
+        },
+        "coverage_ratio": 0.9974683544303797,
+        "missing_count": 14,
+        "passes_threshold": true,
+        "ready_count": 5516,
+        "threshold": 0.9,
+        "total_count": 5530
+      }
+    },
+    "latest_run": {
+      "cursor": 1106,
+      "daily_bar_policy": "strict",
+      "diagnostics": [],
+      "finished_at": "2026-07-14T13:59:06.381559+00:00",
+      "heartbeat_at": "2026-07-14T13:59:06.381559+00:00",
+      "id": "75961705-f20d-4d7a-a212-310943b30c11",
+      "phase": "completed",
+      "phase_total": 1106,
+      "processed_count": 1106,
+      "retry": {
+        "fundamentals": {
+          "count": 0,
+          "preview": []
+        }
+      },
+      "run_kind": "fundamental_shard",
+      "source_stats": {},
+      "status": "succeeded",
+      "task_run_id": "2bcd6f76-c853-42b0-b6c2-a8dd471d29d8"
+    },
+    "market": "CN",
+    "provider": "akshare",
+    "status": "ok",
+    "thresholds": {
+      "daily_bars": 0.95,
+      "fundamentals": 0.8,
+      "technical_indicators": 0.9
+    },
+    "universe": {
+      "active_count": 5530,
+      "exchange_counts": {
+        "BSE": 327,
+        "SSE": 2308,
+        "SZSE": 2895
+      }
+    }
+  },
+  "decision": {
+    "extra_fundamental_shards_started": false,
+    "extra_technical_baseline_started": false,
+    "reason": "All fixed 95/90/80 coverage gates already pass; avoid redundant provider load."
+  },
+  "incremental_backfill": {
+    "cancel_requested_at": "2026-07-14T13:22:15.940641+00:00",
+    "counters": {
+      "daily_bars": {
+        "attempted": 4650,
+        "failed": 8,
+        "insufficient_data": 0,
+        "no_data": 0,
+        "succeeded": 4642
+      },
+      "technical_indicators": {
+        "attempted": 0,
+        "failed": 0,
+        "insufficient_data": 0,
+        "no_data": 0,
+        "succeeded": 0
+      }
+    },
+    "cursor": 4650,
+    "diagnostics": [
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "603799"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      },
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "688126"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      },
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "689009"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      },
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "000004"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      },
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "002808"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      },
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "300239"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      },
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "300269"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      },
+      {
+        "code": "PROCESSING_FAILED",
+        "details": {
+          "exception_type": "ConnectionError",
+          "symbol": "300385"
+        },
+        "message": "A backfill symbol could not be processed.",
+        "source": "daily_bars",
+        "status": "failed"
+      }
+    ],
+    "evidence_kinds": [
+      "daily_bars",
+      "technical_indicators"
+    ],
+    "finished_at": "2026-07-14T13:26:08.485599+00:00",
+    "heartbeat_at": "2026-07-14T13:26:08.485599+00:00",
+    "id": "8aad5f19-eb28-424c-b0c5-6a5113e12eaf",
+    "phase": "daily_bars",
+    "phase_total": 5530,
+    "processed_count": 4650,
+    "retry": {
+      "daily_bars": [
+        "603799",
+        "688126",
+        "689009",
+        "000004",
+        "002808",
+        "300239",
+        "300269",
+        "300385"
+      ],
+      "technical_indicators": []
+    },
+    "run_kind": "incremental",
+    "safety": {
+      "no_automated_trading": true,
+      "no_silent_provider_fallback": true,
+      "research_signal_only": true
+    },
+    "shard_count": null,
+    "shard_index": null,
+    "source_stats": {
+      "akshare.stock_zh_a_daily": {
+        "attempted": 4650,
+        "failed": 8,
+        "selected": 4642
+      },
+      "akshare.stock_zh_a_hist": {
+        "attempted": 3,
+        "failed": 3,
+        "skipped_circuit_open": 4647
+      },
+      "tushare.pro.daily": {
+        "attempted": 8,
+        "no_data": 8
+      }
+    },
+    "status": "cancelled",
+    "task_run_id": "b2aa1dea-872e-4664-93d8-c26b7af302ce"
+  },
+  "incremental_outcome": "cancelled_after_stale_checkpoint_with_coverage_already_passing",
+  "incremental_task_run": {
+    "duration_ms": 10568409,
+    "error_type": null,
+    "finished_at": "2026-07-14T13:26:08.491062+00:00",
+    "heartbeat_at": "2026-07-14T12:44:03.704097+00:00",
+    "id": "b2aa1dea-872e-4664-93d8-c26b7af302ce",
+    "result_json": {
+      "batch_size": 25,
+      "cancel_requested_at": "2026-07-14T13:22:15.940641+00:00",
+      "cohort_size": null,
+      "counters": {
+        "daily_bars": {
+          "attempted": 4650,
+          "failed": 8,
+          "insufficient_data": 0,
+          "no_data": 0,
+          "succeeded": 4642
+        },
+        "technical_indicators": {
+          "attempted": 0,
+          "failed": 0,
+          "insufficient_data": 0,
+          "no_data": 0,
+          "succeeded": 0
+        }
+      },
+      "created_at": "2026-07-14T10:30:00.024872+00:00",
+      "cursor": 4650,
+      "daily_bar_policy": "cn_resilient",
+      "diagnostics": [
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "603799"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        },
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "688126"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        },
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "689009"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        },
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "000004"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        },
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "002808"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        },
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "300239"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        },
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "300269"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        },
+        {
+          "code": "PROCESSING_FAILED",
+          "details": {
+            "exception_type": "ConnectionError",
+            "symbol": "300385"
+          },
+          "message": "A backfill symbol could not be processed.",
+          "source": "daily_bars",
+          "status": "failed"
+        }
+      ],
+      "end_date": "2026-07-14",
+      "evidence_kinds": [
+        "daily_bars",
+        "technical_indicators"
+      ],
+      "finished_at": "2026-07-14T13:26:08.485599+00:00",
+      "heartbeat_at": "2026-07-14T13:26:08.485599+00:00",
+      "id": "8aad5f19-eb28-424c-b0c5-6a5113e12eaf",
+      "market": "CN",
+      "parent_run_id": null,
+      "phase": "daily_bars",
+      "phase_total": 5530,
+      "processed_count": 4650,
+      "provider": "akshare",
+      "retry": {
+        "daily_bars": [
+          "603799",
+          "688126",
+          "689009",
+          "000004",
+          "002808",
+          "300239",
+          "300269",
+          "300385"
+        ],
+        "technical_indicators": []
+      },
+      "run_kind": "incremental",
+      "safety": {
+        "no_automated_trading": true,
+        "no_silent_provider_fallback": true,
+        "research_signal_only": true
+      },
+      "scope_symbols": [
+        "920000",
+        "920001",
+        "920002",
+        "920003",
+        "920005",
+        "920006",
+        "920007",
+        "920008",
+        "920009",
+        "920010",
+        "920011",
+        "920012",
+        "920014",
+        "920015",
+        "920016",
+        "920017",
+        "920018",
+        "920019",
+        "920020",
+        "920021",
+        "920022",
+        "920023",
+        "920026",
+        "920027",
+        "920028",
+        "920029",
+        "920030",
+        "920033",
+        "920035",
+        "920036",
+        "920037",
+        "920039",
+        "920045",
+        "920046",
+        "920047",
+        "920050",
+        "920055",
+        "920056",
+        "920057",
+        "920058",
+        "920060",
+        "920061",
+        "920062",
+        "920066",
+        "920068",
+        "920069",
+        "920072",
+        "920075",
+        "920076",
+        "920077",
+        "920078",
+        "920080",
+        "920081",
+        "920082",
+        "920083",
+        "920086",
+        "920087",
+        "920088",
+        "920089",
+        "920090",
+        "920091",
+        "920092",
+        "920096",
+        "920098",
+        "920099",
+        "920100",
+        "920101",
+        "920106",
+        "920108",
+        "920110",
+        "920111",
+        "920112",
+        "920116",
+        "920118",
+        "920119",
+        "920121",
+        "920122",
+        "920123",
+        "920124",
+        "920125",
+        "920126",
+        "920128",
+        "920130",
+        "920132",
+        "920136",
+        "920139",
+        "920145",
+        "920146",
+        "920149",
+        "920152",
+        "920156",
+        "920158",
+        "920159",
+        "920160",
+        "920161",
+        "920163",
+        "920166",
+        "920167",
+        "920168",
+        "920169"
+      ],
+      "shard_count": null,
+      "shard_index": null,
+      "source_stats": {
+        "akshare.stock_zh_a_daily": {
+          "attempted": 4650,
+          "failed": 8,
+          "selected": 4642
+        },
+        "akshare.stock_zh_a_hist": {
+          "attempted": 3,
+          "failed": 3,
+          "skipped_circuit_open": 4647
+        },
+        "tushare.pro.daily": {
+          "attempted": 8,
+          "no_data": 8
+        }
+      },
+      "start_date": "2026-07-04",
+      "status": "cancelled",
+      "task_run_id": "b2aa1dea-872e-4664-93d8-c26b7af302ce",
+      "universe_as_of": "2026-07-13T22:30:10.928454+00:00",
+      "universe_sync_id": "a7243e85-7e1e-461a-a0e1-ca831d7cbec2",
+      "updated_at": "2026-07-14T13:26:08.485599+00:00"
+    },
+    "started_at": "2026-07-14T10:30:00.081650+00:00",
+    "status": "succeeded",
+    "task_name": "ingestion.backfill_a_share_research_evidence"
+  },
+  "metadata": {
+    "akshare": "1.18.64",
+    "alembic_head": "0022_research_shortlist_task_run (head)",
+    "commit": "b9c990dfe4b2dd066dd79fdb4238d4c65aac36f1",
+    "git_status": "dirty",
+    "market": "CN",
+    "provider": "akshare",
+    "python": "3.13.7",
+    "recorded_at": "2026-07-14T14:00:10.369396+00:00"
+  },
+  "scheduled_fundamental_shard": {
+    "cancel_requested_at": null,
+    "counters": {
+      "fundamentals": {
+        "attempted": 1106,
+        "failed": 0,
+        "insufficient_data": 0,
+        "no_data": 3,
+        "succeeded": 1103
+      }
+    },
+    "cursor": 1106,
+    "diagnostics": [],
+    "evidence_kinds": [
+      "fundamentals"
+    ],
+    "finished_at": "2026-07-14T13:59:06.381559+00:00",
+    "heartbeat_at": "2026-07-14T13:59:06.381559+00:00",
+    "id": "75961705-f20d-4d7a-a212-310943b30c11",
+    "phase": "completed",
+    "phase_total": 1106,
+    "processed_count": 1106,
+    "retry": {
+      "fundamentals": []
+    },
+    "run_kind": "fundamental_shard",
+    "safety": {
+      "no_automated_trading": true,
+      "no_silent_provider_fallback": true,
+      "research_signal_only": true
+    },
+    "shard_count": 5,
+    "shard_index": 1,
+    "source_stats": {},
+    "status": "succeeded",
+    "task_run_id": "2bcd6f76-c853-42b0-b6c2-a8dd471d29d8"
+  },
+  "scheduled_fundamental_task_run": {
+    "duration_ms": 1977610,
+    "error_type": null,
+    "finished_at": "2026-07-14T13:59:06.385870+00:00",
+    "heartbeat_at": "2026-07-14T13:59:06.377425+00:00",
+    "id": "2bcd6f76-c853-42b0-b6c2-a8dd471d29d8",
+    "result_json": {
+      "batch_size": 25,
+      "cancel_requested_at": null,
+      "cohort_size": null,
+      "counters": {
+        "fundamentals": {
+          "attempted": 1106,
+          "failed": 0,
+          "insufficient_data": 0,
+          "no_data": 3,
+          "succeeded": 1103
+        }
+      },
+      "created_at": "2026-07-14T13:26:08.724449+00:00",
+      "cursor": 1106,
+      "daily_bar_policy": "strict",
+      "diagnostics": [],
+      "end_date": "2026-07-14",
+      "evidence_kinds": [
+        "fundamentals"
+      ],
+      "finished_at": "2026-07-14T13:59:06.381559+00:00",
+      "heartbeat_at": "2026-07-14T13:59:06.381559+00:00",
+      "id": "75961705-f20d-4d7a-a212-310943b30c11",
+      "market": "CN",
+      "parent_run_id": null,
+      "phase": "completed",
+      "phase_total": 1106,
+      "processed_count": 1106,
+      "provider": "akshare",
+      "retry": {
+        "fundamentals": []
+      },
+      "run_kind": "fundamental_shard",
+      "safety": {
+        "no_automated_trading": true,
+        "no_silent_provider_fallback": true,
+        "research_signal_only": true
+      },
+      "scope_symbols": [
+        "920001",
+        "920007",
+        "920012",
+        "920018",
+        "920023",
+        "920030",
+        "920039",
+        "920055",
+        "920061",
+        "920072",
+        "920080",
+        "920087",
+        "920092",
+        "920101",
+        "920112",
+        "920122",
+        "920128",
+        "920145",
+        "920158",
+        "920166",
+        "920174",
+        "920180",
+        "920186",
+        "920191",
+        "920200",
+        "920211",
+        "920222",
+        "920237",
+        "920249",
+        "920263",
+        "920273",
+        "920299",
+        "920344",
+        "920367",
+        "920375",
+        "920396",
+        "920414",
+        "920425",
+        "920438",
+        "920471",
+        "920491",
+        "920508",
+        "920523",
+        "920547",
+        "920570",
+        "920579",
+        "920608",
+        "920641",
+        "920663",
+        "920682",
+        "920694",
+        "920717",
+        "920726",
+        "920753",
+        "920781",
+        "920802",
+        "920810",
+        "920833",
+        "920856",
+        "920873",
+        "920895",
+        "920925",
+        "920943",
+        "920961",
+        "920976",
+        "920992",
+        "600008",
+        "600015",
+        "600020",
+        "600026",
+        "600031",
+        "600037",
+        "600051",
+        "600056",
+        "600061",
+        "600067",
+        "600076",
+        "600082",
+        "600094",
+        "600099",
+        "600105",
+        "600110",
+        "600116",
+        "600121",
+        "600128",
+        "600133",
+        "600141",
+        "600151",
+        "600157",
+        "600162",
+        "600168",
+        "600173",
+        "600180",
+        "600186",
+        "600192",
+        "600199",
+        "600207",
+        "600215",
+        "600221",
+        "600228"
+      ],
+      "shard_count": 5,
+      "shard_index": 1,
+      "source_stats": {},
+      "start_date": "2025-01-14",
+      "status": "succeeded",
+      "task_run_id": "2bcd6f76-c853-42b0-b6c2-a8dd471d29d8",
+      "universe_as_of": "2026-07-13T22:30:10.928454+00:00",
+      "universe_sync_id": "a7243e85-7e1e-461a-a0e1-ca831d7cbec2",
+      "updated_at": "2026-07-14T13:59:06.381559+00:00"
+    },
+    "started_at": "2026-07-14T13:26:08.775682+00:00",
+    "status": "succeeded",
+    "task_name": "ingestion.backfill_a_share_research_evidence"
+  },
+  "scope": "normal-local-personal-coverage",
+  "status": "passed"
+}
