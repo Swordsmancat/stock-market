@@ -1911,3 +1911,36 @@ Completed final cross-child acceptance for immutable daily shortlist snapshots, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 58: Personal A-share research readiness repair
+
+**Date**: 2026-07-14
+**Task**: Personal A-share research readiness repair
+**Branch**: `master`
+
+### Summary
+
+Restored the personal A-share research loop by repairing legacy exchange/provider attribution, forwarding the resilient daily-bar policy through the scheduled worker path, and validating live daily bars, technical indicators, fundamentals, shortlist generation, and replay at the existing 95/90/80 thresholds.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `425716e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
