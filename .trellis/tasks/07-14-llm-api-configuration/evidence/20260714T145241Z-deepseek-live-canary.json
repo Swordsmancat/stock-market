@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-07-14T22:52:41.374+08:00",
+  "environment": {
+    "runtime": "normal local stack",
+    "api": "http://127.0.0.1:8000",
+    "web": "http://127.0.0.1:3000"
+  },
+  "configuration": {
+    "settings_endpoints_checked": 3,
+    "provider": "openai",
+    "api_base": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "api_key_configured": true,
+    "api_key_redacted": true
+  },
+  "stock_discovery": {
+    "deterministic_http_status": 200,
+    "deterministic_elapsed_ms": 4896,
+    "live_http_status": 200,
+    "live_elapsed_ms": 13316,
+    "status": "ok",
+    "shortlist_count": 10,
+    "same_members_order_scores": true,
+    "first_symbol": "920946",
+    "model_provider": "openai",
+    "model_name": "deepseek-chat",
+    "used_llm": true,
+    "fallback_reason": null,
+    "citation_count": 30,
+    "deterministic_shortlist": true,
+    "ai_cannot_change_membership_or_ranking": true
+  },
+  "market_assistant": {
+    "http_status": 200,
+    "elapsed_ms": 6112,
+    "status": "degraded",
+    "symbol": "920946",
+    "answer_nonempty": true,
+    "model_provider": "openai",
+    "model_name": "deepseek-chat",
+    "used_llm": true,
+    "fallback_reason": null,
+    "citation_count": 3,
+    "citation_ids_unique": true,
+    "citation_source_types": [
+      "bars",
+      "fundamental",
+      "technical_indicator"
+    ],
+    "unknown_citation_diagnostic": false,
+    "bar_count": 118,
+    "latest_close_present": true,
+    "not_investment_advice": true,
+    "no_fabricated_market_data": true,
+    "optional_no_data_diagnostics": [
+      "MACRO_INDICATOR_NO_DATA",
+      "SOURCE_NO_DATA",
+      "SOURCE_NO_DATA"
+    ]
+  },
+  "safety": {
+    "paid_calls": {
+      "stock_discovery": 1,
+      "market_assistant": 1
+    },
+    "retries": 0,
+    "secrets_recorded": false,
+    "answer_text_recorded": false,
+    "provider_response_body_recorded": false
+  }
+}

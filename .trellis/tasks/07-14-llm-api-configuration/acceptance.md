@@ -54,28 +54,40 @@ Date: 2026-07-14 (Asia/Shanghai)
 
 ## Live DeepSeek canaries
 
-Each paid path was called once. No retry was made after failure.
+After the user refreshed the configuration, each paid path was called once.
+No retry was made, and no answer text, provider response body, API key, or
+authorization header was recorded. Sanitized evidence:
+`evidence/20260714T145241Z-deepseek-live-canary.json`.
+
+### Configuration projection
+
+- FastAPI and both Next settings aliases agreed on provider `openai`, Base URL
+  `https://api.deepseek.com/v1`, model `deepseek-chat`, and
+  `llm_api_key_configured=true`.
+- Every public response kept `llm_api_key` empty.
 
 ### Stock discovery
 
-- Deterministic and LLM requests returned the same 10 shortlist members in the
-  same rank/score order; the first symbol was `920946`.
-- Citation allowlisting and deterministic-shortlist safety remained intact.
-- The live response degraded to `deterministic-stock-discovery-v1`; it did not
-  satisfy `used_llm=true` or `model.name=deepseek-chat`.
+- The deterministic control and single live request both returned HTTP 200 and
+  the same 10 shortlist members in the same order with the same scores; the
+  first symbol was `920946`.
+- The live response returned `status=ok`, `used_llm=true`,
+  `fallback_reason=null`, and `model.name=deepseek-chat`.
+- All 30 assembled citations passed allowlisting. Deterministic membership and
+  ranking safety remained enabled.
 
 ### Market assistant
 
-- Stored AkShare evidence was available and three citations were assembled.
-- The live response safely degraded with
-  `LLM generation failed: HTTPStatusError.`
-- Diagnostics remained sanitized and no API key, authorization header, raw
-  provider body, or answer text was recorded here.
+- The single request for `920946` returned HTTP 200, `used_llm=true`,
+  `fallback_reason=null`, and `model.name=deepseek-chat` with a non-empty answer.
+- Three unique citations covered daily bars, fundamentals, and technical
+  indicators; no unknown-citation diagnostic was present.
+- The response status was `degraded` only because optional macro indicators and
+  some research-source collections had no data. It retained 118 daily bars, a
+  latest close, and both research-safety flags.
 
 ## Result
 
 The implementation, security, deterministic behavior, metadata propagation,
-and local runtime rollout passed. Successful external DeepSeek generation is
-blocked by the current upstream credential, quota, or account state. The live
-success acceptance item remains open; thresholds and citation/symbol gates were
-not weakened.
+local runtime rollout, and live DeepSeek execution all passed. Every acceptance
+item is complete; thresholds and citation/symbol gates were not weakened.

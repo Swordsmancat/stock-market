@@ -108,11 +108,11 @@ existing deterministic fallbacks and research safety boundaries remain intact.
       fallback, citation, symbol, ranking, and safety tests continue to pass.
 - [x] Full backend and web suites, touched Ruff/mypy, TypeScript, Trellis
       validation, JSON parsing, and `git diff --check` pass.
-- [ ] Live DeepSeek canaries for stock discovery and `/assistant/market` return
+- [x] Live DeepSeek canaries for stock discovery and `/assistant/market` return
       `used_llm=true`, `fallback_reason=null`, `model.name=deepseek-chat`, and
-      only valid citations; discovery membership/rank matches the deterministic
-      control. Blocked on 2026-07-14 by a sanitized upstream
-      `HTTPStatusError`; deterministic fallback and ranking invariants passed.
+      only valid citations; discovery membership, order, and scores match the
+      deterministic control. After the user refreshed the configuration on
+      2026-07-14, each paid path passed on its first call with no retry.
 - [x] Frontend/API health remains OK after worker/API reload.
 
 ## Out of Scope
