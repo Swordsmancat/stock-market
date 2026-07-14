@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Defines authoritative universe sync, resilient backfill, coverage thresholds, checkpoints, and source provenance."}
+{"file":".trellis/spec/backend/daily-research-loop-contract.md","reason":"Defines the trusted watermark and unchanged 95/90/80 publication gate used for final acceptance."}

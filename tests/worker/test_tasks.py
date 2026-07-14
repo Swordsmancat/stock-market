@@ -106,6 +106,44 @@ def test_sync_instrument_universe_task_marks_provider_failure(monkeypatch):
     assert "last good universe was preserved" in latest_run["error_message"]
 
 
+@pytest.mark.parametrize(
+    ("task_kwargs", "expected_policy"),
+    [
+        ({"daily_bar_policy": "cn_resilient"}, "cn_resilient"),
+        ({}, "strict"),
+    ],
+)
+def test_scheduled_a_share_backfill_forwards_daily_bar_policy(
+    monkeypatch,
+    task_kwargs,
+    expected_policy,
+):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    captured = {}
+
+    def fake_create_backfill_run(request, *, session):
+        captured["request"] = request
+        return {"status": "already_running"}
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "create_backfill_run",
+        fake_create_backfill_run,
+    )
+
+    result = ingestion_tasks.schedule_a_share_evidence_backfill_task(
+        run_kind="incremental",
+        evidence_kinds=["daily_bars", "technical_indicators"],
+        **task_kwargs,
+    )
+
+    assert result == {"status": "already_running"}
+    assert captured["request"].daily_bar_policy == expected_policy
+
+
 def test_sync_corporate_actions_task_records_partial_batch_and_progress(monkeypatch):
     session = make_session()
     from apps.worker.tasks import ingestion as ingestion_tasks

@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Defines focused/full backend verification and live-service safety expectations."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Verify no threshold, provider-boundary, checkpoint, or source-provenance regression."}

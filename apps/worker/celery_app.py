@@ -3,6 +3,7 @@ from datetime import timedelta
 from celery import Celery
 from celery.schedules import crontab
 
+from packages.services.daily_bar_sources import CN_RESILIENT_POLICY
 from packages.shared.config import settings
 
 
@@ -99,6 +100,7 @@ celery_app.conf.beat_schedule = {
         "kwargs": {
             "run_kind": "incremental",
             "evidence_kinds": ["daily_bars", "technical_indicators"],
+            "daily_bar_policy": CN_RESILIENT_POLICY,
         },
     },
     "daily-a-share-fundamental-shard": {

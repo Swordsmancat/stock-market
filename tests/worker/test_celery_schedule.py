@@ -55,6 +55,7 @@ def test_celery_beat_schedules_a_share_incremental_evidence_refreshes():
     assert incremental["kwargs"] == {
         "run_kind": "incremental",
         "evidence_kinds": ["daily_bars", "technical_indicators"],
+        "daily_bar_policy": "cn_resilient",
     }
     assert fundamentals["task"] == "ingestion.schedule_a_share_evidence_backfill"
     assert fundamentals["kwargs"] == {

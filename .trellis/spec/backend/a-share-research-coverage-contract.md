@@ -391,6 +391,8 @@ bounded classification.
   fetch_coordinator=None)`.
 - Backfill input/API: `daily_bar_policy`, supported values `strict` and
   `cn_resilient`.
+- Scheduled task:
+  `schedule_a_share_evidence_backfill_task(..., daily_bar_policy=STRICT_POLICY)`.
 - Coverage: `evidence.daily_bars.source_distribution[]` with `provider`,
   `source`, `row_count`, and `instrument_count`; latest run adds policy and
   source stats.
@@ -415,12 +417,19 @@ bounded classification.
   migrated as `legacy_unknown` priority 99.
 - Resume/retry copies the policy. One coordinator is shared for a complete
   worker execution so pacing, circuits, and source counters span symbols.
+- The weekday 18:30 incremental Beat entry passes
+  `daily_bar_policy=CN_RESILIENT_POLICY`. The scheduling task must accept and
+  forward that value into `BackfillRequest`; callers that omit it retain the
+  shared `STRICT_POLICY` default. Policy literals come from
+  `packages/services/daily_bar_sources.py`.
 - Readiness thresholds remain 95/90/80 percent; source distribution explains
   evidence quality but does not silently relax coverage.
 
 ### 4. Validation & Error Matrix
 
 - Unknown policy -> `ValueError` / HTTP 400 before dispatch.
+- Unknown scheduled policy -> `create_backfill_run()` rejects it before a
+  backfill or execution task is dispatched.
 - `start_date > end_date` -> `ValueError` before provider access.
 - Strict source exception -> original exception behavior; no fallback call.
 - Resilient source exception -> sanitized failed attempt, then next eligible
@@ -443,9 +452,14 @@ bounded classification.
   cannot overwrite it.
 - Base: Tushare is unconfigured; its fetcher is not called and the diagnostic
   says `skipped_unconfigured`.
+- Base: the fundamental-only Beat entry omits the daily-bar policy and retains
+  the compatibility default without invoking a daily-bar source.
 - Bad: a circuit-open provider is reported as stock-level no-data.
 - Bad: a worker silently tries yfinance/mock, or a fallback overwrites a
   higher-priority canonical row.
+- Bad: Beat adds a policy kwarg that the scheduling task does not accept or
+  drops before constructing `BackfillRequest`; the scheduled run then either
+  fails at delivery or silently executes the wrong policy.
 
 ### 6. Tests Required
 
@@ -459,6 +473,9 @@ bounded classification.
   assert all additive columns.
 - Backfill/API/worker tests assert policy round-trip, source stats, resume/retry,
   and preserved TaskRun semantics.
+- Schedule tests assert the 18:30 entry uses `CN_RESILIENT_POLICY`; worker tests
+  assert explicit policy forwarding and omitted-policy `STRICT_POLICY`
+  compatibility.
 - Coverage tests assert source row/instrument distribution and the existing
   constant query bound.
 - Web tests assert explicit `cn_resilient` mutation input, visible controlled-

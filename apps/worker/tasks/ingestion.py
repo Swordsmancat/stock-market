@@ -8,6 +8,7 @@ from packages.services.corporate_actions import (
     CorporateActionSyncInput,
     sync_corporate_action_evidence,
 )
+from packages.services.daily_bar_sources import STRICT_POLICY
 from packages.services.ingestion import (
     ingest_market_snapshot,
     ingest_symbol_daily_bars,
@@ -577,6 +578,7 @@ def schedule_a_share_evidence_backfill_task(
     evidence_kinds: list[str],
     shard_index: int | None = None,
     shard_count: int | None = None,
+    daily_bar_policy: str = STRICT_POLICY,
 ) -> dict[str, object]:
     session = SessionLocal()
     try:
@@ -589,6 +591,7 @@ def schedule_a_share_evidence_backfill_task(
                 evidence_kinds=tuple(evidence_kinds),
                 shard_index=shard_index,
                 shard_count=shard_count,
+                daily_bar_policy=daily_bar_policy,
             ),
             session=session,
         )

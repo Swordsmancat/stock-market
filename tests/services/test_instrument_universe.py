@@ -129,6 +129,42 @@ def test_sync_inserts_multi_exchange_a_share_universe(sqlite_session: Session):
     ]
 
 
+def test_sync_repairs_legacy_cn_stock_metadata_in_place(sqlite_session: Session):
+    market = Market(
+        code="CN",
+        name="China",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+        trading_calendar_code="XSHG",
+    )
+    legacy = Instrument(
+        symbol="600519",
+        name="Legacy Stock",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+        is_active=True,
+    )
+    sqlite_session.add(legacy)
+    sqlite_session.commit()
+    legacy_id = legacy.id
+
+    result = sync_instrument_universe(
+        session=sqlite_session,
+        provider=UniverseProvider(
+            _snapshot([_instrument("600519", "Kweichow Moutai", "SSE")])
+        ),
+    )
+
+    repaired = sqlite_session.query(Instrument).filter_by(symbol="600519").one()
+    assert repaired.id == legacy_id
+    assert repaired.name == "Kweichow Moutai"
+    assert repaired.exchange.code == "SSE"
+    assert repaired.universe_provider == "akshare"
+    assert result["counts"]["inserted_count"] == 0
+    assert result["counts"]["updated_count"] == 1
+
+
 def test_complete_sync_updates_reactivates_and_deactivates_only_managed_rows(
     sqlite_session: Session,
 ):
