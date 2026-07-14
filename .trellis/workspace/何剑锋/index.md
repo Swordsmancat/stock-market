@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 58
+- **Total Sessions**: 59
 - **Last Active**: 2026-07-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1946 | Active |
+| `journal-1.md` | ~1979 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 59 | 2026-07-14 | Simplify LLM API configuration | `5e05e87` | `master` |
 | 58 | 2026-07-14 | Personal A-share research readiness repair | `425716e` | `master` |
 | 57 | 2026-07-14 | Complete A-share AI research decision loop | `7c1b3be` | `master` |
 | 56 | 2026-07-14 | Automate daily A-share research loop | `bb7aea9` | `master` |

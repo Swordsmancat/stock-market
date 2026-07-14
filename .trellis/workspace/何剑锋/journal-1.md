@@ -1944,3 +1944,36 @@ Restored the personal A-share research loop by repairing legacy exchange/provide
 ### Next Steps
 
 - None - task complete
+
+
+## Session 59: Simplify LLM API configuration
+
+**Date**: 2026-07-14
+**Task**: Simplify LLM API configuration
+**Branch**: `master`
+
+### Summary
+
+Simplified personal-use LLM setup with DeepSeek/OpenAI/custom presets, configurable model propagation, secret-safe public settings, fail-closed host/key association, and synchronized Python/Next validation. Full gates passed (826 backend, 265 web); normal services and the active A-share backfill remained healthy. Live DeepSeek generation remains blocked by a sanitized upstream HTTPStatusError, so the task stays in progress.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5e05e87` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
