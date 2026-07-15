@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import os
 
 import pandas as pd
+from sqlalchemy import case, func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from packages.analytics.indicators import calculate_ma, calculate_rsi
 from packages.domain.models import DailyBar, Instrument, IntradayMinuteCacheEntry, Market, MinuteBar
@@ -20,7 +23,16 @@ from packages.providers.base import ProviderRecentTrade
 from packages.providers.mock_provider import MockProvider
 from packages.providers.tushare_provider import TushareProvider
 from packages.providers.yfinance_provider import YFinanceProvider
-from packages.services.platform_settings import get_effective_market_data_provider
+from packages.services.daily_bar_sources import (
+    CN_RESILIENT_POLICY,
+    DailyBarFetchCoordinator,
+    DailyBarSource,
+    resolve_daily_bar_adjustment,
+)
+from packages.services.platform_settings import (
+    get_effective_market_data_provider,
+    get_platform_settings,
+)
 
 
 def _provider() -> MockProvider:
@@ -63,6 +75,8 @@ LARGE_ORDERS_UNSUPPORTED_REASON = (
     "Large order detection requires verified recent trades, which are unavailable."
 )
 FUND_FLOW_UNSUPPORTED_REASON = "Fund-flow data is not normalized or verified by this backend yet."
+CN_MARKET = "CN"
+DAILY_TIMEFRAME = "1d"
 
 MARKET_DEPTH_PROVIDER_CAPABILITIES = {
     "mock": {
@@ -150,12 +164,16 @@ def resolve_market_data_provider_name(provider_name: str | None = None) -> str:
     return get_effective_market_data_provider(provider_name)
 
 
-def get_provider(provider_name: str | None = None) -> ProviderAdapter:
+def get_provider(
+    provider_name: str | None = None,
+    *,
+    market: str | None = None,
+) -> ProviderAdapter:
     normalized = resolve_market_data_provider_name(provider_name)
     if normalized == "mock":
         return MockProvider()
     if normalized == "yfinance":
-        return YFinanceProvider()
+        return YFinanceProvider(market=market)
     if normalized == "akshare":
         return AkShareProvider()
     if normalized == "tushare":
@@ -438,22 +456,237 @@ def serialize_daily_bar(bar: DailyBar) -> dict[str, float | str | None]:
     }
 
 
+def _database_daily_bar_provenance(bar: DailyBar) -> dict[str, object]:
+    stored_provider, stored_source, stored_adjustment = (
+        _database_daily_bar_storage_identity(bar)
+    )
+    _adjustment, provenance_corrected = resolve_daily_bar_adjustment(
+        stored_source,
+        bar.adjustment,
+    )
+    effective_provider = (
+        stored_provider
+        if stored_provider != "legacy_unknown"
+        else None
+    )
+    return {
+        "provider": effective_provider,
+        "effective_provider": effective_provider,
+        "upstream_source": (
+            stored_source
+            if stored_source != "legacy_unknown"
+            else None
+        ),
+        "adjustment": stored_adjustment,
+        "provenance_known": all(
+            value != "legacy_unknown"
+            for value in (stored_provider, stored_source, stored_adjustment)
+        ),
+        "provenance_corrected": provenance_corrected,
+    }
+
+
+def _database_daily_bar_storage_identity(bar: DailyBar) -> tuple[str, str, str]:
+    stored_source = str(bar.source or "legacy_unknown").strip() or "legacy_unknown"
+    effective_adjustment, _corrected = resolve_daily_bar_adjustment(
+        stored_source,
+        bar.adjustment,
+    )
+    return (
+        str(bar.provider or "legacy_unknown").strip().lower() or "legacy_unknown",
+        stored_source,
+        effective_adjustment or "legacy_unknown",
+    )
+
+
+def _database_daily_bar_identity_expressions() -> tuple[
+    ColumnElement[str],
+    ColumnElement[str],
+    ColumnElement[str],
+]:
+    raw_provider = func.lower(func.trim(func.coalesce(DailyBar.provider, "")))
+    provider = func.coalesce(func.nullif(raw_provider, ""), "legacy_unknown")
+    raw_source = func.trim(func.coalesce(DailyBar.source, ""))
+    source = func.coalesce(func.nullif(raw_source, ""), "legacy_unknown")
+    raw_adjustment = func.lower(func.trim(func.coalesce(DailyBar.adjustment, "")))
+    adjustment = case(
+        (func.lower(source) == "tushare.pro.daily", "raw"),
+        (raw_adjustment.in_(("none", "unadjusted", "no_adjust")), "raw"),
+        (raw_adjustment.in_(("qfq", "hfq", "raw")), raw_adjustment),
+        else_="legacy_unknown",
+    )
+    return provider, source, adjustment
+
+
+def _coherent_database_daily_bar_series(bars: list[DailyBar]) -> list[DailyBar]:
+    if not bars:
+        return []
+    latest_identity = _database_daily_bar_storage_identity(bars[-1])
+    cohort_start = len(bars) - 1
+    while (
+        cohort_start > 0
+        and _database_daily_bar_storage_identity(bars[cohort_start - 1])
+        == latest_identity
+    ):
+        cohort_start -= 1
+    return bars[cohort_start:]
+
+
+def _database_daily_bar_diagnostics(
+    *,
+    dropped_row_count: int,
+    provenance_known: bool,
+) -> list[dict[str, object]]:
+    diagnostics: list[dict[str, object]] = []
+    if dropped_row_count:
+        diagnostics.append(
+            {
+                "source": "database",
+                "status": "degraded",
+                "code": "MIXED_DAILY_BAR_PROVENANCE",
+                "message": (
+                    "Stored daily bars span multiple provenance cohorts; "
+                    "only the latest coherent cohort was returned."
+                ),
+                "dropped_row_count": dropped_row_count,
+            }
+        )
+    if not provenance_known:
+        diagnostics.append(
+            {
+                "source": "database",
+                "status": "degraded",
+                "code": "UNKNOWN_DAILY_BAR_PROVENANCE",
+                "message": (
+                    "Stored daily-bar provenance is incomplete or could not be "
+                    "fully audited."
+                ),
+            }
+        )
+    return diagnostics
+
+
 def _fetch_daily_bars_from_database(
     symbol: str,
     start: date,
     end: date,
     session: Session,
+    market: str | None = None,
 ) -> list[DailyBar]:
-    return (
+    query = (
         session.query(DailyBar)
         .join(Instrument, DailyBar.instrument_id == Instrument.id)
         .join(Market, Instrument.market_id == Market.id)
         .filter(Instrument.symbol == symbol)
         .filter(DailyBar.trade_date >= start)
         .filter(DailyBar.trade_date <= end)
-        .order_by(DailyBar.trade_date)
-        .all()
     )
+    if market is not None:
+        query = query.filter(Market.code == market)
+    return query.order_by(DailyBar.trade_date).all()
+
+
+def _is_cn_daily_bar_fallback_eligible(
+    *,
+    symbol: str,
+    timeframe: str,
+    market: str | None,
+    provider_name: str,
+) -> bool:
+    return bool(
+        market == CN_MARKET
+        and timeframe == DAILY_TIMEFRAME
+        and provider_name != "mock"
+        and len(symbol) == 6
+        and symbol.isdigit()
+    )
+
+
+def _daily_bar_source_metadata(provider_name: str) -> tuple[str, str, float]:
+    if provider_name == "akshare":
+        return "akshare.stock_zh_a_hist", "qfq", 0.25
+    if provider_name == "tushare":
+        return "tushare.pro.daily", "raw", 0.25
+    return f"{provider_name}.fetch_bars", "provider_default", 0.0
+
+
+def _build_cn_daily_bar_fetch_coordinator(
+    provider_name: str,
+) -> DailyBarFetchCoordinator:
+    settings_payload = get_platform_settings()
+    akshare_configured = bool(settings_payload.get("akshare_enabled", False))
+    tushare_configured = bool(
+        str(settings_payload.get("tushare_token", "") or "").strip()
+        or os.environ.get("TUSHARE_TOKEN", "").strip()
+    )
+    sources: list[DailyBarSource] = []
+    seen_sources: set[str] = set()
+
+    def add_source(
+        *,
+        provider: str,
+        source: str,
+        adjustment: str,
+        fetch,
+        configured: bool,
+        min_interval_seconds: float,
+    ) -> None:
+        if source in seen_sources:
+            return
+        seen_sources.add(source)
+        sources.append(
+            DailyBarSource(
+                provider=provider,
+                source=source,
+                adjustment=adjustment,
+                priority=len(sources),
+                fetch=fetch,
+                configured=configured,
+                min_interval_seconds=min_interval_seconds,
+            )
+        )
+
+    primary = get_provider(provider_name, market=CN_MARKET)
+    primary_source, primary_adjustment, primary_interval = _daily_bar_source_metadata(
+        provider_name
+    )
+    add_source(
+        provider=provider_name,
+        source=primary_source,
+        adjustment=primary_adjustment,
+        fetch=primary.fetch_bars,
+        configured=True,
+        min_interval_seconds=primary_interval,
+    )
+
+    akshare = get_provider("akshare", market=CN_MARKET)
+    add_source(
+        provider="akshare",
+        source="akshare.stock_zh_a_hist",
+        adjustment="qfq",
+        fetch=akshare.fetch_bars,
+        configured=akshare_configured,
+        min_interval_seconds=0.25,
+    )
+    sina = AkShareProvider(downloader=AkShareProvider.download_sina_daily_bars)
+    add_source(
+        provider="akshare",
+        source="akshare.stock_zh_a_daily",
+        adjustment="qfq",
+        fetch=sina.fetch_bars,
+        configured=akshare_configured,
+        min_interval_seconds=0.5,
+    )
+    tushare = get_provider("tushare", market=CN_MARKET)
+    add_source(
+        provider="tushare",
+        source="tushare.pro.daily",
+        adjustment="raw",
+        fetch=tushare.fetch_bars,
+        configured=tushare_configured,
+        min_interval_seconds=0.25,
+    )
+    return DailyBarFetchCoordinator(sources)
 
 
 def get_bars_payload(
@@ -463,28 +696,98 @@ def get_bars_payload(
     end: date,
     session: Session | None = None,
     provider_name: str | None = None,
+    market: str | None = None,
 ) -> dict[str, object]:
     requested_provider_name = _normalize_requested_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
+    normalized_market = market.strip().upper() if market and market.strip() else None
     if timeframe == "1d" and session is not None:
         try:
-            db_bars = _fetch_daily_bars_from_database(symbol, start, end, session)
+            db_bars = _fetch_daily_bars_from_database(
+                symbol,
+                start,
+                end,
+                session,
+                normalized_market,
+            )
         except SQLAlchemyError:
             db_bars = []
         if db_bars:
+            stored_row_count = len(db_bars)
+            db_bars = _coherent_database_daily_bar_series(db_bars)
             serialized_db_bars = [serialize_daily_bar(bar) for bar in db_bars]
+            database_provenance = _database_daily_bar_provenance(db_bars[-1])
+            database_diagnostics = _database_daily_bar_diagnostics(
+                dropped_row_count=stored_row_count - len(db_bars),
+                provenance_known=bool(database_provenance["provenance_known"]),
+            )
+            availability = _build_data_availability_metadata(serialized_db_bars)
+            if database_diagnostics:
+                availability["status"] = "degraded"
             return {
                 "symbol": symbol,
+                "market": normalized_market,
                 "timeframe": timeframe,
                 "source": "database",
-                "provider": effective_provider_name,
+                **database_provenance,
                 "requested_provider": requested_provider_name,
-                "effective_provider": effective_provider_name,
+                "fallback_used": False,
+                "source_attempts": [],
+                "diagnostics": database_diagnostics,
                 "items": serialized_db_bars,
-                **_build_data_availability_metadata(serialized_db_bars),
+                **availability,
             }
 
-    provider = get_provider(effective_provider_name)
+    if _is_cn_daily_bar_fallback_eligible(
+        symbol=symbol,
+        timeframe=timeframe,
+        market=normalized_market,
+        provider_name=effective_provider_name,
+    ):
+        fetch_result = _build_cn_daily_bar_fetch_coordinator(effective_provider_name).fetch(
+            symbol,
+            timeframe,
+            start,
+            end,
+            policy=CN_RESILIENT_POLICY,
+        )
+        selected_provider = fetch_result.effective_provider or effective_provider_name
+        serialized_provider_bars = _serialize_provider_bars(
+            fetch_result.bars,
+            selected_provider,
+            "serializing bars",
+        )
+        availability = _build_data_availability_metadata(serialized_provider_bars)
+        if fetch_result.status == "failed":
+            availability["status"] = "degraded"
+        return {
+            "symbol": symbol,
+            "market": normalized_market,
+            "timeframe": timeframe,
+            "source": fetch_result.source or "none",
+            "upstream_source": fetch_result.source,
+            "provider": selected_provider,
+            "requested_provider": requested_provider_name,
+            "effective_provider": selected_provider,
+            "adjustment": fetch_result.adjustment,
+            "provenance_known": bool(
+                fetch_result.source
+                and fetch_result.adjustment
+                and serialized_provider_bars
+            ),
+            "provenance_corrected": False,
+            "fallback_used": fetch_result.fallback_used,
+            "source_attempts": fetch_result.attempts,
+            "diagnostics": [],
+            "items": serialized_provider_bars,
+            **availability,
+        }
+
+    provider = (
+        get_provider(effective_provider_name)
+        if normalized_market is None
+        else get_provider(effective_provider_name, market=normalized_market)
+    )
     bars = _fetch_provider_bars(
         provider,
         effective_provider_name,
@@ -498,13 +801,32 @@ def get_bars_payload(
         effective_provider_name,
         "serializing bars",
     )
+    provider_source, adjustment, _interval = _daily_bar_source_metadata(
+        effective_provider_name
+    )
+    attempt_status = "selected" if serialized_provider_bars else "no_data"
     return {
         "symbol": symbol,
+        "market": normalized_market,
         "timeframe": timeframe,
         "source": effective_provider_name,
+        "upstream_source": provider_source,
         "provider": effective_provider_name,
         "requested_provider": requested_provider_name,
         "effective_provider": effective_provider_name,
+        "adjustment": adjustment,
+        "provenance_known": bool(serialized_provider_bars),
+        "provenance_corrected": False,
+        "fallback_used": False,
+        "source_attempts": [
+            {
+                "provider": effective_provider_name,
+                "source": provider_source,
+                "status": attempt_status,
+                "row_count": len(serialized_provider_bars),
+            }
+        ],
+        "diagnostics": [],
         "items": serialized_provider_bars,
         **_build_data_availability_metadata(serialized_provider_bars),
     }
@@ -1518,6 +1840,7 @@ def get_indicator_payload(
     ma_window: int,
     session: Session | None = None,
     provider_name: str | None = None,
+    market: str | None = None,
 ) -> dict[str, object]:
     bars_payload = get_bars_payload(
         symbol,
@@ -1526,6 +1849,7 @@ def get_indicator_payload(
         end,
         session=session,
         provider_name=provider_name,
+        market=market,
     )
     items = bars_payload["items"]
     close_prices = pd.Series([float(item["close"]) for item in items], dtype="float64")
@@ -1534,11 +1858,19 @@ def get_indicator_payload(
 
     return {
         "symbol": symbol,
+        "market": bars_payload.get("market"),
         "as_of": str(items[-1]["timestamp"]) if items else None,
         "source": bars_payload["source"],
         "provider": bars_payload.get("provider"),
         "requested_provider": bars_payload.get("requested_provider"),
         "effective_provider": bars_payload.get("effective_provider"),
+        "upstream_source": bars_payload.get("upstream_source"),
+        "adjustment": bars_payload.get("adjustment"),
+        "provenance_known": bars_payload.get("provenance_known"),
+        "provenance_corrected": bars_payload.get("provenance_corrected", False),
+        "fallback_used": bars_payload.get("fallback_used", False),
+        "source_attempts": bars_payload.get("source_attempts", []),
+        "diagnostics": bars_payload.get("diagnostics", []),
         "status": bars_payload.get("status"),
         "no_data_reason": bars_payload.get("no_data_reason"),
         "indicators": {
@@ -1552,31 +1884,67 @@ def get_latest_bar_payload(
     symbol: str,
     session: Session | None = None,
     provider_name: str | None = None,
+    market: str | None = None,
 ) -> dict[str, object]:
     requested_provider_name = _normalize_requested_provider_name(provider_name)
-    effective_provider_name = resolve_market_data_provider_name(provider_name)
+    normalized_market = market.strip().upper() if market and market.strip() else None
     if session is not None:
         try:
-            db_bar = (
+            query = (
                 session.query(DailyBar)
                 .join(Instrument, DailyBar.instrument_id == Instrument.id)
+                .join(Market, Instrument.market_id == Market.id)
                 .filter(Instrument.symbol == symbol)
-                .order_by(DailyBar.trade_date.desc())
-                .first()
             )
+            if normalized_market is not None:
+                query = query.filter(Market.code == normalized_market)
+            db_bar = query.order_by(DailyBar.trade_date.desc()).first()
         except SQLAlchemyError:
             db_bar = None
         if db_bar is not None:
             serialized_db_bar = serialize_daily_bar(db_bar)
+            database_provenance = _database_daily_bar_provenance(db_bar)
+            stored_identity = _database_daily_bar_storage_identity(db_bar)
+            provider_expr, source_expr, adjustment_expr = (
+                _database_daily_bar_identity_expressions()
+            )
+            try:
+                boundary = (
+                    query.with_entities(DailyBar.trade_date)
+                    .filter(
+                        or_(
+                            provider_expr != stored_identity[0],
+                            source_expr != stored_identity[1],
+                            adjustment_expr != stored_identity[2],
+                        )
+                    )
+                    .order_by(DailyBar.trade_date.desc())
+                    .first()
+                )
+                dropped_row_count = (
+                    query.filter(DailyBar.trade_date <= boundary[0]).count()
+                    if boundary is not None
+                    else 0
+                )
+            except SQLAlchemyError:
+                dropped_row_count = 0
+                database_provenance["provenance_known"] = False
+            database_diagnostics = _database_daily_bar_diagnostics(
+                dropped_row_count=dropped_row_count,
+                provenance_known=bool(database_provenance["provenance_known"]),
+            )
             return {
                 "symbol": symbol,
+                "market": normalized_market,
                 "timeframe": "1d",
                 "source": "database",
-                "provider": effective_provider_name,
+                **database_provenance,
                 "requested_provider": requested_provider_name,
-                "effective_provider": effective_provider_name,
+                "fallback_used": False,
+                "source_attempts": [],
+                "diagnostics": database_diagnostics,
                 "item": serialized_db_bar,
-                "status": "ok",
+                "status": "degraded" if database_diagnostics else "ok",
                 "no_data_reason": None,
             }
 
@@ -1589,18 +1957,35 @@ def get_latest_bar_payload(
         end,
         session=session,
         provider_name=provider_name,
+        market=normalized_market,
     )
     items = fallback["items"]
     latest_item = items[-1] if items else None
+    fallback_status = str(fallback.get("status") or "no_data")
+    latest_status = fallback_status
+    if latest_item is not None and fallback_status not in {
+        "degraded",
+        "failed",
+        "unavailable",
+    }:
+        latest_status = "ok"
     return {
         "symbol": symbol,
+        "market": normalized_market,
         "timeframe": "1d",
         "source": fallback["source"],
         "provider": fallback.get("provider"),
         "requested_provider": fallback.get("requested_provider"),
         "effective_provider": fallback.get("effective_provider"),
+        "upstream_source": fallback.get("upstream_source"),
+        "adjustment": fallback.get("adjustment"),
+        "provenance_known": fallback.get("provenance_known"),
+        "provenance_corrected": fallback.get("provenance_corrected", False),
+        "fallback_used": fallback.get("fallback_used", False),
+        "source_attempts": fallback.get("source_attempts", []),
+        "diagnostics": fallback.get("diagnostics", []),
         "item": latest_item,
-        "status": "ok" if latest_item is not None else "no_data",
+        "status": latest_status,
         "no_data_reason": None
         if latest_item is not None
         else fallback.get("no_data_reason", NO_DAILY_BARS_REASON),

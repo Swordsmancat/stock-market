@@ -74,17 +74,11 @@ afterEach(() => {
   backendFetchMock.mockReset();
 });
 
-it("fetches instrument latest and bars using the backend date-range contract", async () => {
+it("fetches instrument bars and derives latest using the backend date-range contract", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
 
   backendFetchMock
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 102 } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    )
     .mockResolvedValueOnce(
       new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 102 }] }), {
         status: 200,
@@ -113,25 +107,22 @@ it("fetches instrument latest and bars using the backend date-range contract", a
       }),
     );
 
-  const response = await GET(new Request("http://localhost/api/instruments/AAPL?provider=yfinance"), {
+  const response = await GET(new Request("http://localhost/api/instruments/AAPL?provider=yfinance&market=CN"), {
     params: Promise.resolve({ symbol: "AAPL" }),
   });
 
-  expect(backendFetchMock).toHaveBeenNthCalledWith(1, "/market-data/AAPL/latest?provider=yfinance", {
-    cache: "no-store",
-  });
   expect(backendFetchMock).toHaveBeenNthCalledWith(
-    2,
-    "/market-data/AAPL/bars?timeframe=1d&start=2026-01-04&end=2026-07-03&provider=yfinance",
+    1,
+    "/market-data/AAPL/bars?timeframe=1d&start=2026-01-04&end=2026-07-03&provider=yfinance&market=CN",
     { cache: "no-store" },
   );
   expect(backendFetchMock).toHaveBeenNthCalledWith(
-    3,
+    2,
     "/market-data/AAPL/intraday?date=2026-07-03&timeframe=1m&provider=yfinance",
     { cache: "no-store" },
   );
   expect(backendFetchMock).toHaveBeenNthCalledWith(
-    4,
+    3,
     "/market-data/AAPL/depth?depth_levels=5&large_order_threshold_amount=1000000&provider=yfinance",
     { cache: "no-store" },
   );
@@ -140,12 +131,24 @@ it("fetches instrument latest and bars using the backend date-range contract", a
   expect(backendFetchMock).toHaveBeenCalledWith("/news/AAPL", { cache: "no-store" });
   expect(backendFetchMock).toHaveBeenCalledWith("/reports/AAPL/daily/latest", { cache: "no-store" });
   expect(backendFetchMock).toHaveBeenCalledWith("/reports/AAPL/daily/history?limit=5", { cache: "no-store" });
+  expect(
+    backendFetchMock.mock.calls.some(([path]) =>
+      String(path).includes("/market-data/AAPL/latest"),
+    ),
+  ).toBe(false);
 
   expect(response.status).toBe(200);
   await expect(response.json()).resolves.toEqual({
     symbol: "AAPL",
+    market: "CN",
     request_symbol: "AAPL",
-    latest: { status: "ok", item: { timestamp: "2026-07-03", close: 102 } },
+    provider_symbol_mapped: false,
+    latest: {
+      status: "ok",
+      source: "database",
+      item: { timestamp: "2026-07-03", close: 102 },
+      no_data_reason: null,
+    },
     bars: { source: "database", items: [{ timestamp: "2026-07-03", close: 102 }] },
     intraday: {
       symbol: "AAPL",
@@ -218,12 +221,6 @@ it("preserves real intraday minute payloads from the backend", async () => {
   };
 
   backendFetchMock
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 214.2 } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    )
     .mockResolvedValueOnce(
       new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 214.2 }] }), {
         status: 200,
@@ -316,12 +313,6 @@ it("preserves real market-depth payloads from the backend", async () => {
 
   backendFetchMock
     .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 101.25 } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    )
-    .mockResolvedValueOnce(
       new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 101.25 }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -357,12 +348,6 @@ it("maps dashboard index codes to provider symbols before requesting market data
 
   backendFetchMock
     .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 3450 } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    )
-    .mockResolvedValueOnce(
       new Response(JSON.stringify({ source: "yfinance", items: [{ timestamp: "2026-07-03", close: 3450 }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -385,21 +370,18 @@ it("maps dashboard index codes to provider symbols before requesting market data
     params: Promise.resolve({ symbol: "cn_shanghai_composite" }),
   });
 
-  expect(backendFetchMock).toHaveBeenNthCalledWith(1, "/market-data/000001.SS/latest?provider=yfinance", {
-    cache: "no-store",
-  });
   expect(backendFetchMock).toHaveBeenNthCalledWith(
-    2,
+    1,
     "/market-data/000001.SS/bars?timeframe=1d&start=2026-01-04&end=2026-07-03&provider=yfinance",
     { cache: "no-store" },
   );
   expect(backendFetchMock).toHaveBeenNthCalledWith(
-    3,
+    2,
     "/market-data/000001.SS/intraday?date=2026-07-03&timeframe=1m&provider=yfinance",
     { cache: "no-store" },
   );
   expect(backendFetchMock).toHaveBeenNthCalledWith(
-    4,
+    3,
     "/market-data/000001.SS/depth?depth_levels=5&large_order_threshold_amount=1000000&provider=yfinance",
     { cache: "no-store" },
   );
@@ -408,6 +390,7 @@ it("maps dashboard index codes to provider symbols before requesting market data
   await expect(response.json()).resolves.toMatchObject({
     symbol: "cn_shanghai_composite",
     request_symbol: "000001.SS",
+    provider_symbol_mapped: true,
     bars: { source: "yfinance", items: [{ timestamp: "2026-07-03", close: 3450 }] },
     intraday: { status: "degraded", items: [] },
     market_depth: { symbol: "000001.SS", status: "degraded" },
@@ -419,12 +402,6 @@ it("degrades intraday failures without failing the instrument detail response", 
   vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
 
   backendFetchMock
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 102 } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    )
     .mockResolvedValueOnce(
       new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 102 }] }), {
         status: 200,
@@ -469,12 +446,6 @@ it("degrades market depth failures without failing the instrument detail respons
   vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
 
   backendFetchMock
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 102 } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    )
     .mockResolvedValueOnce(
       new Response(JSON.stringify({ source: "database", items: [{ timestamp: "2026-07-03", close: 102 }] }), {
         status: 200,
@@ -525,12 +496,6 @@ it("propagates backend bars failures instead of rewriting them as empty data", a
   vi.setSystemTime(new Date("2026-07-03T12:00:00Z"));
 
   backendFetchMock
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: "ok", item: { timestamp: "2026-07-03", close: 102 } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    )
     .mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: "Missing start/end date range" }), {
         status: 422,

@@ -5,6 +5,7 @@ from decimal import Decimal
 import pandas as pd
 
 from packages.providers.base import ProviderBar, ProviderInstrument
+from packages.providers.cn_market_helpers import tushare_ts_code
 
 Downloader = Callable[[str, date, date], pd.DataFrame]
 
@@ -60,42 +61,46 @@ class TushareProvider:
     @staticmethod
     def _download(symbol: str, start: date, end: date) -> pd.DataFrame:
         try:
-            import os
             import tushare as ts
+        except ImportError as exc:
+            raise RuntimeError("tushare package is not installed.") from exc
 
-            token = ""
-            http_url = ""
-            try:
-                from packages.services.platform_settings import get_platform_settings
-                settings_payload = get_platform_settings()
-                token = str(settings_payload.get("tushare_token", "") or "").strip()
-                http_url = str(settings_payload.get("tushare_http_url", "") or "").strip()
-            except Exception:
-                pass
+        import os
 
-            if not token:
-                token = os.environ.get("TUSHARE_TOKEN", "").strip()
-            if not http_url:
-                http_url = os.environ.get("TUSHARE_HTTP_URL", "").strip()
+        token = ""
+        http_url = ""
+        try:
+            from packages.services.platform_settings import get_platform_settings
+        except ImportError:
+            pass
+        else:
+            settings_payload = get_platform_settings()
+            token = str(settings_payload.get("tushare_token", "") or "").strip()
+            http_url = str(settings_payload.get("tushare_http_url", "") or "").strip()
 
-            if not token:
-                return pd.DataFrame()
+        if not token:
+            token = os.environ.get("TUSHARE_TOKEN", "").strip()
+        if not http_url:
+            http_url = os.environ.get("TUSHARE_HTTP_URL", "").strip()
 
-            ts.set_token(token)
-            pro = ts.pro_api(http_url) if http_url else ts.pro_api()
+        if not token:
+            return pd.DataFrame()
 
-            start_str = start.isoformat().replace("-", "")
-            end_str = end.isoformat().replace("-", "")
+        ts.set_token(token)
+        pro = ts.pro_api(http_url) if http_url else ts.pro_api()
 
-            df = pro.daily(ts_code=f"{symbol}.SH", start_date=start_str, end_date=end_str)
-            if symbol.startswith("0") or symbol.startswith("3"):
-                df2 = pro.daily(ts_code=f"{symbol}.SZ", start_date=start_str, end_date=end_str)
-                df = df2 if df is None or df.empty else df
+        start_str = start.isoformat().replace("-", "")
+        end_str = end.isoformat().replace("-", "")
+        df = pro.daily(
+            ts_code=tushare_ts_code(symbol),
+            start_date=start_str,
+            end_date=end_str,
+        )
+        if df is None or df.empty:
+            return pd.DataFrame()
 
-            if df is None or df.empty:
-                return pd.DataFrame()
-
-            df = df.rename(columns={
+        df = df.rename(
+            columns={
                 "trade_date": "timestamp",
                 "open": "open",
                 "close": "close",
@@ -103,19 +108,15 @@ class TushareProvider:
                 "low": "low",
                 "vol": "volume",
                 "amount": "amount",
-            })
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            numeric_cols = ["open", "high", "low", "close", "volume"]
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
-            if "amount" in df.columns:
-                df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
-            else:
-                df["amount"] = 0
-            df = df.dropna(subset=numeric_cols)
-            return df
-        except ImportError:
-            return pd.DataFrame()
-        except Exception:
-            return pd.DataFrame()
+            }
+        )
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        numeric_cols = ["open", "high", "low", "close", "volume"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        if "amount" in df.columns:
+            df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
+        else:
+            df["amount"] = 0
+        return df.dropna(subset=numeric_cols)

@@ -134,6 +134,7 @@ def answer_market_assistant_question(
     start: date | None = None,
     end: date | None = None,
     provider_name: str | None = None,
+    market: str | None = None,
     research_snapshot_id: str | None = None,
     session: Session | None = None,
 ) -> dict[str, object]:
@@ -150,9 +151,10 @@ def answer_market_assistant_question(
         effective_end,
         session=session,
         provider_name=provider_name,
+        market=market,
     )
     bar_items = _extract_bar_items(bars_payload)
-    diagnostics: list[dict[str, object]] = []
+    diagnostics = _extract_daily_bar_diagnostics(bars_payload)
     research_snapshot = _build_research_snapshot_context(
         research_snapshot_id,
         symbol=normalized_symbol,
@@ -162,13 +164,28 @@ def answer_market_assistant_question(
     )
 
     if not bar_items:
+        daily_bar_status = str(bars_payload.get("status") or "no_data").strip().lower()
+        daily_sources_unavailable = daily_bar_status in {
+            "degraded",
+            "failed",
+            "unavailable",
+        }
+        diagnostic_status = "unavailable" if daily_sources_unavailable else "no_data"
+        diagnostic_code = (
+            "SOURCE_UNAVAILABLE" if daily_sources_unavailable else "SOURCE_NO_DATA"
+        )
+        diagnostic_message = (
+            "Daily-bar sources were unavailable for the requested symbol and date range."
+            if daily_sources_unavailable
+            else "No verified daily bars are available for the requested symbol and date range."
+        )
         diagnostics.append(
             {
                 "source": "bars_1d",
-                "status": "no_data",
+                "status": diagnostic_status,
                 "severity": "error",
-                "code": "SOURCE_NO_DATA",
-                "message": "No verified daily bars are available for the requested symbol and date range.",
+                "code": diagnostic_code,
+                "message": diagnostic_message,
             }
         )
         prompt_context = MarketAssistantPromptContext(
@@ -193,11 +210,11 @@ def answer_market_assistant_question(
             diagnostics=diagnostics,
         )
         return _build_response_payload(
-            status="no_data",
+            status="degraded" if daily_sources_unavailable else "no_data",
             symbol=normalized_symbol,
             prompt_context=prompt_context,
             answer_markdown=build_deterministic_market_answer(prompt_context),
-            model_metadata=_build_fallback_model_metadata("No verified daily bars are available."),
+            model_metadata=_build_fallback_model_metadata(diagnostic_message),
             bars_payload=bars_payload,
             research_snapshot=research_snapshot.response_context,
         )
@@ -673,6 +690,29 @@ def _extract_bar_items(bars_payload: dict[str, object]) -> list[dict[str, object
     if not isinstance(raw_items, list):
         return []
     return [item for item in raw_items if isinstance(item, dict)]
+
+
+def _extract_daily_bar_diagnostics(
+    bars_payload: dict[str, object],
+) -> list[dict[str, object]]:
+    raw_diagnostics = bars_payload.get("diagnostics")
+    if not isinstance(raw_diagnostics, list):
+        return []
+    diagnostics: list[dict[str, object]] = []
+    for raw_diagnostic in raw_diagnostics:
+        if not isinstance(raw_diagnostic, dict):
+            continue
+        diagnostic = {
+            field: raw_diagnostic[field]
+            for field in ("source", "status", "severity", "code", "message")
+            if isinstance(raw_diagnostic.get(field), str)
+        }
+        dropped_row_count = raw_diagnostic.get("dropped_row_count")
+        if isinstance(dropped_row_count, int) and dropped_row_count >= 0:
+            diagnostic["dropped_row_count"] = dropped_row_count
+        if diagnostic:
+            diagnostics.append(diagnostic)
+    return diagnostics
 
 
 def _build_price_context(
@@ -1172,6 +1212,16 @@ def _build_response_payload(
             "provider": bars_payload.get("provider"),
             "requested_provider": bars_payload.get("requested_provider"),
             "effective_provider": bars_payload.get("effective_provider"),
+            "upstream_source": bars_payload.get("upstream_source"),
+            "market": bars_payload.get("market"),
+            "adjustment": bars_payload.get("adjustment"),
+            "provenance_known": bars_payload.get("provenance_known"),
+            "provenance_corrected": bars_payload.get("provenance_corrected", False),
+            "fallback_used": bars_payload.get("fallback_used", False),
+            "source_attempts": bars_payload.get("source_attempts", []),
+            "bars_status": bars_payload.get("status")
+            or ("ok" if prompt_context.bar_count else "no_data"),
+            "bars_no_data_reason": bars_payload.get("no_data_reason"),
         },
         "citations": [citation.to_payload() for citation in prompt_context.citations],
         "diagnostics": prompt_context.diagnostics,

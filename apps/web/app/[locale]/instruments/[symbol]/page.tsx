@@ -23,7 +23,7 @@ export default async function InstrumentDetailPage({
   const researchSnapshotId = firstSearchParam(rawSearchParams.research_snapshot_id);
   const providerName = normalizeInstrumentDetailProvider(provider);
   const [detailResult, detailContext] = await Promise.all([
-    fetchInstrumentDetailPayload({ symbol, providerName }),
+    fetchInstrumentDetailPayload({ symbol, providerName, market }),
     fetchInstrumentDetailContext(symbol, market),
   ]);
   const initialData = detailResult.status === "loaded" ? detailResult.payload : null;

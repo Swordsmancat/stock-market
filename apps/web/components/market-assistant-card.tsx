@@ -22,6 +22,7 @@ import type {
 type MarketAssistantCardProps = {
   symbol: string;
   locale: string;
+  market?: string | null;
   provider?: string | null;
   start?: string | null;
   end?: string | null;
@@ -31,17 +32,22 @@ type MarketAssistantCardProps = {
 };
 
 const QUICK_PROMPT_IDS = ["trend", "risk", "data"] as const;
-const RESEARCH_SNAPSHOT_DIAGNOSTIC_KEYS = {
+const DIAGNOSTIC_TRANSLATION_KEYS = {
   RESEARCH_SNAPSHOT_INVALID_ID: "diagnosticResearchSnapshotInvalidId",
   RESEARCH_SNAPSHOT_SESSION_UNAVAILABLE: "diagnosticResearchSnapshotSessionUnavailable",
   RESEARCH_SNAPSHOT_UNAVAILABLE: "diagnosticResearchSnapshotUnavailable",
   RESEARCH_SNAPSHOT_NOT_FOUND: "diagnosticResearchSnapshotNotFound",
   RESEARCH_SNAPSHOT_SYMBOL_MISMATCH: "diagnosticResearchSnapshotSymbolMismatch",
+  MIXED_DAILY_BAR_PROVENANCE: "diagnosticMixedDailyBarProvenance",
+  UNKNOWN_DAILY_BAR_PROVENANCE: "diagnosticUnknownDailyBarProvenance",
+  SOURCE_UNAVAILABLE: "diagnosticSourceUnavailable",
+  SOURCE_NO_DATA: "diagnosticSourceNoData",
 } as const;
 
 export function MarketAssistantCard({
   symbol,
   locale,
+  market = null,
   provider = null,
   start = null,
   end = null,
@@ -83,6 +89,7 @@ export function MarketAssistantCard({
         start,
         end,
         provider,
+        ...(market ? { market } : {}),
         ...(researchSnapshotId ? { researchSnapshotId } : {}),
       });
       setResponse(assistantResponse);
@@ -260,8 +267,8 @@ function AssistantResponsePanel({
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             {response.diagnostics.map((diagnostic) => {
               const translationKey = diagnostic.code
-                ? RESEARCH_SNAPSHOT_DIAGNOSTIC_KEYS[
-                    diagnostic.code as keyof typeof RESEARCH_SNAPSHOT_DIAGNOSTIC_KEYS
+                ? DIAGNOSTIC_TRANSLATION_KEYS[
+                    diagnostic.code as keyof typeof DIAGNOSTIC_TRANSLATION_KEYS
                   ]
                 : undefined;
               return (

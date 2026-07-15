@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from packages.providers.akshare_provider import AkShareProvider
+from packages.providers.cn_market_helpers import tushare_ts_code
 from packages.providers.tushare_provider import TushareProvider
 from packages.services.market_data import get_provider
 
@@ -22,6 +23,22 @@ def _sample_cn_frame() -> pd.DataFrame:
             "volume": [100000.0, 120000.0],
             "amount": [1_000_000_000.0, 1_200_000_000.0],
         }
+    )
+
+
+def _install_tushare_daily(monkeypatch, daily):
+    monkeypatch.setitem(
+        sys.modules,
+        "packages.services.platform_settings",
+        SimpleNamespace(get_platform_settings=lambda: {"tushare_token": "test-token"}),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "tushare",
+        SimpleNamespace(
+            set_token=lambda _token: None,
+            pro_api=lambda *_args: SimpleNamespace(daily=daily),
+        ),
     )
 
 
@@ -315,6 +332,84 @@ def test_tushare_provider_fetch_bars_with_mock_downloader():
 
     assert len(bars) == 2
     assert bars[0].symbol == "600519"
+
+
+@pytest.mark.parametrize(
+    ("symbol", "expected_ts_code"),
+    [
+        ("600519", "600519.SH"),
+        ("000001", "000001.SZ"),
+        ("300750", "300750.SZ"),
+        ("430047", "430047.BJ"),
+        ("830799", "830799.BJ"),
+        ("920000", "920000.BJ"),
+    ],
+)
+def test_tushare_downloader_uses_exact_exchange_ts_code(
+    monkeypatch,
+    symbol: str,
+    expected_ts_code: str,
+):
+    calls: list[dict[str, object]] = []
+
+    def daily(**kwargs):
+        calls.append(kwargs)
+        return pd.DataFrame(
+            [
+                {
+                    "trade_date": "20260709",
+                    "open": 100,
+                    "high": 102,
+                    "low": 99,
+                    "close": 101,
+                    "vol": 1000,
+                    "amount": 101000,
+                }
+            ]
+        )
+
+    _install_tushare_daily(monkeypatch, daily)
+
+    frame = TushareProvider._download(symbol, date(2026, 7, 1), date(2026, 7, 10))
+
+    assert tushare_ts_code(symbol) == expected_ts_code
+    assert [call["ts_code"] for call in calls] == [expected_ts_code]
+    assert frame["timestamp"].tolist() == [pd.Timestamp("2026-07-09")]
+
+
+def test_tushare_downloader_reports_missing_dependency_as_unavailable(monkeypatch):
+    monkeypatch.setitem(sys.modules, "tushare", None)
+
+    with pytest.raises(RuntimeError, match="tushare package is not installed"):
+        TushareProvider._download("600519", date(2026, 7, 1), date(2026, 7, 10))
+
+
+def test_tushare_downloader_does_not_convert_provider_failure_into_no_data(monkeypatch):
+    def daily(**_kwargs):
+        raise RuntimeError("provider rate limited")
+
+    _install_tushare_daily(monkeypatch, daily)
+
+    with pytest.raises(RuntimeError, match="provider rate limited"):
+        TushareProvider._download("600519", date(2026, 7, 1), date(2026, 7, 10))
+
+
+def test_tushare_downloader_does_not_convert_schema_failure_into_no_data(monkeypatch):
+    def daily(**_kwargs):
+        return pd.DataFrame([{"trade_date": "20260709", "open": 100}])
+
+    _install_tushare_daily(monkeypatch, daily)
+
+    with pytest.raises(KeyError):
+        TushareProvider._download("600519", date(2026, 7, 1), date(2026, 7, 10))
+
+
+def test_tushare_downloader_keeps_empty_provider_result_as_no_data(monkeypatch):
+    _install_tushare_daily(monkeypatch, lambda **_kwargs: pd.DataFrame())
+
+    frame = TushareProvider._download("600519", date(2026, 7, 1), date(2026, 7, 10))
+
+    assert frame.empty
 
 
 def test_get_provider_resolves_akshare_and_tushare():

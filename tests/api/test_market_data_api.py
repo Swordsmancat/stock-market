@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from apps.api.main import app
+from apps.api.routers import market_data as market_data_router
 from packages.services import market_data as market_data_service
 from packages.shared.database import get_session
 
@@ -58,6 +59,85 @@ def test_get_bars_uses_platform_default_when_provider_query_is_omitted(monkeypat
     assert response.status_code == 200
     payload = response.json()
     assert payload["source"] == "mock"
+
+
+def test_get_bars_forwards_optional_market_to_the_service(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def bars_stub(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return {
+            "symbol": "600519",
+            "market": "CN",
+            "timeframe": "1d",
+            "source": "akshare.stock_zh_a_hist",
+            "provider": "akshare",
+            "requested_provider": "yfinance",
+            "effective_provider": "akshare",
+            "adjustment": "qfq",
+            "fallback_used": True,
+            "source_attempts": [],
+            "status": "ok",
+            "no_data_reason": None,
+            "items": [],
+        }
+
+    monkeypatch.setattr(market_data_router, "get_bars_payload", bars_stub)
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        response = TestClient(app).get(
+            "/market-data/600519/bars",
+            params={
+                "timeframe": "1d",
+                "start": "2026-07-01",
+                "end": "2026-07-10",
+                "provider": "yfinance",
+                "market": "CN",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["kwargs"]["market"] == "CN"
+
+
+@pytest.mark.parametrize(
+    ("service_name", "path", "params"),
+    [
+        ("get_latest_bar_payload", "/market-data/600519/latest", {}),
+        (
+            "get_indicator_payload",
+            "/market-data/600519/indicators",
+            {"start": "2026-07-01", "end": "2026-07-10", "ma_window": 5},
+        ),
+    ],
+)
+def test_daily_market_data_routes_forward_optional_market(
+    monkeypatch,
+    service_name,
+    path,
+    params,
+):
+    captured: dict[str, object] = {}
+
+    def service_stub(*args, **kwargs):
+        captured["kwargs"] = kwargs
+        return {"symbol": "600519", "status": "ok"}
+
+    monkeypatch.setattr(market_data_router, service_name, service_stub)
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        response = TestClient(app).get(
+            path,
+            params={**params, "provider": "yfinance", "market": "CN"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["kwargs"]["market"] == "CN"
 
 
 def test_get_indicators_returns_latest_ma_and_rsi():

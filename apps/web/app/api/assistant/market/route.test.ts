@@ -23,6 +23,7 @@ it("proxies market assistant requests to the backend", async () => {
     timeframe: "1d",
     start: "2026-01-01",
     end: "2026-01-20",
+    market: "US",
     provider: "mock",
   };
   const backendPayload = {

@@ -4,7 +4,6 @@ import * as React from "react";
 import { useRouter } from "@/src/i18n/routing";
 import { Loader2, Search } from "lucide-react";
 
-import { searchInstrumentAction } from "@/app/[locale]/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +33,43 @@ type GlobalSearchProps = {
 
 const SEARCH_RESULT_LIMIT = 10;
 const SEARCH_DEBOUNCE_MS = 250;
+
+function buildInstrumentSearchParams(query: string): URLSearchParams {
+  return new URLSearchParams({
+    q: query,
+    limit: String(SEARCH_RESULT_LIMIT),
+    offset: "0",
+  });
+}
+
+async function fetchMatchingInstruments(query: string): Promise<Instrument[]> {
+  const response = await fetch(
+    `/api/instruments?${buildInstrumentSearchParams(query).toString()}`,
+  );
+  if (!response.ok) {
+    throw new Error("load failed");
+  }
+  const data = (await response.json()) as { items?: Instrument[] };
+  return data.items ?? [];
+}
+
+function resolveExactMarket(query: string, instruments: Instrument[]): string {
+  const normalizedQuery = query.trim().toUpperCase();
+  const exactMatches = instruments.filter(
+    (instrument) =>
+      instrument.symbol.trim().toUpperCase() === normalizedQuery,
+  );
+  return exactMatches.length === 1
+    ? exactMatches[0].market.trim().toUpperCase()
+    : "";
+}
+
+function buildInstrumentHref(symbol: string, market: string): string {
+  const marketQuery = market
+    ? `?${new URLSearchParams({ market }).toString()}`
+    : "";
+  return `/instruments/${encodeURIComponent(symbol)}${marketQuery}`;
+}
 
 export function GlobalSearch({ locale, labels }: GlobalSearchProps) {
   const [open, setOpen] = React.useState(false);
@@ -67,18 +103,9 @@ export function GlobalSearch({ locale, labels }: GlobalSearchProps) {
     setIsLoading(true);
     setLoadError(null);
     const timer = window.setTimeout(() => {
-      const params = new URLSearchParams({
-        q: normalizedQuery,
-        limit: String(SEARCH_RESULT_LIMIT),
-        offset: "0",
-      });
-      void fetch(`/api/instruments?${params.toString()}`)
-        .then(async (response) => {
-          if (!response.ok) {
-            throw new Error("load failed");
-          }
-          const data = (await response.json()) as { items?: Instrument[] };
-          if (active) setInstruments(data.items ?? []);
+      void fetchMatchingInstruments(normalizedQuery)
+        .then((items) => {
+          if (active) setInstruments(items);
         })
         .catch(() => {
           if (active) setLoadError(labels.loadFailed);
@@ -95,6 +122,30 @@ export function GlobalSearch({ locale, labels }: GlobalSearchProps) {
   }, [labels.loadFailed, open, query]);
 
   const hasQuery = query.trim().length > 0;
+  const exactMarket = resolveExactMarket(query, instruments);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedQuery = query.trim().toUpperCase();
+    if (!normalizedQuery) {
+      return;
+    }
+
+    let market = exactMarket;
+    if (!market) {
+      try {
+        market = resolveExactMarket(
+          normalizedQuery,
+          await fetchMatchingInstruments(normalizedQuery),
+        );
+      } catch {
+        setLoadError(labels.loadFailed);
+        return;
+      }
+    }
+    setOpen(false);
+    router.push(buildInstrumentHref(normalizedQuery, market) as any);
+  }
 
   return (
     <>
@@ -117,8 +168,9 @@ export function GlobalSearch({ locale, labels }: GlobalSearchProps) {
             <DialogTitle>{labels.placeholder}</DialogTitle>
           </DialogHeader>
 
-          <form action={searchInstrumentAction} className="flex gap-2">
+          <form onSubmit={handleSubmit} className="flex gap-2">
             <input type="hidden" name="locale" value={locale} />
+            <input type="hidden" name="market" value={exactMarket} />
             <Input
               name="symbol"
               value={query}
@@ -151,11 +203,8 @@ export function GlobalSearch({ locale, labels }: GlobalSearchProps) {
                       onClick={() => {
                         setOpen(false);
                         const market = instrument.market.trim();
-                        const searchParams = market
-                          ? `?${new URLSearchParams({ market }).toString()}`
-                          : "";
                         router.push(
-                          `/instruments/${encodeURIComponent(instrument.symbol)}${searchParams}` as any,
+                          buildInstrumentHref(instrument.symbol, market) as any,
                         );
                       }}
                     >

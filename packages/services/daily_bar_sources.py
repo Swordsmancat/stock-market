@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 import time
 
 from packages.providers.base import ProviderBar
@@ -13,6 +14,21 @@ CN_RESILIENT_POLICY = "cn_resilient"
 SUPPORTED_DAILY_BAR_POLICIES = {STRICT_POLICY, CN_RESILIENT_POLICY}
 
 DailyBarFetcher = Callable[[str, str, date, date], list[ProviderBar]]
+
+
+def resolve_daily_bar_adjustment(
+    source: object,
+    adjustment: object,
+) -> tuple[str | None, bool]:
+    normalized_source = str(source or "").strip().lower()
+    normalized_adjustment = str(adjustment or "").strip().lower()
+    if normalized_source == "tushare.pro.daily":
+        return "raw", normalized_adjustment != "raw"
+    if normalized_adjustment in {"none", "unadjusted", "no_adjust"}:
+        return "raw", False
+    if normalized_adjustment in {"qfq", "hfq", "raw"}:
+        return normalized_adjustment, False
+    return None, False
 
 
 @dataclass(frozen=True)
@@ -134,6 +150,14 @@ class DailyBarFetchCoordinator:
                     raise
                 continue
 
+            bars = sorted(
+                bars,
+                key=lambda bar: (
+                    bar.timestamp.date()
+                    if hasattr(bar.timestamp, "date")
+                    else bar.timestamp
+                ),
+            )
             self._failure_counts[source.source] = 0
             self._increment(source.source, "selected")
             attempts.append(self._attempt(source, "selected", row_count=len(bars)))
@@ -207,7 +231,25 @@ def _validate_bars(
     seen_dates: set[date] = set()
     normalized_symbol = symbol.strip().upper()
     for bar in bars:
-        trade_date = bar.timestamp.date() if hasattr(bar.timestamp, "date") else bar.timestamp
+        if not isinstance(bar, ProviderBar):
+            raise DailyBarValidationError(
+                "MALFORMED_BAR",
+                "A daily-bar source returned an unsupported row structure.",
+            )
+        numeric_values = (bar.open, bar.high, bar.low, bar.close, bar.volume)
+        if (
+            not isinstance(bar.symbol, str)
+            or not isinstance(bar.timestamp, date)
+            or any(not isinstance(value, Decimal) for value in numeric_values)
+            or (bar.amount is not None and not isinstance(bar.amount, Decimal))
+        ):
+            raise DailyBarValidationError(
+                "MALFORMED_BAR",
+                "A daily-bar source returned malformed field values.",
+            )
+        trade_date = (
+            bar.timestamp.date() if isinstance(bar.timestamp, datetime) else bar.timestamp
+        )
         if not isinstance(trade_date, date) or trade_date < start or trade_date > end:
             raise DailyBarValidationError("DATE_OUT_OF_RANGE", "A bar date is outside the request.")
         if trade_date in seen_dates:
@@ -215,7 +257,11 @@ def _validate_bars(
         seen_dates.add(trade_date)
         if bar.symbol.strip().upper() != normalized_symbol:
             raise DailyBarValidationError("SYMBOL_MISMATCH", "A provider bar has another symbol.")
-        values = (bar.open, bar.high, bar.low, bar.close, bar.volume)
+        values = (
+            (*numeric_values, bar.amount)
+            if bar.amount is not None
+            else numeric_values
+        )
         if any(not value.is_finite() for value in values):
             raise DailyBarValidationError("NON_FINITE_VALUE", "A daily-bar value is not finite.")
         if bar.high < max(bar.open, bar.low, bar.close) or bar.low > min(

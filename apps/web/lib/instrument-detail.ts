@@ -28,6 +28,24 @@ export type InstrumentBar = {
   volume?: number;
 };
 
+export type InstrumentDailyBarSourceAttempt = {
+  provider?: string | null;
+  source?: string | null;
+  status?: string | null;
+  row_count?: number | null;
+  exception_type?: string | null;
+  code?: string | null;
+};
+
+export type InstrumentDailyBarDiagnostic = {
+  source?: string | null;
+  status?: string | null;
+  severity?: string | null;
+  code?: string | null;
+  message?: string | null;
+  dropped_row_count?: number | null;
+};
+
 export type InstrumentIntradayItem = {
   timestamp?: string;
   open?: number;
@@ -210,7 +228,9 @@ export type InstrumentDailyReportHistoryPayload = {
 
 export type InstrumentDetailPayload = {
   symbol: string;
+  market?: string | null;
   request_symbol: string;
+  provider_symbol_mapped?: boolean;
   latest: {
     item?: {
       timestamp?: string;
@@ -221,6 +241,13 @@ export type InstrumentDetailPayload = {
     provider?: string | null;
     requested_provider?: string | null;
     effective_provider?: string | null;
+    upstream_source?: string | null;
+    adjustment?: string | null;
+    provenance_known?: boolean | null;
+    provenance_corrected?: boolean;
+    fallback_used?: boolean;
+    source_attempts?: InstrumentDailyBarSourceAttempt[];
+    diagnostics?: InstrumentDailyBarDiagnostic[];
     no_data_reason?: string | null;
   };
   bars: {
@@ -230,6 +257,13 @@ export type InstrumentDetailPayload = {
     provider?: string | null;
     requested_provider?: string | null;
     effective_provider?: string | null;
+    upstream_source?: string | null;
+    adjustment?: string | null;
+    provenance_known?: boolean | null;
+    provenance_corrected?: boolean;
+    fallback_used?: boolean;
+    source_attempts?: InstrumentDailyBarSourceAttempt[];
+    diagnostics?: InstrumentDailyBarDiagnostic[];
     no_data_reason?: string | null;
   };
   intraday?: InstrumentIntradayPayload;
@@ -520,19 +554,52 @@ function buildUnavailableMarketDepthPayload({
   };
 }
 
+function deriveLatestFromBars(
+  bars: InstrumentDetailPayload["bars"],
+): InstrumentDetailPayload["latest"] {
+  const items = Array.isArray(bars.items) ? bars.items : [];
+  const latestItem = items.at(-1) ?? null;
+
+  return {
+    item: latestItem,
+    status: bars.status ?? (latestItem ? "ok" : "no_data"),
+    source: bars.source,
+    provider: bars.provider,
+    requested_provider: bars.requested_provider,
+    effective_provider: bars.effective_provider,
+    upstream_source: bars.upstream_source,
+    adjustment: bars.adjustment,
+    provenance_known: bars.provenance_known,
+    provenance_corrected: bars.provenance_corrected,
+    fallback_used: bars.fallback_used,
+    source_attempts: bars.source_attempts,
+    diagnostics: bars.diagnostics,
+    no_data_reason: latestItem ? null : bars.no_data_reason,
+  };
+}
+
 export async function fetchInstrumentDetailPayload({
   symbol,
   providerName,
+  market = null,
 }: {
   symbol: string;
   providerName: string;
+  market?: string | null;
 }): Promise<InstrumentDetailFetchResult> {
   const { start, end } = getDetailBarsDateRange();
   const normalizedProviderName = normalizeInstrumentDetailProvider(providerName);
   const providerQuerySuffix = buildProviderQuerySuffix(normalizedProviderName);
+  const normalizedMarket = market?.trim().toUpperCase() || null;
   const requestSymbol = resolveInstrumentDetailRequestSymbol(symbol, normalizedProviderName);
+  const usesProviderSpecificSymbol =
+    requestSymbol.trim().toUpperCase() !== symbol.trim().toUpperCase();
+  const dailyMarketQuerySuffix = normalizedMarket && !usesProviderSpecificSymbol
+    ? `&market=${encodeURIComponent(normalizedMarket)}`
+    : "";
   const encodedSymbol = encodeURIComponent(requestSymbol);
   const encodedOriginalSymbol = encodeURIComponent(symbol);
+  const barsPath = `/market-data/${encodedSymbol}/bars?timeframe=1d&start=${start}&end=${end}${providerQuerySuffix}${dailyMarketQuerySuffix}`;
 
   const [
     marketDataResults,
@@ -543,13 +610,7 @@ export async function fetchInstrumentDetailPayload({
     dailyReportHistoryData,
   ] = await Promise.all([
     Promise.allSettled([
-      backendFetch(`/market-data/${encodedSymbol}/latest${providerQuerySuffix.replace("&", "?")}`, {
-        cache: "no-store",
-      }),
-      backendFetch(
-        `/market-data/${encodedSymbol}/bars?timeframe=1d&start=${start}&end=${end}${providerQuerySuffix}`,
-        { cache: "no-store" },
-      ),
+      backendFetch(barsPath, { cache: "no-store" }),
       backendFetch(
         `/market-data/${encodedSymbol}/intraday?date=${end}&timeframe=1m${providerQuerySuffix}`,
         { cache: "no-store" },
@@ -590,7 +651,7 @@ export async function fetchInstrumentDetailPayload({
       },
     ),
   ]);
-  const [latestResult, barsResult, intradayResult, marketDepthResult] = marketDataResults;
+  const [barsResult, intradayResult, marketDepthResult] = marketDataResults;
 
   if (barsResult.status === "rejected") {
     return {
@@ -612,10 +673,8 @@ export async function fetchInstrumentDetailPayload({
     };
   }
 
-  const barsData = await barsResponse.json();
-  const latestData = latestResult.status === "fulfilled" && latestResult.value.ok
-    ? await latestResult.value.json()
-    : { status: "unavailable", item: null };
+  const barsData = (await barsResponse.json()) as InstrumentDetailPayload["bars"];
+  const latestData = deriveLatestFromBars(barsData);
   const intradayData = intradayResult.status === "fulfilled" && intradayResult.value.ok
     ? await intradayResult.value.json()
     : buildUnavailableIntradayPayload({
@@ -636,7 +695,9 @@ export async function fetchInstrumentDetailPayload({
     status: "loaded",
     payload: {
       symbol,
+      market: normalizedMarket,
       request_symbol: requestSymbol,
+      provider_symbol_mapped: usesProviderSpecificSymbol,
       latest: latestData,
       bars: barsData,
       intraday: intradayData,

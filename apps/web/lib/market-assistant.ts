@@ -8,6 +8,7 @@ export type MarketAssistantRequest = {
   timeframe?: "1d";
   start?: string | null;
   end?: string | null;
+  market?: string | null;
   provider?: string | null;
   researchSnapshotId?: string | null;
 };
@@ -75,6 +76,22 @@ export type MarketAssistantResponse = {
     provider?: string | null;
     requested_provider?: string | null;
     effective_provider?: string | null;
+    upstream_source?: string | null;
+    market?: string | null;
+    adjustment?: string | null;
+    provenance_known?: boolean | null;
+    provenance_corrected?: boolean;
+    fallback_used?: boolean;
+    bars_status?: string | null;
+    bars_no_data_reason?: string | null;
+    source_attempts?: Array<{
+      provider?: string | null;
+      source?: string | null;
+      status?: string | null;
+      row_count?: number | null;
+      exception_type?: string | null;
+      code?: string | null;
+    }>;
   };
   citations: MarketAssistantCitation[];
   diagnostics: MarketAssistantDiagnostic[];
@@ -100,6 +117,7 @@ export async function askMarketAssistant(request: MarketAssistantRequest): Promi
       timeframe: request.timeframe ?? "1d",
       start: request.start ?? undefined,
       end: request.end ?? undefined,
+      market: request.market ?? undefined,
       provider: request.provider ?? undefined,
       research_snapshot_id: request.researchSnapshotId ?? undefined,
     }),

@@ -10,7 +10,12 @@ def normalize_cn_symbol(symbol: str) -> str:
 
 def tushare_ts_code(symbol: str) -> str:
     code = normalize_cn_symbol(symbol)
-    suffix = "SH" if code.startswith("6") else "SZ"
+    if code.startswith(("4", "8", "9")):
+        suffix = "BJ"
+    elif code.startswith("6"):
+        suffix = "SH"
+    else:
+        suffix = "SZ"
     return f"{code}.{suffix}"
 
 

@@ -121,3 +121,168 @@ membership = get_watchlist_item_membership(
 
 The direct exact query is side-effect free and keeps unavailable/empty/watched
 states distinct.
+
+## Scenario: Market-Aware CN Daily-Bar Source Fallback
+
+### 1. Scope / Trigger
+
+- Trigger: a personal user opens a searched instrument detail page or requests
+  AI analysis and the requested daily-bar provider returns no rows, raises, is
+  rate-limited, or returns malformed rows.
+- Scope: canonical search identity, daily bars/latest/indicators APIs,
+  database-first reads, CN provider coordination, detail provenance, and the
+  market assistant's daily-bar context.
+- Non-goals: intraday/depth fallback, index-to-stock guessing, mock recovery,
+  HK/US fallback through CN providers, provider backfill, or trading actions.
+
+### 2. Signatures
+
+- Bars API:
+  `GET /market-data/{symbol}/bars?timeframe=1d&start=YYYY-MM-DD&end=YYYY-MM-DD&provider=<name>&market=CN`.
+- Latest/indicator APIs accept the same optional `market` query and forward it
+  to `get_latest_bar_payload(...)` / `get_indicator_payload(...)`.
+- Service:
+  `get_bars_payload(symbol, timeframe, start, end, session=None, provider_name=None, market=None)`.
+- Assistant request/service adds optional `market`; detail sends the daily-bar
+  effective provider plus the exact resolved market.
+- Coordinator:
+  `DailyBarFetchCoordinator.fetch(symbol, timeframe, start, end, policy="cn_resilient")`.
+- Tushare may be configured by stored `tushare_token` or `TUSHARE_TOKEN`; both
+  enable the same fallback source.
+
+### 3. Contracts
+
+- Database daily bars remain first. When market is known, lookup identity is
+  `(Market.code, Instrument.symbol)`; another market's same symbol cannot win.
+- A database response contains only the latest continuous cohort with one
+  effective `(provider, source, adjustment)` identity. Dropped earlier cohorts
+  produce `status="degraded"` and `MIXED_DAILY_BAR_PROVENANCE`; incomplete
+  legacy provenance produces `UNKNOWN_DAILY_BAR_PROVENANCE` and never invents
+  an adapter provider. Legacy `tushare.pro.daily + qfq` is corrected to `raw`
+  through the shared adjustment resolver.
+- The latest-bar database path preserves those diagnostics with a latest-row,
+  provenance-boundary, and dropped-row count query. It must not materialize the
+  symbol's full daily-bar history because watchlist batch enrichment calls this
+  path once per symbol.
+- Resilient fallback is eligible only for exact `market="CN"`,
+  `timeframe="1d"`, a six-digit numeric stock symbol, and a non-mock requested
+  provider. The ordered sources are:
+
+```text
+requested provider
+  -> akshare.stock_zh_a_hist (qfq)
+  -> akshare.stock_zh_a_daily (qfq)
+  -> tushare.pro.daily (raw)
+```
+
+- Each source is attempted at most once. Unconfigured alternates remain visible
+  as `skipped_unconfigured` and are not called. Mock is never appended.
+- A whole source is selected only after validating row type, symbol, date
+  range, duplicate dates, Decimal field structure, finite OHLCV/amount,
+  consistent OHLC, and non-negative volume. Selected rows are sorted ascending;
+  rows from different sources or adjustments are never merged.
+- Provider/schema/rate/dependency failures reach the coordinator. Attempts may
+  expose only `provider`, `source`, `status`, `row_count`, validation `code`,
+  and `exception_type`; exception messages, URLs, tokens, and response bodies
+  are forbidden.
+- Payload provenance is additive:
+  `requested_provider`, `effective_provider`, `provider`, `source`,
+  `upstream_source`, `adjustment`, `provenance_known`,
+  `provenance_corrected`, `fallback_used`, `source_attempts`, `diagnostics`,
+  `status`, and `no_data_reason`.
+- Successful alternate selection returns `status="ok"`. All configured sources
+  returning empty is `no_data`; any failed/invalid source with no selected rows
+  is `degraded`. Latest, indicators, and assistant context preserve that state.
+- Detail fetches daily bars once and derives latest from the same payload,
+  including the empty/degraded state. It does not run a second fallback chain.
+- Search resolves an exact market before navigation when one unique exact
+  result exists. Provider-specific logical index symbols omit `market=CN` from
+  daily and assistant requests so numeric index codes cannot enter stock
+  fallback.
+- Detail and AI use the daily-bar effective provider, never market-depth
+  provenance. Unsupported/storage provider labels fall back to the requested
+  adapter. Requested/effective differences show a localized source notice;
+  stable diagnostics render localized code text rather than backend messages.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| CN 1d primary succeeds | Select primary once; `fallback_used=false` |
+| Primary empty/fails/malformed | Continue in exact priority order |
+| AkShare hist fails, daily succeeds | Select `stock_zh_a_daily`; sanitized attempts |
+| AkShare unavailable, Tushare succeeds | Select `tushare.pro.daily`, `adjustment=raw` |
+| `TUSHARE_TOKEN` only | Tushare is configured and eligible |
+| Tushare dependency/rate/schema failure | Record failed `exception_type`; continue/exhaust degraded |
+| All configured sources empty | `no_data`, empty items, no mock |
+| At least one source fails/invalid and none succeeds | `degraded`, empty items, no mock |
+| HK/US/missing market or non-1d | Existing single-provider behavior; no CN alternate |
+| Provider-specific logical index | Omit CN market forwarding; no stock fallback |
+| DB range crosses provenance cohorts | Return latest continuous cohort and degraded diagnostic |
+| Legacy DB provenance unknown | Effective provider remains null; never pass `database` as adapter |
+| Latest provenance-boundary audit fails | Return degraded unknown-provenance diagnostics; never assume a coherent series |
+| Assistant receives degraded empty bars | No LLM call; `SOURCE_UNAVAILABLE`, not `SOURCE_NO_DATA` |
+
+### 5. Good / Base / Bad Cases
+
+- Good: searching `920000` resolves `market=CN`; yfinance and AkShare hist do
+  not yield usable rows, AkShare daily succeeds, detail shows its exact source,
+  and AI cites the same daily-bar provider.
+- Good: a stored qfq cohort follows older raw rows; detail uses only the latest
+  continuous cohort, marks degraded, and AI receives the diagnostic.
+- Base: a US symbol has no yfinance rows; it remains explicit no-data and never
+  calls AkShare/Tushare.
+- Bad: convert provider exceptions to empty frames, mix raw/qfq rows, launch
+  `/latest` and `/bars` fallback chains together, infer CN from a numeric symbol,
+  pass `database` as an assistant adapter, or render raw exception text.
+
+### 6. Tests Required
+
+- Coordinator tests cover structural/numeric malformed rows, non-finite amount,
+  symbol mismatch, ordering, sanitized attempts, configured skips, and strict
+  policy not calling alternates.
+- Provider tests cover yfinance CN/HK/BSE ticker mapping, shared Tushare
+  SH/SZ/BJ mapping, one `pro.daily` call, missing dependency, upstream failure,
+  schema failure, and true empty frames.
+- Service tests cover four-source priority, no mock, all-empty versus failed
+  exhaustion, env-only Tushare, market-scoped DB reads, latest continuous DB
+  cohort, legacy adjustment correction, latest/indicator provenance, and a
+  latest-bar regression that forbids the full-history range helper. Boundary
+  audit query failures remain explicitly degraded.
+- API tests assert optional market forwarding for bars/latest/indicators and
+  assistant requests.
+- Frontend tests assert immediate search submit retains a unique market, index
+  market omission, one daily fallback chain per detail load, derived latest
+  provenance, source notice behavior, provider filtering, and localized
+  diagnostics without raw backend messages.
+- Live acceptance uses an isolated Compose project and proves primary empty or
+  failed, a later source selected, normal `3000/8000` health unchanged, and no
+  secret present in evidence/log output.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+bars = requested.fetch_bars(symbol, "1d", start, end)
+if not bars:
+    bars = MockProvider().fetch_bars(symbol, "1d", start, end)
+```
+
+This fabricates evidence, hides the actual source gap, and can contaminate AI
+analysis.
+
+#### Correct
+
+```python
+result = coordinator.fetch(
+    symbol,
+    "1d",
+    start,
+    end,
+    policy=CN_RESILIENT_POLICY,
+)
+```
+
+The coordinator selects one validated configured source, preserves sanitized
+provenance, and returns explicit no-data/degraded state when none succeeds.

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
 import zhMessages from "../../../../messages/zh.json";
@@ -107,12 +107,21 @@ function mockInstrumentDetailResponse(
   latestClose?: number,
   intradayPayload: Record<string, unknown> | null = null,
   marketDepthPayload: Record<string, unknown> | null = null,
+  barsMetadata: Record<string, unknown> = {},
+  identity: {
+    symbol?: string;
+    requestSymbol?: string;
+    market?: string;
+    providerSymbolMapped?: boolean;
+  } = {},
 ) {
   fetchInstrumentDetailPayloadMock.mockResolvedValue({
     status: "loaded",
     payload: {
-      symbol: "AAPL",
-      request_symbol: "AAPL",
+      symbol: identity.symbol ?? "AAPL",
+      market: identity.market ?? null,
+      request_symbol: identity.requestSymbol ?? identity.symbol ?? "AAPL",
+      provider_symbol_mapped: identity.providerSymbolMapped ?? false,
       latest: latestClose === undefined
         ? {
             status: "unavailable",
@@ -136,6 +145,7 @@ function mockInstrumentDetailResponse(
         provider: "yfinance",
         effective_provider: "yfinance",
         no_data_reason: items.length > 0 ? null : "No daily bars were available for the requested symbol/date range.",
+        ...barsMetadata,
       },
       intraday: intradayPayload ?? {
         symbol: "AAPL",
@@ -274,6 +284,220 @@ function mockInstrumentDetailResponse(
     },
   });
 }
+
+function mockAssistantFetch(symbol = "600519") {
+  return vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        status: "degraded",
+        answer_markdown: "Research-only answer.",
+        symbol,
+        model: {
+          provider: "deterministic",
+          name: "market-assistant-deterministic-fallback",
+          used_llm: false,
+        },
+        context: {
+          timeframe: "1d",
+          start: "2026-01-01",
+          end: "2026-07-09",
+          bar_count: 1,
+        },
+        citations: [],
+        diagnostics: [],
+        safety: {
+          not_investment_advice: true,
+          no_fabricated_market_data: true,
+          disclaimer: "Research only.",
+        },
+      }),
+      { status: 200 },
+    ),
+  );
+}
+
+it("uses fallback daily-bar provenance for the detail header and AI request", async () => {
+  mockInstrumentDetailResponse(
+    [
+      {
+        timestamp: "2026-07-09",
+        open: 1480,
+        high: 1500,
+        low: 1475,
+        close: 1495,
+        volume: 120000,
+      },
+    ],
+    1495,
+    null,
+    null,
+    {
+      source: "akshare.stock_zh_a_daily",
+      provider: "akshare",
+      requested_provider: "yfinance",
+      effective_provider: "akshare",
+      adjustment: "qfq",
+      fallback_used: true,
+      source_attempts: [
+        {
+          provider: "yfinance",
+          source: "yfinance.fetch_bars",
+          status: "failed",
+          exception_type: "ConnectionError",
+        },
+        {
+          provider: "akshare",
+          source: "akshare.stock_zh_a_daily",
+          status: "selected",
+          row_count: 1,
+        },
+      ],
+    },
+    { symbol: "600519", requestSymbol: "600519.SS", market: "CN" },
+  );
+  const assistantFetch = mockAssistantFetch();
+
+  await renderChineseInstrumentDetailPage("600519", { market: "CN" });
+
+  expect(screen.getAllByText("provider: akshare").length).toBeGreaterThan(0);
+  expect(
+    screen.getByText(
+      "日线数据源已自动切换：yfinance -> akshare / akshare.stock_zh_a_daily。",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/ConnectionError/)).not.toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole("button", { name: zhMessages.MarketAssistant.submit }),
+  );
+  await waitFor(() => expect(assistantFetch).toHaveBeenCalledTimes(1));
+  const [, request] = assistantFetch.mock.calls[0];
+  expect(JSON.parse(String(request?.body))).toMatchObject({
+    symbol: "600519",
+    market: "CN",
+    provider: "akshare",
+  });
+});
+
+it("explains database provenance when requested and effective providers differ", async () => {
+  mockInstrumentDetailResponse(
+    [
+      {
+        timestamp: "2026-07-09",
+        open: 1480,
+        high: 1500,
+        low: 1475,
+        close: 1495,
+        volume: 120000,
+      },
+    ],
+    1495,
+    null,
+    null,
+    {
+      source: "database",
+      upstream_source: "akshare.stock_zh_a_hist",
+      provider: "akshare",
+      requested_provider: "yfinance",
+      effective_provider: "akshare",
+      adjustment: "qfq",
+      fallback_used: false,
+      source_attempts: [],
+    },
+    { symbol: "600519", requestSymbol: "600519", market: "CN" },
+  );
+
+  await renderChineseInstrumentDetailPage("600519", { market: "CN" });
+
+  expect(
+    screen.getByText(
+      "日线数据源已自动切换：yfinance -> akshare / akshare.stock_zh_a_hist。",
+    ),
+  ).toBeInTheDocument();
+});
+
+it("does not forward a storage-layer provider to the assistant", async () => {
+  mockInstrumentDetailResponse(
+    [
+      {
+        timestamp: "2026-07-09",
+        open: 1480,
+        high: 1500,
+        low: 1475,
+        close: 1495,
+        volume: 120000,
+      },
+    ],
+    1495,
+    null,
+    null,
+    {
+      source: "database",
+      provider: "database",
+      requested_provider: "yfinance",
+      effective_provider: "database",
+      fallback_used: false,
+    },
+    { symbol: "600519", requestSymbol: "600519", market: "CN" },
+  );
+  const assistantFetch = mockAssistantFetch();
+
+  await renderChineseInstrumentDetailPage("600519", { market: "CN" });
+  fireEvent.click(
+    screen.getByRole("button", { name: zhMessages.MarketAssistant.submit }),
+  );
+
+  await waitFor(() => expect(assistantFetch).toHaveBeenCalledTimes(1));
+  const [, request] = assistantFetch.mock.calls[0];
+  expect(JSON.parse(String(request?.body))).toMatchObject({
+    symbol: "600519",
+    market: "CN",
+    provider: "yfinance",
+  });
+});
+
+it("keeps provider-specific market indexes out of assistant CN stock fallback", async () => {
+  mockInstrumentDetailResponse(
+    [
+      {
+        timestamp: "2026-07-09",
+        open: 4000,
+        high: 4020,
+        low: 3980,
+        close: 4010,
+        volume: 1000,
+      },
+    ],
+    4010,
+    null,
+    null,
+    {
+      source: "akshare.stock_zh_a_hist",
+      provider: "akshare",
+      requested_provider: "akshare",
+      effective_provider: "akshare",
+      fallback_used: false,
+    },
+    {
+      symbol: "cn_csi_300",
+      requestSymbol: "000300",
+      market: "CN",
+      providerSymbolMapped: true,
+    },
+  );
+  const assistantFetch = mockAssistantFetch("000300");
+
+  await renderChineseInstrumentDetailPage("cn_csi_300", { market: "CN" });
+  fireEvent.click(
+    screen.getByRole("button", { name: zhMessages.MarketAssistant.submit }),
+  );
+
+  await waitFor(() => expect(assistantFetch).toHaveBeenCalledTimes(1));
+  const [, request] = assistantFetch.mock.calls[0];
+  const requestBody = JSON.parse(String(request?.body));
+  expect(requestBody).toMatchObject({ symbol: "000300", provider: "akshare" });
+  expect(requestBody).not.toHaveProperty("market");
+});
 
 it("renders the enhanced client-side instrument detail view", async () => {
   mockInstrumentDetailResponse([
@@ -497,6 +721,11 @@ it("keeps market and shortlist identity on the detail research path", async () =
     research_snapshot_id: "12345678-1234-1234-1234-123456789abc",
   });
 
+  expect(fetchInstrumentDetailPayloadMock).toHaveBeenCalledWith({
+    symbol: "AAPL",
+    providerName: "yfinance",
+    market: "US",
+  });
   expect(fetchInstrumentDetailContextMock).toHaveBeenCalledWith("AAPL", "US");
   expect(screen.getByRole("button", { name: "加入关注列表" })).toBeInTheDocument();
   expect(screen.getByText("每日候选快照 12345678...")).toHaveAttribute(

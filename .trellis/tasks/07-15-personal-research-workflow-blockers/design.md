@@ -78,10 +78,59 @@ Watchlist price formatting maps `CN -> CNY`, `HK -> HKD`, and `US -> USD` with
 guessed currency. Detail price/change metrics use nullable formatting, and
 movement color is applied only when the value exists.
 
+## Market-aware daily-bar fallback
+
+The browser carries canonical `symbol + market` from search to detail and from
+detail to the assistant. Provider-specific symbols remain an adapter concern;
+the fallback decision never guesses a market from an ambiguous code.
+
+`get_bars_payload` keeps its database-first behavior. When the database has no
+matching rows and `market=CN`, it delegates one complete request range to the
+existing `DailyBarFetchCoordinator`. The ordered sources are:
+
+```text
+requested provider
+  -> configured AkShare stock_zh_a_hist
+  -> configured AkShare stock_zh_a_daily
+  -> configured Tushare pro.daily
+```
+
+Duplicate providers/sources are removed, each source is attempted at most
+once, and mock is never added. The coordinator validates symbol, date range,
+finite values, OHLC consistency, duplicates, and volume before selecting one
+whole source. Bars from different adjustment policies are never mixed.
+
+The additive result contract is:
+
+```text
+requested_provider, effective_provider, provider, source, adjustment,
+fallback_used, source_attempts, status, no_data_reason
+```
+
+Attempts expose provider/source/status/row count and sanitized exception type
+only. A configured alternate success returns `status=ok`. All-empty sources
+return `no_data`; failed/invalid sources with no usable result return a
+degraded empty payload rather than fabricated bars.
+
+Latest and indicator payloads inherit the same provenance from bars. Detail
+uses `bars.effective_provider` as the assistant provider and shows a localized
+switch notice when requested and effective providers differ. Intraday and
+market-depth capabilities remain independent; this slice does not claim that
+daily fallback makes those sections available.
+
+HK, US, missing-market, provider-specific index symbols, and mock requests keep
+their existing single-provider behavior. Yahoo ticker normalization is made
+market-aware for canonical CN/HK symbols, but no CN adapter is called outside
+an exact CN request.
+
 ## Compatibility and rollback
 
 - All new request fields are optional; ordinary assistant calls remain valid.
+- Daily fallback metadata is additive; old clients can ignore it.
+- Omitting `market` preserves the previous single-provider behavior.
 - No schema migration or new snapshot endpoint is required.
 - POST/DELETE watchlist behavior remains compatible.
 - Rollback is file-local: remove the optional snapshot field, membership GET,
   toggle rendering, and presentation helpers. Stored data is unchanged.
+- The fallback slice rolls back by removing the optional market forwarding and
+  coordinator call; no stored rows or settings require migration.

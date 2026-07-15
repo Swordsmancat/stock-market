@@ -19,13 +19,17 @@ afterEach(() => {
   askMarketAssistantMock.mockReset();
 });
 
-function renderChineseMarketAssistantCard(researchSnapshotId?: string | null) {
+function renderChineseMarketAssistantCard(
+  researchSnapshotId?: string | null,
+  market?: string | null,
+) {
   render(
     <NextIntlClientProvider locale="zh" messages={zhMessages}>
       <MarketAssistantCard
         symbol="AAPL"
         locale="zh"
         provider="mock"
+        market={market}
         start="2026-01-01"
         end="2026-01-20"
         researchSnapshotId={researchSnapshotId}
@@ -33,6 +37,27 @@ function renderChineseMarketAssistantCard(researchSnapshotId?: string | null) {
     </NextIntlClientProvider>,
   );
 }
+
+it("forwards the exact instrument market with assistant questions", async () => {
+  askMarketAssistantMock.mockResolvedValue(buildAssistantResponse());
+  renderChineseMarketAssistantCard(null, "CN");
+
+  fireEvent.click(screen.getByRole("button", { name: zhMessages.MarketAssistant.submit }));
+
+  await waitFor(() => {
+    expect(askMarketAssistantMock).toHaveBeenCalledWith({
+      scope: "instrument",
+      symbol: "AAPL",
+      question: zhMessages.MarketAssistant.defaultQuestion.replace("{symbol}", "AAPL"),
+      locale: "zh",
+      timeframe: "1d",
+      start: "2026-01-01",
+      end: "2026-01-20",
+      market: "CN",
+      provider: "mock",
+    });
+  });
+});
 
 function buildAssistantResponse(overrides: Partial<MarketAssistantResponse> = {}): MarketAssistantResponse {
   return {
@@ -125,7 +150,11 @@ it("submits a contextual assistant question and renders traceable output", async
   expect(screen.getByText(/基于可用数据整理。/)).toBeInTheDocument();
   expect(screen.getByText("Daily bars for AAPL as of 2026-01-20")).toBeInTheDocument();
   expect(screen.getByText(/type=bars/)).toBeInTheDocument();
-  expect(screen.getByText(/news \[info\/SOURCE_NO_DATA\]: No stored news sentiment/)).toBeInTheDocument();
+  expect(
+    screen.getByText(zhMessages.MarketAssistant.diagnosticSourceNoData, {
+      exact: false,
+    }),
+  ).toBeInTheDocument();
   expect(screen.getByText(/不构成投资建议/)).toBeInTheDocument();
 });
 
@@ -207,6 +236,58 @@ it("localizes shortlist citations and diagnostics without rendering raw snapshot
   expect(screen.queryByText(rawLabel)).not.toBeInTheDocument();
   expect(screen.queryByText(rawExcerpt)).not.toBeInTheDocument();
   expect(screen.queryByText(rawDiagnostic)).not.toBeInTheDocument();
+});
+
+it("localizes daily-bar provenance diagnostics without rendering backend messages", async () => {
+  const diagnostics = [
+    {
+      source: "database",
+      status: "degraded",
+      severity: "warning",
+      code: "MIXED_DAILY_BAR_PROVENANCE",
+      message: "raw mixed provenance backend message",
+    },
+    {
+      source: "database",
+      status: "degraded",
+      severity: "warning",
+      code: "UNKNOWN_DAILY_BAR_PROVENANCE",
+      message: "raw unknown provenance backend message",
+    },
+    {
+      source: "bars_1d",
+      status: "unavailable",
+      severity: "error",
+      code: "SOURCE_UNAVAILABLE",
+      message: "raw unavailable backend message",
+    },
+    {
+      source: "bars_1d",
+      status: "no_data",
+      severity: "info",
+      code: "SOURCE_NO_DATA",
+      message: "raw no-data backend message",
+    },
+  ];
+  askMarketAssistantMock.mockResolvedValue({
+    ...buildAssistantResponse(),
+    diagnostics,
+  });
+  renderChineseMarketAssistantCard();
+
+  fireEvent.click(screen.getByRole("button", { name: zhMessages.MarketAssistant.submit }));
+
+  for (const expected of [
+    "日线数据来自多个来源或复权批次，仅使用最新的连续可信批次。",
+    "已存储日线缺少完整的来源或复权信息。",
+    "所需数据源暂时不可用。",
+    "该数据源没有可用的已验证数据。",
+  ]) {
+    expect(await screen.findByText(expected, { exact: false })).toBeInTheDocument();
+  }
+  for (const diagnostic of diagnostics) {
+    expect(screen.queryByText(diagnostic.message)).not.toBeInTheDocument();
+  }
 });
 
 it("renders citation links and compact research metadata", async () => {

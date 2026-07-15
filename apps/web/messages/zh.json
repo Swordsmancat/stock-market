@@ -906,6 +906,7 @@
     "reload": "重新加载关注列表"
   },
   "InstrumentDetail": {
+    "dailyBarSourceSwitched": "日线数据源已自动切换：{requestedProvider} -> {effectiveProvider} / {source}。",
     "overview": "概览",
     "technical": "技术面",
     "fundamentals": "基本面",
@@ -1298,7 +1299,11 @@
     "diagnosticResearchSnapshotSessionUnavailable": "数据库不可用，无法读取每日候选快照。",
     "diagnosticResearchSnapshotUnavailable": "请求的每日候选快照暂不可用。",
     "diagnosticResearchSnapshotNotFound": "未找到请求的已提交每日候选快照。",
-    "diagnosticResearchSnapshotSymbolMismatch": "每日候选快照不包含当前标的。"
+    "diagnosticResearchSnapshotSymbolMismatch": "每日候选快照不包含当前标的。",
+    "diagnosticMixedDailyBarProvenance": "日线数据来自多个来源或复权批次，仅使用最新的连续可信批次。",
+    "diagnosticUnknownDailyBarProvenance": "已存储日线缺少完整的来源或复权信息。",
+    "diagnosticSourceUnavailable": "所需数据源暂时不可用。",
+    "diagnosticSourceNoData": "该数据源没有可用的已验证数据。"
   },
   "Instruments": {
     "title": "行情标的",

@@ -80,6 +80,34 @@ def test_yfinance_provider_maps_known_market_instruments():
     assert instruments[0].currency == "HKD"
 
 
+@pytest.mark.parametrize(
+    ("market", "symbol", "expected_ticker"),
+    [
+        ("CN", "000001", "000001.SZ"),
+        ("CN", "600000", "600000.SS"),
+        ("CN", "920000", "920000.BJ"),
+        ("HK", "9988", "9988.HK"),
+        ("US", "AAPL", "AAPL"),
+        ("CN", "000001.SS", "000001.SS"),
+    ],
+)
+def test_yfinance_provider_maps_canonical_symbols_with_explicit_market(
+    market: str,
+    symbol: str,
+    expected_ticker: str,
+):
+    requested_tickers: list[str] = []
+
+    def fake_download(ticker: str, start: date, end: date) -> pd.DataFrame:
+        requested_tickers.append(ticker)
+        return pd.DataFrame()
+
+    provider = YFinanceProvider(downloader=fake_download, market=market)
+
+    assert provider.fetch_bars(symbol, "1d", date(2026, 7, 1), date(2026, 7, 2)) == []
+    assert requested_tickers == [expected_ticker]
+
+
 def test_yfinance_provider_fetches_intraday_bars_with_one_minute_interval():
     def fake_download(ticker: str, start: date, end: date, interval: str | None = None) -> pd.DataFrame:
         assert ticker == "AAPL"

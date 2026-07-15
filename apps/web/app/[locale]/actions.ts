@@ -383,10 +383,18 @@ export async function searchInstrumentAction(formData: FormData) {
   const symbol = String(formData.get("symbol") ?? "")
     .trim()
     .toUpperCase();
+  const market = String(formData.get("market") ?? "")
+    .trim()
+    .toUpperCase();
   if (!symbol) {
     redirect(`/${locale}`);
   }
-  redirect(`/${locale}/instruments/${encodeURIComponent(symbol)}`);
+  const marketQuery = market
+    ? `?${new URLSearchParams({ market }).toString()}`
+    : "";
+  redirect(
+    `/${locale}/instruments/${encodeURIComponent(symbol)}${marketQuery}`,
+  );
 }
 
 export async function addWatchlistItemAction(formData: FormData) {

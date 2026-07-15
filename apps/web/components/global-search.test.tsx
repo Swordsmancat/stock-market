@@ -1,4 +1,11 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 const { pushMock } = vi.hoisted(() => ({
@@ -72,9 +79,63 @@ it("waits for nonblank input and requests only a bounded result set", async () =
     "/api/instruments?q=600519&limit=10&offset=0",
   );
   expect(screen.getByText("Kweichow Moutai")).toBeInTheDocument();
+  expect(document.querySelector('input[name="market"]')).toHaveValue("CN");
 
   fireEvent.click(screen.getByRole("button", { name: /600519/ }));
   expect(pushMock).toHaveBeenCalledWith("/instruments/600519?market=CN");
+});
+
+it("resolves an exact market before an immediate form submission", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        source: "database",
+        items: [
+          { symbol: "600519", name: "Kweichow Moutai", market: "CN" },
+        ],
+        total: 1,
+        limit: 10,
+        offset: 0,
+        has_more: false,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  );
+
+  renderGlobalSearch();
+  fireEvent.click(screen.getByRole("button", { name: /Search stocks/ }));
+  fireEvent.change(screen.getByPlaceholderText("Enter symbol, e.g. AAPL"), {
+    target: { value: "600519" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Go" }));
+
+  await waitFor(() => {
+    expect(pushMock).toHaveBeenCalledWith("/instruments/600519?market=CN");
+  });
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/instruments?q=600519&limit=10&offset=0",
+  );
+});
+
+it("keeps search open when immediate market resolution fails", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(null, { status: 503 }),
+  );
+
+  renderGlobalSearch();
+  fireEvent.click(screen.getByRole("button", { name: /Search stocks/ }));
+  fireEvent.change(screen.getByPlaceholderText("Enter symbol, e.g. AAPL"), {
+    target: { value: "600519" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Go" }));
+
+  expect(
+    await screen.findByText(
+      "Could not load instruments. Check that the API is running.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(pushMock).not.toHaveBeenCalled();
 });
 
 it.each([

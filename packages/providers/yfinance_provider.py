@@ -12,8 +12,9 @@ Downloader = Callable[..., pd.DataFrame]
 
 
 class YFinanceProvider:
-    def __init__(self, downloader: Downloader | None = None) -> None:
+    def __init__(self, downloader: Downloader | None = None, market: str | None = None) -> None:
         self._downloader = downloader or self._download
+        self._market = market.strip().upper() if market and market.strip() else None
 
     def fetch_instruments(
         self,
@@ -35,7 +36,7 @@ class YFinanceProvider:
             msg = f"Unsupported timeframe for yfinance provider: {timeframe}"
             raise ValueError(msg)
 
-        ticker = map_symbol_to_ticker(symbol)
+        ticker = map_symbol_to_ticker(symbol, self._market)
         frame = _normalize_downloaded_frame(self._downloader(ticker, start, end), ticker)
         bars: list[ProviderBar] = []
 
@@ -60,7 +61,7 @@ class YFinanceProvider:
             msg = f"Unsupported intraday timeframe for yfinance provider: {timeframe}"
             raise ValueError(msg)
 
-        ticker = map_symbol_to_ticker(symbol)
+        ticker = map_symbol_to_ticker(symbol, self._market)
         end_date = trade_date + timedelta(days=1)
         frame = _normalize_downloaded_frame(
             self._downloader(ticker, trade_date, end_date, interval="1m"),

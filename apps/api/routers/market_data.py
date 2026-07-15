@@ -56,10 +56,16 @@ def get_latest_bars(
 def get_latest_bar(
     symbol: str,
     provider: str | None = Query(default=None),
+    market: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     return _call_market_data_service(
-        lambda: get_latest_bar_payload(symbol, session=session, provider_name=provider)
+        lambda: get_latest_bar_payload(
+            symbol,
+            session=session,
+            provider_name=provider,
+            market=market,
+        )
     )
 
 
@@ -70,6 +76,7 @@ def get_bars(
     start: date = Query(...),
     end: date = Query(...),
     provider: str | None = Query(default=None),
+    market: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     return _call_market_data_service(
@@ -80,6 +87,7 @@ def get_bars(
             end,
             session=session,
             provider_name=provider,
+            market=market,
         )
     )
 
@@ -127,6 +135,7 @@ def get_indicators(
     end: date = Query(...),
     ma_window: int = Query(default=20, ge=1),
     provider: str | None = Query(default=None),
+    market: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     return _call_market_data_service(
@@ -137,5 +146,6 @@ def get_indicators(
             ma_window,
             session=session,
             provider_name=provider,
+            market=market,
         )
     )

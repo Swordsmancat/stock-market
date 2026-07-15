@@ -276,3 +276,108 @@ def test_malformed_fallback_bars_are_rejected_before_selection() -> None:
     assert result.bars == []
     assert result.attempts[-1]["status"] == "invalid"
     assert result.attempts[-1]["code"] == "INVALID_OHLC"
+
+
+def test_resilient_policy_skips_structurally_malformed_rows() -> None:
+    coordinator = DailyBarFetchCoordinator(
+        [
+            _source("yfinance.fetch_bars", 0, lambda *_args: [object()], provider="yfinance"),
+            _source("akshare.stock_zh_a_hist", 1, lambda *_args: [_bar()]),
+        ]
+    )
+
+    result = coordinator.fetch(
+        "600519", "1d", date(2026, 7, 1), date(2026, 7, 10), policy=CN_RESILIENT_POLICY
+    )
+
+    assert result.status == "ok"
+    assert result.source == "akshare.stock_zh_a_hist"
+    assert result.attempts[0] == {
+        "provider": "yfinance",
+        "source": "yfinance.fetch_bars",
+        "status": "invalid",
+        "code": "MALFORMED_BAR",
+    }
+
+
+def test_resilient_policy_skips_provider_bars_with_malformed_numeric_fields() -> None:
+    malformed = _bar()
+    object.__setattr__(malformed, "close", 100.0)
+    coordinator = DailyBarFetchCoordinator(
+        [
+            _source("yfinance.fetch_bars", 0, lambda *_args: [malformed], provider="yfinance"),
+            _source("akshare.stock_zh_a_hist", 1, lambda *_args: [_bar()]),
+        ]
+    )
+
+    result = coordinator.fetch(
+        "600519", "1d", date(2026, 7, 1), date(2026, 7, 10), policy=CN_RESILIENT_POLICY
+    )
+
+    assert result.status == "ok"
+    assert result.source == "akshare.stock_zh_a_hist"
+    assert result.attempts[0]["status"] == "invalid"
+    assert result.attempts[0]["code"] == "MALFORMED_BAR"
+
+
+def test_resilient_policy_skips_provider_bars_with_malformed_symbol() -> None:
+    malformed = _bar()
+    object.__setattr__(malformed, "symbol", None)
+    coordinator = DailyBarFetchCoordinator(
+        [
+            _source("yfinance.fetch_bars", 0, lambda *_args: [malformed], provider="yfinance"),
+            _source("akshare.stock_zh_a_hist", 1, lambda *_args: [_bar()]),
+        ]
+    )
+
+    result = coordinator.fetch(
+        "600519", "1d", date(2026, 7, 1), date(2026, 7, 10), policy=CN_RESILIENT_POLICY
+    )
+
+    assert result.status == "ok"
+    assert result.source == "akshare.stock_zh_a_hist"
+    assert result.attempts[0]["status"] == "invalid"
+    assert result.attempts[0]["code"] == "MALFORMED_BAR"
+
+
+def test_resilient_policy_skips_provider_bars_with_non_finite_amount() -> None:
+    malformed = _bar()
+    object.__setattr__(malformed, "amount", Decimal("NaN"))
+    coordinator = DailyBarFetchCoordinator(
+        [
+            _source("yfinance.fetch_bars", 0, lambda *_args: [malformed], provider="yfinance"),
+            _source("akshare.stock_zh_a_hist", 1, lambda *_args: [_bar()]),
+        ]
+    )
+
+    result = coordinator.fetch(
+        "600519", "1d", date(2026, 7, 1), date(2026, 7, 10), policy=CN_RESILIENT_POLICY
+    )
+
+    assert result.status == "ok"
+    assert result.source == "akshare.stock_zh_a_hist"
+    assert result.attempts[0]["status"] == "invalid"
+    assert result.attempts[0]["code"] == "NON_FINITE_VALUE"
+
+
+def test_selected_daily_bars_are_normalized_to_ascending_trade_date() -> None:
+    older = _bar(close="100")
+    newer = _bar(close="110")
+    object.__setattr__(older, "timestamp", date(2026, 7, 8))
+    object.__setattr__(newer, "timestamp", date(2026, 7, 9))
+    coordinator = DailyBarFetchCoordinator(
+        [
+            _source(
+                "tushare.pro.daily",
+                0,
+                lambda *_args: [newer, older],
+                provider="tushare",
+            )
+        ]
+    )
+
+    result = coordinator.fetch(
+        "600519", "1d", date(2026, 7, 1), date(2026, 7, 10), policy=STRICT_POLICY
+    )
+
+    assert [bar.timestamp for bar in result.bars] == [date(2026, 7, 8), date(2026, 7, 9)]

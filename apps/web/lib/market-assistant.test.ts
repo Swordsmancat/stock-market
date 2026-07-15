@@ -40,6 +40,7 @@ it("serializes the optional shortlist identity using the API field name", async 
     symbol: "600519",
     question: "Summarize the frozen evidence.",
     locale: "en",
+    market: "CN",
     researchSnapshotId: "12345678-1234-1234-1234-123456789abc",
   });
 
@@ -47,6 +48,7 @@ it("serializes the optional shortlist identity using the API field name", async 
   const [, init] = fetchMock.mock.calls[0];
   expect(JSON.parse(String(init?.body))).toMatchObject({
     symbol: "600519",
+    market: "CN",
     research_snapshot_id: "12345678-1234-1234-1234-123456789abc",
   });
 });

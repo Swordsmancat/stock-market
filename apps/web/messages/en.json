@@ -899,6 +899,7 @@
     "reload": "Reload watchlist"
   },
   "InstrumentDetail": {
+    "dailyBarSourceSwitched": "Daily data source switched automatically: {requestedProvider} -> {effectiveProvider} / {source}.",
     "overview": "Overview",
     "technical": "Technical",
     "fundamentals": "Fundamentals",
@@ -1291,7 +1292,11 @@
     "diagnosticResearchSnapshotSessionUnavailable": "The daily shortlist snapshot cannot be loaded because the database is unavailable.",
     "diagnosticResearchSnapshotUnavailable": "The requested daily shortlist snapshot is temporarily unavailable.",
     "diagnosticResearchSnapshotNotFound": "The requested committed daily shortlist snapshot was not found.",
-    "diagnosticResearchSnapshotSymbolMismatch": "The daily shortlist snapshot does not contain this instrument."
+    "diagnosticResearchSnapshotSymbolMismatch": "The daily shortlist snapshot does not contain this instrument.",
+    "diagnosticMixedDailyBarProvenance": "Daily bars span multiple source or adjustment cohorts; only the latest continuous trusted cohort is used.",
+    "diagnosticUnknownDailyBarProvenance": "Stored daily bars do not have complete source or adjustment provenance.",
+    "diagnosticSourceUnavailable": "A required data source is temporarily unavailable.",
+    "diagnosticSourceNoData": "This source has no verified data available."
   },
   "Instruments": {
     "title": "Instruments",

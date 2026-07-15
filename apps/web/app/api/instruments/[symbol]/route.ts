@@ -7,9 +7,10 @@ export async function GET(
   const { symbol } = await params;
   const requestUrl = new URL(request.url);
   const providerName = normalizeInstrumentDetailProvider(requestUrl.searchParams.get("provider"));
+  const market = requestUrl.searchParams.get("market");
 
   try {
-    const result = await fetchInstrumentDetailPayload({ symbol, providerName });
+    const result = await fetchInstrumentDetailPayload({ symbol, providerName, market });
     if (result.status === "failed") {
       return new Response(result.body, {
         status: result.responseStatus,

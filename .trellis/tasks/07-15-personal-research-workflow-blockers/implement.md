@@ -18,3 +18,29 @@
 8. Confirm the diff excludes the protected homepage and all pre-existing user
    changes; update specs only for durable contracts, commit this task alone,
    archive it, then restore the five-day acceptance task as current.
+9. Add failing provider-symbol, market forwarding, and CN fallback tests before
+   changing runtime behavior.
+10. Extend daily-bar payloads with optional market-aware database filtering and
+    resilient CN source selection using the existing coordinator; preserve
+    single-provider behavior elsewhere.
+11. Forward market through market-data and assistant APIs, detail loading, and
+    `MarketAssistantCard`; prefer the bars effective provider over depth.
+12. Add localized detail provenance for automatic source switches without
+    rendering raw source-attempt errors.
+13. Run focused provider/service/API/assistant/frontend tests, then full Python
+    and frontend suites, ruff, TypeScript, translations, and production build.
+14. Live-smoke a CN symbol through search, detail, and AI; verify effective
+    provider/citations and that no normal `3000`/`8000` service is disrupted.
+
+## Verification
+
+- Full backend suite: `916 passed`.
+- Full frontend suite: `91 files, 316 passed`; TypeScript and scoped Ruff pass.
+- Translation JSON and `git diff --check` pass.
+- Isolated live path `920000/CN`: yfinance returned no data, AkShare hist
+  failed with a sanitized `ConnectionError`, and AkShare daily selected 11
+  rows. Detail loaded 118 bars and AI cited `provider=akshare`.
+- Desktop `1280x720` and mobile `375x812` checks found no document, body, or
+  control horizontal overflow.
+- Normal Web/API remained healthy on ports `3000/8000` with their original
+  process IDs after the isolated stack was stopped.

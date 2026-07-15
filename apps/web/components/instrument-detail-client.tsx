@@ -42,6 +42,28 @@ type ChartBarData = InstrumentBar & {
   close: number;
 };
 
+const SUPPORTED_ASSISTANT_MARKET_DATA_PROVIDERS = new Set([
+  "mock",
+  "yfinance",
+  "akshare",
+  "tushare",
+]);
+
+function resolveAssistantProvider(
+  ...candidates: Array<string | null | undefined>
+): string | null {
+  for (const candidate of candidates) {
+    const normalizedCandidate = candidate?.trim().toLowerCase();
+    if (
+      normalizedCandidate &&
+      SUPPORTED_ASSISTANT_MARKET_DATA_PROVIDERS.has(normalizedCandidate)
+    ) {
+      return normalizedCandidate;
+    }
+  }
+  return null;
+}
+
 function isChartBarData(bar: InstrumentBar): bar is ChartBarData {
   return (
     typeof bar.timestamp === "string" &&
@@ -278,11 +300,38 @@ export function InstrumentDetailClient({
     displayName === decodedSymbol
       ? t("detailSubtitle")
       : `${decodedSymbol} · ${t("detailSubtitle")}`;
-  const assistantSymbol = data.request_symbol ?? symbol;
-  const assistantProvider =
-    data.market_depth?.effective_provider ??
-    data.market_depth?.provider ??
-    null;
+  const providerRequestSymbol = data.request_symbol?.trim();
+  const usesProviderSpecificSymbol =
+    data.provider_symbol_mapped === true &&
+    providerRequestSymbol !== undefined &&
+    providerRequestSymbol.length > 0;
+  const assistantSymbol = usesProviderSpecificSymbol
+    ? providerRequestSymbol
+    : detailContext?.identity?.symbol ?? data.symbol ?? symbol;
+  const assistantMarket = usesProviderSpecificSymbol
+    ? null
+    : detailContext?.identity?.market ?? data.market ?? null;
+  const assistantProvider = resolveAssistantProvider(
+    data.bars?.effective_provider,
+    data.bars?.provider,
+    data.bars?.requested_provider,
+    data.latest?.effective_provider,
+    data.latest?.provider,
+    data.latest?.requested_provider,
+  );
+  const requestedDailyProvider =
+    data.bars?.requested_provider ?? data.latest?.requested_provider ?? null;
+  const dailyProviderChanged = Boolean(
+    requestedDailyProvider?.trim() &&
+      assistantProvider?.trim() &&
+      requestedDailyProvider.trim().toLowerCase() !==
+        assistantProvider.trim().toLowerCase(),
+  );
+  const showDailySourceSwitch = Boolean(
+    data.bars?.fallback_used || dailyProviderChanged,
+  );
+  const dailySource =
+    data.bars?.upstream_source ?? data.bars?.source ?? "-";
   const latestTrustSignal = createDataTrustSignal({
     status: data.latest?.status,
     source: data.latest?.source,
@@ -374,10 +423,24 @@ export function InstrumentDetailClient({
         }
       />
 
+      {showDailySourceSwitch ? (
+        <div
+          role="status"
+          className="border-l-2 border-primary bg-primary/5 px-3 py-2 text-sm text-foreground"
+        >
+          {t("dailyBarSourceSwitched", {
+            requestedProvider: requestedDailyProvider ?? "-",
+            effectiveProvider: assistantProvider ?? "-",
+            source: dailySource,
+          })}
+        </div>
+      ) : null}
+
       <MarketAssistantCard
-        key={`${assistantSymbol}:${researchSnapshotId ?? "no-snapshot"}`}
+        key={`${assistantSymbol}:${assistantMarket ?? "unknown-market"}:${assistantProvider ?? "unknown-provider"}:${researchSnapshotId ?? "no-snapshot"}`}
         symbol={assistantSymbol}
         locale={locale}
+        market={assistantMarket}
         provider={assistantProvider}
         start={data.range?.start ?? null}
         end={data.range?.end ?? null}

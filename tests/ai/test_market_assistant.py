@@ -137,6 +137,128 @@ def test_market_assistant_returns_traceable_fallback_answer(monkeypatch):
     assert "不构成投资建议" in payload["answer_markdown"]
 
 
+def test_market_assistant_uses_cn_fallback_bars_and_effective_provider(monkeypatch):
+    patch_snapshot_test_dependencies(monkeypatch)
+    captured: dict[str, object] = {}
+
+    def bars_stub(*args, **kwargs):
+        captured.update(kwargs)
+        return {
+            "symbol": "600519",
+            "market": "CN",
+            "timeframe": "1d",
+            "source": "akshare.stock_zh_a_daily",
+            "provider": "akshare",
+            "requested_provider": "yfinance",
+            "effective_provider": "akshare",
+            "adjustment": "qfq",
+            "fallback_used": True,
+            "source_attempts": [
+                {
+                    "provider": "yfinance",
+                    "source": "yfinance.fetch_bars",
+                    "status": "no_data",
+                    "row_count": 0,
+                },
+                {
+                    "provider": "akshare",
+                    "source": "akshare.stock_zh_a_daily",
+                    "status": "selected",
+                    "row_count": 2,
+                },
+            ],
+            "items": [
+                {"timestamp": "2026-07-08", "close": 1490.0},
+                {"timestamp": "2026-07-09", "close": 1495.0},
+            ],
+        }
+
+    monkeypatch.setattr(market_assistant_service, "get_bars_payload", bars_stub)
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="600519",
+        question="Summarize the verified daily evidence.",
+        locale="en",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        provider_name="yfinance",
+        market="CN",
+        session=None,
+    )
+
+    assert captured["market"] == "CN"
+    assert payload["context"]["market"] == "CN"
+    assert payload["context"]["effective_provider"] == "akshare"
+    assert payload["context"]["source"] == "akshare.stock_zh_a_daily"
+    assert payload["context"]["fallback_used"] is True
+    assert payload["citations"][0]["provider"] == "akshare"
+    assert not any(
+        diagnostic.get("source") == "bars_1d" and diagnostic.get("code") == "SOURCE_NO_DATA"
+        for diagnostic in payload["diagnostics"]
+    )
+
+
+def test_market_assistant_preserves_partial_database_bar_diagnostic(monkeypatch):
+    patch_snapshot_test_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "600519",
+            "market": "CN",
+            "timeframe": "1d",
+            "source": "database",
+            "provider": "akshare",
+            "requested_provider": "yfinance",
+            "effective_provider": "akshare",
+            "upstream_source": "akshare.stock_zh_a_hist",
+            "adjustment": "qfq",
+            "status": "degraded",
+            "diagnostics": [
+                {
+                    "source": "database",
+                    "status": "degraded",
+                    "code": "MIXED_DAILY_BAR_PROVENANCE",
+                    "message": "Stored daily bars span multiple provenance cohorts; only the latest coherent cohort was returned.",
+                    "dropped_row_count": 9,
+                }
+            ],
+            "items": [{"timestamp": "2026-07-09", "close": 1495.0}],
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "mock", "llm_api_key": "", "llm_api_base": ""},
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="600519",
+        question="Summarize the verified daily evidence.",
+        locale="en",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        provider_name="yfinance",
+        market="CN",
+        session=None,
+    )
+
+    diagnostic = next(
+        item
+        for item in payload["diagnostics"]
+        if item.get("code") == "MIXED_DAILY_BAR_PROVENANCE"
+    )
+    assert payload["status"] == "degraded"
+    assert payload["context"]["bars_status"] == "degraded"
+    assert payload["context"]["bar_count"] == 1
+    assert diagnostic["dropped_row_count"] == 9
+
+
 def test_market_assistant_reports_configured_physical_model(monkeypatch):
     class FakeProvider:
         def generate(self, prompt: str) -> str:
@@ -833,6 +955,73 @@ def test_market_assistant_returns_no_data_without_llm(monkeypatch):
     assert payload["citations"] == []
     assert payload["diagnostics"][0]["source"] == "bars_1d"
     assert "没有获取到" in payload["answer_markdown"]
+
+
+def test_market_assistant_preserves_degraded_daily_source_exhaustion(monkeypatch):
+    class UnexpectedProvider:
+        def generate(self, prompt: str) -> str:
+            raise AssertionError("LLM should not be called when daily sources are unavailable.")
+
+    no_data_reason = "No daily bars were available for the requested symbol/date range."
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "600519",
+            "market": "CN",
+            "timeframe": "1d",
+            "source": "none",
+            "provider": "yfinance",
+            "requested_provider": "yfinance",
+            "effective_provider": "yfinance",
+            "fallback_used": False,
+            "source_attempts": [
+                {
+                    "provider": "yfinance",
+                    "source": "yfinance.fetch_bars",
+                    "status": "failed",
+                    "exception_type": "TimeoutError",
+                }
+            ],
+            "status": "degraded",
+            "no_data_reason": no_data_reason,
+            "items": [],
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "openai", "llm_api_key": "configured", "llm_api_base": ""},
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_llm_provider",
+        lambda _settings=None: UnexpectedProvider(),
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="600519",
+        question="Summarize the verified daily evidence.",
+        locale="en",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        provider_name="yfinance",
+        market="CN",
+        session=None,
+    )
+
+    assert payload["status"] == "degraded"
+    assert payload["model"]["used_llm"] is False
+    assert payload["context"]["bars_status"] == "degraded"
+    assert payload["context"]["bars_no_data_reason"] == no_data_reason
+    assert payload["context"]["source_attempts"][0] == {
+        "provider": "yfinance",
+        "source": "yfinance.fetch_bars",
+        "status": "failed",
+        "exception_type": "TimeoutError",
+    }
+    assert payload["diagnostics"][0]["status"] == "unavailable"
+    assert payload["diagnostics"][0]["code"] == "SOURCE_UNAVAILABLE"
 
 
 def test_market_assistant_falls_back_when_llm_generation_fails(monkeypatch):

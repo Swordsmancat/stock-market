@@ -32,6 +32,19 @@ Fix the verified personal workflow blockers without expanding product scope: glo
 - Format watchlist prices with the market currency (`CNY`, `HKD`, or `USD`)
   and render missing detail prices and movements as unavailable rather than
   synthetic zero values.
+- Carry the exact optional `market` from search through instrument detail and
+  the market assistant. For `market=CN` daily bars, use the requested provider
+  first, then configured AkShare/Tushare sources when the primary source is
+  empty, unavailable, rate-limited, or malformed. Never apply CN fallbacks to
+  HK/US/unknown markets and never fall back to mock data.
+- Keep database daily bars ahead of all provider calls and scope database
+  identity by market when market is known. A successful fallback must expose
+  the requested provider, effective provider, exact source, adjustment,
+  fallback flag, and sanitized source attempts. Exhausted sources remain an
+  explicit no-data/degraded state.
+- Instrument detail and AI analysis must use the daily-bar effective provider,
+  not the independently loaded market-depth provider. Show a localized source
+  switch notice without exposing raw provider exceptions.
 - Preserve existing watchlist alert rules, shortlist immutability, citation
   validation, no-trading safety behavior, and normal `3000`/`8000` services.
 - Do not stage, commit, or alter the user's unrelated backend worktree changes.
@@ -41,20 +54,28 @@ Fix the verified personal workflow blockers without expanding product scope: glo
 - [x] A clean Next.js browser run opens global search by click and by
       `Ctrl/Meta+K`; Escape closes it, and a result retains its market in the
       instrument-detail URL.
-- [ ] Selecting a daily shortlist candidate in the AI desk and opening its
+- [x] Selecting a daily shortlist candidate in the AI desk and opening its
       deep detail link both submit the exact snapshot ID to the assistant;
       selecting a normal/manual candidate clears any stale snapshot context.
-- [ ] Assistant tests prove the committed matching candidate contributes all
+- [x] Assistant tests prove the committed matching candidate contributes all
       four structured evidence groups and a `research_shortlist:` citation,
       while missing/mismatched snapshots produce explicit degraded diagnostics
       and raw persisted prose is not leaked.
-- [ ] Instrument detail shows a localized watch/unwatch control only for an
+- [x] Instrument detail shows a localized watch/unwatch control only for an
       exact resolved `(symbol, market)` identity and keeps the user on the same
       URL after mutation. Membership reads do not record alerts or mutate data.
-- [ ] Watchlist API failure renders an error state, a true empty payload renders
+- [x] Watchlist API failure renders an error state, a true empty payload renders
       the existing empty state, CN/HK/US values use their correct currencies,
       and missing values render the localized unavailable label.
-- [ ] Focused frontend/backend tests, frontend type/lint checks, relevant full
+- [x] Searching a CN instrument and opening detail forwards canonical
+      `symbol + market`; yfinance empty/failure automatically selects the first
+      configured valid AkShare/Tushare daily-bar source, records transparent
+      provenance, and never calls mock or a CN source for HK/US/unknown markets.
+- [x] Detail shows the actual daily-bar source switch, and its AI assistant
+      forwards the same market plus daily-bar effective provider. A successful
+      fallback produces normal price context/citations rather than
+      `SOURCE_NO_DATA`; all-source exhaustion remains explicit and safe.
+- [x] Focused frontend/backend tests, frontend type/lint checks, relevant full
       suites, and desktop/mobile browser checks pass without homepage changes.
 
 ## Notes

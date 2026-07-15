@@ -51,6 +51,7 @@ import {
   generateDailyReportAction,
   refreshAnalysisAction,
   savePlatformSettingsAction,
+  searchInstrumentAction,
   triggerIngestionAction,
   updateWatchlistAlertsAction,
 } from "./actions";
@@ -128,6 +129,17 @@ function buildMarketDataFormData(overrides: Record<string, string> = {}) {
   }
   return formData;
 }
+
+it("preserves an exact market when search redirects to instrument detail", async () => {
+  const formData = new FormData();
+  formData.set("locale", "en");
+  formData.set("symbol", "600519");
+  formData.set("market", "cn");
+
+  await expect(searchInstrumentAction(formData)).rejects.toThrow(
+    "NEXT_REDIRECT:/en/instruments/600519?market=CN",
+  );
+});
 
 it("redirects ingestion success with the created task run id", async () => {
   backendFetchMock.mockResolvedValue(
