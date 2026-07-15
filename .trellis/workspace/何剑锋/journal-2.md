@@ -170,3 +170,36 @@ Suppressed direct 15-minute no-rule alert TaskRun noise while preserving explici
 ### Next Steps
 
 - None - task complete
+
+
+## Session 65: Fix homepage fund-flow scrolling
+
+**Date**: 2026-07-15
+**Task**: Fix homepage fund-flow scrolling
+**Branch**: `master`
+
+### Summary
+
+Made the fixed-height homepage fund-flow panel natively scrollable and focusable, restored every loaded row, and validated 279 frontend tests plus desktop/mobile browser overflow behavior.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `660f0c1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
