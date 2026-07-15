@@ -137,3 +137,36 @@ Diagnosed two repeated scheduled report failures, preserved intentionally empty 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 64: Suppress empty alert TaskRun noise
+
+**Date**: 2026-07-15
+**Task**: Suppress empty alert TaskRun noise
+**Branch**: `master`
+
+### Summary
+
+Suppressed direct 15-minute no-rule alert TaskRun noise while preserving explicit TaskRuns and failures; validated 60 focused tests plus live queued and Beat-tick acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `043dc5f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
