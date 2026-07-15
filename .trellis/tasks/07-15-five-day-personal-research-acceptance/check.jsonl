@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/daily-research-loop-contract.md","reason":"Check scheduled-loop timing, trusted-date selection, terminal semantics, and no retry or threshold bypass."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Check immutable run identity, coverage metadata, generation reuse, and deterministic membership."}
+{"file":".trellis/spec/backend/research-shortlist-outcome-contract.md","reason":"Check cohort uniqueness and distinguish expected pending horizons from defects."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Check citation integrity, at-most-once model use, redaction, and research-only response boundaries."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Check all 95/90/80 gates without threshold relaxation."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply non-mutating diagnostics and proportional validation for evidence-only work or any focused fix."}
+{"file":".trellis/tasks/07-15-five-day-personal-research-acceptance/research/runtime-audit.md","reason":"Verify probes and conclusions against the audited runtime behavior and risks."}

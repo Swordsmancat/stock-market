@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/daily-research-loop-contract.md","reason":"Preserve the trusted watermark, bounded outcome, immutable publication, Beat, TaskRun, and no-automatic-retry contracts."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Validate immutable shortlist identity, point-in-time evidence, deterministic ranking, and safe LLM explanation behavior."}
+{"file":".trellis/spec/backend/research-shortlist-outcome-contract.md","reason":"Interpret 5/20/60-session tracking, pending horizons, cohort identity, and duplicate prevention correctly."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Enforce citation validation, one-call behavior, research-only safety, and secret-safe evidence capture."}
+{"file":".trellis/spec/backend/a-share-research-coverage-contract.md","reason":"Keep the 95/90/80 coverage thresholds and comprehensive A-share evidence boundary unchanged."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Apply the repository's sensitive-data and bounded diagnostic rules to acceptance artifacts."}
+{"file":".trellis/tasks/07-15-five-day-personal-research-acceptance/research/runtime-audit.md","reason":"Use the confirmed runtime routes, exact task name, baseline risks, and strict read-only query boundary."}

@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "artifact_type": "five_day_personal_research_preflight",
+  "captured_at": "2026-07-15T09:36:21+08:00",
+  "counts_toward_observation": false,
+  "runtime": {
+    "web": {
+      "status": "ok",
+      "http_status": 200,
+      "route": "/zh/ai-research",
+      "diagnostics": [
+        {
+          "code": "DEV_HEALTH_INITIAL_HTTP_TIMEOUT",
+          "severity": "warning",
+          "detail": "The five-second health probe timed out once; the bounded follow-up returned HTTP 200."
+        }
+      ]
+    },
+    "api": {
+      "status": "ok",
+      "app_env": "local",
+      "database_name": "stock",
+      "celery_timezone": "Asia/Shanghai"
+    },
+    "postgresql": {
+      "status": "ok",
+      "read_only_probe": true
+    },
+    "redis": {
+      "status": "ok",
+      "response": "PONG"
+    },
+    "worker": {
+      "status": "ok",
+      "node_count": 1,
+      "node": "stock-local"
+    },
+    "beat": {
+      "status": "ok",
+      "process_present": true,
+      "started_at": "2026-07-14T18:18:04+08:00"
+    }
+  },
+  "daily_loop": {
+    "task_name": "research.run_daily_research_loop",
+    "schedule": {
+      "timezone": "Asia/Shanghai",
+      "weekdays_only": true,
+      "scheduled_local_time": "21:30"
+    },
+    "latest_scheduled_task_run": {
+      "id": "5f54b24c-f03d-4035-88b3-7c4d4f8c5aab",
+      "status": "succeeded",
+      "trigger": "scheduled",
+      "started_at": "2026-07-14T21:59:12+08:00",
+      "finished_at": "2026-07-14T21:59:12+08:00",
+      "schedule_delay_seconds": 1752,
+      "result_status": "completed",
+      "watermark_status": "ready",
+      "verified_completed_through": "2026-07-13",
+      "outcomes_status": "completed",
+      "publication_decision_date": "2026-07-13"
+    },
+    "assertions": {
+      "terminal_success": "pass",
+      "publication_matches_latest_shortlist": "pass",
+      "started_within_15_minutes_of_schedule": "degraded"
+    }
+  },
+  "shortlist": {
+    "status": "ok",
+    "run_id": "c0f33ccf-4ccf-44e7-88e0-e74d555d327a",
+    "generation_task_run_id": "bb23ac63-fba9-4d43-bce4-0928fe59f6c2",
+    "generation_key_fingerprint": "e63d6ba617ce",
+    "decision_date": "2026-07-13",
+    "generated_at": "2026-07-14T15:59:34+08:00",
+    "item_count": 10,
+    "rank_one_symbol": "688202",
+    "universe": {
+      "candidate_count": 5530,
+      "evaluated_count": 5530,
+      "matched_count": 420
+    },
+    "coverage": {
+      "daily_bars": {
+        "ratio": 0.9960216998191682,
+        "threshold": 0.95,
+        "passes_threshold": true
+      },
+      "technical_indicators": {
+        "ratio": 0.9974683544303797,
+        "threshold": 0.9,
+        "passes_threshold": true
+      },
+      "fundamentals": {
+        "ratio": 1.0,
+        "threshold": 0.8,
+        "passes_threshold": true
+      }
+    },
+    "model": {
+      "name": "deterministic-stock-discovery-v1",
+      "provider": "deterministic",
+      "used_llm": false,
+      "status": "degraded",
+      "fallback_code": "LLM_HTTP_STATUS_ERROR"
+    },
+    "safety": {
+      "research_signal_only": true,
+      "no_automated_trading": true,
+      "ai_cannot_change_membership_or_ranking": true
+    }
+  },
+  "outcomes": {
+    "status": "ok",
+    "as_of": "2026-07-14",
+    "latest_run_id": "c0f33ccf-4ccf-44e7-88e0-e74d555d327a",
+    "history_count": 0,
+    "has_more": false,
+    "duplicate_cohort_detected": false,
+    "horizons": [
+      {
+        "sessions": 5,
+        "total_count": 10,
+        "evaluated_count": 0,
+        "pending_count": 10,
+        "blocked_count": 0
+      },
+      {
+        "sessions": 20,
+        "total_count": 10,
+        "evaluated_count": 0,
+        "pending_count": 10,
+        "blocked_count": 0
+      },
+      {
+        "sessions": 60,
+        "total_count": 10,
+        "evaluated_count": 0,
+        "pending_count": 10,
+        "blocked_count": 0
+      }
+    ]
+  },
+  "related_runtime_warnings": [
+    {
+      "code": "UNRELATED_TASK_FAILURE_LAST_24H",
+      "task_name": "reports.refresh_daily_watchlist_analysis",
+      "severity": "warning"
+    }
+  ],
+  "baseline_classification": "degraded",
+  "baseline_reasons": [
+    "scheduled_loop_started_29_minutes_late",
+    "shortlist_explanation_used_deterministic_fallback",
+    "initial_frontend_health_probe_timed_out_once"
+  ],
+  "redaction": {
+    "prohibited_fields_recorded": false,
+    "raw_responses_recorded": false,
+    "question_or_answer_recorded": false,
+    "credentials_recorded": false
+  }
+}

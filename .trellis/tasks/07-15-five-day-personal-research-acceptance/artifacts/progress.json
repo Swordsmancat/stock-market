@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "task": "five-day-personal-research-acceptance",
+  "status": "monitoring",
+  "started_at": "2026-07-15T09:36:21+08:00",
+  "timezone": "Asia/Shanghai",
+  "baseline": {
+    "verified_completed_through": "2026-07-13",
+    "shortlist_decision_date": "2026-07-13",
+    "captured_at": "2026-07-15T09:36:21+08:00",
+    "artifact": "artifacts/preflight.json",
+    "counts_toward_observation": false
+  },
+  "required_observed_date_count": 5,
+  "observed_date_count": 0,
+  "observed_dates": [],
+  "reservation_directory": "artifacts/reservations",
+  "day_artifacts": {},
+  "last_check": {
+    "checked_at": "2026-07-15T09:36:21+08:00",
+    "kind": "preflight",
+    "result": "baseline_recorded",
+    "latest_verified_completed_through": "2026-07-13",
+    "latest_shortlist_decision_date": "2026-07-13"
+  },
+  "skipped_check_count": 0,
+  "no_progress_weekday_window_count": 0,
+  "last_no_progress_window_date": null,
+  "hard_deadline_at": "2026-08-05T23:59:59+08:00",
+  "stop_limits": {
+    "natural_days": 21,
+    "no_progress_weekday_windows": 7
+  },
+  "finalization": {
+    "paid_call_branch_closed": false,
+    "reason": null,
+    "delivery_status": "not_started"
+  },
+  "automation": {
+    "id": "a-share-personal-research-five-day-acceptance",
+    "name": "A-share personal research five-day acceptance",
+    "status": "active",
+    "scheduled_local_times": [
+      "22:15",
+      "22:45",
+      "23:15",
+      "23:45"
+    ],
+    "weekdays_only": true,
+    "target_thread_id": "019f49d0-c404-7c30-af8f-b6263fc23da8"
+  },
+  "completed_at": null
+}

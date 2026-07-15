@@ -96,6 +96,12 @@
 - Beat uses `Asia/Shanghai` and runs weekdays at configurable 21:30 by default.
   The clock never bypasses the active-backfill or watermark gates, and the task
   never starts an evidence backfill or uses Celery automatic retries.
+- The public `GET /task-runs/recent`, `GET /task-runs/latest`, and
+  `GET /task-runs/{id}` surfaces are operational reads, not strict read-only
+  diagnostics: their service path calls `expire_stale_task_runs()` and may
+  transition stale `running` rows to `failed`. Acceptance or audit tooling that
+  promises zero mutation must query TaskRuns inside a database
+  `BEGIN READ ONLY` transaction instead.
 - Every result is structured and bounded, retains
   `research_signal_only=true`, and includes `no_automated_trading=true` and
   `outcomes_do_not_change_shortlist_ranking=true`. It contains no credentials,
@@ -122,6 +128,7 @@
 | Unexpected watermark/outcome/publication/progress failure | Preserve bounded partial result, fail TaskRun, re-raise, close session |
 | Same daily loop or retry is repeated | Reuse immutable shortlist/outcome rows; do not duplicate or revise terminal state |
 | Original generation TaskRun is deleted | Shortlist lineage becomes null through `ON DELETE SET NULL` |
+| A zero-mutation audit needs recent/latest TaskRun state | Use bounded `BEGIN READ ONLY` SQL; do not call the TaskRun GET API |
 
 ### 5. Good / Base / Bad Cases
 
@@ -133,6 +140,9 @@
 - Base: completed bars are ready but indicators or fundamentals are not. Due
   outcomes commit and publication is honestly deferred without lowering
   95/90/80.
+- Base: an operator needs to observe the scheduled loop without changing state.
+  A bounded read-only SQL transaction returns TaskRun status/result fields and
+  leaves stale-run expiration to normal operational paths.
 - Base: Beat overlaps an active fundamental shard. The loop succeeds as
   deferred and performs no provider call or domain write.
 - Bad: use `max(DailyBar.trade_date)` as evidence authority, accept a canary as
@@ -140,6 +150,8 @@
 - Bad: catch a cohort error and mark the whole TaskRun succeeded, overwrite the
   original shortlist publisher during reuse, or feed outcomes into later
   shortlist membership/ranking.
+- Bad: label `GET /task-runs/latest` a non-mutating health probe; it can expire
+  a stale running row as a side effect.
 
 ### 6. Tests Required
 
@@ -164,6 +176,9 @@
 - Final gate: focused and full pytest, full Vitest, TypeScript, touched-file
   Ruff, Alembic head/upgrade/downgrade, locale JSON, Trellis validation,
   PostgreSQL migration smoke, live 3000/8000 health, and `git diff --check`.
+- Strict read-only acceptance scripts and runbooks must use bounded TaskRun SQL
+  inside `BEGIN READ ONLY`; tests must reject TaskRun GET endpoints as
+  zero-mutation probes.
 
 ### 7. Wrong vs Correct
 
@@ -205,3 +220,25 @@ generate_research_shortlist(
 
 One local, completed-market watermark controls both bounded phases while the
 existing publication gate and immutable domain identities remain authoritative.
+
+For a strict zero-mutation TaskRun audit, the analogous boundary is:
+
+#### Wrong
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/task-runs/latest?task_name=research.run_daily_research_loop"
+```
+
+This route can call stale-run expiration before returning the row.
+
+#### Correct
+
+```sql
+BEGIN READ ONLY;
+SELECT id, status, started_at, finished_at, result_json
+FROM task_runs
+WHERE task_name = 'research.run_daily_research_loop'
+ORDER BY started_at DESC
+LIMIT 10;
+COMMIT;
+```
