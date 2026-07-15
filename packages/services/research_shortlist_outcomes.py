@@ -40,6 +40,7 @@ from packages.services.daily_bar_completion import (
     daily_bar_is_complete,
     daily_bar_timestamp_is_complete,
 )
+from packages.services.daily_bar_sources import resolve_daily_bar_adjustment
 
 
 OUTCOME_HORIZONS = (5, 20, 60)
@@ -1425,15 +1426,7 @@ def _positive_finite(value: object) -> bool:
 
 
 def _effective_adjustment(source: object, adjustment: object) -> tuple[str | None, bool]:
-    normalized_source = str(source or "").strip().lower()
-    normalized = str(adjustment or "").strip().lower()
-    if normalized_source == "tushare.pro.daily":
-        return "raw", normalized != "raw"
-    if normalized in {"none", "unadjusted", "no_adjust"}:
-        return "raw", False
-    if normalized in {"qfq", "hfq", "raw"}:
-        return normalized, False
-    return None, False
+    return resolve_daily_bar_adjustment(source, adjustment)
 
 
 def _timestamp_is_complete(value: datetime, trade_date: date) -> bool:
