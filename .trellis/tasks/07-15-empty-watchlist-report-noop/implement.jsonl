@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Follow the backend pre-development checklist and worker/service ownership boundaries."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Use the existing monkeypatched SQLite worker test seam and proportional focused checks."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Preserve TaskRun success/failure semantics while treating an expected empty scope as a bounded skip."}
+{"file":".trellis/tasks/07-15-empty-watchlist-report-noop/research/diagnosis.md","reason":"Implement against the reproduced persisted-empty state, ranked hypotheses, and deterministic feedback loop."}

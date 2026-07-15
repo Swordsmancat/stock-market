@@ -91,8 +91,6 @@ def _default_watchlist_value(session) -> str:
     except SQLAlchemyError:
         session.rollback()
         return settings.daily_report_watchlist
-    if not entries:
-        return settings.daily_report_watchlist
     return format_watchlist_entries(entries)
 
 
@@ -111,7 +109,7 @@ def refresh_daily_watchlist_analysis(
     end_value = end or default_end
     ma_window_value = ma_window or settings.daily_report_ma_window
     provider_value = provider or settings.market_data_provider
-    watchlist_value = watchlist or _default_watchlist_value(session)
+    watchlist_value = _default_watchlist_value(session) if watchlist is None else watchlist
 
     if task_run_id:
         task_run = session.get(TaskRun, UUID(task_run_id))
@@ -134,7 +132,18 @@ def refresh_daily_watchlist_analysis(
 
     try:
         items = []
-        for symbol, market in _parse_watchlist(watchlist_value):
+        watchlist_items = _parse_watchlist(watchlist_value)
+        if not watchlist_items:
+            result_payload = {
+                "status": "skipped",
+                "reason": "empty_watchlist",
+                "item_count": 0,
+                "items": [],
+            }
+            finish_task_run(task_run, result_payload, session=session)
+            return result_payload
+
+        for symbol, market in watchlist_items:
             result = refresh_stock_analysis(
                 symbol=symbol,
                 market=market,

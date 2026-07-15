@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify focused regression coverage, no live provider dependency, and scoped validation."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check the empty-list skip is a successful expected state while real worker exceptions still fail and re-raise."}
+{"file":".trellis/tasks/07-15-empty-watchlist-report-noop/research/diagnosis.md","reason":"Confirm the fix closes the original two-run failure mechanism without changing unrelated behavior."}

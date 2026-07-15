@@ -120,3 +120,92 @@ Tests that lock these semantics include `tests/scripts/test_provider_readiness.p
 - Do not print tracebacks for expected diagnostic failures; current scripts render concise details and suggestions.
 - Do not swallow worker exceptions after calling `fail_task_run()`; current worker tests expect the exception to propagate.
 - Do not expose API keys, tokens, or connection secrets in error payloads. Current provider and diagnostic messages include provider names, task names, URLs, and exception summaries, but should not reveal secret values.
+
+---
+
+## Scenario: Empty Persisted Watchlist Daily Report
+
+### 1. Scope / Trigger
+
+- Trigger: `reports.refresh_daily_watchlist_analysis` runs without an explicit
+  watchlist after the user has intentionally soft-removed every persisted item.
+- Scope: default watchlist resolution and the watchlist-report worker TaskRun.
+- Non-goals: Beat timing, provider retry, per-symbol partial failure, UI
+  behavior, or automatic watchlist mutation.
+
+### 2. Signatures
+
+- Resolver: `_default_watchlist_value(session) -> str` in
+  `apps/worker/tasks/reports.py`.
+- Worker: `refresh_daily_watchlist_analysis(watchlist=None, start=None,
+  end=None, ma_window=None, provider=None, task_run_id=None) -> dict[str,
+  object]`.
+- Persisted read: `get_active_watchlist_entries(session) -> list[tuple[str,
+  str]]` in `packages/services/watchlists.py`.
+
+### 3. Contracts
+
+- A successful persisted read is authoritative, including `[]`. Historical
+  inactive rows mean the user intentionally has no active scope; they prevent
+  bootstrap reseeding and must resolve to the empty string.
+- Only `SQLAlchemyError` from the persisted read rolls back and falls back to
+  `settings.daily_report_watchlist`.
+- An empty resolved list still creates or reuses the TaskRun, calls no market,
+  provider, or AI analysis, and finishes succeeded with:
+
+```json
+{"status":"skipped","reason":"empty_watchlist","item_count":0,"items":[]}
+```
+
+- Explicit and persisted non-empty lists keep the existing report-generation
+  and fail-plus-reraise semantics.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| No watchlist rows have ever existed | Existing watchlist service may seed configured defaults |
+| Historical rows exist but all are inactive | Succeeded `skipped/empty_watchlist`; no analysis call |
+| Persisted watchlist read raises `SQLAlchemyError` | Roll back and use configured fallback |
+| Explicit empty string is supplied | Succeeded `skipped/empty_watchlist`; do not substitute persisted/configured items |
+| One or more active entries exist | Refresh each entry using existing behavior |
+| Non-empty entry analysis raises | Fail TaskRun and re-raise the original exception |
+
+### 5. Good / Base / Bad Cases
+
+- Good: the user removes the last item, the nightly task records a bounded
+  skip, and the watchlist stays empty.
+- Base: a fresh database has never held an item, so the existing bootstrap
+  seeds `DAILY_REPORT_WATCHLIST` before the worker resolves its scope.
+- Bad: use `entries or settings.daily_report_watchlist`; this treats an
+  intentional empty list as a database failure and resurrects removed symbols.
+
+### 6. Tests Required
+
+- Worker regression uses SQLite, creates then soft-removes an item, patches
+  `refresh_stock_analysis` to fail if called, and asserts the exact succeeded
+  TaskRun result and empty input scope.
+- Existing persisted non-empty, explicit non-empty, exception, and reused
+  TaskRun tests must continue to pass.
+- Watchlist service tests must keep asserting that soft removal returns zero
+  active entries without reseeding historical rows.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+entries = get_active_watchlist_entries(session)
+return format_watchlist_entries(entries) if entries else settings.daily_report_watchlist
+```
+
+#### Correct
+
+```python
+try:
+    entries = get_active_watchlist_entries(session)
+except SQLAlchemyError:
+    session.rollback()
+    return settings.daily_report_watchlist
+return format_watchlist_entries(entries)
+```

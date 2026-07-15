@@ -10,7 +10,7 @@ from apps.worker.tasks.ingestion import ingest_mock_market_data
 from apps.worker.tasks import reports as report_tasks
 from packages.services.reports import get_latest_daily_report_payload
 from packages.services.task_runs import get_latest_task_run_payload
-from packages.services.watchlists import upsert_watchlist_item
+from packages.services.watchlists import remove_watchlist_item, upsert_watchlist_item
 from packages.shared.database import Base
 
 
@@ -591,6 +591,76 @@ def test_refresh_daily_watchlist_analysis_task_uses_persisted_watchlist(monkeypa
     assert result["items"][0]["symbol"] == "0700"
     assert result["items"][0]["market"] == "HK"
     assert latest_run["input_json"]["watchlist"] == "0700:HK"
+
+
+def test_refresh_daily_watchlist_analysis_skips_intentionally_empty_watchlist(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)
+    upsert_watchlist_item("AAPL", "US", session=session, name="Apple Inc.")
+    remove_watchlist_item("AAPL", "US", session=session)
+
+    def fail_if_called(**_kwargs):
+        raise AssertionError("empty watchlist must not refresh stock analysis")
+
+    monkeypatch.setattr(report_tasks, "refresh_stock_analysis", fail_if_called)
+
+    result = report_tasks.refresh_daily_watchlist_analysis(
+        start="2026-01-01",
+        end="2026-01-20",
+        ma_window=3,
+        provider="mock",
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_watchlist_analysis",
+    )
+
+    assert result == {
+        "status": "skipped",
+        "reason": "empty_watchlist",
+        "item_count": 0,
+        "items": [],
+    }
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["input_json"]["watchlist"] == ""
+    assert latest_run["result_json"] == result
+
+
+def test_refresh_daily_watchlist_analysis_reuses_task_run_for_explicit_empty_watchlist(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(report_tasks, "SessionLocal", lambda: session)
+    from packages.services.task_runs import start_task_run
+
+    existing_run = start_task_run(
+        "reports.refresh_daily_watchlist_analysis",
+        {"watchlist": "", "retry_of": "original-id"},
+        session=session,
+    )
+
+    def fail_if_called(**_kwargs):
+        raise AssertionError("empty watchlist must not refresh stock analysis")
+
+    monkeypatch.setattr(report_tasks, "refresh_stock_analysis", fail_if_called)
+
+    result = report_tasks.refresh_daily_watchlist_analysis(
+        watchlist="",
+        start="2026-01-01",
+        end="2026-01-20",
+        ma_window=3,
+        provider="mock",
+        task_run_id=str(existing_run.id),
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="reports.refresh_daily_watchlist_analysis",
+    )
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "empty_watchlist"
+    assert latest_run["id"] == str(existing_run.id)
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["input_json"] == {"watchlist": "", "retry_of": "original-id"}
+    assert session.query(packages.domain.models.TaskRun).count() == 1
 
 
 def test_refresh_daily_watchlist_analysis_task_records_failed_run(monkeypatch):
