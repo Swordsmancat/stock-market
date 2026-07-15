@@ -36,9 +36,9 @@ and failing the TaskRun.
 - [x] The empty-list TaskRun succeeds with the explicit bounded skipped result.
 - [x] Existing worker watchlist-report and watchlist service tests pass.
 - [x] Focused lint/type checks, Trellis validation/check, and diff checks pass.
-- [ ] Only task-owned files and the minimal worker/test/spec changes are
+- [x] Only task-owned files and the minimal worker/test/spec changes are
       committed and pushed; unrelated working-tree changes remain untouched.
-- [ ] The original five-day acceptance task is restored as the active Trellis
+- [x] The original five-day acceptance task is restored as the active Trellis
       task after this fix is archived.
 
 ## Out of Scope
