@@ -1260,10 +1260,15 @@ function FundFlowPanel({
       icon={<BarChart3 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
       className="xl:h-[14.25rem]"
       action={<TerminalActionLink href="/instruments" label={t("terminalActionMore")} />}
-      contentClassName="p-3"
+      contentClassName="p-0"
     >
       {rows.length > 0 ? (
-        <>
+        <div
+          role="region"
+          aria-labelledby="terminal-fund-flow-heading"
+          tabIndex={0}
+          className="h-full overflow-y-auto p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring xl:overscroll-contain"
+        >
           <svg className="h-28 w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("terminalFundFlowTitle")}>
             <path d={`M0,${baseline} L${width},${baseline}`} className="stroke-border" strokeWidth="1" strokeDasharray="3 7" />
             {rows.map((row, index) => {
@@ -1286,7 +1291,7 @@ function FundFlowPanel({
             })}
           </svg>
           <div className="grid gap-1">
-            {rows.slice(0, 4).map((row) => (
+            {rows.map((row) => (
               <div key={row.name} className="flex items-center justify-between gap-3 rounded-sm bg-background/45 px-2 py-1.5 text-xs">
                 <span className="truncate text-muted-foreground">{row.name}</span>
                 <span className={`font-mono tabular-nums ${row.value >= 0 ? "text-positive" : "text-negative"}`}>
@@ -1295,9 +1300,9 @@ function FundFlowPanel({
               </div>
             ))}
           </div>
-        </>
+        </div>
       ) : (
-        <div className="text-sm text-muted-foreground">{t("noFundFlowData")}</div>
+        <div className="p-3 text-sm text-muted-foreground">{t("noFundFlowData")}</div>
       )}
     </TerminalPanel>
   );

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const { getPlatformSettingsMock } = vi.hoisted(() => ({
@@ -403,6 +403,39 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.queryByText("Fundamentals")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Ingest daily bars" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Refresh Analysis" })).not.toBeInTheDocument();
+});
+
+it("keeps every loaded fund-flow row in a focusable scroll region", async () => {
+  mockHomepageFetch({
+    sectors: [
+      ...defaultHotSectors,
+      {
+        sector_id: "energy",
+        name: "Energy",
+        market: "US",
+        rank: 4,
+        change_percent: 1.72,
+        net_flow_amount: 680_000_000,
+        leader_symbol: "XOM",
+      },
+      {
+        sector_id: "industrials",
+        name: "Industrials",
+        market: "US",
+        rank: 5,
+        change_percent: 1.14,
+        net_flow_amount: 510_000_000,
+        leader_symbol: "CAT",
+      },
+    ],
+  });
+
+  await renderHomepage();
+
+  const fundFlowRegion = screen.getByRole("region", { name: "Fund flow" });
+  expect(fundFlowRegion).toHaveAttribute("tabindex", "0");
+  expect(fundFlowRegion).toHaveClass("overflow-y-auto");
+  expect(within(fundFlowRegion).getByText("Industrials")).toBeInTheDocument();
 });
 
 it("uses configured homepage index order and display fields in the market band", async () => {

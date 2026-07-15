@@ -110,6 +110,17 @@ Use page tests to assert both sides of the contract: the curated market sections
 
 **Fixed panel layout contract**: Fixed-height homepage panels should keep the card as `flex flex-col`, the content area as `min-h-0 flex-1`, and the table/list body as `min-h-0 flex-1 overflow-y-auto`. Headers should be `shrink-0`; rows should truncate or line-clamp rather than resizing the panel. This keeps the dashboard stable at desktop and tall mobile visual-check sizes.
 
+When a fixed panel body can overflow, make the scroll owner a focusable named
+region: reuse the panel heading through `aria-labelledby`, set `tabIndex={0}`,
+and retain a visible `focus-visible` ring. Render every row already inside the
+panel's bounded input rather than hiding later rows before scrolling. Apply
+`overscroll-contain` only at the breakpoint where height is constrained; an
+unconstrained mobile panel must continue passing wheel/touch movement to the
+page. A page regression should inject enough rows to reach the last item and
+assert that item inside the named region. Browser acceptance should confirm
+`overflowY === "auto"`, `scrollHeight > clientHeight`, and a real wheel action
+changes `scrollTop` at the constrained desktop breakpoint.
+
 **Example**:
 
 ```tsx

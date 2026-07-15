@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Follow the homepage component and page-test conventions."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Keep the scroll fix inside the existing server component and preserve the dashboard composition."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Add a focused page regression and run the frontend quality gate."}
+{"file":".trellis/tasks/07-15-homepage-fund-flow-scroll/prd.md","reason":"Implement the measured clipping and accessibility acceptance contract."}
