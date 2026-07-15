@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "07-15-personal-research-workflow-blockers"
+  ],
   "parent": null,
   "relatedFiles": [],
   "notes": "",
