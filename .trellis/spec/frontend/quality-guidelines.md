@@ -32,6 +32,93 @@ Frontend quality is enforced mainly through Vitest, Testing Library, and focused
 - Add a focused configuration regression when changing these rules so a local
   warm install cannot hide a broken clean build.
 
+## Scenario: Loopback Dev Origins and Client Hydration
+
+### 1. Scope / Trigger
+
+- Trigger: the Next.js development server is opened through `localhost`,
+  `127.0.0.1`, or another explicitly supported local hostname and the page
+  contains client islands such as `GlobalSearch`.
+- Scope: `apps/web/next.config.mjs`, local development startup, client chunk
+  delivery, and browser interaction smoke checks.
+- Non-goals: production CORS policy, public network exposure, wildcard origin
+  access, or changing component interaction behavior.
+
+### 2. Signatures
+
+- Next config field: `allowedDevOrigins: string[]`.
+- Required loopback entries: `127.0.0.1` and `localhost`.
+- Regression: `apps/web/next-config.test.ts` loads the real Next config in a
+  Node process and asserts both entries.
+- Runtime probe: request one client chunk with
+  `Origin: http://127.0.0.1:3000` and require HTTP 200.
+
+### 3. Contracts
+
+- A local hostname used to open the development UI must be present in
+  `allowedDevOrigins`; add other required development hosts explicitly.
+- HTTP 200 for the document is insufficient evidence that the UI is usable.
+  At least one client chunk and one real client interaction must also pass.
+- A page whose document renders but whose client chunks return HTTP 403 is a
+  failed state: server HTML may look complete while buttons have no handlers.
+- Keep the allowlist limited to known local development hosts. Do not use a
+  wildcard to hide an origin mismatch.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Document 200, client chunk 403 with loopback Origin | Add the exact local host to `allowedDevOrigins`, restart/reload Next, and repeat the probe |
+| Document and chunk both 200, interaction still fails | Diagnose component hydration/runtime behavior; do not blame CORS without evidence |
+| New local hostname is required | Add one explicit hostname plus a config regression |
+| Production build | Must remain independent of the development-origin allowlist |
+
+### 5. Good / Base / Bad Cases
+
+- Good: `/zh` returns 200, a referenced `/_next/static/chunks/*` request with
+  the `127.0.0.1` Origin returns 200, and clicking search opens its dialog.
+- Base: the developer uses `localhost`; the same allowlist and interaction
+  checks pass without special browser configuration.
+- Bad: only curl the HTML, see the search button text, and declare the frontend
+  healthy while every client chunk is rejected with 403.
+- Bad: allow every development origin instead of listing the hosts actually
+  used by this personal installation.
+
+### 6. Tests Required
+
+- Config test asserts the real exported Next config contains `127.0.0.1` and
+  `localhost`.
+- Browser acceptance clicks global search, exercises `Ctrl/Meta+K` and Escape,
+  and verifies a result preserves `market` in the detail URL.
+- Environment recovery reruns the Origin-bearing client-chunk request and
+  records the transition from 403 to 200.
+- Run the full frontend suite, TypeScript, and a production Next build after a
+  config change.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```js
+const nextConfig = {
+  turbopack: { root },
+};
+```
+
+This may return complete server HTML while Next rejects loopback-origin client
+chunks, leaving visible controls inert.
+
+#### Correct
+
+```js
+const nextConfig = {
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  turbopack: { root },
+};
+```
+
+The known local hosts can load client chunks and hydrate interactive islands.
+
 ---
 
 ## Forbidden Patterns

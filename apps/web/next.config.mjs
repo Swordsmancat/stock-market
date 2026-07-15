@@ -8,6 +8,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   turbopack: {
     root: resolve(__dirname, "../.."),
   },

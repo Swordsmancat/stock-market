@@ -38,7 +38,7 @@ Fix the verified personal workflow blockers without expanding product scope: glo
 
 ## Acceptance Criteria
 
-- [ ] A clean Next.js browser run opens global search by click and by
+- [x] A clean Next.js browser run opens global search by click and by
       `Ctrl/Meta+K`; Escape closes it, and a result retains its market in the
       instrument-detail URL.
 - [ ] Selecting a daily shortlist candidate in the AI desk and opening its
