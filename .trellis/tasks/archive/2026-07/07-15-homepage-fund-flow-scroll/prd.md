@@ -43,7 +43,7 @@ The detail list also silently limits the already-loaded rows to four.
       the panel content remains reachable without breaking the main page scroll.
 - [x] The homepage page test, full frontend suite, TypeScript check, Trellis validation,
       and browser console inspection pass.
-- [ ] Only task-owned frontend/spec/task files are committed and pushed; the
+- [x] Only task-owned frontend/spec/task files are committed and pushed; the
       ongoing five-day acceptance is restored as the current task.
 
 ## Out of Scope
