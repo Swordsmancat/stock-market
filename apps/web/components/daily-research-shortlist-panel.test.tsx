@@ -183,11 +183,15 @@ it("renders the persisted ranked cohort, evidence limits, and both research hand
   ).toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: "Open deep analysis" })[0]).toHaveAttribute(
     "href",
-    "/instruments/600519?research_snapshot_id=run-2026-07-10",
+    "/instruments/600519?market=CN&research_snapshot_id=run-2026-07-10",
   );
 
   fireEvent.click(screen.getAllByRole("button", { name: "Use in research desk" })[0]);
   expect(handoff).toHaveBeenCalledOnce();
+  expect((handoff.mock.calls[0][0] as CustomEvent).detail).toEqual({
+    symbol: "600519",
+    researchSnapshotId: "run-2026-07-10",
+  });
   window.removeEventListener("stock-discovery:select-symbol", handoff);
 });
 

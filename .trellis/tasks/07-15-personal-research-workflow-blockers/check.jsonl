@@ -1,0 +1,8 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check localized client islands, distinct failed/empty states, immutable snapshot display, and no homepage expansion."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check focused component/page regressions, both locale catalogs, and full frontend validation."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check optional snapshot, identity, membership, and response-context fields stay explicitly typed at boundaries."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Check snapshot citation validation, structured-only evidence, degraded diagnostics, backward compatibility, and research-only safety."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Check committed-run lookup, exact candidate membership, immutable rank/evidence, and locale-provenance boundaries."}
+{"file":".trellis/spec/backend/instrument-list-query-contract.md","reason":"Check bounded exact metadata lookup and market-preserving detail navigation."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check thin routers, service-owned database reads, SQLite-focused tests, and relevant backend suites."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check true empty, failed, unavailable, invalid snapshot, and ambiguous identity states remain distinguishable."}

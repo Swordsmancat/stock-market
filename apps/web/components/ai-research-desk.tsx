@@ -227,6 +227,11 @@ type CandidateSymbol = {
   detail?: string | null;
 };
 
+type ActiveResearchSnapshot = {
+  symbol: string;
+  id: string;
+};
+
 const SELECTED_SYMBOL_LIMIT = 5;
 const DISPLAY_CANDIDATE_LIMIT = 8;
 const DISPLAY_MACRO_LIMIT = 8;
@@ -268,11 +273,19 @@ export function AiResearchDesk({
     initialSelectedSymbols[0] ?? "",
   );
   const [manualSymbol, setManualSymbol] = useState("");
+  const [activeResearchSnapshot, setActiveResearchSnapshot] =
+    useState<ActiveResearchSnapshot | null>(null);
 
   useEffect(() => {
     function useDiscoveredSymbol(event: Event) {
+      const detail = (
+        event as CustomEvent<{
+          symbol?: unknown;
+          researchSnapshotId?: unknown;
+        }>
+      ).detail;
       const symbol = normalizeSymbol(
-        String((event as CustomEvent<{ symbol?: string }>).detail?.symbol ?? ""),
+        String(detail?.symbol ?? ""),
       );
       if (!symbol) {
         return;
@@ -280,9 +293,16 @@ export function AiResearchDesk({
       setSelectedSymbols((currentSymbols) =>
         currentSymbols.includes(symbol)
           ? currentSymbols
-          : [...currentSymbols, symbol].slice(0, SELECTED_SYMBOL_LIMIT),
+          : [symbol, ...currentSymbols].slice(0, SELECTED_SYMBOL_LIMIT),
       );
       setActiveSymbol(symbol);
+      const researchSnapshotId =
+        typeof detail?.researchSnapshotId === "string"
+          ? detail.researchSnapshotId.trim()
+          : "";
+      setActiveResearchSnapshot(
+        researchSnapshotId ? { symbol, id: researchSnapshotId } : null,
+      );
     }
     window.addEventListener("stock-discovery:select-symbol", useDiscoveredSymbol);
     return () => window.removeEventListener("stock-discovery:select-symbol", useDiscoveredSymbol);
@@ -291,6 +311,10 @@ export function AiResearchDesk({
   const activeSelectedSymbol = selectedSymbols.includes(activeSymbol)
     ? activeSymbol
     : (selectedSymbols[0] ?? "");
+  const activeResearchSnapshotId =
+    activeResearchSnapshot?.symbol === activeSelectedSymbol
+      ? activeResearchSnapshot.id
+      : null;
   const prioritizedMacroIndicators = useMemo(
     () => prioritizeMacroIndicators(macroIndicators),
     [macroIndicators],
@@ -345,6 +369,16 @@ export function AiResearchDesk({
       );
     });
     setActiveSymbol(normalizedSymbol);
+    setActiveResearchSnapshot(null);
+  }
+
+  function activateOrdinarySymbol(rawSymbol: string) {
+    const normalizedSymbol = normalizeSymbol(rawSymbol);
+    if (!normalizedSymbol) {
+      return;
+    }
+    setActiveSymbol(normalizedSymbol);
+    setActiveResearchSnapshot(null);
   }
 
   function removeSymbol(symbol: string) {
@@ -355,6 +389,9 @@ export function AiResearchDesk({
       }
       return nextSymbols;
     });
+    if (activeResearchSnapshot?.symbol === symbol) {
+      setActiveResearchSnapshot(null);
+    }
   }
 
   function submitManualSymbol(event: FormEvent<HTMLFormElement>) {
@@ -456,7 +493,7 @@ export function AiResearchDesk({
                       <button
                         type="button"
                         className="font-mono font-semibold"
-                        onClick={() => setActiveSymbol(symbol)}
+                        onClick={() => activateOrdinarySymbol(symbol)}
                       >
                         {symbol}
                       </button>
@@ -488,7 +525,7 @@ export function AiResearchDesk({
               .slice(0, DISPLAY_CANDIDATE_LIMIT)}
             activeSymbol={activeSelectedSymbol}
             onUseSymbol={addSymbol}
-            onActivateSymbol={setActiveSymbol}
+            onActivateSymbol={activateOrdinarySymbol}
           />
 
           <CandidatePanel
@@ -499,7 +536,7 @@ export function AiResearchDesk({
               .slice(0, DISPLAY_CANDIDATE_LIMIT)}
             activeSymbol={activeSelectedSymbol}
             onUseSymbol={addSymbol}
-            onActivateSymbol={setActiveSymbol}
+            onActivateSymbol={activateOrdinarySymbol}
           />
         </div>
 
@@ -547,11 +584,12 @@ export function AiResearchDesk({
 
               {activeSelectedSymbol ? (
                 <MarketAssistantCard
-                  key={`${activeSelectedSymbol}-${assistantInitialQuestion}`}
+                  key={`${activeSelectedSymbol}-${activeResearchSnapshotId ?? "no-snapshot"}-${assistantInitialQuestion}`}
                   symbol={activeSelectedSymbol}
                   locale={locale}
                   provider={provider}
                   initialQuestion={assistantInitialQuestion}
+                  researchSnapshotId={activeResearchSnapshotId}
                 />
               ) : null}
             </div>
@@ -562,7 +600,7 @@ export function AiResearchDesk({
                 recommendationStatus={recommendationStatus}
                 activeSymbol={activeSelectedSymbol}
                 onUseSymbol={addSymbol}
-                onActivateSymbol={setActiveSymbol}
+                onActivateSymbol={activateOrdinarySymbol}
               />
               <MarketDailyDataPanel
                 stockFundFlowPayload={stockFundFlowPayload}

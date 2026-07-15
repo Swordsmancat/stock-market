@@ -1,16 +1,18 @@
-"use client"
-
 import { Link } from "@/src/i18n/routing"
 import { NotificationBell } from "@/components/notification-bell"
-import { useTranslations } from "next-intl"
+import { getLocale, getTranslations } from "next-intl/server"
 import { CandlestickChart } from "lucide-react"
 
 import { ModeToggle } from "@/components/mode-toggle"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { GlobalSearch } from "@/components/global-search"
 
-export function TopNavBar() {
-  const t = useTranslations("TopNav")
+export async function TopNavBar() {
+  const [t, alerts, locale] = await Promise.all([
+    getTranslations("TopNav"),
+    getTranslations("Alerts"),
+    getLocale(),
+  ])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.12)] backdrop-blur supports-[backdrop-filter]:bg-background/90">
@@ -28,11 +30,29 @@ export function TopNavBar() {
             </span>
           </Link>
           <div className="min-w-0 flex-1 max-w-2xl">
-            <GlobalSearch />
+            <GlobalSearch
+              locale={locale}
+              labels={{
+                placeholder: t("searchPlaceholder"),
+                inputPlaceholder: t("searchInputPlaceholder"),
+                go: t("searchGo"),
+                loading: t("searchLoading"),
+                loadFailed: t("searchLoadFailed"),
+                noResults: t("noResults"),
+              }}
+            />
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <NotificationBell />
+          <NotificationBell
+            labels={{
+              title: alerts("title"),
+              recentTriggers: alerts("recentTriggers"),
+              loadFailed: alerts("loadFailed"),
+              noTriggers: alerts("noTriggers"),
+              viewAll: alerts("viewAll"),
+            }}
+          />
           <LanguageSwitcher />
           <ModeToggle />
         </div>

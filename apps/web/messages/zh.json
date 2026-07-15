@@ -900,7 +900,10 @@
     "discoverCandidates": "打开 AI 研究",
     "browseInstruments": "浏览标的",
     "advancedControls": "手工录入与告警设置",
-    "viewAlertHistory": "查看告警历史"
+    "viewAlertHistory": "查看告警历史",
+    "loadFailedTitle": "关注列表暂不可用",
+    "loadFailedDescription": "无法加载关注列表。请检查 API 服务后重试。",
+    "reload": "重新加载关注列表"
   },
   "InstrumentDetail": {
     "overview": "概览",
@@ -991,8 +994,13 @@
     "newsArticleCount": "已加载 {count} 条新闻。",
     "noNews": "暂无新闻舆情数据。",
     "addToWatchlist": "加入关注列表",
+    "removeFromWatchlist": "取消关注",
     "addingToWatchlist": "添加中...",
+    "watchlistUpdating": "更新中...",
+    "watchlistUnavailable": "关注状态暂不可用",
     "watchlistAdded": "已加入关注列表。",
+    "watchlistRemoved": "已取消关注。",
+    "watchlistToggleFailed": "更新关注状态失败，请重试。",
     "watchlistFailed": "加入关注列表失败。",
     "watchlistFailedDetail": "加入关注列表失败：{reason}。",
     "viewReports": "历史报告",
@@ -1283,7 +1291,14 @@
     "latestClose": "最新收盘价",
     "periodChange": "区间涨跌幅",
     "citationsTitle": "引用数据",
-    "diagnosticsTitle": "数据诊断"
+    "diagnosticsTitle": "数据诊断",
+    "snapshotContext": "每日候选快照 {id}",
+    "snapshotCitationLabel": "{symbol} 的每日候选快照（{date}）",
+    "diagnosticResearchSnapshotInvalidId": "请求的每日候选快照 ID 无效。",
+    "diagnosticResearchSnapshotSessionUnavailable": "数据库不可用，无法读取每日候选快照。",
+    "diagnosticResearchSnapshotUnavailable": "请求的每日候选快照暂不可用。",
+    "diagnosticResearchSnapshotNotFound": "未找到请求的已提交每日候选快照。",
+    "diagnosticResearchSnapshotSymbolMismatch": "每日候选快照不包含当前标的。"
   },
   "Instruments": {
     "title": "行情标的",

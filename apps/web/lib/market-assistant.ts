@@ -9,6 +9,7 @@ export type MarketAssistantRequest = {
   start?: string | null;
   end?: string | null;
   provider?: string | null;
+  researchSnapshotId?: string | null;
 };
 
 export type MarketAssistantCitation = {
@@ -59,6 +60,17 @@ export type MarketAssistantResponse = {
     fundamental_summary?: string;
     news_summary?: string;
     research_summary?: string;
+    research_snapshot?: {
+      requested_id?: string;
+      status: string;
+      applied: boolean;
+      run_id?: string;
+      candidate_id?: string;
+      decision_date?: string;
+      rank?: number;
+      score?: number;
+      citation_id?: string;
+    } | null;
     source?: string | null;
     provider?: string | null;
     requested_provider?: string | null;
@@ -89,6 +101,7 @@ export async function askMarketAssistant(request: MarketAssistantRequest): Promi
       start: request.start ?? undefined,
       end: request.end ?? undefined,
       provider: request.provider ?? undefined,
+      research_snapshot_id: request.researchSnapshotId ?? undefined,
     }),
   });
 

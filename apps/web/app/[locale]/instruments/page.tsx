@@ -655,7 +655,9 @@ export default async function InstrumentsPage({
                       >
                         <TableCell className="font-medium">
                           <Link
-                            href={`/instruments/${instrument.symbol}` as any}
+                            href={
+                              `/instruments/${encodeURIComponent(instrument.symbol)}?market=${encodeURIComponent(instrument.market)}` as any
+                            }
                             className="hover:underline"
                           >
                             {instrument.symbol}
@@ -725,7 +727,7 @@ export default async function InstrumentsPage({
                             <Button variant="outline" size="sm" asChild>
                               <Link
                                 href={
-                                  `/instruments/${instrument.symbol}` as any
+                                  `/instruments/${encodeURIComponent(instrument.symbol)}?market=${encodeURIComponent(instrument.market)}` as any
                                 }
                               >
                                 {t("viewDetails")}

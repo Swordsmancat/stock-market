@@ -15,6 +15,19 @@ vi.mock("@/app/[locale]/actions", () => ({
 
 import { GlobalSearch } from "./global-search";
 
+const labels = {
+  placeholder: "Search stocks...",
+  inputPlaceholder: "Enter symbol, e.g. AAPL",
+  go: "Go",
+  loading: "Searching...",
+  loadFailed: "Could not load instruments. Check that the API is running.",
+  noResults: "No matching instruments",
+};
+
+function renderGlobalSearch() {
+  render(<GlobalSearch locale="en" labels={labels} />);
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -40,8 +53,9 @@ it("waits for nonblank input and requests only a bounded result set", async () =
     ),
   );
 
-  render(<GlobalSearch />);
+  renderGlobalSearch();
   fireEvent.click(screen.getByRole("button", { name: /Search stocks/ }));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
   expect(fetchMock).not.toHaveBeenCalled();
 
   fireEvent.change(screen.getByPlaceholderText("Enter symbol, e.g. AAPL"), {
@@ -60,7 +74,29 @@ it("waits for nonblank input and requests only a bounded result set", async () =
   expect(screen.getByText("Kweichow Moutai")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: /600519/ }));
-  expect(pushMock).toHaveBeenCalledWith("/instruments/600519");
+  expect(pushMock).toHaveBeenCalledWith("/instruments/600519?market=CN");
+});
+
+it.each([
+  ["Ctrl+K", { ctrlKey: true }],
+  ["Meta+K", { metaKey: true }],
+])("opens with %s", (_label, modifier) => {
+  renderGlobalSearch();
+
+  fireEvent.keyDown(document, { key: "k", ...modifier });
+
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(screen.getByPlaceholderText("Enter symbol, e.g. AAPL")).toBeInTheDocument();
+});
+
+it("closes with Escape", () => {
+  renderGlobalSearch();
+  fireEvent.click(screen.getByRole("button", { name: /Search stocks/ }));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+  fireEvent.keyDown(document, { key: "Escape" });
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
 it("shows a localized failure without retrying the search", async () => {
@@ -69,7 +105,7 @@ it("shows a localized failure without retrying the search", async () => {
     .spyOn(globalThis, "fetch")
     .mockResolvedValue(new Response(null, { status: 503 }));
 
-  render(<GlobalSearch />);
+  renderGlobalSearch();
   fireEvent.click(screen.getByRole("button", { name: /Search stocks/ }));
   fireEvent.change(screen.getByPlaceholderText("Enter symbol, e.g. AAPL"), {
     target: { value: "AAPL" },

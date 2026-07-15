@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { FlashBanner } from "@/components/flash-banner";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { FinancialPageHeader } from "@/components/financial-page-header";
 import {
   WatchlistAddForm,
@@ -49,12 +50,46 @@ type WatchlistPayload = {
   items: WatchlistItem[];
 };
 
-async function fetchWatchlist(): Promise<WatchlistPayload> {
-  const response = await backendFetch("/watchlist");
-  if (!response.ok) {
-    return { name: "default", source: "error", items: [] };
+type WatchlistLoadResult =
+  | { status: "loaded"; payload: WatchlistPayload }
+  | { status: "failed" };
+
+const MARKET_CURRENCY = {
+  CN: "CNY",
+  HK: "HKD",
+  US: "USD",
+} as const;
+
+async function fetchWatchlist(): Promise<WatchlistLoadResult> {
+  try {
+    const response = await backendFetch("/watchlist");
+    if (!response.ok) {
+      return { status: "failed" };
+    }
+
+    return {
+      status: "loaded",
+      payload: (await response.json()) as WatchlistPayload,
+    };
+  } catch {
+    return { status: "failed" };
   }
-  return response.json() as Promise<WatchlistPayload>;
+}
+
+function hasAvailablePrice(price: number | null | undefined): price is number {
+  return typeof price === "number" && Number.isFinite(price);
+}
+
+function formatWatchlistPrice(price: number, market: string, locale: string): string {
+  const normalizedMarket = market.trim().toUpperCase() as keyof typeof MARKET_CURRENCY;
+  const currency = MARKET_CURRENCY[normalizedMarket];
+
+  return new Intl.NumberFormat(
+    locale,
+    currency
+      ? { style: "currency", currency }
+      : { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+  ).format(price);
 }
 
 function formatRuleLabel(
@@ -79,35 +114,35 @@ export default async function WatchlistPage({
 }) {
   const { locale } = await params;
   const { op, reason } = await searchParams;
-  const payload = await fetchWatchlist();
+  const watchlistResult = await fetchWatchlist();
   const t = await getTranslations("Watchlist");
-  const totalCount = payload.items.length;
-  const activeCount = payload.items.filter((item) => item.is_active).length;
-  const triggeredAlertCount = payload.items.filter((item) => item.alert_status?.triggered).length;
-  const pricedCount = payload.items.filter((item) => item.latest_price !== undefined && item.latest_price !== null).length;
-  const marketCount = new Set(payload.items.map((item) => item.market)).size;
-  const summaryMetrics = [
-    {
-      label: t("summaryTotal"),
-      value: totalCount,
-      description: t("summarySource", { source: payload.source }),
-    },
-    {
-      label: t("summaryActive"),
-      value: activeCount,
-      description: t("summaryMarkets", { count: marketCount }),
-    },
-    {
-      label: t("summaryTriggered"),
-      value: triggeredAlertCount,
-      description: t("alertRules"),
-    },
-    {
-      label: t("summaryPriced"),
-      value: pricedCount,
-      description: t("price"),
-    },
-  ];
+  const payload = watchlistResult.status === "loaded" ? watchlistResult.payload : null;
+  const summaryMetrics = payload
+    ? [
+        {
+          label: t("summaryTotal"),
+          value: payload.items.length,
+          description: t("summarySource", { source: payload.source }),
+        },
+        {
+          label: t("summaryActive"),
+          value: payload.items.filter((item) => item.is_active).length,
+          description: t("summaryMarkets", {
+            count: new Set(payload.items.map((item) => item.market)).size,
+          }),
+        },
+        {
+          label: t("summaryTriggered"),
+          value: payload.items.filter((item) => item.alert_status?.triggered).length,
+          description: t("alertRules"),
+        },
+        {
+          label: t("summaryPriced"),
+          value: payload.items.filter((item) => hasAvailablePrice(item.latest_price)).length,
+          description: t("price"),
+        },
+      ]
+    : [];
 
   return (
     <div className="space-y-6">
@@ -121,17 +156,23 @@ export default async function WatchlistPage({
       <FinancialPageHeader
         title={t("title")}
         description={t("description")}
-        badges={[
-          { label: t("summaryTotal"), variant: "secondary" },
-          { label: t("summarySource", { source: payload.source }) },
-        ]}
+        badges={
+          payload
+            ? [
+                { label: t("summaryTotal"), variant: "secondary" },
+                { label: t("summarySource", { source: payload.source }) },
+              ]
+            : [{ label: t("loadFailedTitle"), variant: "destructive" }]
+        }
         metrics={summaryMetrics}
       />
 
       <Card className="overflow-hidden rounded-md border-primary/10 shadow-none">
         <CardHeader className="border-b bg-muted/20 p-3">
           <CardTitle>{t("title")}</CardTitle>
-          <CardDescription>{t("itemsCount", { count: payload.items.length })}</CardDescription>
+          {payload ? (
+            <CardDescription>{t("itemsCount", { count: payload.items.length })}</CardDescription>
+          ) : null}
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -147,7 +188,23 @@ export default async function WatchlistPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payload.items.length === 0 ? (
+              {watchlistResult.status === "failed" ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="p-6">
+                    <div className="space-y-4">
+                      <ErrorState
+                        title={t("loadFailedTitle")}
+                        description={t("loadFailedDescription")}
+                      />
+                      <div className="flex justify-center">
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href="/watchlist">{t("reload")}</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : watchlistResult.payload.items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="p-6">
                     <div className="space-y-4">
@@ -164,11 +221,16 @@ export default async function WatchlistPage({
                   </TableCell>
                 </TableRow>
               ) : (
-                payload.items.map((item) => (
+                watchlistResult.payload.items.map((item) => (
                   <TableRow key={`${item.market}-${item.symbol}`} className="hover:bg-muted/30">
                     <TableCell className="px-3 py-2 font-medium">
                       <div className="flex items-center gap-2">
-                        <Link href={`/instruments/${item.symbol}` as any} className="hover:underline">
+                        <Link
+                          href={
+                            `/instruments/${encodeURIComponent(item.symbol)}?market=${encodeURIComponent(item.market)}` as any
+                          }
+                          className="hover:underline"
+                        >
                           {item.symbol}
                         </Link>
                         {item.alert_status?.triggered ? (
@@ -181,8 +243,10 @@ export default async function WatchlistPage({
                       <Badge variant="outline">{item.market}</Badge>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-right font-mono">
-                      {item.latest_price !== undefined && item.latest_price !== null ? (
-                        <span className="font-medium">${item.latest_price.toFixed(2)}</span>
+                      {hasAvailablePrice(item.latest_price) ? (
+                        <span className="font-medium">
+                          {formatWatchlistPrice(item.latest_price, item.market, locale)}
+                        </span>
                       ) : (
                         <span className="text-muted-foreground">{t("priceUnavailable")}</span>
                       )}
@@ -213,7 +277,12 @@ export default async function WatchlistPage({
                     <TableCell className="px-3 py-2 text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="icon" asChild>
-                          <Link href={`/instruments/${item.symbol}` as any} title={t("viewDetails")}>
+                          <Link
+                            href={
+                              `/instruments/${encodeURIComponent(item.symbol)}?market=${encodeURIComponent(item.market)}` as any
+                            }
+                            title={t("viewDetails")}
+                          >
                             <ExternalLink className="h-4 w-4" />
                             <span className="sr-only">{t("viewDetails")}</span>
                           </Link>
@@ -240,7 +309,7 @@ export default async function WatchlistPage({
               <Link href="/alerts">{t("viewAlertHistory")}</Link>
             </Button>
           </div>
-          {payload.items.length > 0 ? (
+          {payload && payload.items.length > 0 ? (
             <div className="grid gap-3 xl:grid-cols-2">
               {payload.items.map((item) => (
                 <div

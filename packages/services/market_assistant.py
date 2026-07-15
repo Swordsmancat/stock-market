@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,7 @@ from packages.services.official_disclosure_documents import (
 from packages.services.official_disclosures import list_citable_official_disclosure_citations
 from packages.services.platform_settings import get_platform_settings, normalize_llm_model
 from packages.services.research_source_notes import list_citable_research_source_note_citations
+from packages.services.research_shortlists import get_research_shortlist
 from packages.services.reports import list_reports_payload
 
 
@@ -49,7 +51,56 @@ ASSISTANT_CITATION_ID_PREFIXES = (
     "market_daily_event:",
     "official_disclosure:",
     "official_disclosure_section:",
+    "research_shortlist:",
 )
+RESEARCH_SNAPSHOT_FACTOR_FIELDS = (
+    "code",
+    "field",
+    "actual",
+    "threshold",
+    "normalization",
+    "buffer",
+    "dimension",
+    "dimension_weight",
+    "weighted_contribution",
+)
+RESEARCH_SNAPSHOT_GAP_FIELDS = (
+    "source",
+    "code",
+    "status",
+    "as_of",
+    "decision_date",
+)
+RESEARCH_SNAPSHOT_INVALIDATION_FIELDS = (
+    "rule",
+    "field",
+    "invalidates_when",
+    "operator",
+    "threshold",
+    "entry_actual",
+)
+RESEARCH_SNAPSHOT_DIAGNOSTIC_MESSAGES = {
+    "RESEARCH_SNAPSHOT_INVALID_ID": {
+        "en": "The requested research snapshot ID is invalid.",
+        "zh": "请求的每日候选快照 ID 无效。",
+    },
+    "RESEARCH_SNAPSHOT_SESSION_UNAVAILABLE": {
+        "en": "The requested research snapshot cannot be loaded because the database session is unavailable.",
+        "zh": "数据库会话不可用，无法读取请求的每日候选快照。",
+    },
+    "RESEARCH_SNAPSHOT_UNAVAILABLE": {
+        "en": "The requested research snapshot is temporarily unavailable.",
+        "zh": "请求的每日候选快照暂不可用。",
+    },
+    "RESEARCH_SNAPSHOT_NOT_FOUND": {
+        "en": "The requested committed research snapshot was not found.",
+        "zh": "未找到请求的已提交每日候选快照。",
+    },
+    "RESEARCH_SNAPSHOT_SYMBOL_MISMATCH": {
+        "en": "The requested research snapshot does not contain the exact assistant symbol.",
+        "zh": "请求的每日候选快照不包含当前助手标的。",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -66,6 +117,13 @@ class MarketAssistantResearchEvidence:
     metadata: dict[str, object] | None = None
 
 
+@dataclass(frozen=True)
+class MarketAssistantResearchSnapshot:
+    summary: str
+    evidence: list[MarketAssistantResearchEvidence]
+    response_context: dict[str, object] | None
+
+
 def answer_market_assistant_question(
     *,
     symbol: str,
@@ -76,6 +134,7 @@ def answer_market_assistant_question(
     start: date | None = None,
     end: date | None = None,
     provider_name: str | None = None,
+    research_snapshot_id: str | None = None,
     session: Session | None = None,
 ) -> dict[str, object]:
     normalized_symbol = _normalize_symbol(symbol)
@@ -94,6 +153,13 @@ def answer_market_assistant_question(
     )
     bar_items = _extract_bar_items(bars_payload)
     diagnostics: list[dict[str, object]] = []
+    research_snapshot = _build_research_snapshot_context(
+        research_snapshot_id,
+        symbol=normalized_symbol,
+        locale=normalized_locale,
+        session=session,
+        diagnostics=diagnostics,
+    )
 
     if not bar_items:
         diagnostics.append(
@@ -120,7 +186,10 @@ def answer_market_assistant_question(
             indicator_summary="No technical indicators were loaded because price context is unavailable.",
             fundamental_summary="No fundamental context was loaded because price context is unavailable.",
             news_summary="No news context was loaded because price context is unavailable.",
-            citations=[],
+            research_summary=(
+                research_snapshot.summary or "No generated research reports were loaded."
+            ),
+            citations=_rank_research_citations(research_snapshot.evidence),
             diagnostics=diagnostics,
         )
         return _build_response_payload(
@@ -130,6 +199,7 @@ def answer_market_assistant_question(
             answer_markdown=build_deterministic_market_answer(prompt_context),
             model_metadata=_build_fallback_model_metadata("No verified daily bars are available."),
             bars_payload=bars_payload,
+            research_snapshot=research_snapshot.response_context,
         )
 
     price_context = _build_price_context(
@@ -141,6 +211,7 @@ def answer_market_assistant_question(
         provider_name=_stringify_optional(bars_payload.get("effective_provider") or bars_payload.get("provider")),
     )
     research_evidence = list(price_context["evidence"])
+    research_evidence.extend(research_snapshot.evidence)
     indicator_summary, indicator_evidence = _build_indicator_context(normalized_symbol, session, diagnostics)
     macro_summary, macro_evidence = _build_macro_indicator_context(session, diagnostics)
     fundamental_summary, fundamental_evidence = _build_fundamental_context(
@@ -188,6 +259,17 @@ def answer_market_assistant_question(
     research_evidence.extend(disclosure_section_evidence)
     research_evidence.extend(market_daily_evidence)
     citations = _rank_research_citations(research_evidence)
+    research_summary = " ".join(
+        summary
+        for summary in (
+            research_snapshot.summary,
+            generated_report_summary,
+            source_note_summary,
+            disclosure_summary,
+            disclosure_section_summary,
+        )
+        if summary
+    )
 
     prompt_context = MarketAssistantPromptContext(
         symbol=normalized_symbol,
@@ -206,10 +288,7 @@ def answer_market_assistant_question(
         market_daily_summary=market_daily_summary,
         fundamental_summary=fundamental_summary,
         news_summary=news_summary,
-        research_summary=(
-            f"{generated_report_summary} {source_note_summary} {disclosure_summary} "
-            f"{disclosure_section_summary}"
-        ),
+        research_summary=research_summary,
         citations=citations,
         diagnostics=diagnostics,
     )
@@ -223,6 +302,7 @@ def answer_market_assistant_question(
         answer_markdown=answer_markdown,
         model_metadata=model_metadata,
         bars_payload=bars_payload,
+        research_snapshot=research_snapshot.response_context,
     )
 
 
@@ -258,6 +338,334 @@ def _validate_scope_and_timeframe(scope: str, timeframe: str) -> None:
     if timeframe != SUPPORTED_ASSISTANT_TIMEFRAME:
         msg = f"Unsupported assistant timeframe: {timeframe}. Only {SUPPORTED_ASSISTANT_TIMEFRAME} is supported."
         raise ValueError(msg)
+
+
+def _build_research_snapshot_context(
+    research_snapshot_id: str | None,
+    *,
+    symbol: str,
+    locale: str,
+    session: Session | None,
+    diagnostics: list[dict[str, object]],
+) -> MarketAssistantResearchSnapshot:
+    if research_snapshot_id is None:
+        return MarketAssistantResearchSnapshot(summary="", evidence=[], response_context=None)
+
+    normalized_snapshot_id = research_snapshot_id.strip()
+    parsed_snapshot_id = _canonical_uuid(normalized_snapshot_id)
+    if parsed_snapshot_id is None:
+        return _degraded_research_snapshot(
+            diagnostics,
+            status="invalid",
+            code="RESEARCH_SNAPSHOT_INVALID_ID",
+            locale=locale,
+        )
+
+    if session is None:
+        return _degraded_research_snapshot(
+            diagnostics,
+            status="session_unavailable",
+            code="RESEARCH_SNAPSHOT_SESSION_UNAVAILABLE",
+            locale=locale,
+            requested_id=parsed_snapshot_id,
+        )
+
+    try:
+        snapshot_payload = get_research_shortlist(parsed_snapshot_id, session=session)
+    except Exception:
+        _rollback_session_if_possible(session)
+        return _degraded_research_snapshot(
+            diagnostics,
+            status="unavailable",
+            code="RESEARCH_SNAPSHOT_UNAVAILABLE",
+            locale=locale,
+            requested_id=parsed_snapshot_id,
+        )
+
+    if snapshot_payload is None:
+        return _degraded_research_snapshot(
+            diagnostics,
+            status="missing",
+            code="RESEARCH_SNAPSHOT_NOT_FOUND",
+            locale=locale,
+            requested_id=parsed_snapshot_id,
+        )
+
+    run = _optional_dict(snapshot_payload.get("run"))
+    raw_items = snapshot_payload.get("items")
+    resolved_run_id = _canonical_uuid(run.get("id")) if run is not None else None
+    decision_date = _canonical_date(run.get("decision_date")) if run is not None else None
+    if resolved_run_id != parsed_snapshot_id or decision_date is None or not isinstance(raw_items, list):
+        return _degraded_research_snapshot(
+            diagnostics,
+            status="unavailable",
+            code="RESEARCH_SNAPSHOT_UNAVAILABLE",
+            locale=locale,
+            requested_id=parsed_snapshot_id,
+        )
+
+    candidate = next(
+        (
+            item
+            for item in raw_items
+            if isinstance(item, dict)
+            and str(item.get("symbol") or "").strip().upper() == symbol
+        ),
+        None,
+    )
+    if candidate is None:
+        return _degraded_research_snapshot(
+            diagnostics,
+            status="symbol_mismatch",
+            code="RESEARCH_SNAPSHOT_SYMBOL_MISMATCH",
+            locale=locale,
+            requested_id=parsed_snapshot_id,
+            metadata={"run_id": resolved_run_id, "decision_date": decision_date},
+        )
+
+    candidate_id = _canonical_uuid(candidate.get("id"))
+    rank = _safe_int(candidate.get("rank"))
+    score = _safe_float(candidate.get("score"))
+    if candidate_id is None or rank <= 0 or score is None:
+        return _degraded_research_snapshot(
+            diagnostics,
+            status="unavailable",
+            code="RESEARCH_SNAPSHOT_UNAVAILABLE",
+            locale=locale,
+            requested_id=parsed_snapshot_id,
+        )
+
+    structured_evidence = {
+        "decision_date": decision_date,
+        "rank": rank,
+        "score": score,
+        "supporting_factors": _snapshot_structured_records(
+            candidate.get("supporting_factors"),
+            RESEARCH_SNAPSHOT_FACTOR_FIELDS,
+        ),
+        "opposing_factors": _snapshot_structured_records(
+            candidate.get("opposing_factors"),
+            RESEARCH_SNAPSHOT_FACTOR_FIELDS,
+        ),
+        "data_gaps": _snapshot_structured_records(
+            candidate.get("data_gaps"),
+            RESEARCH_SNAPSHOT_GAP_FIELDS,
+        ),
+        "invalidation_conditions": _snapshot_structured_records(
+            candidate.get("invalidation_conditions"),
+            RESEARCH_SNAPSHOT_INVALIDATION_FIELDS,
+        ),
+    }
+    summary = _build_research_snapshot_summary(
+        locale=locale,
+        decision_date=decision_date,
+        rank=rank,
+        score=score,
+        structured_evidence=structured_evidence,
+    )
+    citation_id = f"research_shortlist:{resolved_run_id}:{candidate_id}"
+    citation_metadata = {
+        "run_id": resolved_run_id,
+        "candidate_id": candidate_id,
+        "symbol": symbol,
+        "structured_evidence": structured_evidence,
+    }
+    citation_label = (
+        f"{symbol} 的已提交每日候选快照（{decision_date}）"
+        if locale == "zh"
+        else f"Committed daily research shortlist for {symbol} on {decision_date}"
+    )
+    evidence_title = (
+        f"{symbol} 的已提交每日候选快照"
+        if locale == "zh"
+        else f"Committed daily research shortlist for {symbol}"
+    )
+    citation = MarketAssistantCitation(
+        id=citation_id,
+        label=citation_label,
+        source="research_shortlist",
+        source_type="research_shortlist",
+        as_of=decision_date,
+        excerpt=_build_safe_excerpt(summary, max_length=1000),
+        metadata=citation_metadata,
+    )
+    evidence = MarketAssistantResearchEvidence(
+        citation=citation,
+        summary=summary,
+        priority=15,
+        source_type="research_shortlist",
+        title=evidence_title,
+        as_of=decision_date,
+        metadata=citation_metadata,
+    )
+    response_context = {
+        "requested_id": parsed_snapshot_id,
+        "status": "applied",
+        "applied": True,
+        "run_id": resolved_run_id,
+        "candidate_id": candidate_id,
+        "decision_date": decision_date,
+        "rank": rank,
+        "score": score,
+        "citation_id": citation_id,
+    }
+    return MarketAssistantResearchSnapshot(
+        summary=summary,
+        evidence=[evidence],
+        response_context=response_context,
+    )
+
+
+def _build_research_snapshot_summary(
+    *,
+    locale: str,
+    decision_date: str,
+    rank: int,
+    score: float,
+    structured_evidence: dict[str, object],
+) -> str:
+    supporting = _format_snapshot_record_group(structured_evidence.get("supporting_factors"))
+    opposing = _format_snapshot_record_group(structured_evidence.get("opposing_factors"))
+    gaps = _format_snapshot_record_group(structured_evidence.get("data_gaps"))
+    invalidations = _format_snapshot_record_group(
+        structured_evidence.get("invalidation_conditions")
+    )
+    if locale == "zh":
+        return (
+            f"已应用已提交的每日候选快照结构化证据：决策日期={decision_date}；排名={rank}；"
+            f"得分={score}；支持因素={supporting}；反向因素={opposing}；"
+            f"数据缺口={gaps}；失效条件={invalidations}。"
+        )
+    return (
+        f"Committed research shortlist snapshot evidence: decision_date={decision_date}; "
+        f"rank={rank}; score={score}; supporting_factors={supporting}; "
+        f"opposing_factors={opposing}; data_gaps={gaps}; "
+        f"invalidation_conditions={invalidations}."
+    )
+
+
+def _format_snapshot_record_group(value: object) -> str:
+    if not isinstance(value, list) or not value:
+        return "none"
+    rendered_records: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        rendered_records.append(
+            "(" + ", ".join(f"{key}={item[key]}" for key in sorted(item)) + ")"
+        )
+    return "; ".join(rendered_records) or "none"
+
+
+def _research_snapshot_diagnostic_message(code: str, locale: str) -> str:
+    localized = RESEARCH_SNAPSHOT_DIAGNOSTIC_MESSAGES.get(code)
+    if localized is None:
+        return (
+            "请求的每日候选快照暂不可用。"
+            if locale == "zh"
+            else "The requested research snapshot is temporarily unavailable."
+        )
+    return localized["zh" if locale == "zh" else "en"]
+
+
+def _degraded_research_snapshot(
+    diagnostics: list[dict[str, object]],
+    *,
+    status: str,
+    code: str,
+    locale: str,
+    requested_id: str | None = None,
+    metadata: dict[str, object] | None = None,
+) -> MarketAssistantResearchSnapshot:
+    response_context: dict[str, object] = {"status": status, "applied": False}
+    if requested_id is not None:
+        response_context["requested_id"] = requested_id
+    if metadata:
+        response_context.update(metadata)
+    diagnostics.append(
+        {
+            "source": "research_shortlist",
+            "status": status,
+            "severity": "warning",
+            "code": code,
+            "message": _research_snapshot_diagnostic_message(code, locale),
+        }
+    )
+    return MarketAssistantResearchSnapshot(
+        summary="",
+        evidence=[],
+        response_context=response_context,
+    )
+
+
+def _snapshot_structured_records(
+    value: object,
+    allowed_fields: tuple[str, ...],
+) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    records: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        record: dict[str, object] = {}
+        for field_name in allowed_fields:
+            if field_name not in item:
+                continue
+            record[field_name] = _sanitize_snapshot_value(item[field_name])
+        if record:
+            records.append(record)
+    return records
+
+
+def _sanitize_snapshot_value(value: object) -> object:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return [_sanitize_snapshot_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): _sanitize_snapshot_value(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+            if not _is_snapshot_prose_field(str(key))
+        }
+    return None
+
+
+def _is_snapshot_prose_field(field_name: str) -> bool:
+    normalized_field = field_name.strip().casefold()
+    prose_tokens = (
+        "description",
+        "explanation",
+        "label",
+        "markdown",
+        "message",
+        "name",
+        "note",
+        "prose",
+        "title",
+    )
+    return any(token in normalized_field for token in prose_tokens)
+
+
+def _canonical_uuid(value: object) -> str | None:
+    if value is None:
+        return None
+    try:
+        return str(UUID(str(value).strip()))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _canonical_date(value: object) -> str | None:
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(str(value).strip()).isoformat()
+    except (TypeError, ValueError, AttributeError):
+        return None
 
 
 def _extract_bar_items(bars_payload: dict[str, object]) -> list[dict[str, object]]:
@@ -736,6 +1144,7 @@ def _build_response_payload(
     answer_markdown: str,
     model_metadata: dict[str, object],
     bars_payload: dict[str, object],
+    research_snapshot: dict[str, object] | None,
 ) -> dict[str, object]:
     return {
         "status": status,
@@ -758,6 +1167,7 @@ def _build_response_payload(
             "fundamental_summary": prompt_context.fundamental_summary,
             "news_summary": prompt_context.news_summary,
             "research_summary": prompt_context.research_summary,
+            "research_snapshot": research_snapshot,
             "source": bars_payload.get("source"),
             "provider": bars_payload.get("provider"),
             "requested_provider": bars_payload.get("requested_provider"),

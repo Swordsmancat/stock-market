@@ -893,7 +893,10 @@
     "discoverCandidates": "Open AI Research",
     "browseInstruments": "Browse instruments",
     "advancedControls": "Manual entry and alert settings",
-    "viewAlertHistory": "View alert history"
+    "viewAlertHistory": "View alert history",
+    "loadFailedTitle": "Watchlist is unavailable",
+    "loadFailedDescription": "Could not load your watchlist. Check the API service, then try again.",
+    "reload": "Reload watchlist"
   },
   "InstrumentDetail": {
     "overview": "Overview",
@@ -984,8 +987,13 @@
     "newsArticleCount": "{count} news articles loaded.",
     "noNews": "No news sentiment available.",
     "addToWatchlist": "Add to Watchlist",
+    "removeFromWatchlist": "Remove from Watchlist",
     "addingToWatchlist": "Adding...",
+    "watchlistUpdating": "Updating...",
+    "watchlistUnavailable": "Watchlist status unavailable",
     "watchlistAdded": "Added to watchlist.",
+    "watchlistRemoved": "Removed from watchlist.",
+    "watchlistToggleFailed": "Could not update the watchlist. Try again.",
     "watchlistFailed": "Failed to add to watchlist.",
     "watchlistFailedDetail": "Failed to add to watchlist: {reason}.",
     "viewReports": "Stored Reports",
@@ -1276,7 +1284,14 @@
     "latestClose": "Latest close",
     "periodChange": "Period change",
     "citationsTitle": "Citations",
-    "diagnosticsTitle": "Diagnostics"
+    "diagnosticsTitle": "Diagnostics",
+    "snapshotContext": "Daily shortlist snapshot {id}",
+    "snapshotCitationLabel": "Daily shortlist snapshot for {symbol} on {date}",
+    "diagnosticResearchSnapshotInvalidId": "The requested daily shortlist snapshot ID is invalid.",
+    "diagnosticResearchSnapshotSessionUnavailable": "The daily shortlist snapshot cannot be loaded because the database is unavailable.",
+    "diagnosticResearchSnapshotUnavailable": "The requested daily shortlist snapshot is temporarily unavailable.",
+    "diagnosticResearchSnapshotNotFound": "The requested committed daily shortlist snapshot was not found.",
+    "diagnosticResearchSnapshotSymbolMismatch": "The daily shortlist snapshot does not contain this instrument."
   },
   "Instruments": {
     "title": "Instruments",

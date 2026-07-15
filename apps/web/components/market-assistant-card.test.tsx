@@ -19,7 +19,7 @@ afterEach(() => {
   askMarketAssistantMock.mockReset();
 });
 
-function renderChineseMarketAssistantCard() {
+function renderChineseMarketAssistantCard(researchSnapshotId?: string | null) {
   render(
     <NextIntlClientProvider locale="zh" messages={zhMessages}>
       <MarketAssistantCard
@@ -28,6 +28,7 @@ function renderChineseMarketAssistantCard() {
         provider="mock"
         start="2026-01-01"
         end="2026-01-20"
+        researchSnapshotId={researchSnapshotId}
       />
     </NextIntlClientProvider>,
   );
@@ -126,6 +127,86 @@ it("submits a contextual assistant question and renders traceable output", async
   expect(screen.getByText(/type=bars/)).toBeInTheDocument();
   expect(screen.getByText(/news \[info\/SOURCE_NO_DATA\]: No stored news sentiment/)).toBeInTheDocument();
   expect(screen.getByText(/不构成投资建议/)).toBeInTheDocument();
+});
+
+it("keeps the hidden shortlist snapshot on quick-prompt requests", async () => {
+  askMarketAssistantMock.mockResolvedValue(buildAssistantResponse());
+  renderChineseMarketAssistantCard("12345678-1234-1234-1234-123456789abc");
+
+  expect(screen.getByText("每日候选快照 12345678...")).toHaveAttribute(
+    "data-research-snapshot-id",
+    "12345678-1234-1234-1234-123456789abc",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "数据缺口" }));
+  fireEvent.click(screen.getByRole("button", { name: "询问助手" }));
+
+  await waitFor(() => {
+    expect(askMarketAssistantMock).toHaveBeenCalledWith({
+      scope: "instrument",
+      symbol: "AAPL",
+      question: "请说明分析 AAPL 时当前还缺少哪些关键数据。",
+      locale: "zh",
+      timeframe: "1d",
+      start: "2026-01-01",
+      end: "2026-01-20",
+      provider: "mock",
+      researchSnapshotId: "12345678-1234-1234-1234-123456789abc",
+    });
+  });
+});
+
+it("localizes shortlist citations and diagnostics without rendering raw snapshot prose", async () => {
+  const rawLabel = "Committed daily research shortlist for AAPL on 2026-01-20";
+  const rawExcerpt = "Committed research shortlist snapshot evidence: raw JSON.";
+  const rawDiagnostic = "The requested research snapshot does not contain the exact symbol.";
+  const baseResponse = buildAssistantResponse();
+  askMarketAssistantMock.mockResolvedValue({
+    ...baseResponse,
+    context: {
+      ...baseResponse.context,
+      research_snapshot: {
+        status: "symbol_mismatch",
+        applied: false,
+        decision_date: "2026-01-20",
+      },
+    },
+    citations: [
+      {
+        id: "research_shortlist:run:candidate",
+        label: rawLabel,
+        source: "research_shortlist",
+        source_type: "research_shortlist",
+        as_of: "2026-01-20",
+        excerpt: rawExcerpt,
+      },
+    ],
+    diagnostics: [
+      {
+        source: "research_shortlist",
+        status: "symbol_mismatch",
+        severity: "warning",
+        code: "RESEARCH_SNAPSHOT_SYMBOL_MISMATCH",
+        message: rawDiagnostic,
+      },
+    ],
+  });
+  renderChineseMarketAssistantCard("12345678-1234-1234-1234-123456789abc");
+
+  fireEvent.click(screen.getByRole("button", { name: zhMessages.MarketAssistant.submit }));
+
+  const expectedLabel = zhMessages.MarketAssistant.snapshotCitationLabel
+    .replace("{symbol}", "AAPL")
+    .replace("{date}", "2026-01-20");
+  expect(await screen.findByText(expectedLabel)).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      zhMessages.MarketAssistant.diagnosticResearchSnapshotSymbolMismatch,
+      { exact: false },
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(rawLabel)).not.toBeInTheDocument();
+  expect(screen.queryByText(rawExcerpt)).not.toBeInTheDocument();
+  expect(screen.queryByText(rawDiagnostic)).not.toBeInTheDocument();
 });
 
 it("renders citation links and compact research metadata", async () => {

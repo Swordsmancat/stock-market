@@ -8,11 +8,38 @@ vi.mock("@/lib/backend-api", () => ({
   getBackendApiUrl: getBackendApiUrlMock,
 }));
 
-import { DELETE, POST } from "./route";
+import { DELETE, GET, POST } from "./route";
 
 afterEach(() => {
   vi.restoreAllMocks();
   getBackendApiUrlMock.mockReturnValue("https://backend.example");
+});
+
+it("forwards exact watchlist membership identity without caching", async () => {
+  const responsePayload = {
+    source: "database",
+    status: "watched",
+    symbol: "0700",
+    market: "HK",
+  };
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify(responsePayload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+
+  const response = await GET(
+    new Request("http://localhost/api/watchlist/items?symbol=0700&market=HK&unused=value"),
+  );
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    "https://backend.example/watchlist/items?symbol=0700&market=HK",
+    { cache: "no-store" },
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("application/json");
+  await expect(response.json()).resolves.toEqual(responsePayload);
 });
 
 it("forwards watchlist item creation bodies to the backend without caching", async () => {

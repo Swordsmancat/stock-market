@@ -7,3 +7,7 @@ export async function getTranslations(namespace?: string) {
 export async function getMessages() {
   return {};
 }
+
+export async function getLocale() {
+  return "en";
+}

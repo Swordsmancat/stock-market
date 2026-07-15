@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from decimal import Decimal
 
@@ -30,6 +31,41 @@ def make_session():
     )
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)()
+
+
+def patch_snapshot_test_dependencies(monkeypatch):
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_bars_payload",
+        lambda *args, **kwargs: {
+            "symbol": "000001",
+            "timeframe": "1d",
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "items": [
+                {"timestamp": "2026-07-10", "close": 10.0},
+                {"timestamp": "2026-07-11", "close": 10.5},
+            ],
+        },
+    )
+    for builder_name in (
+        "_build_indicator_context",
+        "_build_macro_indicator_context",
+        "_build_fundamental_context",
+        "_build_news_context",
+        "_build_generated_report_context",
+        "_build_research_source_note_context",
+        "_build_official_disclosure_context",
+        "_build_official_disclosure_section_context",
+        "_build_market_daily_evidence_context",
+    ):
+        monkeypatch.setattr(
+            market_assistant_service,
+            builder_name,
+            lambda *args, **kwargs: ("No optional evidence.", []),
+        )
 
 
 def test_deterministic_answer_refuses_direct_trading_instruction():
@@ -94,6 +130,7 @@ def test_market_assistant_returns_traceable_fallback_answer(monkeypatch):
     assert payload["model"]["used_llm"] is False
     assert payload["context"]["latest_close"] == 105.0
     assert payload["context"]["period_change_pct"] == 5.0
+    assert payload["context"]["research_snapshot"] is None
     assert payload["citations"][0]["id"] == "bars_1d:AAPL:2026-01-03"
     assert payload["citations"][0]["source_type"] == "bars"
     assert payload["safety"]["not_investment_advice"] is True
@@ -639,6 +676,13 @@ def test_market_assistant_recognizes_invented_disclosure_section_citation_ids():
 
     assert unknown == ["official_disclosure_section:not-present"]
 
+    shortlist_unknown = market_assistant_service._extract_unknown_inline_citation_ids(
+        "Unsupported claim [research_shortlist:not-present].",
+        [],
+    )
+
+    assert shortlist_unknown == ["research_shortlist:not-present"]
+
 
 def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):
     class HallucinatingProvider:
@@ -785,6 +829,7 @@ def test_market_assistant_returns_no_data_without_llm(monkeypatch):
     assert payload["status"] == "no_data"
     assert payload["model"]["used_llm"] is False
     assert payload["context"]["bar_count"] == 0
+    assert payload["context"]["research_snapshot"] is None
     assert payload["citations"] == []
     assert payload["diagnostics"][0]["source"] == "bars_1d"
     assert "没有获取到" in payload["answer_markdown"]
@@ -837,3 +882,372 @@ def test_market_assistant_falls_back_when_llm_generation_fails(monkeypatch):
     assert payload["model"]["fallback_reason"] == "LLM generation failed: RuntimeError."
     assert "secret" not in payload["model"]["fallback_reason"]
     assert "not investment advice" in payload["answer_markdown"]
+
+
+def test_market_assistant_applies_structured_research_snapshot_without_persisted_prose(
+    monkeypatch,
+):
+    run_id = "11111111-1111-1111-1111-111111111111"
+    candidate_id = "22222222-2222-2222-2222-222222222222"
+    citation_id = f"research_shortlist:{run_id}:{candidate_id}"
+    session = object()
+    captured_prompts: list[str] = []
+
+    class SnapshotAwareProvider:
+        def generate(self, prompt: str) -> str:
+            captured_prompts.append(prompt)
+            return f"### Summary\nStructured snapshot applied. [{citation_id}]"
+
+    patch_snapshot_test_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_research_shortlist",
+        lambda requested_id, *, session: _snapshot_payload_for_test(
+            requested_id,
+            session,
+            expected_run_id=run_id,
+            expected_session=session_token,
+            candidate_id=candidate_id,
+        ),
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {
+            "llm_provider": "openai",
+            "llm_api_key": "configured",
+            "llm_model": "deepseek-chat",
+        },
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_llm_provider",
+        lambda _settings=None: SnapshotAwareProvider(),
+    )
+    session_token = session
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="000001",
+        question="Summarize the candidate evidence.",
+        locale="en",
+        start=date(2026, 7, 10),
+        end=date(2026, 7, 11),
+        provider_name="mock",
+        research_snapshot_id=run_id,
+        session=session,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["context"]["research_snapshot"] == {
+        "requested_id": run_id,
+        "status": "applied",
+        "applied": True,
+        "run_id": run_id,
+        "candidate_id": candidate_id,
+        "decision_date": "2026-07-11",
+        "rank": 2,
+        "score": 0.8123,
+        "citation_id": citation_id,
+    }
+    snapshot_citation = next(
+        citation
+        for citation in payload["citations"]
+        if citation["source"] == "research_shortlist"
+    )
+    structured_evidence = snapshot_citation["metadata"]["structured_evidence"]
+    assert structured_evidence == {
+        "decision_date": "2026-07-11",
+        "rank": 2,
+        "score": 0.8123,
+        "supporting_factors": [
+            {
+                "code": "min_net_margin",
+                "field": "net_margin",
+                "actual": 0.22,
+                "threshold": 0.15,
+                "buffer": 0.85,
+                "dimension": "fundamental",
+            }
+        ],
+        "opposing_factors": [
+            {
+                "code": "max_pe_ratio",
+                "field": "pe_ratio",
+                "actual": 19.0,
+                "threshold": 20.0,
+                "buffer": 0.55,
+                "dimension": "fundamental",
+            }
+        ],
+        "data_gaps": [
+            {
+                "source": "news_sentiment",
+                "code": "NEWS_NOT_EVALUATED_BY_PROFILE",
+                "status": "not_evaluated",
+            }
+        ],
+        "invalidation_conditions": [
+            {
+                "rule": "min_net_margin",
+                "field": "net_margin",
+                "invalidates_when": "less_than",
+                "operator": "<",
+                "threshold": 0.15,
+                "entry_actual": 0.22,
+            }
+        ],
+    }
+    assert snapshot_citation["id"] == citation_id
+
+    serialized_output = json.dumps(payload, sort_keys=True)
+    prompt = captured_prompts[0]
+    for structured_key in (
+        "supporting_factors",
+        "opposing_factors",
+        "data_gaps",
+        "invalidation_conditions",
+    ):
+        assert structured_key in prompt
+    for persisted_prose in (
+        "LEAK_RUN_EXPLANATION",
+        "LEAK_FACTOR_MESSAGE",
+        "LEAK_FACTOR_LABEL",
+        "LEAK_GAP_MESSAGE",
+        "LEAK_INVALIDATION_MESSAGE",
+        "LEAK_CANDIDATE_EXPLANATION",
+    ):
+        assert persisted_prose not in prompt
+        assert persisted_prose not in serialized_output
+
+
+def _snapshot_payload_for_test(
+    requested_id: str,
+    session: object,
+    *,
+    expected_run_id: str,
+    expected_session: object,
+    candidate_id: str,
+) -> dict[str, object]:
+    assert requested_id == expected_run_id
+    assert session is expected_session
+    return {
+        "status": "ok",
+        "run": {
+            "id": expected_run_id,
+            "decision_date": "2026-07-11",
+            "explanation_markdown": "LEAK_RUN_EXPLANATION",
+        },
+        "items": [
+            {
+                "id": candidate_id,
+                "symbol": "000001",
+                "rank": 2,
+                "score": 0.8123,
+                "supporting_factors": [
+                    {
+                        "code": "min_net_margin",
+                        "field": "net_margin",
+                        "actual": 0.22,
+                        "threshold": 0.15,
+                        "buffer": 0.85,
+                        "dimension": "fundamental",
+                        "message": "LEAK_FACTOR_MESSAGE",
+                        "label": "LEAK_FACTOR_LABEL",
+                    }
+                ],
+                "opposing_factors": [
+                    {
+                        "code": "max_pe_ratio",
+                        "field": "pe_ratio",
+                        "actual": 19.0,
+                        "threshold": 20.0,
+                        "buffer": 0.55,
+                        "dimension": "fundamental",
+                        "message": "LEAK_FACTOR_MESSAGE",
+                    }
+                ],
+                "data_gaps": [
+                    {
+                        "source": "news_sentiment",
+                        "code": "NEWS_NOT_EVALUATED_BY_PROFILE",
+                        "status": "not_evaluated",
+                        "message": "LEAK_GAP_MESSAGE",
+                    }
+                ],
+                "invalidation_conditions": [
+                    {
+                        "rule": "min_net_margin",
+                        "field": "net_margin",
+                        "invalidates_when": "less_than",
+                        "operator": "<",
+                        "threshold": 0.15,
+                        "entry_actual": 0.22,
+                        "message": "LEAK_INVALIDATION_MESSAGE",
+                    }
+                ],
+                "explanation": "LEAK_CANDIDATE_EXPLANATION",
+            }
+        ],
+    }
+
+
+def test_market_assistant_localizes_applied_snapshot_context_for_chinese_fallback(
+    monkeypatch,
+):
+    run_id = "66666666-6666-6666-6666-666666666666"
+    candidate_id = "77777777-7777-7777-7777-777777777777"
+    session = object()
+    patch_snapshot_test_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_research_shortlist",
+        lambda requested_id, *, session: _snapshot_payload_for_test(
+            requested_id,
+            session,
+            expected_run_id=run_id,
+            expected_session=session_token,
+            candidate_id=candidate_id,
+        ),
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "mock", "llm_api_key": ""},
+    )
+    session_token = session
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="000001",
+        question="请总结候选证据。",
+        locale="zh",
+        start=date(2026, 7, 10),
+        end=date(2026, 7, 11),
+        provider_name="mock",
+        research_snapshot_id=run_id,
+        session=session,
+    )
+
+    snapshot_citation = next(
+        citation
+        for citation in payload["citations"]
+        if citation["source"] == "research_shortlist"
+    )
+    serialized_output = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    assert payload["model"]["used_llm"] is False
+    assert snapshot_citation["label"] == "000001 的已提交每日候选快照（2026-07-11）"
+    assert "已应用已提交的每日候选快照结构化证据" in snapshot_citation["excerpt"]
+    assert "已应用已提交的每日候选快照结构化证据" in payload["answer_markdown"]
+    assert "Committed research shortlist snapshot evidence" not in serialized_output
+
+
+def test_market_assistant_degrades_explicitly_for_unapplied_research_snapshots(
+    monkeypatch,
+):
+    session = object()
+    missing_id = "33333333-3333-3333-3333-333333333333"
+    mismatch_id = "44444444-4444-4444-4444-444444444444"
+    session_unavailable_id = "55555555-5555-5555-5555-555555555555"
+    lookup_ids: list[str] = []
+
+    def get_snapshot_stub(requested_id: str, *, session: object):
+        lookup_ids.append(requested_id)
+        if requested_id == missing_id:
+            return None
+        assert requested_id == mismatch_id
+        return {
+            "status": "ok",
+            "run": {"id": mismatch_id, "decision_date": "2026-07-11"},
+            "items": [{"symbol": "000002"}],
+        }
+
+    patch_snapshot_test_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_research_shortlist",
+        get_snapshot_stub,
+    )
+    monkeypatch.setattr(
+        market_assistant_service,
+        "_generate_answer_or_fallback",
+        lambda prompt_context: (
+            "### Summary\nNo snapshot evidence was applied.",
+            {
+                "provider": "openai",
+                "name": "test-model",
+                "used_llm": True,
+                "fallback_reason": None,
+            },
+        ),
+    )
+
+    cases = (
+        ("not-a-uuid", session, "invalid", "RESEARCH_SNAPSHOT_INVALID_ID"),
+        (
+            session_unavailable_id,
+            None,
+            "session_unavailable",
+            "RESEARCH_SNAPSHOT_SESSION_UNAVAILABLE",
+        ),
+        (missing_id, session, "missing", "RESEARCH_SNAPSHOT_NOT_FOUND"),
+        (
+            mismatch_id,
+            session,
+            "symbol_mismatch",
+            "RESEARCH_SNAPSHOT_SYMBOL_MISMATCH",
+        ),
+    )
+    for snapshot_id, candidate_session, expected_status, expected_code in cases:
+        payload = market_assistant_service.answer_market_assistant_question(
+            symbol="000001",
+            question="Summarize the candidate evidence.",
+            locale="en",
+            start=date(2026, 7, 10),
+            end=date(2026, 7, 11),
+            provider_name="mock",
+            research_snapshot_id=snapshot_id,
+            session=candidate_session,
+        )
+
+        assert payload["status"] == "degraded"
+        assert payload["context"]["research_snapshot"]["status"] == expected_status
+        assert payload["context"]["research_snapshot"]["applied"] is False
+        assert any(
+            diagnostic.get("code") == expected_code
+            for diagnostic in payload["diagnostics"]
+        )
+        assert not any(
+            citation["source"] == "research_shortlist"
+            for citation in payload["citations"]
+        )
+
+    assert lookup_ids == [missing_id, mismatch_id]
+
+
+def test_market_assistant_localizes_unapplied_snapshot_diagnostic_for_chinese_fallback(
+    monkeypatch,
+):
+    patch_snapshot_test_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_platform_settings",
+        lambda: {"llm_provider": "mock", "llm_api_key": ""},
+    )
+
+    payload = market_assistant_service.answer_market_assistant_question(
+        symbol="000001",
+        question="请说明证据缺口。",
+        locale="zh",
+        start=date(2026, 7, 10),
+        end=date(2026, 7, 11),
+        provider_name="mock",
+        research_snapshot_id="not-a-uuid",
+        session=object(),
+    )
+
+    snapshot_diagnostic = next(
+        diagnostic
+        for diagnostic in payload["diagnostics"]
+        if diagnostic.get("code") == "RESEARCH_SNAPSHOT_INVALID_ID"
+    )
+    assert snapshot_diagnostic["message"] == "请求的每日候选快照 ID 无效。"
+    assert snapshot_diagnostic["message"] in payload["answer_markdown"]

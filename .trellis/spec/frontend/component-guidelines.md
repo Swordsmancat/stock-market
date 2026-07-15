@@ -48,6 +48,12 @@ The frontend uses server-rendered pages for data-heavy screens and small client 
 
 Do not pass functions such as `description: (count) => t("key", { count })` across the server/client boundary.
 
+`TopNavBar` is a server component. It passes the resolved locale plus a
+serializable `labels` object to `GlobalSearch`, and a serializable `labels`
+object to `NotificationBell`. These client islands must not independently
+re-resolve translated shell copy; their browser-only responsibility is
+interaction and bounded client fetching.
+
 ---
 
 ## Styling Patterns

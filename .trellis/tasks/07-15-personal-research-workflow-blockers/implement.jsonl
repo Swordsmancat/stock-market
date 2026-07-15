@@ -1,0 +1,10 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Preserve personal-research information hierarchy, localized client-island composition, distinct error states, and the immutable snapshot locale boundary."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Keep snapshot selection and watchlist pending state local/URL-based without introducing a global store or conflating failed and empty data."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Add focused Vitest coverage, paired locale strings, and behavior-level error/loading assertions."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Extend the assistant with a stored shortlist citation while preserving citation allowlists, degraded diagnostics, secret safety, and no-trading behavior."}
+{"file":".trellis/spec/backend/daily-research-shortlist-contract.md","reason":"Consume only committed immutable shortlist data and structured point-in-time evidence without changing membership, rank, or locale provenance."}
+{"file":".trellis/spec/backend/instrument-list-query-contract.md","reason":"Resolve exact instrument identity through the existing bounded instrument query and preserve known market through navigation."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Implement watchlist membership as a direct read-only service query with explicit session ownership and no hidden commits."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Keep missing/failed membership and assistant snapshot states explicit without silently mutating, guessing, or exposing raw errors."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace snapshot ID and watchlist identity across component, API, service, and persistence boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing shortlist readers, watchlist proxies, UI primitives, and formatting patterns instead of duplicating contracts."}

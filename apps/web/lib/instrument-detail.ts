@@ -4,6 +4,7 @@ const DETAIL_BARS_LOOKBACK_DAYS = 180;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_MARKET_DEPTH_LEVELS = 5;
 const DEFAULT_LARGE_ORDER_THRESHOLD_AMOUNT = 1000000;
+const INSTRUMENT_IDENTITY_LOOKUP_LIMIT = 10;
 
 const MARKET_INDEX_PROVIDER_SYMBOLS: Record<string, Record<string, string>> = {
   cn_shanghai_composite: { mock: "SH000001", yfinance: "000001.SS", akshare: "000001", tushare: "000001" },
@@ -249,6 +250,34 @@ export type InstrumentDetailFetchResult =
   | { status: "loaded"; payload: InstrumentDetailPayload }
   | { status: "failed"; responseStatus: number; body: string; headers: HeadersInit };
 
+export type InstrumentDetailIdentity = {
+  symbol: string;
+  market: string;
+  name: string;
+};
+
+export type InstrumentWatchlistMembership =
+  | "watched"
+  | "not_watched"
+  | "unavailable";
+
+export type InstrumentDetailContext = {
+  identity: InstrumentDetailIdentity | null;
+  watchlistMembership: InstrumentWatchlistMembership;
+};
+
+type InstrumentIdentityLookupPayload = {
+  items?: Array<{
+    symbol?: unknown;
+    market?: unknown;
+    name?: unknown;
+  }>;
+};
+
+type WatchlistMembershipPayload = {
+  status?: unknown;
+};
+
 function formatDateParameter(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -278,6 +307,97 @@ export function resolveInstrumentDetailRequestSymbol(symbol: string, providerNam
 
 export function buildProviderQuerySuffix(providerName: string): string {
   return providerName ? `&provider=${encodeURIComponent(providerName)}` : "";
+}
+
+export async function fetchInstrumentDetailContext(
+  symbol: string,
+  market?: string | null,
+): Promise<InstrumentDetailContext> {
+  const normalizedSymbol = symbol.trim().toUpperCase();
+  const normalizedMarket = market?.trim().toUpperCase() || null;
+  if (!normalizedSymbol) {
+    return { identity: null, watchlistMembership: "unavailable" };
+  }
+
+  const query = new URLSearchParams({
+    q: normalizedSymbol,
+  });
+  if (normalizedMarket) {
+    query.set("market", normalizedMarket);
+  }
+  query.set("limit", String(INSTRUMENT_IDENTITY_LOOKUP_LIMIT));
+
+  let identity: InstrumentDetailIdentity | null = null;
+  try {
+    const response = await backendFetch(`/instruments?${query.toString()}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      return { identity: null, watchlistMembership: "unavailable" };
+    }
+
+    const payload = (await response.json()) as InstrumentIdentityLookupPayload;
+    const matches = (Array.isArray(payload.items) ? payload.items : []).filter(
+      (item) => {
+        const itemSymbol =
+          typeof item.symbol === "string"
+            ? item.symbol.trim().toUpperCase()
+            : "";
+        const itemMarket =
+          typeof item.market === "string"
+            ? item.market.trim().toUpperCase()
+            : "";
+        return (
+          itemSymbol === normalizedSymbol &&
+          (!normalizedMarket || itemMarket === normalizedMarket)
+        );
+      },
+    );
+
+    if (matches.length !== 1) {
+      return { identity: null, watchlistMembership: "unavailable" };
+    }
+
+    const match = matches[0];
+    const resolvedMarket =
+      typeof match.market === "string"
+        ? match.market.trim().toUpperCase()
+        : "";
+    if (!resolvedMarket) {
+      return { identity: null, watchlistMembership: "unavailable" };
+    }
+
+    identity = {
+      symbol: normalizedSymbol,
+      market: resolvedMarket,
+      name: typeof match.name === "string" ? match.name.trim() : "",
+    };
+  } catch {
+    return { identity: null, watchlistMembership: "unavailable" };
+  }
+
+  try {
+    const membershipQuery = new URLSearchParams({
+      symbol: identity.symbol,
+      market: identity.market,
+    });
+    const response = await backendFetch(
+      `/watchlist/items?${membershipQuery.toString()}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return { identity, watchlistMembership: "unavailable" };
+    }
+
+    const payload = (await response.json()) as WatchlistMembershipPayload;
+    if (payload.status === "watched" || payload.status === "not_watched") {
+      return { identity, watchlistMembership: payload.status };
+    }
+  } catch {
+    return { identity, watchlistMembership: "unavailable" };
+  }
+
+  return { identity, watchlistMembership: "unavailable" };
 }
 
 async function readResponseBody(response: Response): Promise<string> {

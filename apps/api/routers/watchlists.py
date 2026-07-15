@@ -1,11 +1,12 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from packages.services.watchlists import (
     get_default_watchlist_payload,
+    get_watchlist_item_membership,
     remove_watchlist_item,
     upsert_watchlist_item,
 )
@@ -19,12 +20,28 @@ class WatchlistItemInput(BaseModel):
     market: str
     name: str | None = None
     is_active: bool = True
-    alert_rules: dict[str, Any] = Field(default_factory=dict)
+    alert_rules: dict[str, Any] | None = Field(default=None)
 
 
 @router.get("")
 def get_default_watchlist(session: Session = Depends(get_session)) -> dict[str, object]:
     return get_default_watchlist_payload(session=session)
+
+
+@router.get("/items")
+def get_default_watchlist_item_membership(
+    symbol: str,
+    market: str,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        return get_watchlist_item_membership(
+            symbol=symbol,
+            market=market,
+            session=session,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @router.post("/items")

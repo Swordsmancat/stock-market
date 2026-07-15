@@ -23,6 +23,7 @@ class MarketAssistantRequest(BaseModel):
     start: date | None = None
     end: date | None = None
     provider: str | None = Field(default=None, max_length=32)
+    research_snapshot_id: str | None = Field(default=None, max_length=128)
 
 
 @router.post("/market")
@@ -40,6 +41,7 @@ def answer_market_assistant(
             start=request.start,
             end=request.end,
             provider_name=request.provider,
+            research_snapshot_id=request.research_snapshot_id,
             session=session,
         )
     except ValueError as error:

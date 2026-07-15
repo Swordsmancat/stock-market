@@ -26,10 +26,18 @@ type MarketAssistantCardProps = {
   start?: string | null;
   end?: string | null;
   initialQuestion?: string | null;
+  researchSnapshotId?: string | null;
   className?: string;
 };
 
 const QUICK_PROMPT_IDS = ["trend", "risk", "data"] as const;
+const RESEARCH_SNAPSHOT_DIAGNOSTIC_KEYS = {
+  RESEARCH_SNAPSHOT_INVALID_ID: "diagnosticResearchSnapshotInvalidId",
+  RESEARCH_SNAPSHOT_SESSION_UNAVAILABLE: "diagnosticResearchSnapshotSessionUnavailable",
+  RESEARCH_SNAPSHOT_UNAVAILABLE: "diagnosticResearchSnapshotUnavailable",
+  RESEARCH_SNAPSHOT_NOT_FOUND: "diagnosticResearchSnapshotNotFound",
+  RESEARCH_SNAPSHOT_SYMBOL_MISMATCH: "diagnosticResearchSnapshotSymbolMismatch",
+} as const;
 
 export function MarketAssistantCard({
   symbol,
@@ -38,6 +46,7 @@ export function MarketAssistantCard({
   start = null,
   end = null,
   initialQuestion = null,
+  researchSnapshotId = null,
   className,
 }: MarketAssistantCardProps) {
   const t = useTranslations("MarketAssistant");
@@ -74,6 +83,7 @@ export function MarketAssistantCard({
         start,
         end,
         provider,
+        ...(researchSnapshotId ? { researchSnapshotId } : {}),
       });
       setResponse(assistantResponse);
     } catch (caughtError) {
@@ -98,7 +108,23 @@ export function MarketAssistantCard({
             <CardTitle>{t("title")}</CardTitle>
             <CardDescription>{t("description")}</CardDescription>
           </div>
-          {response ? <AssistantStatusBadge status={response.status} /> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {researchSnapshotId ? (
+              <Badge
+                variant="outline"
+                title={researchSnapshotId}
+                data-research-snapshot-id={researchSnapshotId}
+              >
+                {t("snapshotContext", {
+                  id:
+                    researchSnapshotId.length > 12
+                      ? `${researchSnapshotId.slice(0, 8)}...`
+                      : researchSnapshotId,
+                })}
+              </Badge>
+            ) : null}
+            {response ? <AssistantStatusBadge status={response.status} /> : null}
+          </div>
         </div>
       </FinancialTerminalCardHeader>
       <FinancialTerminalCardContent className="space-y-4">
@@ -194,24 +220,36 @@ function AssistantResponsePanel({
         <div className="space-y-2">
           <div className="text-sm font-semibold">{t("citationsTitle")}</div>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-            {response.citations.map((citation) => (
-              <li key={citation.id} className="space-y-1">
-                {citation.url ? (
-                  <a
-                    className="font-medium text-foreground underline-offset-4 hover:underline"
-                    href={citation.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                  >
-                    {citation.label}
-                  </a>
-                ) : (
-                  <span>{citation.label}</span>
-                )}{" "}
-                <span className="font-mono">({citation.source})</span>
-                <CitationMetadata citation={citation} />
-              </li>
-            ))}
+            {response.citations.map((citation) => {
+              const isResearchSnapshot = citation.source_type === "research_shortlist";
+              const citationLabel = isResearchSnapshot
+                ? t("snapshotCitationLabel", {
+                    symbol: response.symbol,
+                    date:
+                      response.context.research_snapshot?.decision_date ??
+                      citation.as_of ??
+                      "--",
+                  })
+                : citation.label;
+              return (
+                <li key={citation.id} className="space-y-1">
+                  {citation.url ? (
+                    <a
+                      className="font-medium text-foreground underline-offset-4 hover:underline"
+                      href={citation.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      {citationLabel}
+                    </a>
+                  ) : (
+                    <span>{citationLabel}</span>
+                  )}{" "}
+                  <span className="font-mono">({citation.source})</span>
+                  <CitationMetadata citation={citation} hideExcerpt={isResearchSnapshot} />
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}
@@ -220,13 +258,21 @@ function AssistantResponsePanel({
         <div className="space-y-2">
           <div className="text-sm font-semibold">{t("diagnosticsTitle")}</div>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-            {response.diagnostics.map((diagnostic) => (
-              <li
-                key={`${diagnostic.source}:${diagnostic.status}:${diagnostic.message}`}
-              >
-                {formatDiagnosticPrefix(diagnostic)}: {diagnostic.message}
-              </li>
-            ))}
+            {response.diagnostics.map((diagnostic) => {
+              const translationKey = diagnostic.code
+                ? RESEARCH_SNAPSHOT_DIAGNOSTIC_KEYS[
+                    diagnostic.code as keyof typeof RESEARCH_SNAPSHOT_DIAGNOSTIC_KEYS
+                  ]
+                : undefined;
+              return (
+                <li
+                  key={`${diagnostic.source}:${diagnostic.status}:${diagnostic.message}`}
+                >
+                  {formatDiagnosticPrefix(diagnostic)}:{" "}
+                  {translationKey ? t(translationKey) : diagnostic.message}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}
@@ -238,7 +284,13 @@ function AssistantResponsePanel({
   );
 }
 
-function CitationMetadata({ citation }: { citation: MarketAssistantCitation }) {
+function CitationMetadata({
+  citation,
+  hideExcerpt = false,
+}: {
+  citation: MarketAssistantCitation;
+  hideExcerpt?: boolean;
+}) {
   const metadataParts = [
     citation.source_type ? `type=${citation.source_type}` : null,
     citation.as_of ? `as_of=${citation.as_of}` : null,
@@ -246,14 +298,14 @@ function CitationMetadata({ citation }: { citation: MarketAssistantCitation }) {
     citation.retrieved_at ? `retrieved=${citation.retrieved_at}` : null,
   ].filter(Boolean);
 
-  if (metadataParts.length === 0 && !citation.excerpt) {
+  if (metadataParts.length === 0 && (!citation.excerpt || hideExcerpt)) {
     return null;
   }
 
   return (
     <div className="ml-5 space-y-1 text-xs text-muted-foreground">
       {metadataParts.length > 0 ? <div>{metadataParts.join(" · ")}</div> : null}
-      {citation.excerpt ? (
+      {citation.excerpt && !hideExcerpt ? (
         <div className="line-clamp-2">{citation.excerpt}</div>
       ) : null}
     </div>

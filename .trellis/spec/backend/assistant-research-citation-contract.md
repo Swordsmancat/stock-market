@@ -247,9 +247,12 @@ HTTP boundary.
 
 - Daily bars remain the core evidence gate. If required market data is unavailable, the assistant must return `no_data` / degraded-safe output and avoid LLM generation.
 - Existing top-level response fields and old minimal citation payloads must remain backward compatible.
-- Evidence may come from existing platform sources only: daily bars, stored technical indicators, stored macro / valuation indicator observations, fundamentals snapshots, news / sentiment payloads, generated reports, reviewed/citable research source notebook entries, persisted/citable `MarketDailyEvidenceEvent` rows, persisted CNINFO disclosure metadata, and persisted extracted official disclosure sections.
+- Evidence may come from existing platform sources only: daily bars, stored technical indicators, stored macro / valuation indicator observations, fundamentals snapshots, news / sentiment payloads, generated reports, reviewed/citable research source notebook entries, persisted/citable `MarketDailyEvidenceEvent` rows, persisted CNINFO disclosure metadata, persisted extracted official disclosure sections, and a committed immutable daily research shortlist candidate that exactly matches the assistant symbol.
 - Missing optional sources must produce diagnostics, not fabricated evidence or fake citations.
-- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `market_indicator:{code}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, `research_source_note:{id}`, `market_daily_event:{event_type}:{identity}:{trade_date}`, `official_disclosure:{id}`, or `official_disclosure_section:{id}`.
+- Citation IDs must be deterministic and source-specific, such as `bars_1d:{symbol}:{as_of}`, `technical_indicators:{symbol}:{as_of}`, `market_indicator:{code}:{as_of}`, `fundamentals:{symbol}:{as_of}`, `news:{symbol}:...`, `generated_report:{id}`, `research_source_note:{id}`, `market_daily_event:{event_type}:{identity}:{trade_date}`, `official_disclosure:{id}`, `official_disclosure_section:{id}`, or `research_shortlist:{run_id}:{candidate_id}`.
+- `research_snapshot_id` is optional. When present, the service loads the run through `get_research_shortlist`, which returns committed runs only, verifies the returned run ID and decision date, then requires an exact normalized symbol match before adding evidence.
+- Shortlist prompt context uses only decision date, rank, score, and allowlisted structured supporting factor, opposing factor, data-gap, and invalidation fields. Persisted run/candidate explanations plus factor/gap/invalidation `message` or `label` prose never enters prompts, citations, responses, or cross-locale UI.
+- Current-locale shortlist summaries and diagnostics are derived from stable codes and structured fields. The frontend localizes `RESEARCH_SNAPSHOT_*` diagnostics and the `research_shortlist` citation label, and does not render the backend snapshot excerpt.
 - `official_disclosure:*` supports metadata claims only. `official_disclosure_section:*` supports document-content claims only when the cited local section preserves exact announcement ID, document SHA-256, page number, topic, content hash, and extracted excerpt.
 - The assistant loads sections only from the latest extracted version of each disclosure. Older versions remain queryable for audit but do not enter current AI context.
 - `market_daily_event:*` citations are allowed only for persisted rows with `is_citable=true`. Live `/market-daily-data/*` and `/sectors/hot` payloads remain non-citable even when their provider status is `ok` or `degraded`.
@@ -269,6 +272,8 @@ HTTP boundary.
 - Official source readiness/status rows -> remain maintenance guidance; they are not included in allowed assistant citation IDs.
 - Live market daily rows, mock/static sector fixtures, or unknown `market_daily_event:*` IDs -> remain context or diagnostics; they are not accepted as stored evidence citations.
 - Stored disclosure PDF without extracted text, an older document version, or an unknown `official_disclosure_section:*` ID -> not accepted as current document-content evidence.
+- Invalid/missing shortlist ID, unavailable database session, uncommitted or missing run, invalid run metadata, or exact-symbol mismatch -> explicit `RESEARCH_SNAPSHOT_*` warning diagnostic, `context.research_snapshot.applied=false`, and no `research_shortlist:*` citation.
+- Matching committed shortlist candidate -> `context.research_snapshot.applied=true`, exact run/candidate/date/rank/score metadata, and one `research_shortlist:{run_id}:{candidate_id}` citation.
 - LLM returns unknown inline citation ID -> `CITATION_UNKNOWN_ID` diagnostic and degraded/fallback output; unknown citation is not presented as valid.
 - User asks for direct trading instruction -> assistant refuses/reframes per safety policy.
 - Old frontend payload with only `id`, `label`, `source`, `url` citations -> still renders.
@@ -277,17 +282,20 @@ HTTP boundary.
 ### 5. Good/Base/Bad Cases
 
 - Good: daily bars, technical indicators, stored macro observations, fundamentals, news, a generated report, and reviewed/citable source notebook entries are available; response contains deterministic citation IDs, optional metadata/excerpts, compact diagnostics, and an answer using only known citation IDs.
+- Good: a daily-shortlist entry sends only `symbol + research_snapshot_id`; the service loads the committed candidate, includes all four structured evidence groups, and returns one citable snapshot reference without exposing stored explanation prose.
 - Base: only daily bars are available; answer remains traceable to bars and diagnostics state missing optional sources.
 - Bad: a missing filing/transcript, image-only PDF, or metadata-only disclosure is represented as document-body evidence.
 - Bad: `fred`, `world_bank`, source-readiness IDs, collection links, or seed-template IDs are cited instead of stored `market_indicator:{code}:{as_of}` observations.
 - Bad: an LLM-invented citation ID is rendered as if it existed in `citations`.
 - Bad: direct buy/sell/hold advice, target prices, or position sizing is emitted because citations exist.
+- Bad: the browser serializes candidate evidence arrays into a URL/question, the service accepts a draft/uncommitted run, a symbol mismatch silently falls back, or stored snapshot prose is reused across locales.
 
 ### 6. Tests Required
 
 - Service/AI tests assert citations are generated for available bars, indicators, stored macro observations, fundamentals, news, generated reports, reviewed/citable research source notes, persisted/citable market daily events, disclosure metadata, and latest-version extracted disclosure sections.
 - Service tests assert missing optional evidence produces diagnostics rather than fabricated citation items.
 - Service tests assert missing macro observations produce diagnostics rather than fabricated `market_indicator:*` citation items.
+- Service/API/frontend tests assert optional snapshot ID forwarding, committed exact-symbol lookup, all four structured evidence groups, stable citation identity, explicit degraded diagnostics, stale-snapshot clearing, current-locale presentation, and exclusion of persisted prose.
 - AI tests assert unknown LLM citation IDs are detected and handled with diagnostics/fallback behavior.
 - AI/dashboard/research-brief tests assert unknown `market_daily_event:*` IDs are rejected and live provider rows never enter the allowed citation list.
 - API tests assert backward compatibility and enriched optional fields.
@@ -345,6 +353,25 @@ citations.append({
 ```
 
 This cites the stored local observation. Missing official-source coverage should be reported as diagnostics or UI guidance, not as an assistant citation.
+
+#### Wrong
+
+```python
+candidate = snapshot_payload["items"][0]
+prompt_context += candidate["explanation"]
+```
+
+This guesses membership and leaks immutable free-text prose into another locale.
+
+#### Correct
+
+```python
+candidate = next(item for item in snapshot_payload["items"] if item["symbol"] == symbol)
+citation_id = f"research_shortlist:{run_id}:{candidate['id']}"
+structured_context = allowlist_snapshot_fields(candidate)
+```
+
+The committed run, exact symbol, structured-field allowlist, and deterministic citation ID stay explicit.
 
 ## Scenario: Reviewed Source Notebook Citations
 

@@ -5,6 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
+from packages.domain.models import AlertTrigger, Watchlist, WatchlistItem
 from packages.shared.database import Base, get_session
 
 
@@ -103,3 +104,75 @@ def test_watchlist_api_removes_item_from_active_list():
     assert remove_response.json()["status"] == "removed"
     assert list_response.status_code == 200
     assert list_response.json()["items"] == []
+
+
+def test_watchlist_membership_api_is_read_only_when_default_list_is_absent():
+    session = make_session()
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        response = TestClient(app).get(
+            "/watchlist/items",
+            params={"symbol": "AAPL", "market": "US"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "not_watched"
+    assert session.query(Watchlist).count() == 0
+    assert session.query(WatchlistItem).count() == 0
+    assert session.query(AlertTrigger).count() == 0
+
+
+def test_watchlist_membership_api_returns_exact_active_identity():
+    session = make_session()
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        client.post(
+            "/watchlist/items",
+            json={"symbol": "0700", "market": "HK", "name": "Tencent Holdings"},
+        )
+        watched = client.get(
+            "/watchlist/items",
+            params={"symbol": "0700", "market": "HK"},
+        )
+        other_market = client.get(
+            "/watchlist/items",
+            params={"symbol": "0700", "market": "US"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert watched.status_code == 200
+    assert watched.json()["status"] == "watched"
+    assert watched.json()["item"]["name"] == "Tencent Holdings"
+    assert other_market.status_code == 200
+    assert other_market.json()["status"] == "not_watched"
+
+
+def test_watchlist_membership_api_rejects_blank_identity_as_client_error():
+    session = make_session()
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        response = TestClient(app).get(
+            "/watchlist/items",
+            params={"symbol": " ", "market": "US"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Symbol and market are required."}

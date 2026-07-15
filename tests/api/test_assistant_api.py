@@ -14,6 +14,7 @@ def test_market_assistant_api_returns_contextual_answer(monkeypatch):
         assert kwargs["symbol"] == "AAPL"
         assert kwargs["question"] == "请总结近期走势。"
         assert kwargs["provider_name"] == "mock"
+        assert kwargs["research_snapshot_id"] == "11111111-1111-1111-1111-111111111111"
         assert kwargs["session"] is None
         return {
             "status": "degraded",
@@ -78,6 +79,7 @@ def test_market_assistant_api_returns_contextual_answer(monkeypatch):
                 "start": "2026-01-01",
                 "end": "2026-01-03",
                 "provider": "mock",
+                "research_snapshot_id": "11111111-1111-1111-1111-111111111111",
             },
         )
     finally:

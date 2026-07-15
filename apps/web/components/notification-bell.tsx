@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Link } from "@/src/i18n/routing";
 import { Bell } from "lucide-react";
-import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -23,10 +22,19 @@ type AlertTrigger = {
   triggered_at: string;
 };
 
-export function NotificationBell() {
+type NotificationBellProps = {
+  labels: {
+    title: string;
+    recentTriggers: string;
+    loadFailed: string;
+    noTriggers: string;
+    viewAll: string;
+  };
+};
+
+export function NotificationBell({ labels }: NotificationBellProps) {
   const [triggers, setTriggers] = React.useState<AlertTrigger[]>([]);
   const [loadError, setLoadError] = React.useState(false);
-  const t = useTranslations("Alerts");
 
   React.useEffect(() => {
     fetch("/api/alerts/triggers/recent?limit=5")
@@ -50,17 +58,17 @@ export function NotificationBell() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
-          <span className="sr-only">{t("title")}</span>
+          <span className="sr-only">{labels.title}</span>
           {hasTriggers ? (
             <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" />
           ) : null}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel>{t("recentTriggers")}</DropdownMenuLabel>
+        <DropdownMenuLabel>{labels.recentTriggers}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {loadError ? (
-          <DropdownMenuItem disabled>{t("loadFailed")}</DropdownMenuItem>
+          <DropdownMenuItem disabled>{labels.loadFailed}</DropdownMenuItem>
         ) : hasTriggers ? (
           triggers.map((trigger) => (
             <DropdownMenuItem key={`${trigger.symbol}-${trigger.rule_key}-${trigger.triggered_at}`} asChild>
@@ -75,11 +83,11 @@ export function NotificationBell() {
             </DropdownMenuItem>
           ))
         ) : (
-          <DropdownMenuItem disabled>{t("noTriggers")}</DropdownMenuItem>
+          <DropdownMenuItem disabled>{labels.noTriggers}</DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/alerts">{t("viewAll")}</Link>
+          <Link href="/alerts">{labels.viewAll}</Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

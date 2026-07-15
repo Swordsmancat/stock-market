@@ -97,9 +97,11 @@ export function DailyResearchShortlistPanel({
     }
   }
 
-  function handoffSymbol(symbol: string) {
+  function handoffSymbol(symbol: string, researchSnapshotId: string) {
     window.dispatchEvent(
-      new CustomEvent("stock-discovery:select-symbol", { detail: { symbol } }),
+      new CustomEvent("stock-discovery:select-symbol", {
+        detail: { symbol, researchSnapshotId },
+      }),
     );
     document.getElementById("ai-research-desk")?.scrollIntoView({ behavior: "smooth" });
   }
@@ -423,7 +425,11 @@ export function DailyResearchShortlistPanel({
                           <div className="mt-3 flex flex-col gap-2">
                             <Button size="sm" variant="outline" asChild>
                               <Link
-                                href={`/instruments/${item.symbol}?research_snapshot_id=${run.id}`}
+                                href={buildResearchInstrumentHref(
+                                  item.symbol,
+                                  item.market ?? run.market,
+                                  run.id,
+                                )}
                               >
                                 {t("deepAnalysis")}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -433,7 +439,7 @@ export function DailyResearchShortlistPanel({
                               type="button"
                               size="sm"
                               variant="ghost"
-                              onClick={() => handoffSymbol(item.symbol)}
+                              onClick={() => handoffSymbol(item.symbol, run.id)}
                             >
                               {t("useInDesk")}
                             </Button>
@@ -656,6 +662,20 @@ function getStructuredCode(detail: unknown): string | null {
     return typeof code === "string" && code.trim() ? code : null;
   }
   return null;
+}
+
+function buildResearchInstrumentHref(
+  symbol: string,
+  market: string | null | undefined,
+  researchSnapshotId: string,
+): string {
+  const query = new URLSearchParams();
+  const normalizedMarket = market?.trim().toUpperCase();
+  if (normalizedMarket) {
+    query.set("market", normalizedMarket);
+  }
+  query.set("research_snapshot_id", researchSnapshotId);
+  return `/instruments/${encodeURIComponent(symbol)}?${query.toString()}`;
 }
 
 function normalizeLocale(locale: string | null | undefined): "en" | "zh" | null {

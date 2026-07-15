@@ -116,6 +116,56 @@ def get_default_watchlist_payload(session: Session) -> dict[str, object]:
     }
 
 
+def get_watchlist_item_membership(
+    symbol: str,
+    market: str,
+    session: Session,
+) -> dict[str, object]:
+    normalized_symbol = symbol.strip().upper()
+    normalized_market = market.strip().upper()
+    if not normalized_symbol or not normalized_market:
+        msg = "Symbol and market are required."
+        raise ValueError(msg)
+
+    watchlist = (
+        session.query(Watchlist)
+        .filter(Watchlist.name == DEFAULT_WATCHLIST_NAME)
+        .first()
+    )
+    if watchlist is None:
+        return {
+            "source": "database",
+            "status": "not_watched",
+            "symbol": normalized_symbol,
+            "market": normalized_market,
+            "item": None,
+        }
+
+    item = (
+        session.query(WatchlistItem)
+        .filter(WatchlistItem.watchlist_id == watchlist.id)
+        .filter(WatchlistItem.symbol == normalized_symbol)
+        .filter(WatchlistItem.market == normalized_market)
+        .first()
+    )
+    if item is None or not item.is_active:
+        return {
+            "source": "database",
+            "status": "not_watched",
+            "symbol": normalized_symbol,
+            "market": normalized_market,
+            "item": None,
+        }
+
+    return {
+        "source": "database",
+        "status": "watched",
+        "symbol": normalized_symbol,
+        "market": normalized_market,
+        "item": _serialize_item(item),
+    }
+
+
 def upsert_watchlist_item(
     symbol: str,
     market: str,
@@ -134,12 +184,17 @@ def upsert_watchlist_item(
         .filter(WatchlistItem.market == normalized_market)
         .first()
     )
+    resolved_alert_rules = (
+        alert_rules
+        if alert_rules is not None
+        else (item.alert_rules if item is not None else {})
+    )
     values = {
         "symbol": normalized_symbol,
         "market": normalized_market,
         "name": name or _DEFAULT_NAMES.get(normalized_symbol, normalized_symbol),
         "is_active": is_active,
-        "alert_rules": alert_rules or {},
+        "alert_rules": resolved_alert_rules,
     }
     if item is None:
         item = WatchlistItem(watchlist_id=watchlist.id, **values)

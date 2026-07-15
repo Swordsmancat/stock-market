@@ -3,7 +3,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
 import zhMessages from "../../../../messages/zh.json";
 
-const { fetchInstrumentDetailPayloadMock } = vi.hoisted(() => ({
+const { fetchInstrumentDetailContextMock, fetchInstrumentDetailPayloadMock } = vi.hoisted(() => ({
+  fetchInstrumentDetailContextMock: vi.fn(),
   fetchInstrumentDetailPayloadMock: vi.fn(),
 }));
 
@@ -59,6 +60,7 @@ vi.mock("@/context/market-colors-context", () => ({
 }));
 
 vi.mock("@/lib/instrument-detail", () => ({
+  fetchInstrumentDetailContext: fetchInstrumentDetailContextMock,
   fetchInstrumentDetailPayload: fetchInstrumentDetailPayloadMock,
   normalizeInstrumentDetailProvider: (providerName: string | null | undefined) =>
     providerName?.trim().toLowerCase() || "yfinance",
@@ -66,8 +68,25 @@ vi.mock("@/lib/instrument-detail", () => ({
 
 import InstrumentDetailPage from "./page";
 
-async function renderChineseInstrumentDetailPage(symbol = "AAPL") {
-  const page = await InstrumentDetailPage({ params: Promise.resolve({ symbol, locale: "zh" }) });
+async function renderChineseInstrumentDetailPage(
+  symbol = "AAPL",
+  searchParams: {
+    provider?: string | string[];
+    market?: string | string[];
+    research_snapshot_id?: string | string[];
+  } = {},
+) {
+  const requestedMarket = Array.isArray(searchParams.market)
+    ? searchParams.market[0]
+    : searchParams.market;
+  fetchInstrumentDetailContextMock.mockResolvedValueOnce({
+    identity: { symbol, market: requestedMarket?.trim() || "US", name: symbol },
+    watchlistMembership: "not_watched",
+  });
+  const page = await InstrumentDetailPage({
+    params: Promise.resolve({ symbol, locale: "zh" }),
+    searchParams: Promise.resolve(searchParams),
+  });
 
   render(
     <NextIntlClientProvider locale="zh" messages={zhMessages}>
@@ -80,6 +99,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   fetchInstrumentDetailPayloadMock.mockReset();
+  fetchInstrumentDetailContextMock.mockReset();
 });
 
 function mockInstrumentDetailResponse(
@@ -467,6 +487,66 @@ it("renders latest price even when the detail endpoint has no bars", async () =>
   expect(screen.getByText("暂无K线数据")).toBeInTheDocument();
   expect(screen.getByTestId("intraday-price-chart")).toHaveTextContent("Intraday chart status degraded");
   expect(screen.getByText("105.00")).toBeInTheDocument();
+});
+
+it("keeps market and shortlist identity on the detail research path", async () => {
+  mockInstrumentDetailResponse([], 105);
+
+  await renderChineseInstrumentDetailPage("AAPL", {
+    market: "US",
+    research_snapshot_id: "12345678-1234-1234-1234-123456789abc",
+  });
+
+  expect(fetchInstrumentDetailContextMock).toHaveBeenCalledWith("AAPL", "US");
+  expect(screen.getByRole("button", { name: "加入关注列表" })).toBeInTheDocument();
+  expect(screen.getByText("每日候选快照 12345678...")).toHaveAttribute(
+    "data-research-snapshot-id",
+    "12345678-1234-1234-1234-123456789abc",
+  );
+});
+
+it("uses the first nonblank value when detail query parameters are repeated", async () => {
+  mockInstrumentDetailResponse([], 105);
+
+  await renderChineseInstrumentDetailPage("AAPL", {
+    provider: [" mock ", "yfinance"],
+    market: [" US ", "CN"],
+    research_snapshot_id: [
+      "12345678-1234-1234-1234-123456789abc",
+      "87654321-4321-4321-4321-cba987654321",
+    ],
+  });
+
+  expect(fetchInstrumentDetailContextMock).toHaveBeenCalledWith("AAPL", "US");
+  expect(
+    document.querySelector(
+      '[data-research-snapshot-id="12345678-1234-1234-1234-123456789abc"]',
+    ),
+  ).toHaveAttribute(
+    "data-research-snapshot-id",
+    "12345678-1234-1234-1234-123456789abc",
+  );
+});
+
+it("renders missing price and movement as unavailable instead of zero", async () => {
+  mockInstrumentDetailResponse([], undefined);
+
+  await renderChineseInstrumentDetailPage();
+
+  const latestMetric = screen.getByText(
+    zhMessages.InstrumentDetail.latestPriceCard,
+  ).parentElement;
+  const changeMetric = screen.getByText(
+    zhMessages.InstrumentDetail.priceChange,
+  ).parentElement;
+  const percentMetric = screen.getByText(
+    zhMessages.InstrumentDetail.priceChangePercent,
+  ).parentElement;
+  expect(latestMetric).toHaveTextContent(zhMessages.InstrumentDetail.unavailableShort);
+  expect(changeMetric).toHaveTextContent(zhMessages.InstrumentDetail.unavailableShort);
+  expect(percentMetric).toHaveTextContent(zhMessages.InstrumentDetail.unavailableShort);
+  expect(screen.queryByText("0.00")).not.toBeInTheDocument();
+  expect(screen.queryByText("+0.00%")).not.toBeInTheDocument();
 });
 
 it("renders an error state when the detail endpoint fails", async () => {

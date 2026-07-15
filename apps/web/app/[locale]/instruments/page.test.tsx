@@ -144,7 +144,10 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
   expect(screen.getByText("Active provider: yfinance")).toBeInTheDocument();
   expect(screen.getByText("Visible daily-bar health")).toBeInTheDocument();
   expect(screen.getByText("Latest daily-bar health for 2 of 2 instruments using yfinance.")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "AAPL" })).toHaveAttribute("href", "/instruments/AAPL");
+  expect(screen.getByRole("link", { name: "AAPL" })).toHaveAttribute(
+    "href",
+    "/instruments/AAPL?market=US",
+  );
   expect(screen.getAllByText("Apple Inc.").length).toBeGreaterThan(0);
   expect(screen.getByText("$102.15")).toBeInTheDocument();
   expect(screen.getByText("Source: database")).toBeInTheDocument();

@@ -17,6 +17,7 @@ import {
 import { CardDescription, CardTitle } from "@/components/ui/card";
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
 import { IntradayPriceChart } from "@/components/intraday-price-chart";
+import { InstrumentWatchlistForm } from "@/components/instrument-watchlist-form";
 import { MarketAssistantCard } from "@/components/market-assistant-card";
 import { MarketDepthCard } from "@/components/market-depth-card";
 import { DataTrustBadge } from "@/components/data-trust-badge";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/instrument-display";
 import type {
   InstrumentBar,
+  InstrumentDetailContext,
   InstrumentDetailPayload,
 } from "@/lib/instrument-detail";
 
@@ -160,6 +162,8 @@ interface InstrumentDetailClientProps {
   locale: string;
   initialData?: InstrumentDetailPayload | null;
   initialError?: string | null;
+  detailContext?: InstrumentDetailContext | null;
+  researchSnapshotId?: string | null;
 }
 
 export function InstrumentDetailClient({
@@ -167,6 +171,8 @@ export function InstrumentDetailClient({
   locale,
   initialData = null,
   initialError = null,
+  detailContext = null,
+  researchSnapshotId = null,
 }: InstrumentDetailClientProps) {
   const router = useRouter();
   const t = useTranslations("InstrumentDetail");
@@ -243,12 +249,29 @@ export function InstrumentDetailClient({
   const latestBar = bars.at(-1) ?? data.latest?.item ?? null;
   const prevBar = bars.at(-2) ?? null;
 
-  const currentPrice = latestBar?.close || 0;
-  const prevPrice = prevBar?.close || currentPrice;
-  const change = currentPrice - prevPrice;
-  const changePercent = prevPrice ? change / prevPrice : 0;
-  const formattedChange = `${change >= 0 ? "+" : ""}${change.toFixed(2)}`;
-  const formattedChangePercent = `${changePercent >= 0 ? "+" : ""}${(changePercent * 100).toFixed(2)}%`;
+  const latestBarClose = latestBar?.close;
+  const latestQuoteClose = data.latest?.item?.close;
+  const currentPrice = Number.isFinite(latestBarClose)
+    ? (latestBarClose as number)
+    : Number.isFinite(latestQuoteClose)
+      ? (latestQuoteClose as number)
+      : null;
+  const previousBarClose = prevBar?.close;
+  const prevPrice = Number.isFinite(previousBarClose)
+    ? (previousBarClose as number)
+    : null;
+  const change = currentPrice !== null && prevPrice !== null
+    ? currentPrice - prevPrice
+    : null;
+  const changePercent = change !== null && prevPrice !== null && prevPrice !== 0
+    ? change / prevPrice
+    : null;
+  const formattedChange = change === null
+    ? t("unavailableShort")
+    : `${change >= 0 ? "+" : ""}${change.toFixed(2)}`;
+  const formattedChangePercent = changePercent === null
+    ? t("unavailableShort")
+    : `${changePercent >= 0 ? "+" : ""}${(changePercent * 100).toFixed(2)}%`;
   const decodedSymbol = decodeInstrumentSymbol(symbol);
   const displayName = getInstrumentDisplayName(symbol, locale);
   const subtitle =
@@ -301,7 +324,11 @@ export function InstrumentDetailClient({
         metrics={[
           {
             label: t("latestPriceCard"),
-            value: currentPrice.toFixed(2),
+            value: formatDetailNumber(
+              currentPrice,
+              locale,
+              t("unavailableShort"),
+            ),
             description: (
               <DataTrustBadge signal={latestTrustSignal} mode="summary" />
             ),
@@ -309,12 +336,12 @@ export function InstrumentDetailClient({
           {
             label: t("priceChange"),
             value: formattedChange,
-            className: getMovementColor(change),
+            className: change === null ? undefined : getMovementColor(change),
           },
           {
             label: t("priceChangePercent"),
             value: formattedChangePercent,
-            className: getMovementColor(change),
+            className: change === null ? undefined : getMovementColor(change),
           },
           {
             label: t("klineTitle"),
@@ -325,19 +352,36 @@ export function InstrumentDetailClient({
           },
         ]}
         actions={
-          <Button variant="outline" size="sm" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-            {t("back")}
-          </Button>
+          <>
+            {detailContext?.identity ? (
+              <InstrumentWatchlistForm
+                symbol={detailContext.identity.symbol}
+                market={detailContext.identity.market}
+                name={detailContext.identity.name}
+                membership={detailContext.watchlistMembership}
+              />
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t("back")}
+            </Button>
+          </>
         }
       />
 
       <MarketAssistantCard
+        key={`${assistantSymbol}:${researchSnapshotId ?? "no-snapshot"}`}
         symbol={assistantSymbol}
         locale={locale}
         provider={assistantProvider}
         start={data.range?.start ?? null}
         end={data.range?.end ?? null}
+        researchSnapshotId={researchSnapshotId}
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
