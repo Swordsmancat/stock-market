@@ -236,3 +236,36 @@ Added market-aware CN daily-bar source fallback from yfinance to configured AkSh
 ### Next Steps
 
 - None - task complete
+
+
+## Session 67: Multi-source research fallback
+
+**Date**: 2026-07-16
+**Task**: Multi-source research fallback
+**Branch**: `master`
+
+### Summary
+
+Added validated daily, exact-market intraday, and sequential stored-news fallback with one-shot UI recovery, shared credential/HTML safety validation, migration coverage, and live personal-workflow acceptance while preserving the five-day task state.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1f09127` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
