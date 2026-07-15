@@ -26,6 +26,11 @@ There is a lightweight shared helper in `packages/shared/logging.py`, but there 
 
 - API errors: return explicit `HTTPException` details where a router already owns mapping, as in `apps/api/routers/market_data.py` and `apps/api/routers/task_runs.py`.
 - Worker execution: record state in `TaskRun` through `packages/services/task_runs.py`, as used by `apps/worker/tasks/ingestion.py`, `apps/worker/tasks/reports.py`, and `apps/worker/tasks/alerts.py`.
+- Narrow exception: a direct periodic alert delivery with no supplied TaskRun
+  may return the existing bounded `skipped/no_alert_rules` Celery result without
+  database persistence after a local actionable-rule preflight. This is a
+  no-work optimization, not log-only reporting; see the executable scenario in
+  `error-handling.md`.
 - Diagnostics: print concise status lines and suggestions, as in `scripts/provider_readiness.py`, `scripts/dev_health_check.py`, and `scripts/task_run_health.py`.
 - Migrations: keep Alembic's config-driven logging in `alembic/env.py`.
 
@@ -76,6 +81,8 @@ Sensitive-data boundaries:
 
 - Do not add noisy `print()` calls to routers or services. Current print-style output belongs to standalone scripts.
 - Do not add a new structured logging dependency unless the user asks for a logging feature or a broader observability change.
-- Do not replace `TaskRun` persistence with log-only worker reporting; worker tests expect database state changes.
+- Do not replace `TaskRun` persistence with log-only worker reporting. The only
+  current exception is the documented direct periodic alert no-rule preflight;
+  explicit TaskRuns, actual evaluations, and failures are never exempt.
 - Do not reveal secrets while trying to make diagnostic failures more helpful.
 - Do not change `WARN` diagnostics to `FAIL` just to make logs look stricter; current tests and local-development semantics distinguish warnings from failures.

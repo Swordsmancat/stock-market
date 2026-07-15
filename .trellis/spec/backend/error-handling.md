@@ -209,3 +209,123 @@ except SQLAlchemyError:
     return settings.daily_report_watchlist
 return format_watchlist_entries(entries)
 ```
+
+---
+
+## Scenario: Direct Periodic Alert No-Op Suppression
+
+### 1. Scope / Trigger
+
+- Trigger: the 15-minute Beat delivery of
+  `alerts.evaluate_watchlist_alerts` finds no active watchlist item with a
+  supported non-null alert rule.
+- Scope: local actionable-rule preflight, direct periodic worker delivery, and
+  supplied TaskRun preservation.
+- Non-goals: changing the schedule, deleting history, suppressing other task
+  kinds/statuses, or changing alert evaluation/notification behavior.
+
+### 2. Signatures
+
+- `build_no_alert_rules_result() -> dict[str, object]` and
+  `has_actionable_watchlist_alerts(session) -> bool` in
+  `packages/services/watchlist_alerts.py`.
+- `evaluate_watchlist_alerts(provider=None, task_run_id=None) -> dict[str,
+  object]` in `apps/worker/tasks/alerts.py`.
+- Generic dispatch `_dispatch_alert_evaluation(input_json, task_run_id)` must
+  pass `task_run_id` to the worker.
+
+### 3. Contracts
+
+- Only `task_run_id is None` is eligible for preflight suppression. This is how
+  current Beat delivery differs from API dispatch/retry, which supplies an
+  already-running TaskRun ID.
+- A successful preflight with no actionable rules returns the existing exact
+  `skipped/no_alert_rules` payload without creating a TaskRun, fetching market
+  data, or writing an AlertTrigger.
+- A supplied TaskRun always bypasses suppression and is finished succeeded with
+  the skipped payload when no rules exist.
+- If preflight raises, the worker rolls back and continues into the normal
+  lifecycle. Evaluation repeats the same persisted read; a repeated exception
+  fails the created/reused TaskRun and is re-raised.
+- An actionable preflight creates the TaskRun before provider/indicator work,
+  preserving running/failed observability and trigger dedupe behavior.
+- Preflight and evaluation are two local reads. A concurrent rule addition may
+  wait until the next 15-minute tick; a concurrent removal may leave one
+  succeeded skipped TaskRun. This bounded race is accepted for the single-user
+  workflow.
+- Every branch closes the worker-owned session. Beat timing and registration
+  remain unchanged.
+
+The no-rule result is:
+
+```json
+{
+  "status": "skipped",
+  "reason": "no_alert_rules",
+  "item_count": 0,
+  "triggered_count": 0,
+  "items": []
+}
+```
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Direct delivery, empty watchlist | Return no-rule result; no TaskRun/AlertTrigger |
+| Direct delivery, active items but no supported rule | Same no-rule suppression |
+| Direct delivery, actionable rule | Create TaskRun, evaluate, persist result/triggers |
+| Supplied TaskRun, no actionable rule | Reuse and finish the same TaskRun succeeded/skipped |
+| Preflight raises, evaluation repeats error | Roll back once, fail TaskRun, re-raise, close session |
+| Preflight raises, repeated evaluation succeeds | Preserve normal created TaskRun result |
+| Unsupported future skip/degraded after actionable preflight | Persist it; suppression is not status-generic |
+
+### 5. Good / Base / Bad Cases
+
+- Good: an intentionally empty personal watchlist receives 96 cheap Celery
+  checks per day but no TaskRun rows, and adding a rule automatically restores
+  evaluated TaskRuns within the next interval.
+- Base: an API retry supplies a TaskRun ID while no rules exist; the row becomes
+  succeeded with an explicit skip instead of remaining running or disappearing.
+- Bad: disable the Beat entry, suppress every `skipped` result, evaluate
+  provider work before creating a TaskRun, or swallow a preflight database
+  exception without repeating it inside the normal lifecycle.
+
+### 6. Tests Required
+
+- Worker tests assert direct no-rule and soft-removed scopes return the exact
+  result with zero TaskRun/AlertTrigger rows and one session close.
+- Supplied-ID tests assert the same TaskRun is reused, retains retry metadata,
+  and stores the skipped result.
+- Error tests assert one rollback, one failed TaskRun, original exception
+  propagation, and one session close.
+- Actionable tests assert one succeeded TaskRun and one recorded trigger.
+- Dispatcher tests lock `task_run_id` forwarding; schedule tests keep `*/15`
+  and task registration unchanged.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+task_run = start_task_run("alerts.evaluate_watchlist_alerts", {}, session)
+result = evaluate_all_watchlist_alerts(session)
+finish_task_run(task_run, result, session)
+```
+
+This persists every known no-work Beat tick and fills recent history.
+
+#### Correct
+
+```python
+if task_run_id is None:
+    try:
+        has_rules = has_actionable_watchlist_alerts(session)
+    except Exception:
+        session.rollback()
+    else:
+        if not has_rules:
+            return build_no_alert_rules_result()
+
+# Existing supplied/new TaskRun lifecycle begins before real evaluation.
+```

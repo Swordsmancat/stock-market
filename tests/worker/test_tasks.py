@@ -1,6 +1,7 @@
 from datetime import date
 
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
@@ -720,6 +721,133 @@ def test_refresh_daily_watchlist_analysis_reuses_existing_task_run(monkeypatch):
     assert latest_run["result_json"]["item_count"] == 1
 
 
+def test_evaluate_watchlist_alerts_task_skips_no_rule_beat_delivery_without_task_run(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import alerts as alert_tasks
+
+    monkeypatch.setattr(alert_tasks, "SessionLocal", lambda: session)
+    close_calls = 0
+    original_close = session.close
+
+    def track_close():
+        nonlocal close_calls
+        close_calls += 1
+        original_close()
+
+    def fail_if_called(**_kwargs):
+        raise AssertionError("no-rule delivery must not evaluate alerts")
+
+    monkeypatch.setattr(session, "close", track_close)
+    monkeypatch.setattr(alert_tasks, "evaluate_all_watchlist_alerts", fail_if_called)
+
+    result = alert_tasks.evaluate_watchlist_alerts(provider="mock")
+
+    assert result == {
+        "status": "skipped",
+        "reason": "no_alert_rules",
+        "item_count": 0,
+        "triggered_count": 0,
+        "items": [],
+    }
+    assert session.query(packages.domain.models.TaskRun).count() == 0
+    assert session.query(packages.domain.models.AlertTrigger).count() == 0
+    assert close_calls == 1
+
+
+def test_evaluate_watchlist_alerts_task_skips_soft_removed_watchlist_without_task_run(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import alerts as alert_tasks
+
+    monkeypatch.setattr(alert_tasks, "SessionLocal", lambda: session)
+    upsert_watchlist_item(
+        "AAPL",
+        "US",
+        session=session,
+        alert_rules={"price_above": 1},
+    )
+    remove_watchlist_item("AAPL", "US", session=session)
+
+    result = alert_tasks.evaluate_watchlist_alerts(provider="mock")
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "no_alert_rules"
+    assert session.query(packages.domain.models.TaskRun).count() == 0
+    assert session.query(packages.domain.models.AlertTrigger).count() == 0
+
+
+def test_evaluate_watchlist_alerts_task_reuses_supplied_no_rule_task_run(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import alerts as alert_tasks
+    from packages.services.task_runs import start_task_run
+
+    monkeypatch.setattr(alert_tasks, "SessionLocal", lambda: session)
+    existing_run = start_task_run(
+        "alerts.evaluate_watchlist_alerts",
+        {"provider": "mock", "retry_of": "original-id"},
+        session=session,
+    )
+
+    result = alert_tasks.evaluate_watchlist_alerts(
+        provider="mock",
+        task_run_id=str(existing_run.id),
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="alerts.evaluate_watchlist_alerts",
+    )
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "no_alert_rules"
+    assert latest_run["id"] == str(existing_run.id)
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["input_json"]["retry_of"] == "original-id"
+    assert latest_run["result_json"] == result
+    assert session.query(packages.domain.models.TaskRun).count() == 1
+
+
+def test_evaluate_watchlist_alerts_task_records_preflight_database_failure(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import alerts as alert_tasks
+    from packages.services import watchlists as watchlist_service
+
+    monkeypatch.setattr(alert_tasks, "SessionLocal", lambda: session)
+    rollback_calls = 0
+    close_calls = 0
+    original_rollback = session.rollback
+    original_close = session.close
+
+    def track_rollback():
+        nonlocal rollback_calls
+        rollback_calls += 1
+        original_rollback()
+
+    def track_close():
+        nonlocal close_calls
+        close_calls += 1
+        original_close()
+
+    monkeypatch.setattr(session, "rollback", track_rollback)
+    monkeypatch.setattr(session, "close", track_close)
+
+    def fail_active_items(_session):
+        raise SQLAlchemyError("watchlist unavailable")
+
+    monkeypatch.setattr(watchlist_service, "get_active_watchlist_item_dicts", fail_active_items)
+
+    with pytest.raises(SQLAlchemyError, match="watchlist unavailable"):
+        alert_tasks.evaluate_watchlist_alerts(provider="mock")
+
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="alerts.evaluate_watchlist_alerts",
+    )
+    assert latest_run["status"] == "failed"
+    assert latest_run["error_message"] == "watchlist unavailable"
+    assert session.query(packages.domain.models.TaskRun).count() == 1
+    assert rollback_calls == 1
+    assert close_calls == 1
+
+
 def test_evaluate_watchlist_alerts_task_records_trigger_and_task_run(monkeypatch):
     session = make_session()
     from apps.worker.tasks import alerts as alert_tasks
@@ -766,3 +894,5 @@ def test_evaluate_watchlist_alerts_task_records_trigger_and_task_run(monkeypatch
     assert result["triggered_count"] == 1
     assert latest_run["status"] == "succeeded"
     assert latest_run["result_json"]["triggered_count"] == 1
+    assert session.query(packages.domain.models.TaskRun).count() == 1
+    assert session.query(packages.domain.models.AlertTrigger).count() == 1

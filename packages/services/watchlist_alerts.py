@@ -15,29 +15,42 @@ def _has_alert_rules(item: dict[str, object]) -> bool:
     return any(rules.get(key) is not None for key in ("price_above", "rsi_below"))
 
 
+def build_no_alert_rules_result() -> dict[str, object]:
+    return {
+        "status": "skipped",
+        "reason": "no_alert_rules",
+        "item_count": 0,
+        "triggered_count": 0,
+        "items": [],
+    }
+
+
+def _actionable_watchlist_items(session: Session) -> list[dict[str, object]]:
+    from packages.services.watchlists import get_active_watchlist_item_dicts
+
+    return [item for item in get_active_watchlist_item_dicts(session) if _has_alert_rules(item)]
+
+
+def has_actionable_watchlist_alerts(session: Session) -> bool:
+    return bool(_actionable_watchlist_items(session))
+
+
+def _alert_item_was_triggered(item: dict[str, object]) -> bool:
+    alert_status = item.get("alert_status")
+    return isinstance(alert_status, dict) and bool(alert_status.get("triggered"))
+
+
 def evaluate_all_watchlist_alerts(
     session: Session,
     provider_name: str | None = None,
 ) -> dict[str, object]:
-    from packages.services.watchlists import get_active_watchlist_item_dicts
-
     provider = provider_name or settings.market_data_provider
-    items = [item for item in get_active_watchlist_item_dicts(session) if _has_alert_rules(item)]
+    items = _actionable_watchlist_items(session)
     if not items:
-        return {
-            "status": "skipped",
-            "reason": "no_alert_rules",
-            "item_count": 0,
-            "triggered_count": 0,
-            "items": [],
-        }
+        return build_no_alert_rules_result()
 
     enriched = enrich_watchlist_items(items, session=session, provider_name=provider)
-    triggered_count = sum(
-        1
-        for item in enriched
-        if isinstance(item.get("alert_status"), dict) and item["alert_status"].get("triggered")
-    )
+    triggered_count = sum(1 for item in enriched if _alert_item_was_triggered(item))
     return {
         "status": "evaluated",
         "provider": provider,

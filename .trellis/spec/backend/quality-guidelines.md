@@ -28,6 +28,11 @@ New backend behavior should fit the existing layer boundaries so focused tests c
 - Services should accept explicit sessions where they touch the database, as in `packages/services/ingestion.py`, `packages/services/watchlists.py`, and `packages/services/task_runs.py`.
 - Providers should stay behind `ProviderAdapter`, as in `packages/providers/base.py`, `packages/providers/mock_provider.py`, and `packages/providers/yfinance_provider.py`.
 - Workers should call services and record `TaskRun` lifecycle state, as in `apps/worker/tasks/ingestion.py`, `apps/worker/tasks/reports.py`, and `apps/worker/tasks/alerts.py`.
+- The only current no-TaskRun worker exception is the direct periodic
+  `alerts.evaluate_watchlist_alerts` delivery when a local persisted preflight
+  proves there are no actionable alert rules and no `task_run_id` was supplied.
+  The exact boundary and required regressions live in
+  `error-handling.md#scenario-direct-periodic-alert-no-op-suppression`.
 
 ### Preserve non-mutating diagnostics
 
@@ -105,5 +110,8 @@ When reviewing backend work, check that:
 - Database work follows `packages/shared/database.py`, `packages/domain/models.py`, and Alembic patterns under `alembic/versions/`.
 - Provider changes preserve the `ProviderAdapter` boundary from `packages/providers/base.py` and service wrapping in `packages/services/market_data.py`.
 - Worker changes preserve `TaskRun` lifecycle behavior from `apps/worker/tasks/ingestion.py`, `apps/worker/tasks/reports.py`, and `packages/services/task_runs.py`.
+- Direct periodic alert suppression is limited to the documented no-rule
+  preflight; supplied TaskRuns, actionable evaluations, and all repeated errors
+  remain persisted and test-covered.
 - Diagnostics keep their documented `OK` / `WARN` / `FAIL` or `PASS` / `FAIL` semantics and avoid accidental writes.
 - Tests are focused on the changed layer and do not require real PostgreSQL, Redis, Celery, or provider network access unless the command explicitly says so.

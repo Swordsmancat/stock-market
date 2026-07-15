@@ -71,6 +71,23 @@ def test_dispatch_task_run_enqueues_stock_analysis(mock_task):
     )
 
 
+@patch("apps.worker.tasks.alerts.evaluate_watchlist_alerts")
+def test_dispatch_task_run_enqueues_alert_evaluation_with_task_run_id(mock_task):
+    mock_task.delay.return_value.id = "celery-id-alerts"
+
+    celery_id = dispatch_task_run(
+        "alerts.evaluate_watchlist_alerts",
+        {"provider": "mock", "retry_of": "original-task-run"},
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-alerts"
+    mock_task.delay.assert_called_once_with(
+        provider="mock",
+        task_run_id="task-run-id",
+    )
+
+
 @patch("apps.worker.tasks.ingestion.ingest_market_data")
 def test_dispatch_task_run_enqueues_market_ingestion(mock_task):
     mock_result = MagicMock()
