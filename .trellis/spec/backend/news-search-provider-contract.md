@@ -154,3 +154,178 @@ if candidate.result_kind in {"social", "public_opinion"}:
 ```
 
 Social candidates stay visible as low-strength collection inputs while waiting for a separate reviewed evidence model.
+
+## Scenario: Exact-Instrument Sequential News Refresh
+
+### 1. Scope / Trigger
+
+- Trigger: exact instrument detail has no stored news and must recover one
+  auditable local evidence projection without manual provider switching.
+- Scope: built-in/provider adapters, sequential persistence, FastAPI routes,
+  detail-page one-shot recovery, and homepage stored-news aggregation.
+- Non-goals: background universe crawling, generic/authenticated scraping,
+  Cookie replay, licensed full-text storage, or direct AI/trading actions.
+
+### 2. Signatures
+
+- Stored read: `GET /news/{symbol}` remains read-only.
+- Refresh mutation: `POST /news/{symbol}/refresh?market=<market>`.
+- Homepage read: `GET /news/latest?limit=<1..50>` returns bounded stored rows
+  across symbols and performs no provider search.
+- Refresh payload includes `status`, `selected_provider`, persisted counts,
+  sanitized `attempts`/`diagnostics`, and `news`, the final stored-news
+  projection.
+- Shared write boundary:
+  `persist_news_search_candidates(..., expected_symbol=None, expected_provider=None)`.
+- Frontend decoders:
+  `isInstrumentNewsPayload(value, expectedSymbol?)`,
+  `isNewsRefreshPayload(value, expectedSymbol?)`, and
+  `isLatestStoredNewsPayload(value)`.
+
+### 3. Contracts
+
+- Refresh checks stored `NewsArticle` rows first. A hit returns
+  `status="database_hit"` and performs zero external calls.
+- The fixed source order is configured executable search providers in saved
+  order, eligible AkShare stock news for an exact CN six-digit symbol, then
+  market-aware yfinance. Built-in AkShare/yfinance fallback is not dependent on
+  membership in `news_search_enabled_providers`; AkShare still respects the
+  platform-wide `akshare_enabled` gate.
+- Each executable source is called at most once with no retry. Stop immediately
+  after the first source persists at least one deduplicated news row and return
+  `status="refreshed"` plus a fresh stored projection.
+- All executable sources returning legitimate empty results is `no_data`.
+  Provider timeout/transport/schema failure with no persisted result is
+  `provider_error`. A market unsupported by every built-in path is
+  `unsupported`.
+- Candidate normalization may retain only title, URL, source, summary,
+  publication/retrieval time, language/region, result kind, and evidence-boundary
+  metadata. Diagnostics never include keys, cookies, authorization headers,
+  raw provider bodies, credential URLs, prompts, stack traces, or exception
+  messages.
+- Every provider batch is validated before it is returned by search, accepted
+  by refresh, or written by the shared persistence function. Each candidate
+  must match the requested normalized symbol and expected provider, use an
+  absolute HTTP(S) URL with a hostname and no embedded username/password, and
+  fit `NewsArticle` symbol/title/URL/source column limits. Query and fragment
+  keys that carry tokens, API keys, signatures, authorization, Cookies,
+  passwords, secrets, or session credentials invalidate the URL; ordinary
+  public query parameters remain unchanged.
+- Candidate summaries are parsed as HTML with the standard-library parser,
+  script/style/template content is discarded, whitespace is normalized, and
+  stored/returned summary text is capped at 1000 characters. Visible bare
+  `Bearer <token>` text and Cookie/authorization/key/token assignments,
+  including quoted JSON fields, invalidate the candidate. The legacy yfinance,
+  AkShare, and mock ingestion entry points use the same sanitizer and single
+  `NewsArticle` write helper.
+- Any invalid member rejects the whole provider batch as
+  `PROVIDER_INVALID_CANDIDATE`; shared persistence performs zero writes for a
+  mixed valid/invalid batch. Diagnostics contain no candidate fields.
+- `POST /news/search-ingest` uses the same validation and binds persistence to
+  the requested symbol. Shared persistence validates again so future callers
+  cannot bypass the route/service checks.
+- Social/public-opinion candidates remain non-citable and are never persisted
+  as `NewsArticle`. Only stored rows may enter `news:*` assistant citations.
+
+#### Browser behavior
+
+- Exact instrument detail automatically refreshes only when its stored news is
+  empty, once per `news-fallback:v1:{market}:{symbol}:{local-date}` browser
+  session key. It replaces only the local news projection.
+- A failed stored-news GET is not an empty result: detail shows provider-error
+  and must not launch an automatic refresh mutation from that failed preflight.
+- Automatic failure is not retried. `no_data` and `provider_error` may expose
+  one explicit manual retry; `unsupported` links to Settings and does not retry.
+- Recovering, no-data, provider-error, and unsupported states use localized
+  stable-code mappings. Backend free-text messages are never rendered.
+- Homepage consumes only `/news/latest?limit=6`; it distinguishes a successful
+  empty result from a failed read and never fans out searches across symbols.
+- Browser decoders reject wrong-symbol detail/refresh projections, unsafe or
+  credential-bearing URLs, empty titles, contradictory item counts, and status
+  combinations such as `no_data` with non-empty items.
+
+#### Crawling and credentials boundary
+
+- Generic crawling, browser-Cookie extraction/storage/replay, authenticated
+  scraping, CAPTCHA/paywall bypass, proxy rotation, and raw HTML storage remain
+  forbidden.
+- A future public-web adapter must be site-specific, public/no-login,
+  allowlisted, rate-limited, terms/robots aware, and disabled by default.
+- Login-only material uses the existing manual visible-text/link import and
+  reviewed Source Notebook citation gate. Browser credentials never cross into
+  the backend refresh service.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Stored news exists | `database_hit`; zero external calls |
+| Enabled credentialed source lacks key | Sanitized `MISSING_CREDENTIALS`; continue |
+| Source returns persistable candidates | Persist/dedupe, return `refreshed`, stop |
+| Source returns only social candidates | Defer; do not persist; continue |
+| Candidate symbol/provider/URL/field bounds are invalid | `PROVIDER_INVALID_CANDIDATE`; reject batch and continue |
+| Source times out/fails/malformed | Sanitized diagnostic; no retry; continue |
+| All executable sources return empty | `no_data` with final stored projection |
+| Failure occurs and no later source succeeds | `provider_error` |
+| Market has no supported built-in path | `unsupported` |
+| Homepage latest read fails | Explicit failed load, not an empty projection |
+
+### 5. Good / Base / Bad Cases
+
+- Good: no stored CN news, configured sources are unavailable, AkShare returns
+  verified candidates, one deduplicated batch is stored, and yfinance is not
+  called.
+- Good: AkShare is empty and market-aware yfinance maps `000001` to
+  `000001.SZ`, persists news, and only stored rows become citable.
+- Base: every source returns a legitimate empty result; detail shows a localized
+  no-data state and permits one explicit retry.
+- Bad: call every provider after success, retry a timeout, render raw provider
+  text, persist an unsafe search-ingest candidate, persist social chatter as
+  news, or forward browser Cookie/auth headers.
+
+### 6. Tests Required
+
+- Adapter tests use injected frames/tickers and assert CN/HK/US symbol mapping,
+  normalized fields, timezones, malformed shapes, and empty results without
+  live network access.
+- Service/API tests cover DB-first zero calls, fixed order, first-persist stop,
+  dedupe, social deferral, sanitized errors, no-data/provider-error/unsupported,
+  unsafe candidate rejection on refresh and search-ingest, shared persistence
+  defense, credential query/fragment rejection, plain bounded summaries,
+  bare-Bearer and quoted-JSON credential text rejection, invalid-batch
+  atomicity, legacy ingestion safety, GET read-only behavior, and bounded
+  cross-symbol latest ordering.
+- Route/component/page tests cover header/body non-forwarding, generic transport
+  502, stored-news zero POST, one automatic POST, direct projection replacement,
+  pending and terminal states, one manual retry, homepage no-fan-out, and
+  failed-versus-empty display.
+- Assistant regressions keep live candidates outside citation allowlists and
+  accept only persisted `news:*` rows.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+for provider in every_provider:
+    candidates.extend(provider.search(symbol))
+return {"items": candidates}
+```
+
+This creates uncontrolled calls and exposes non-persisted candidates as if they
+were evidence.
+
+#### Correct
+
+```python
+stored = get_news_sentiment_payload(symbol, session=session)
+if stored["summary"]["article_count"]:
+    return database_hit(stored)
+for source in sequential_sources(symbol, market):
+    candidates = source.search_once(symbol)
+    if not candidates_are_safe(candidates, symbol=symbol):
+        continue
+    if persist_first_success(candidates, expected_symbol=symbol):
+        return refreshed(get_news_sentiment_payload(symbol, session=session))
+return terminal_empty_or_error(stored)
+```

@@ -1,0 +1,14 @@
+{"file":".trellis/spec/backend/personal-research-workflow-contract.md","reason":"Preserve exact market identity, one-source daily evidence, sanitized provenance, no mock fallback, and AI handoff."}
+{"file":".trellis/spec/backend/intraday-cache-contract.md","reason":"Preserve verified minute-provider and closed-session cache semantics while adding market-aware CN fallback."}
+{"file":".trellis/spec/backend/news-search-provider-contract.md","reason":"Preserve provider settings, candidate normalization, persistence, social separation, secret masking, and no cookie scraping."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Keep only persisted news citable and preserve assistant evidence and safety boundaries."}
+{"file":".trellis/spec/backend/market-depth-contract.md","reason":"Keep unsupported depth explicit and prohibit fabrication from daily/minute data."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Keep provider, no-data, degraded, and HTTP error semantics explicit and secret-safe."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply focused backend/API/provider tests and non-mutating diagnostics."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Exclude credentials, cookies, raw provider bodies, URLs with secrets, and stack traces."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Use existing client mutation, localized label, empty/error, and personal-research UI conventions."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Keep server data authoritative and use bounded local pending state plus direct projection replacement."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Cover route proxies, interactions, localization, accessibility, and full Vitest gates."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Keep additive backend payloads explicit at frontend boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse daily coordinator, news persistence, and existing mutation components instead of duplicating logic."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace provider to service to API to frontend state and persisted AI evidence end to end."}

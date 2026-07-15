@@ -98,6 +98,7 @@ def get_intraday_bars(
     trade_date: date = Query(..., alias="date"),
     timeframe: str = Query(default="1m"),
     provider: str | None = Query(default=None),
+    market: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     return _call_market_data_service(
@@ -107,6 +108,7 @@ def get_intraday_bars(
             timeframe=timeframe,
             session=session,
             provider_name=provider,
+            market=market,
         )
     )
 

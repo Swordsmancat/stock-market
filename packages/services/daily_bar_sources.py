@@ -89,6 +89,8 @@ class DailyBarFetchCoordinator:
         end: date,
         *,
         policy: str = STRICT_POLICY,
+        required_coverage: tuple[date, date] | None = None,
+        minimum_row_count: int | None = None,
     ) -> DailyBarFetchResult:
         normalized_policy = policy.strip().lower()
         if normalized_policy not in SUPPORTED_DAILY_BAR_POLICIES:
@@ -158,6 +160,29 @@ class DailyBarFetchCoordinator:
                     else bar.timestamp
                 ),
             )
+            if required_coverage is not None or minimum_row_count is not None:
+                required_start, required_end = required_coverage or (start, end)
+                first_date = _bar_trade_date(bars[0])
+                last_date = _bar_trade_date(bars[-1])
+                if (
+                    first_date > required_start
+                    or last_date < required_end
+                    or (
+                        minimum_row_count is not None
+                        and len(bars) < minimum_row_count
+                    )
+                ):
+                    self._failure_counts[source.source] = 0
+                    self._increment(source.source, "insufficient_coverage")
+                    had_failure = True
+                    attempts.append(
+                        self._attempt(
+                            source,
+                            "insufficient_coverage",
+                            row_count=len(bars),
+                        )
+                    )
+                    continue
             self._failure_counts[source.source] = 0
             self._increment(source.source, "selected")
             attempts.append(self._attempt(source, "selected", row_count=len(bars)))
@@ -219,6 +244,10 @@ class DailyBarFetchCoordinator:
         if row_count is not None:
             attempt["row_count"] = row_count
         return attempt
+
+
+def _bar_trade_date(bar: ProviderBar) -> date:
+    return bar.timestamp.date() if isinstance(bar.timestamp, datetime) else bar.timestamp
 
 
 def _validate_bars(

@@ -237,7 +237,12 @@ def answer_market_assistant_question(
         session,
         diagnostics,
     )
-    news_summary, news_evidence = _build_news_context(normalized_symbol, session, diagnostics)
+    news_summary, news_evidence = _build_news_context(
+        normalized_symbol,
+        session,
+        diagnostics,
+        market=market,
+    )
     generated_report_summary, generated_report_evidence = _build_generated_report_context(
         normalized_symbol,
         normalized_question,
@@ -1071,6 +1076,8 @@ def _build_news_context(
     symbol: str,
     session: Session | None,
     diagnostics: list[dict[str, object]],
+    *,
+    market: str | None = None,
 ) -> tuple[str, list[MarketAssistantResearchEvidence]]:
     if session is None:
         diagnostics.append(
@@ -1085,7 +1092,7 @@ def _build_news_context(
         return "No stored news sentiment is available.", []
 
     try:
-        payload = get_news_sentiment_payload(symbol, session)
+        payload = get_news_sentiment_payload(symbol, session, market=market)
     except Exception:
         _rollback_session_if_possible(session)
         diagnostics.append(

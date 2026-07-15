@@ -18,9 +18,9 @@ vi.mock("@/lib/platform-settings-store", async () => {
 import HomePage from "./page";
 
 const defaultNewsItems = [
-  { title: "US chip stocks rally as AI demand improves", sentiment: "positive", confidence: 0.82 },
-  { title: "Apple expands AI features for enterprise devices", sentiment: "positive", confidence: 0.68 },
-  { title: "Yield volatility keeps rate-sensitive sectors cautious", sentiment: "negative", confidence: 0.57 },
+  { symbol: "NVDA", source: "Reuters", title: "US chip stocks rally as AI demand improves", sentiment: "positive", confidence: 0.82 },
+  { symbol: "AAPL", source: "Company filing", title: "Apple expands AI features for enterprise devices", sentiment: "positive", confidence: 0.68 },
+  { symbol: "US10Y", source: "Market desk", title: "Yield volatility keeps rate-sensitive sectors cautious", sentiment: "negative", confidence: 0.57 },
 ];
 
 const defaultHotSectors = [
@@ -264,6 +264,8 @@ function mockHomepageFetch({
   latestClose = 102,
   marketOverviewPayload = createMarketOverviewPayload(symbol, instrumentName, market, latestClose),
   newsItems = defaultNewsItems,
+  newsResponseStatus = 200,
+  newsPayload,
   sectors = defaultHotSectors,
   latestBarStatus = 200,
 }: {
@@ -273,6 +275,8 @@ function mockHomepageFetch({
   latestClose?: number;
   marketOverviewPayload?: ReturnType<typeof createMarketOverviewPayload>;
   newsItems?: typeof defaultNewsItems;
+  newsResponseStatus?: number;
+  newsPayload?: unknown;
   sectors?: typeof defaultHotSectors;
   latestBarStatus?: number;
 } = {}) {
@@ -305,15 +309,26 @@ function mockHomepageFetch({
     if (url.endsWith("/watchlist")) {
       return Promise.resolve(new Response(JSON.stringify({ items: [] })));
     }
-    if (url.includes(`/news/${symbol}`)) {
+    if (url.includes("/news/latest?limit=6")) {
+      if (newsResponseStatus !== 200) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ detail: "news unavailable" }), {
+            status: newsResponseStatus,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
       return Promise.resolve(
         new Response(
-          JSON.stringify({
-            symbol,
-            source: "database",
-            summary: { latest_sentiment: newsItems[0]?.sentiment ?? null, article_count: newsItems.length },
-            items: newsItems,
-          }),
+          JSON.stringify(
+            newsPayload ?? {
+              source: "database",
+              status: newsItems.length > 0 ? "ok" : "no_data",
+              count: newsItems.length,
+              limit: 6,
+              items: newsItems,
+            },
+          ),
         ),
       );
     }
@@ -368,6 +383,7 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.getByText("US chip stocks rally as AI demand improves")).toBeInTheDocument();
   expect(screen.getByText("Apple expands AI features for enterprise devices")).toBeInTheDocument();
   expect(screen.getByText("Yield volatility keeps rate-sensitive sectors cautious")).toBeInTheDocument();
+  expect(screen.getByText(/NVDA · Reuters/)).toBeInTheDocument();
   expect(screen.getByRole("img", { name: "Market overview" })).toBeInTheDocument();
   expect(screen.getByRole("img", { name: "Fund flow" })).toBeInTheDocument();
   expect(screen.getByRole("img", { name: "AI market sentiment" })).toBeInTheDocument();
@@ -383,11 +399,13 @@ it("renders the strict terminal-style homepage cockpit", async () => {
     expect.arrayContaining([
       "/instruments",
       "/evidence",
-      "/instruments/AAPL",
       "/ai-research",
       "/settings",
     ]),
   );
+  expect(
+    moreLinks.some((link) => link.getAttribute("href") === "/instruments/AAPL"),
+  ).toBe(false);
   expect(screen.getByRole("link", { name: "Add custom indicator" })).toHaveAttribute(
     "href",
     "/settings#favorite_macro_indicator_codes",
@@ -403,6 +421,60 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.queryByText("Fundamentals")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Ingest daily bars" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Refresh Analysis" })).not.toBeInTheDocument();
+});
+
+it("loads bounded cross-symbol stored news without provider-search fan-out", async () => {
+  const fetchMock = mockHomepageFetch();
+
+  await renderHomepage();
+
+  const requestedUrls = fetchMock.mock.calls.map(([input]) => String(input));
+  expect(
+    requestedUrls.some((url) => url.endsWith("/news/latest?limit=6")),
+  ).toBe(true);
+  expect(
+    requestedUrls.some((url) => url.endsWith("/news/AAPL")),
+  ).toBe(false);
+  expect(
+    requestedUrls.some((url) => url.includes("/news/search")),
+  ).toBe(false);
+  expect(
+    fetchMock.mock.calls.some(([, init]) => init?.method === "POST"),
+  ).toBe(false);
+});
+
+it("distinguishes a failed latest-news read from a genuine empty result", async () => {
+  mockHomepageFetch({ newsItems: [], newsResponseStatus: 503 });
+
+  await renderHomepage();
+
+  expect(
+    screen.getByText("Latest stored news could not be loaded."),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText("No news sentiment available."),
+  ).not.toBeInTheDocument();
+});
+
+it("treats a malformed successful latest-news payload as a failed load", async () => {
+  mockHomepageFetch({
+    newsPayload: {
+      source: "database",
+      status: "ok",
+      count: 1,
+      limit: 6,
+      items: "invalid",
+    },
+  });
+
+  await renderHomepage();
+
+  expect(
+    screen.getByText("Latest stored news could not be loaded."),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText("No news sentiment available."),
+  ).not.toBeInTheDocument();
 });
 
 it("keeps every loaded fund-flow row in a focusable scroll region", async () => {
@@ -436,6 +508,27 @@ it("keeps every loaded fund-flow row in a focusable scroll region", async () => 
   expect(fundFlowRegion).toHaveAttribute("tabindex", "0");
   expect(fundFlowRegion).toHaveClass("overflow-y-auto");
   expect(within(fundFlowRegion).getByText("Industrials")).toBeInTheDocument();
+});
+
+it("keeps every bounded news row in a named focusable scroll region", async () => {
+  mockHomepageFetch({
+    newsItems: [
+      ...defaultNewsItems,
+      { symbol: "MSFT", source: "Reuters", title: "Fourth bounded news row", sentiment: "neutral", confidence: 0.5 },
+      { symbol: "GOOG", source: "Filing", title: "Fifth bounded news row", sentiment: "positive", confidence: 0.6 },
+      { symbol: "META", source: "Exchange", title: "Sixth bounded news row", sentiment: "negative", confidence: 0.4 },
+    ],
+  });
+
+  await renderHomepage();
+
+  const newsRegion = screen.getByRole("region", {
+    name: "Latest news sentiment",
+  });
+  expect(newsRegion).toHaveAttribute("aria-labelledby", "terminal-latest-news-heading");
+  expect(newsRegion).toHaveAttribute("tabindex", "0");
+  expect(newsRegion).toHaveClass("overflow-y-auto", "focus-visible:ring-2");
+  expect(within(newsRegion).getByText("Sixth bounded news row")).toBeInTheDocument();
 });
 
 it("uses configured homepage index order and display fields in the market band", async () => {

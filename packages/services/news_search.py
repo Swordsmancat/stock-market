@@ -1,15 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from packages.analytics.sentiment import classify_sentiment, make_dedupe_hash
-from packages.domain.models import NewsArticle, SentimentSignal
-from packages.services.news import get_news_sentiment_payload
+from packages.analytics.sentiment import make_dedupe_hash
+from packages.providers.cn_market_helpers import find_column, normalize_cn_symbol
+from packages.providers.yfinance_helpers import map_symbol_to_ticker
+from packages.services.news import (
+    build_empty_news_sentiment_payload,
+    get_news_sentiment_payload,
+    is_supported_news_identity,
+    normalize_news_article_fields,
+    persist_normalized_news_article,
+)
 from packages.services.news_provider_registry import (
     NEWS_SEARCH_PROVIDER_REGISTRY,
     build_news_search_provider_capabilities,
@@ -25,6 +34,8 @@ ANSPIRE_SEARCH_ENDPOINT = "https://plugin.anspire.cn/api/ntsearch/search"
 SERPAPI_BAIDU_SEARCH_ENDPOINT = "https://serpapi.com/search.json"
 PERSISTABLE_NEWS_RESULT_KINDS = {"news", "web"}
 SOCIAL_SENTIMENT_RESULT_KINDS = {"public_opinion", "social"}
+REFRESH_BUILTIN_PROVIDER_IDS = {"akshare", "mock", "tushare", "yfinance"}
+SUPPORTED_YFINANCE_NEWS_MARKETS = {"CN", "HK", "US"}
 HttpGetter = Callable[..., object]
 
 
@@ -225,6 +236,150 @@ class SerpApiBaiduNewsSearchAdapter:
         )
 
 
+class AkShareNewsSearchAdapter:
+    provider = "akshare"
+
+    def __init__(self, *, fetcher: Callable[[str], object] | None = None) -> None:
+        self._fetcher = fetcher or _default_akshare_news_fetcher
+
+    def search(
+        self,
+        *,
+        symbol: str,
+        query: str,
+        max_results: int,
+    ) -> list[NewsSearchCandidate]:
+        frame = self._fetcher(normalize_cn_symbol(symbol))
+        if frame is None or bool(getattr(frame, "empty", False)):
+            return []
+        columns = [str(column) for column in getattr(frame, "columns", [])]
+        title_column = find_column(columns, "新闻标题") or find_column(columns, "标题")
+        url_column = find_column(columns, "新闻链接") or find_column(columns, "链接")
+        if title_column is None or url_column is None:
+            raise NewsSearchProviderError(
+                "AkShare news response did not contain title and URL columns."
+            )
+        published_column = find_column(columns, "发布时间")
+        source_column = find_column(columns, "文章来源") or find_column(columns, "来源")
+        summary_column = find_column(columns, "新闻内容") or find_column(columns, "内容")
+        try:
+            rows = frame.head(max_results).iterrows()
+        except (AttributeError, TypeError) as error:
+            raise NewsSearchProviderError(
+                "AkShare news response was not a supported table."
+            ) from error
+
+        retrieved_at = datetime.now(timezone.utc)
+        candidates: list[NewsSearchCandidate] = []
+        for _, row in rows:
+            title = _frame_text(row[title_column])
+            url = _frame_text(row[url_column])
+            if title is None or url is None:
+                continue
+            summary = _frame_text(row[summary_column]) if summary_column else None
+            source = _frame_text(row[source_column]) if source_column else None
+            candidates.append(
+                NewsSearchCandidate(
+                    symbol=symbol.strip().upper(),
+                    query=query,
+                    title=title,
+                    url=url,
+                    source=source or "AkShare",
+                    summary=summary or title,
+                    published_at=(
+                        _parse_cn_news_datetime(row[published_column])
+                        if published_column
+                        else None
+                    ),
+                    retrieved_at=retrieved_at,
+                    provider=self.provider,
+                    language="zh",
+                    region="CN",
+                )
+            )
+        return candidates
+
+
+class YFinanceNewsSearchAdapter:
+    provider = "yfinance"
+
+    def __init__(
+        self,
+        *,
+        market: str,
+        ticker_factory: Callable[[str], object] | None = None,
+    ) -> None:
+        self._market = market.strip().upper()
+        self._ticker_factory = ticker_factory or _default_yfinance_ticker_factory
+
+    def search(
+        self,
+        *,
+        symbol: str,
+        query: str,
+        max_results: int,
+    ) -> list[NewsSearchCandidate]:
+        ticker_symbol = map_symbol_to_ticker(symbol, self._market)
+        ticker = self._ticker_factory(ticker_symbol)
+        get_news = getattr(ticker, "get_news", None)
+        rows = (
+            get_news(count=max_results)
+            if callable(get_news)
+            else getattr(ticker, "news", None)
+        )
+        if rows is None:
+            return []
+        if not isinstance(rows, list):
+            raise NewsSearchProviderError(
+                "yfinance news response was not a supported list."
+            )
+
+        retrieved_at = datetime.now(timezone.utc)
+        candidates: list[NewsSearchCandidate] = []
+        for row in rows[:max_results]:
+            if not isinstance(row, Mapping):
+                continue
+            content_value = row.get("content")
+            content = content_value if isinstance(content_value, Mapping) else {}
+            title = _first_text(content, ("title", "headline")) or _first_text(
+                row, ("title", "headline")
+            )
+            url = _nested_mapping_text(
+                content,
+                ("canonicalUrl", "clickThroughUrl"),
+                ("url",),
+            ) or _first_text(row, ("link", "url"))
+            if title is None or url is None:
+                continue
+            provider_name = _nested_mapping_text(
+                content,
+                ("provider",),
+                ("displayName", "name"),
+            ) or _first_text(row, ("publisher", "source"))
+            summary = _first_text(
+                content, ("summary", "description")
+            ) or _first_text(row, ("summary", "description"))
+            published_value = _first_value(
+                content,
+                ("pubDate", "displayTime", "published_at"),
+            ) or _first_value(row, ("providerPublishTime", "published_at"))
+            candidates.append(
+                NewsSearchCandidate(
+                    symbol=symbol.strip().upper(),
+                    query=query,
+                    title=title,
+                    url=url,
+                    source=provider_name or "yfinance",
+                    summary=summary or title,
+                    published_at=_parse_datetime(published_value),
+                    retrieved_at=retrieved_at,
+                    provider=self.provider,
+                    region=self._market,
+                )
+            )
+        return candidates
+
+
 def search_news_candidates(
     symbol: str,
     *,
@@ -343,6 +498,36 @@ def search_news_candidates(
             )
             continue
 
+        if not isinstance(provider_candidates, list):
+            diagnostics.append(
+                _diagnostic(
+                    provider,
+                    "error",
+                    "warning",
+                    "PROVIDER_ERROR",
+                    f"{spec.display_name} returned an unsupported candidate payload.",
+                )
+            )
+            continue
+
+        normalized_candidates = _normalize_news_candidate_batch(
+            provider_candidates[:max_results],
+            requested_symbol=normalized_symbol,
+            expected_provider=provider,
+        )
+        if normalized_candidates is None:
+            diagnostics.append(
+                _diagnostic(
+                    provider,
+                    "error",
+                    "warning",
+                    "PROVIDER_INVALID_CANDIDATE",
+                    f"{spec.display_name} returned an invalid news candidate.",
+                )
+            )
+            continue
+        provider_candidates = normalized_candidates
+
         if not provider_candidates:
             diagnostics.append(
                 _diagnostic(
@@ -418,7 +603,11 @@ def search_and_ingest_news_candidates(
     social_candidate_count = sum(
         1 for candidate in candidates if _is_social_sentiment_candidate(candidate)
     )
-    article_count, sentiment_count = persist_news_search_candidates(candidates, session=session)
+    article_count, sentiment_count = persist_news_search_candidates(
+        candidates,
+        session=session,
+        expected_symbol=symbol.strip().upper(),
+    )
     return {
         **payload,
         "status": "ingested" if article_count > 0 else payload["status"],
@@ -429,50 +618,524 @@ def search_and_ingest_news_candidates(
     }
 
 
+def refresh_news_candidates(
+    symbol: str,
+    *,
+    market: str,
+    session: Session,
+    settings_payload: dict[str, Any] | None = None,
+    adapters: Mapping[str, NewsSearchAdapter] | None = None,
+) -> dict[str, object]:
+    normalized_symbol = symbol.strip().upper()
+    normalized_market = market.strip().upper()
+    if not is_supported_news_identity(normalized_symbol, normalized_market):
+        return {
+            "symbol": normalized_symbol,
+            "market": normalized_market,
+            "status": "unsupported",
+            "selected_provider": None,
+            "persisted_article_count": 0,
+            "persisted_sentiment_count": 0,
+            "attempts": [],
+            "diagnostics": [
+                _refresh_diagnostic(
+                    "identity",
+                    "unsupported",
+                    "info",
+                    "UNSUPPORTED_IDENTITY",
+                )
+            ],
+            "news": build_empty_news_sentiment_payload(normalized_symbol),
+        }
+    stored_news = get_news_sentiment_payload(
+        normalized_symbol,
+        session=session,
+        market=normalized_market,
+    )
+    article_count = _news_article_count(stored_news)
+    if article_count > 0:
+        return {
+            "symbol": normalized_symbol,
+            "market": normalized_market,
+            "status": "database_hit",
+            "selected_provider": "database",
+            "persisted_article_count": 0,
+            "persisted_sentiment_count": 0,
+            "attempts": [],
+            "diagnostics": [
+                _refresh_diagnostic(
+                    "database",
+                    "ok",
+                    "info",
+                    "DATABASE_HIT",
+                    details={"article_count": article_count},
+                )
+            ],
+            "news": stored_news,
+        }
+
+    resolved_settings = (
+        settings_payload if settings_payload is not None else get_platform_settings()
+    )
+    order = normalize_news_search_provider_order(
+        resolved_settings.get("news_search_provider_order")
+    )
+    enabled = set(
+        normalize_news_search_enabled_providers(
+            resolved_settings.get("news_search_enabled_providers")
+        )
+    )
+    provider_keys = resolved_settings.get("news_search_provider_keys")
+    provider_key_map = provider_keys if isinstance(provider_keys, dict) else {}
+    max_results = normalize_news_search_max_results(
+        resolved_settings.get("news_search_max_results")
+    )
+    timeout_seconds = normalize_news_search_timeout_seconds(
+        resolved_settings.get("news_search_timeout_seconds")
+    )
+    attempts: list[dict[str, object]] = []
+    diagnostics: list[dict[str, object]] = []
+    had_provider_error = False
+
+    for provider in order:
+        if provider in REFRESH_BUILTIN_PROVIDER_IDS or provider not in enabled:
+            continue
+        spec = NEWS_SEARCH_PROVIDER_REGISTRY[provider]
+        if spec.implementation_status != "implemented":
+            continue
+        api_key = str(provider_key_map.get(provider, "") or "").strip()
+        if spec.credential_required and not api_key:
+            diagnostics.append(
+                _refresh_diagnostic(provider, "skipped", "warning", "MISSING_CREDENTIALS")
+            )
+            continue
+        adapter = (
+            adapters[provider]
+            if adapters is not None and provider in adapters
+            else _build_adapter(provider, api_key=api_key, timeout=timeout_seconds)
+        )
+        success_payload, provider_failed = _run_refresh_source(
+            adapter,
+            provider=provider,
+            symbol=normalized_symbol,
+            market=normalized_market,
+            max_results=max_results,
+            session=session,
+            attempts=attempts,
+            diagnostics=diagnostics,
+        )
+        if success_payload is not None:
+            return success_payload
+        had_provider_error = had_provider_error or provider_failed
+
+    if _is_exact_cn_stock(normalized_symbol, normalized_market):
+        if bool(resolved_settings.get("akshare_enabled", False)):
+            akshare_adapter = (
+                adapters["akshare"]
+                if adapters is not None and "akshare" in adapters
+                else AkShareNewsSearchAdapter()
+            )
+            success_payload, provider_failed = _run_refresh_source(
+                akshare_adapter,
+                provider="akshare",
+                symbol=normalized_symbol,
+                market=normalized_market,
+                max_results=max_results,
+                session=session,
+                attempts=attempts,
+                diagnostics=diagnostics,
+            )
+            if success_payload is not None:
+                return success_payload
+            had_provider_error = had_provider_error or provider_failed
+        else:
+            diagnostics.append(
+                _refresh_diagnostic(
+                    "akshare", "skipped", "info", "PROVIDER_DISABLED"
+                )
+            )
+
+    unsupported_market = normalized_market not in SUPPORTED_YFINANCE_NEWS_MARKETS
+    if not unsupported_market:
+        yfinance_adapter = (
+            adapters["yfinance"]
+            if adapters is not None and "yfinance" in adapters
+            else YFinanceNewsSearchAdapter(market=normalized_market)
+        )
+        success_payload, provider_failed = _run_refresh_source(
+            yfinance_adapter,
+            provider="yfinance",
+            symbol=normalized_symbol,
+            market=normalized_market,
+            max_results=max_results,
+            session=session,
+            attempts=attempts,
+            diagnostics=diagnostics,
+        )
+        if success_payload is not None:
+            return success_payload
+        had_provider_error = had_provider_error or provider_failed
+    else:
+        diagnostics.append(
+            _refresh_diagnostic(
+                "yfinance", "skipped", "info", "UNSUPPORTED_MARKET"
+            )
+        )
+
+    diagnostics.append(
+        _refresh_diagnostic("database", "empty", "info", "DATABASE_FALLBACK_EMPTY")
+    )
+    if had_provider_error:
+        final_status = "provider_error"
+    elif unsupported_market:
+        final_status = "unsupported"
+    else:
+        final_status = "no_data"
+    return {
+        "symbol": normalized_symbol,
+        "market": normalized_market,
+        "status": final_status,
+        "selected_provider": None,
+        "persisted_article_count": 0,
+        "persisted_sentiment_count": 0,
+        "attempts": attempts,
+        "diagnostics": diagnostics,
+        "news": stored_news,
+    }
+
+
+def _refresh_from_adapter(
+    adapter: NewsSearchAdapter,
+    *,
+    provider: str,
+    symbol: str,
+    max_results: int,
+    session: Session,
+) -> dict[str, object]:
+    try:
+        raw_candidates = adapter.search(
+            symbol=symbol,
+            query=_default_news_query(symbol),
+            max_results=max_results,
+        )
+    except NewsSearchProviderTimeout:
+        return {
+            "status": "timeout",
+            "attempt": {"provider": provider, "status": "timeout"},
+            "diagnostic": _refresh_diagnostic(
+                provider, "timeout", "warning", "PROVIDER_TIMEOUT"
+            ),
+        }
+    except Exception:
+        return {
+            "status": "error",
+            "attempt": {"provider": provider, "status": "failed"},
+            "diagnostic": _refresh_diagnostic(
+                provider, "error", "warning", "PROVIDER_ERROR"
+            ),
+        }
+
+    if not isinstance(raw_candidates, list):
+        return {
+            "status": "error",
+            "attempt": {"provider": provider, "status": "failed"},
+            "diagnostic": _refresh_diagnostic(
+                provider, "error", "warning", "PROVIDER_ERROR"
+            ),
+        }
+    candidates = _normalize_news_candidate_batch(
+        raw_candidates[:max_results],
+        requested_symbol=symbol,
+        expected_provider=provider,
+    )
+    if candidates is None:
+        return {
+            "status": "error",
+            "attempt": {"provider": provider, "status": "failed"},
+            "diagnostic": _refresh_diagnostic(
+                provider,
+                "error",
+                "warning",
+                "PROVIDER_INVALID_CANDIDATE",
+            ),
+        }
+    persistable_candidates = [
+        candidate for candidate in candidates if _is_persistable_news_candidate(candidate)
+    ]
+    if not persistable_candidates:
+        code = "NO_PERSISTABLE_CANDIDATES" if candidates else "EMPTY_RESPONSE"
+        return {
+            "status": "empty",
+            "attempt": {
+                "provider": provider,
+                "status": "empty",
+                "candidate_count": len(candidates),
+            },
+            "diagnostic": _refresh_diagnostic(provider, "empty", "info", code),
+        }
+
+    try:
+        article_count, sentiment_count = persist_news_search_candidates(
+            persistable_candidates,
+            session=session,
+            expected_symbol=symbol,
+            expected_provider=provider,
+        )
+    except SQLAlchemyError:
+        session.rollback()
+        return {
+            "status": "error",
+            "attempt": {"provider": provider, "status": "failed"},
+            "diagnostic": _refresh_diagnostic(
+                provider,
+                "error",
+                "warning",
+                "PERSISTENCE_ERROR",
+            ),
+        }
+    if article_count <= 0:
+        return {
+            "status": "empty",
+            "attempt": {
+                "provider": provider,
+                "status": "empty",
+                "candidate_count": len(candidates),
+            },
+            "diagnostic": _refresh_diagnostic(
+                provider, "empty", "info", "EMPTY_RESPONSE"
+            ),
+        }
+    return {
+        "status": "persisted",
+        "article_count": article_count,
+        "sentiment_count": sentiment_count,
+        "attempt": {
+            "provider": provider,
+            "status": "persisted",
+            "candidate_count": len(candidates),
+        },
+        "diagnostic": _refresh_diagnostic(
+            provider,
+            "persisted",
+            "info",
+            "PROVIDER_PERSISTED",
+            details={"article_count": article_count},
+        ),
+    }
+
+
+def _run_refresh_source(
+    adapter: NewsSearchAdapter,
+    *,
+    provider: str,
+    symbol: str,
+    market: str,
+    max_results: int,
+    session: Session,
+    attempts: list[dict[str, object]],
+    diagnostics: list[dict[str, object]],
+) -> tuple[dict[str, object] | None, bool]:
+    outcome = _refresh_from_adapter(
+        adapter,
+        provider=provider,
+        symbol=symbol,
+        max_results=max_results,
+        session=session,
+    )
+    attempts.append(outcome["attempt"])
+    diagnostics.append(outcome["diagnostic"])
+    if outcome["status"] == "persisted":
+        return (
+            _refresh_success_payload(
+                symbol=symbol,
+                market=market,
+                provider=provider,
+                article_count=int(outcome["article_count"]),
+                sentiment_count=int(outcome["sentiment_count"]),
+                attempts=attempts,
+                diagnostics=diagnostics,
+                session=session,
+            ),
+            False,
+        )
+    return None, outcome["status"] in {"error", "timeout"}
+
+
+def _refresh_success_payload(
+    *,
+    symbol: str,
+    market: str,
+    provider: str,
+    article_count: int,
+    sentiment_count: int,
+    attempts: list[dict[str, object]],
+    diagnostics: list[dict[str, object]],
+    session: Session,
+) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "market": market,
+        "status": "refreshed",
+        "selected_provider": provider,
+        "persisted_article_count": article_count,
+        "persisted_sentiment_count": sentiment_count,
+        "attempts": attempts,
+        "diagnostics": diagnostics,
+        "news": get_news_sentiment_payload(symbol, session=session, market=market),
+    }
+
+
+def _refresh_diagnostic(
+    provider: str,
+    status: str,
+    severity: str,
+    code: str,
+    *,
+    details: dict[str, object] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "provider": provider,
+        "status": status,
+        "severity": severity,
+        "code": code,
+    }
+    if details:
+        payload["details"] = details
+    return payload
+
+
+def _is_exact_cn_stock(symbol: str, market: str) -> bool:
+    return market == "CN" and len(symbol) == 6 and symbol.isdigit()
+
+
+def _normalize_news_candidate_batch(
+    candidates: list[object],
+    *,
+    requested_symbol: str | None = None,
+    expected_provider: str | None = None,
+) -> list[NewsSearchCandidate] | None:
+    normalized: list[NewsSearchCandidate] = []
+    for candidate in candidates:
+        normalized_candidate = _normalize_news_search_candidate(
+            candidate,
+            requested_symbol=requested_symbol,
+            expected_provider=expected_provider,
+        )
+        if normalized_candidate is None:
+            return None
+        normalized.append(normalized_candidate)
+    return normalized
+
+
+def _normalize_news_search_candidate(
+    candidate: object,
+    *,
+    requested_symbol: str | None = None,
+    expected_provider: str | None = None,
+) -> NewsSearchCandidate | None:
+    if not isinstance(candidate, NewsSearchCandidate):
+        return None
+    string_fields = (
+        candidate.symbol,
+        candidate.query,
+        candidate.title,
+        candidate.url,
+        candidate.source,
+        candidate.provider,
+        candidate.result_kind,
+    )
+    if any(not isinstance(value, str) for value in string_fields):
+        return None
+    if candidate.summary is not None and not isinstance(candidate.summary, str):
+        return None
+    if candidate.published_at is not None and not isinstance(candidate.published_at, datetime):
+        return None
+    if not isinstance(candidate.retrieved_at, datetime):
+        return None
+
+    symbol = candidate.symbol.strip().upper()
+    normalized_requested_symbol = (
+        requested_symbol.strip().upper() if requested_symbol is not None else None
+    )
+    if normalized_requested_symbol is not None and symbol != normalized_requested_symbol:
+        return None
+    provider = candidate.provider.strip().lower()
+    normalized_expected_provider = (
+        expected_provider.strip().lower() if expected_provider is not None else None
+    )
+    if (
+        not provider
+        or normalized_expected_provider is not None
+        and provider != normalized_expected_provider
+    ):
+        return None
+    normalized_article = normalize_news_article_fields(
+        symbol=symbol,
+        title=candidate.title,
+        url=candidate.url,
+        source=candidate.source or candidate.provider,
+        published_at=candidate.published_at or candidate.retrieved_at,
+        summary=candidate.summary,
+    )
+    if normalized_article is None:
+        return None
+    return replace(
+        candidate,
+        symbol=normalized_article.symbol,
+        query=candidate.query.strip(),
+        title=normalized_article.title,
+        url=normalized_article.url,
+        source=normalized_article.source,
+        summary=normalized_article.summary,
+        provider=provider,
+        result_kind=candidate.result_kind.strip().lower(),
+    )
+
+
 def persist_news_search_candidates(
     candidates: list[NewsSearchCandidate],
     *,
     session: Session,
+    expected_symbol: str | None = None,
+    expected_provider: str | None = None,
 ) -> tuple[int, int]:
     article_count = 0
     sentiment_count = 0
-    for candidate in _dedupe_candidates(candidates):
+    validated_candidates = _normalize_news_candidate_batch(
+        list(candidates),
+        requested_symbol=expected_symbol,
+        expected_provider=expected_provider,
+    )
+    if validated_candidates is None:
+        return 0, 0
+
+    persistable_candidates = []
+    for candidate in _dedupe_candidates(validated_candidates):
         if not _is_persistable_news_candidate(candidate):
             continue
-
-        dedupe_hash = make_dedupe_hash(candidate.title, candidate.url)
-        existing = (
-            session.query(NewsArticle)
-            .filter(NewsArticle.dedupe_hash == dedupe_hash)
-            .one_or_none()
-        )
-        if existing is not None:
-            continue
-
-        article = NewsArticle(
+        normalized_article = normalize_news_article_fields(
             symbol=candidate.symbol,
             title=candidate.title,
             url=candidate.url,
             source=candidate.source or candidate.provider,
             published_at=candidate.published_at or candidate.retrieved_at,
             summary=candidate.summary,
-            dedupe_hash=dedupe_hash,
         )
-        session.add(article)
-        session.flush()
+        if normalized_article is None:
+            return 0, 0
+        persistable_candidates.append((candidate, normalized_article))
 
-        sentiment = classify_sentiment(f"{candidate.title} {candidate.summary or ''}")
-        session.add(
-            SentimentSignal(
-                article_id=article.id,
-                symbol=candidate.symbol,
-                sentiment=sentiment.sentiment,
-                confidence=sentiment.confidence,
-                reason=f"Keyword sentiment classifier on {candidate.provider} search candidate",
-            )
-        )
-        article_count += 1
-        sentiment_count += 1
+    for candidate, normalized_article in persistable_candidates:
+        if persist_normalized_news_article(
+            normalized_article,
+            session=session,
+            sentiment_reason=(
+                f"Keyword sentiment classifier on {candidate.provider} "
+                "search candidate"
+            ),
+        ):
+            article_count += 1
+            sentiment_count += 1
 
     session.commit()
     return article_count, sentiment_count
@@ -524,6 +1187,18 @@ def _default_http_getter(url: str, **kwargs: object) -> object:
     import httpx
 
     return httpx.get(url, **kwargs)
+
+
+def _default_akshare_news_fetcher(symbol: str) -> object:
+    import akshare as ak
+
+    return ak.stock_news_em(symbol=symbol)
+
+
+def _default_yfinance_ticker_factory(symbol: str) -> object:
+    import yfinance as yf
+
+    return yf.Ticker(symbol)
 
 
 def _extract_result_rows(payload: object) -> list[Mapping[str, Any]]:
@@ -696,7 +1371,7 @@ def _database_fallback_payload(
         return None
 
     payload = get_news_sentiment_payload(symbol, session=session)
-    article_count = int(payload.get("summary", {}).get("article_count", 0))  # type: ignore[union-attr]
+    article_count = _news_article_count(payload)
     if article_count > 0:
         diagnostics.append(
             _diagnostic(
@@ -735,6 +1410,16 @@ def _search_status(
     return "no_data"
 
 
+def _news_article_count(payload: dict[str, object]) -> int:
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        return 0
+    try:
+        return int(summary.get("article_count", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _default_news_query(symbol: str) -> str:
     return f"{symbol} financial news"
 
@@ -760,7 +1445,7 @@ def _diagnostic(
 
 def _first_text(row: Mapping[str, Any], keys: tuple[str, ...]) -> str | None:
     raw_value = _first_value(row, keys)
-    if raw_value is None:
+    if raw_value is None or isinstance(raw_value, (Mapping, list, tuple, set)):
         return None
     text = str(raw_value).strip()
     return text or None
@@ -773,11 +1458,54 @@ def _first_value(row: Mapping[str, Any], keys: tuple[str, ...]) -> object:
     return None
 
 
+def _nested_mapping_text(
+    row: Mapping[str, Any],
+    outer_keys: tuple[str, ...],
+    inner_keys: tuple[str, ...],
+) -> str | None:
+    for outer_key in outer_keys:
+        nested = row.get(outer_key)
+        if isinstance(nested, Mapping):
+            value = _first_text(nested, inner_keys)
+            if value:
+                return value
+    return None
+
+
 def _optional_payload_string(value: object) -> str | None:
     if value is None:
         return None
-    text = str(value).strip()
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
     return text or None
+
+
+def _frame_text(value: object) -> str | None:
+    if value is None or isinstance(value, (Mapping, list, tuple, set)):
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "nat", "none"}:
+        return None
+    return text
+
+
+def _parse_cn_news_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+    return parsed
 
 
 def _parse_datetime(value: object) -> datetime | None:

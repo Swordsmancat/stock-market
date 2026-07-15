@@ -61,6 +61,8 @@ INTRADAY_CACHE_UNAVAILABLE_REASON = (
 INTRADAY_PREVIOUS_CLOSE_LOOKBACK_DAYS = 10
 INTRADAY_CACHE_SOURCE = "provider_verified"
 INTRADAY_MARKET_META = {
+    "CN": {"name": "China A Share", "timezone": "Asia/Shanghai", "currency": "CNY"},
+    "HK": {"name": "Hong Kong Stock", "timezone": "Asia/Hong_Kong", "currency": "HKD"},
     "US": {"name": "US Stock", "timezone": "America/New_York", "currency": "USD"},
 }
 DEFAULT_MARKET_DEPTH_LEVELS = 5
@@ -77,6 +79,7 @@ LARGE_ORDERS_UNSUPPORTED_REASON = (
 FUND_FLOW_UNSUPPORTED_REASON = "Fund-flow data is not normalized or verified by this backend yet."
 CN_MARKET = "CN"
 DAILY_TIMEFRAME = "1d"
+RESEARCH_READY_DAILY_BAR_COUNT = 35
 
 MARKET_DEPTH_PROVIDER_CAPABILITIES = {
     "mock": {
@@ -158,6 +161,31 @@ class IntradayCacheWriteResult:
     fetched_at: str | None
     cached_at: str | None
     reason: str | None = None
+
+
+@dataclass(frozen=True)
+class IntradayBarSource:
+    provider: str
+    source: str
+    adapter: ProviderAdapter
+    configured: bool = True
+
+
+@dataclass(frozen=True)
+class IntradayBarFetchResult:
+    status: str
+    requested_provider: str
+    bars: list[ProviderIntradayBar]
+    effective_provider: str | None = None
+    source: str | None = None
+    fallback_used: bool = False
+    attempts: list[dict[str, object]] | None = None
+
+
+class IntradayBarValidationError(ValueError):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 def resolve_market_data_provider_name(provider_name: str | None = None) -> str:
@@ -260,7 +288,14 @@ def _fetch_provider_intraday_bars(
         raise _classify_provider_error(provider_name, "fetching intraday bars", error) from error
 
 
-def _provider_supports_verified_intraday_bars(provider: ProviderAdapter) -> bool:
+def _provider_supports_verified_intraday_bars(
+    provider: ProviderAdapter,
+    *,
+    provider_name: str,
+    cn_fallback_eligible: bool,
+) -> bool:
+    if provider_name == "akshare" and not cn_fallback_eligible:
+        return False
     return callable(getattr(provider, "fetch_intraday_bars", None))
 
 
@@ -689,6 +724,242 @@ def _build_cn_daily_bar_fetch_coordinator(
     return DailyBarFetchCoordinator(sources)
 
 
+def _is_cn_intraday_fallback_eligible(
+    *,
+    symbol: str,
+    market: str | None,
+    provider_name: str,
+) -> bool:
+    return bool(
+        market == CN_MARKET
+        and provider_name != "mock"
+        and len(symbol) == 6
+        and symbol.isdigit()
+    )
+
+
+def _intraday_source_name(provider_name: str) -> str:
+    if provider_name == "akshare":
+        return "akshare.stock_zh_a_hist_min_em"
+    return f"{provider_name}.fetch_intraday_bars"
+
+
+def _build_cn_intraday_sources(
+    *,
+    requested_provider: str,
+    primary_provider: ProviderAdapter,
+) -> list[IntradayBarSource]:
+    settings_payload = get_platform_settings()
+    akshare_configured = bool(settings_payload.get("akshare_enabled", False))
+    sources: list[IntradayBarSource] = []
+    seen_sources: set[str] = set()
+
+    def add_source(
+        *,
+        provider: str,
+        source: str,
+        adapter: ProviderAdapter,
+        configured: bool,
+    ) -> None:
+        if source in seen_sources:
+            return
+        seen_sources.add(source)
+        sources.append(
+            IntradayBarSource(
+                provider=provider,
+                source=source,
+                adapter=adapter,
+                configured=configured,
+            )
+        )
+
+    add_source(
+        provider=requested_provider,
+        source=_intraday_source_name(requested_provider),
+        adapter=primary_provider,
+        configured=True,
+    )
+    akshare = (
+        primary_provider
+        if requested_provider == "akshare"
+        else get_provider("akshare", market=CN_MARKET)
+    )
+    add_source(
+        provider="akshare",
+        source="akshare.stock_zh_a_hist_min_em",
+        adapter=akshare,
+        configured=requested_provider == "akshare" or akshare_configured,
+    )
+    sina = AkShareProvider(
+        intraday_downloader=AkShareProvider.download_sina_intraday_bars
+    )
+    add_source(
+        provider="akshare",
+        source="akshare.stock_zh_a_minute",
+        adapter=sina,
+        configured=requested_provider == "akshare" or akshare_configured,
+    )
+    return sources
+
+
+def _fetch_cn_intraday_bars(
+    *,
+    symbol: str,
+    trade_date: date,
+    timeframe: str,
+    requested_provider: str,
+    primary_provider: ProviderAdapter,
+    sources: list[IntradayBarSource] | None = None,
+) -> IntradayBarFetchResult:
+    attempts: list[dict[str, object]] = []
+    had_failure = False
+    resolved_sources = sources or _build_cn_intraday_sources(
+        requested_provider=requested_provider,
+        primary_provider=primary_provider,
+    )
+    for index, source in enumerate(resolved_sources):
+        if not source.configured:
+            attempts.append(
+                {
+                    "provider": source.provider,
+                    "source": source.source,
+                    "status": "skipped_unconfigured",
+                }
+            )
+            continue
+        fetch_intraday_bars = getattr(source.adapter, "fetch_intraday_bars", None)
+        if not callable(fetch_intraday_bars):
+            had_failure = True
+            attempts.append(
+                {
+                    "provider": source.provider,
+                    "source": source.source,
+                    "status": "unsupported",
+                }
+            )
+            continue
+        try:
+            bars = fetch_intraday_bars(symbol, trade_date, timeframe)
+        except Exception as exc:
+            had_failure = True
+            attempts.append(
+                {
+                    "provider": source.provider,
+                    "source": source.source,
+                    "status": "failed",
+                    "exception_type": type(exc).__name__,
+                }
+            )
+            continue
+        if not bars:
+            attempts.append(
+                {
+                    "provider": source.provider,
+                    "source": source.source,
+                    "status": "no_data",
+                    "row_count": 0,
+                }
+            )
+            continue
+        try:
+            bars = _validate_intraday_bars(
+                bars,
+                symbol=symbol,
+                trade_date=trade_date,
+            )
+        except IntradayBarValidationError as exc:
+            had_failure = True
+            attempts.append(
+                {
+                    "provider": source.provider,
+                    "source": source.source,
+                    "status": "invalid",
+                    "code": exc.code,
+                }
+            )
+            continue
+        attempts.append(
+            {
+                "provider": source.provider,
+                "source": source.source,
+                "status": "selected",
+                "row_count": len(bars),
+            }
+        )
+        return IntradayBarFetchResult(
+            status="ok",
+            requested_provider=requested_provider,
+            bars=bars,
+            effective_provider=source.provider,
+            source=source.source,
+            fallback_used=index > 0,
+            attempts=attempts,
+        )
+    return IntradayBarFetchResult(
+        status="failed" if had_failure else "no_data",
+        requested_provider=requested_provider,
+        bars=[],
+        attempts=attempts,
+    )
+
+
+def _validate_intraday_bars(
+    bars: list[ProviderIntradayBar],
+    *,
+    symbol: str,
+    trade_date: date,
+) -> list[ProviderIntradayBar]:
+    normalized_symbol = symbol.strip().upper()
+    seen_timestamps: set[datetime] = set()
+    timestamp_is_aware: bool | None = None
+    for bar in bars:
+        if (
+            not isinstance(bar, ProviderIntradayBar)
+            or not isinstance(bar.symbol, str)
+            or not isinstance(bar.timestamp, datetime)
+        ):
+            raise IntradayBarValidationError("MALFORMED_INTRADAY_BAR")
+        try:
+            current_timestamp_is_aware = bar.timestamp.utcoffset() is not None
+        except Exception as exc:
+            raise IntradayBarValidationError("MALFORMED_INTRADAY_BAR") from exc
+        if timestamp_is_aware is None:
+            timestamp_is_aware = current_timestamp_is_aware
+        elif timestamp_is_aware != current_timestamp_is_aware:
+            raise IntradayBarValidationError(
+                "MIXED_INTRADAY_TIMESTAMP_AWARENESS"
+            )
+        if bar.symbol.strip().upper() != normalized_symbol:
+            raise IntradayBarValidationError("INTRADAY_SYMBOL_MISMATCH")
+        if bar.timestamp.date() != trade_date:
+            raise IntradayBarValidationError("INTRADAY_DATE_MISMATCH")
+        if bar.timestamp in seen_timestamps:
+            raise IntradayBarValidationError("DUPLICATE_INTRADAY_TIMESTAMP")
+        seen_timestamps.add(bar.timestamp)
+        decimal_values = (bar.open, bar.high, bar.low, bar.close)
+        if any(
+            not isinstance(value, Decimal) or not value.is_finite()
+            for value in decimal_values
+        ):
+            raise IntradayBarValidationError("MALFORMED_INTRADAY_BAR")
+        if bar.amount is not None and (
+            not isinstance(bar.amount, Decimal) or not bar.amount.is_finite()
+        ):
+            raise IntradayBarValidationError("MALFORMED_INTRADAY_BAR")
+        if bar.average_price is not None and (
+            not isinstance(bar.average_price, Decimal)
+            or not bar.average_price.is_finite()
+        ):
+            raise IntradayBarValidationError("MALFORMED_INTRADAY_BAR")
+        if not isinstance(bar.volume, int) or bar.volume < 0:
+            raise IntradayBarValidationError("INVALID_INTRADAY_VOLUME")
+        if min(decimal_values) < 0 or bar.low > min(bar.open, bar.close, bar.high):
+            raise IntradayBarValidationError("INVALID_INTRADAY_OHLC")
+        if bar.high < max(bar.open, bar.close, bar.low):
+            raise IntradayBarValidationError("INVALID_INTRADAY_OHLC")
+    return sorted(bars, key=lambda item: item.timestamp)
+
+
 def get_bars_payload(
     symbol: str,
     timeframe: str,
@@ -701,6 +972,9 @@ def get_bars_payload(
     requested_provider_name = _normalize_requested_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
     normalized_market = market.strip().upper() if market and market.strip() else None
+    database_fallback_payload: dict[str, object] | None = None
+    required_remote_coverage: tuple[date, date] | None = None
+    required_remote_row_count: int | None = None
     if timeframe == "1d" and session is not None:
         try:
             db_bars = _fetch_daily_bars_from_database(
@@ -713,6 +987,7 @@ def get_bars_payload(
         except SQLAlchemyError:
             db_bars = []
         if db_bars:
+            stored_db_bars = db_bars
             stored_row_count = len(db_bars)
             db_bars = _coherent_database_daily_bar_series(db_bars)
             serialized_db_bars = [serialize_daily_bar(bar) for bar in db_bars]
@@ -724,7 +999,7 @@ def get_bars_payload(
             availability = _build_data_availability_metadata(serialized_db_bars)
             if database_diagnostics:
                 availability["status"] = "degraded"
-            return {
+            database_payload: dict[str, object] = {
                 "symbol": symbol,
                 "market": normalized_market,
                 "timeframe": timeframe,
@@ -737,6 +1012,25 @@ def get_bars_payload(
                 "items": serialized_db_bars,
                 **availability,
             }
+            should_recover_mixed_database = bool(
+                stored_row_count >= RESEARCH_READY_DAILY_BAR_COUNT
+                and len(db_bars) < RESEARCH_READY_DAILY_BAR_COUNT
+                and stored_row_count > len(db_bars)
+                and _is_cn_daily_bar_fallback_eligible(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    market=normalized_market,
+                    provider_name=effective_provider_name,
+                )
+            )
+            if not should_recover_mixed_database:
+                return database_payload
+            database_fallback_payload = database_payload
+            required_remote_coverage = (
+                stored_db_bars[0].trade_date,
+                stored_db_bars[-1].trade_date,
+            )
+            required_remote_row_count = stored_row_count
 
     if _is_cn_daily_bar_fallback_eligible(
         symbol=symbol,
@@ -750,7 +1044,12 @@ def get_bars_payload(
             start,
             end,
             policy=CN_RESILIENT_POLICY,
+            required_coverage=required_remote_coverage,
+            minimum_row_count=required_remote_row_count,
         )
+        if database_fallback_payload is not None and not fetch_result.bars:
+            database_fallback_payload["source_attempts"] = fetch_result.attempts
+            return database_fallback_payload
         selected_provider = fetch_result.effective_provider or effective_provider_name
         serialized_provider_bars = _serialize_provider_bars(
             fetch_result.bars,
@@ -838,6 +1137,7 @@ def get_intraday_bars_payload(
     timeframe: str = DEFAULT_INTRADAY_TIMEFRAME,
     session: Session | None = None,
     provider_name: str | None = None,
+    market: str | None = None,
 ) -> dict[str, object]:
     if timeframe != DEFAULT_INTRADAY_TIMEFRAME:
         msg = f"Unsupported intraday timeframe: {timeframe}. Only {DEFAULT_INTRADAY_TIMEFRAME} is supported."
@@ -845,22 +1145,23 @@ def get_intraday_bars_payload(
 
     requested_provider_name = _normalize_requested_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
-    provider = get_provider(effective_provider_name)
+    normalized_market = market.strip().upper() if market and market.strip() else None
+    provider = (
+        get_provider(effective_provider_name)
+        if normalized_market is None
+        else get_provider(effective_provider_name, market=normalized_market)
+    )
     database_previous_close = _get_previous_close_reference_from_database(
         symbol=symbol,
         trade_date=trade_date,
         session=session,
+        market=normalized_market,
     )
-
-    if not _provider_supports_verified_intraday_bars(provider):
-        return _build_unsupported_intraday_payload(
-            symbol=symbol,
-            trade_date=trade_date,
-            timeframe=timeframe,
-            requested_provider_name=requested_provider_name,
-            effective_provider_name=effective_provider_name,
-            previous_close=database_previous_close,
-        )
+    cn_fallback_eligible = _is_cn_intraday_fallback_eligible(
+        symbol=symbol,
+        market=normalized_market,
+        provider_name=effective_provider_name,
+    )
 
     if _is_future_trade_date(trade_date):
         return _build_intraday_no_data_payload(
@@ -872,6 +1173,7 @@ def get_intraday_bars_payload(
             previous_close=database_previous_close,
             reason=INTRADAY_FUTURE_NO_DATA_REASON,
             source="none",
+            market=normalized_market,
         )
 
     if _is_weekend_trade_date(trade_date):
@@ -884,6 +1186,7 @@ def get_intraday_bars_payload(
             previous_close=database_previous_close,
             reason=INTRADAY_WEEKEND_NO_DATA_REASON,
             source="none",
+            market=normalized_market,
         )
 
     if _is_known_intraday_market_holiday(effective_provider_name, symbol, trade_date):
@@ -896,6 +1199,7 @@ def get_intraday_bars_payload(
             previous_close=database_previous_close,
             reason=INTRADAY_KNOWN_HOLIDAY_NO_DATA_REASON,
             source="none",
+            market=normalized_market,
         )
 
     session_status = _classify_regular_intraday_session_status(trade_date)
@@ -906,44 +1210,116 @@ def get_intraday_bars_payload(
         session=session,
         provider_name=effective_provider_name,
         session_status=session_status,
+        market=normalized_market,
     )
     if cache_lookup.status == "hit":
+        cache_entry = cache_lookup.entry
+        cached_provider = (
+            cache_entry.provider if cache_entry is not None else effective_provider_name
+        )
+        cached_upstream_source = (
+            cache_entry.source
+            if cache_entry is not None and cache_entry.source != INTRADAY_CACHE_SOURCE
+            else _intraday_source_name(cached_provider)
+        )
         return _build_intraday_ok_payload(
             symbol=symbol,
             trade_date=trade_date,
             timeframe=timeframe,
             requested_provider_name=requested_provider_name,
-            effective_provider_name=effective_provider_name,
+            effective_provider_name=cached_provider,
             previous_close=database_previous_close,
             items=cache_lookup.items,
             source="cache",
             freshness_status="closed",
             freshness_reason=None,
             cache_status="hit",
-            fetched_at=cache_lookup.entry.fetched_at.isoformat()
-            if cache_lookup.entry is not None
-            else None,
-            cached_at=cache_lookup.entry.cached_at.isoformat()
-            if cache_lookup.entry is not None
-            else None,
+            fetched_at=(
+                cache_entry.fetched_at.isoformat()
+                if cache_entry is not None
+                else None
+            ),
+            cached_at=(
+                cache_entry.cached_at.isoformat()
+                if cache_entry is not None
+                else None
+            ),
             session_status=session_status,
+            upstream_source=cached_upstream_source,
+            fallback_used=(
+                cached_provider != effective_provider_name
+                or cached_upstream_source
+                != _intraday_source_name(effective_provider_name)
+            ),
+            market=normalized_market,
         )
 
+    if not cn_fallback_eligible and not _provider_supports_verified_intraday_bars(
+        provider,
+        provider_name=effective_provider_name,
+        cn_fallback_eligible=cn_fallback_eligible,
+    ):
+        return _build_unsupported_intraday_payload(
+            symbol=symbol,
+            trade_date=trade_date,
+            timeframe=timeframe,
+            requested_provider_name=requested_provider_name,
+            effective_provider_name=effective_provider_name,
+            previous_close=database_previous_close,
+            market=normalized_market,
+        )
+
+    intraday_sources = (
+        _build_cn_intraday_sources(
+            requested_provider=effective_provider_name,
+            primary_provider=provider,
+        )
+        if cn_fallback_eligible
+        else [
+            IntradayBarSource(
+                provider=effective_provider_name,
+                source=_intraday_source_name(effective_provider_name),
+                adapter=provider,
+            )
+        ]
+    )
     previous_close = _get_previous_close_reference(
         symbol=symbol,
         trade_date=trade_date,
         session=session,
         provider_name=effective_provider_name,
+        market=normalized_market,
     )
-    intraday_bars = _fetch_provider_intraday_bars(
-        provider,
-        effective_provider_name,
-        symbol,
-        trade_date,
-        timeframe,
-    )
+    if cn_fallback_eligible:
+        fetch_result = _fetch_cn_intraday_bars(
+            symbol=symbol,
+            trade_date=trade_date,
+            timeframe=timeframe,
+            requested_provider=effective_provider_name,
+            primary_provider=provider,
+            sources=intraday_sources,
+        )
+        intraday_bars = fetch_result.bars
+        selected_provider_name = fetch_result.effective_provider or effective_provider_name
+        upstream_source = fetch_result.source
+        fallback_used = fetch_result.fallback_used
+        source_attempts = fetch_result.attempts or []
+        fetch_status = fetch_result.status
+    else:
+        intraday_bars = _fetch_provider_intraday_bars(
+            provider,
+            effective_provider_name,
+            symbol,
+            trade_date,
+            timeframe,
+        )
+        selected_provider_name = effective_provider_name
+        upstream_source = f"{effective_provider_name}.fetch_intraday_bars"
+        fallback_used = False
+        source_attempts = []
+        fetch_status = "ok" if intraday_bars else "no_data"
     serialized_intraday_bars = _serialize_provider_intraday_bars(
-        intraday_bars, effective_provider_name
+        intraday_bars, selected_provider_name
     )
     if not serialized_intraday_bars:
         return _build_intraday_no_data_payload(
@@ -951,10 +1327,15 @@ def get_intraday_bars_payload(
             trade_date=trade_date,
             timeframe=timeframe,
             requested_provider_name=requested_provider_name,
-            effective_provider_name=effective_provider_name,
+            effective_provider_name=selected_provider_name,
             previous_close=previous_close,
             reason=INTRADAY_NO_DATA_REASON,
             cache_status=_provider_empty_intraday_cache_status(cache_lookup.status, session_status),
+            status="degraded" if fetch_status == "failed" else "no_data",
+            upstream_source=upstream_source,
+            fallback_used=fallback_used,
+            source_attempts=source_attempts,
+            market=normalized_market,
         )
 
     cache_write = _persist_intraday_cache_bars(
@@ -962,17 +1343,19 @@ def get_intraday_bars_payload(
         trade_date=trade_date,
         timeframe=timeframe,
         session=session,
-        provider_name=effective_provider_name,
+        provider_name=selected_provider_name,
         session_status=session_status,
         bars=intraday_bars,
         cache_lookup_status=cache_lookup.status,
+        upstream_source=upstream_source,
+        market=normalized_market,
     )
     return _build_intraday_ok_payload(
         symbol=symbol,
         trade_date=trade_date,
         timeframe=timeframe,
         requested_provider_name=requested_provider_name,
-        effective_provider_name=effective_provider_name,
+        effective_provider_name=selected_provider_name,
         previous_close=previous_close,
         items=serialized_intraday_bars,
         source="provider",
@@ -984,6 +1367,10 @@ def get_intraday_bars_payload(
         fetched_at=cache_write.fetched_at,
         cached_at=cache_write.cached_at,
         session_status=session_status,
+        upstream_source=upstream_source,
+        fallback_used=fallback_used,
+        source_attempts=source_attempts,
+        market=normalized_market,
     )
 
 
@@ -998,6 +1385,11 @@ def _build_intraday_no_data_payload(
     reason: str,
     source: str = "provider",
     cache_status: str | None = None,
+    status: str = "no_data",
+    upstream_source: str | None = None,
+    fallback_used: bool = False,
+    source_attempts: list[dict[str, object]] | None = None,
+    market: str | None = None,
 ) -> dict[str, object]:
     return {
         "symbol": symbol,
@@ -1007,11 +1399,14 @@ def _build_intraday_no_data_payload(
         "provider": effective_provider_name,
         "requested_provider": requested_provider_name,
         "effective_provider": effective_provider_name,
-        "status": "no_data",
+        "upstream_source": upstream_source,
+        "fallback_used": fallback_used,
+        "source_attempts": source_attempts or [],
+        "status": status,
         "previous_close": previous_close,
         "items": [],
         "availability": {
-            "status": "no_data",
+            "status": status,
             "reason": reason,
             "is_realtime": False,
             "is_delayed": True,
@@ -1029,6 +1424,7 @@ def _build_intraday_no_data_payload(
             trade_date=trade_date,
             status=_intraday_session_status_for_reason(reason, trade_date),
             reason=reason,
+            market=market,
         ),
     }
 
@@ -1049,6 +1445,10 @@ def _build_intraday_ok_payload(
     fetched_at: str | None,
     cached_at: str | None,
     session_status: str,
+    upstream_source: str | None = None,
+    fallback_used: bool = False,
+    source_attempts: list[dict[str, object]] | None = None,
+    market: str | None = None,
 ) -> dict[str, object]:
     return {
         "symbol": symbol,
@@ -1058,6 +1458,9 @@ def _build_intraday_ok_payload(
         "provider": effective_provider_name,
         "requested_provider": requested_provider_name,
         "effective_provider": effective_provider_name,
+        "upstream_source": upstream_source,
+        "fallback_used": fallback_used,
+        "source_attempts": source_attempts or [],
         "status": "ok",
         "previous_close": previous_close,
         "items": items,
@@ -1082,6 +1485,7 @@ def _build_intraday_ok_payload(
             trade_date=trade_date,
             status=session_status,
             reason=None,
+            market=market,
         ),
     }
 
@@ -1178,6 +1582,7 @@ def _build_unsupported_intraday_payload(
     requested_provider_name: str | None,
     effective_provider_name: str,
     previous_close: float | None,
+    market: str | None = None,
 ) -> dict[str, object]:
     return {
         "symbol": symbol,
@@ -1209,6 +1614,7 @@ def _build_unsupported_intraday_payload(
             trade_date=trade_date,
             status="unsupported_market",
             reason=INTRADAY_UNSUPPORTED_REASON,
+            market=market,
         ),
     }
 
@@ -1241,10 +1647,11 @@ def _build_intraday_session_metadata(
     trade_date: date,
     status: str,
     reason: str | None,
+    market: str | None = None,
 ) -> dict[str, object]:
     return {
-        "market": _infer_intraday_market(provider_name, symbol),
-        "timezone": _infer_intraday_timezone(provider_name, symbol),
+        "market": _infer_intraday_market(provider_name, symbol, market),
+        "timezone": _infer_intraday_timezone(provider_name, symbol, market),
         "trading_date": trade_date.isoformat(),
         "status": status,
         "reason": reason,
@@ -1266,23 +1673,39 @@ def _get_intraday_cache_lookup(
     session: Session | None,
     provider_name: str,
     session_status: str,
+    market: str | None = None,
 ) -> IntradayCacheLookup:
     if session_status != "closed_session":
         return IntradayCacheLookup(status="skipped", items=[], reason=None)
-    if session is None or not _can_use_persistent_intraday_cache(provider_name, symbol):
+    if session is None or not _can_use_persistent_intraday_cache(
+        provider_name,
+        symbol,
+        market,
+    ):
         return IntradayCacheLookup(
             status="unavailable", items=[], reason=INTRADAY_CACHE_UNAVAILABLE_REASON
         )
 
     normalized_symbol = _normalize_intraday_cache_symbol(symbol)
+    market_code = _infer_intraday_market(provider_name, symbol, market)
     try:
         cache_entry = (
             session.query(IntradayMinuteCacheEntry)
-            .filter(IntradayMinuteCacheEntry.provider == provider_name)
+            .join(
+                Instrument,
+                IntradayMinuteCacheEntry.instrument_id == Instrument.id,
+            )
+            .join(Market, Instrument.market_id == Market.id)
             .filter(IntradayMinuteCacheEntry.symbol == normalized_symbol)
             .filter(IntradayMinuteCacheEntry.trade_date == trade_date)
             .filter(IntradayMinuteCacheEntry.timeframe == timeframe)
-            .one_or_none()
+            .filter(Instrument.symbol == normalized_symbol)
+            .filter(Market.code == market_code)
+            .order_by(
+                IntradayMinuteCacheEntry.cached_at.desc(),
+                IntradayMinuteCacheEntry.id.desc(),
+            )
+            .first()
         )
         if cache_entry is None:
             return IntradayCacheLookup(status="miss", items=[])
@@ -1321,6 +1744,8 @@ def _persist_intraday_cache_bars(
     session_status: str,
     bars: list[ProviderIntradayBar],
     cache_lookup_status: str,
+    upstream_source: str | None = None,
+    market: str | None = None,
 ) -> IntradayCacheWriteResult:
     fetched_at = datetime.now(timezone.utc)
     fetched_at_iso = fetched_at.isoformat()
@@ -1329,7 +1754,7 @@ def _persist_intraday_cache_bars(
     if (
         session is None
         or cache_lookup_status == "unavailable"
-        or not _can_use_persistent_intraday_cache(provider_name, symbol)
+        or not _can_use_persistent_intraday_cache(provider_name, symbol, market)
     ):
         return IntradayCacheWriteResult(
             status="unavailable",
@@ -1351,7 +1776,13 @@ def _persist_intraday_cache_bars(
             session=session,
             provider_name=provider_name,
             symbol=normalized_symbol,
+            market=market,
         )
+        session.query(MinuteBar).filter(
+            MinuteBar.instrument_id == instrument.id,
+            MinuteBar.ts >= first_ts,
+            MinuteBar.ts <= last_ts,
+        ).delete(synchronize_session=False)
         for provider_bar, timestamp in normalized_bars:
             minute_bar = session.get(MinuteBar, (instrument.id, timestamp))
             if minute_bar is None:
@@ -1364,8 +1795,17 @@ def _persist_intraday_cache_bars(
             minute_bar.volume = Decimal(provider_bar.volume)
             minute_bar.amount = provider_bar.amount
 
+        session.query(IntradayMinuteCacheEntry).filter(
+            IntradayMinuteCacheEntry.instrument_id == instrument.id,
+            IntradayMinuteCacheEntry.symbol == normalized_symbol,
+            IntradayMinuteCacheEntry.trade_date == trade_date,
+            IntradayMinuteCacheEntry.timeframe == timeframe,
+            IntradayMinuteCacheEntry.provider != provider_name,
+        ).delete(synchronize_session=False)
+
         cache_entry = (
             session.query(IntradayMinuteCacheEntry)
+            .filter(IntradayMinuteCacheEntry.instrument_id == instrument.id)
             .filter(IntradayMinuteCacheEntry.provider == provider_name)
             .filter(IntradayMinuteCacheEntry.symbol == normalized_symbol)
             .filter(IntradayMinuteCacheEntry.trade_date == trade_date)
@@ -1381,7 +1821,7 @@ def _persist_intraday_cache_bars(
             )
             session.add(cache_entry)
         cache_entry.instrument_id = instrument.id
-        cache_entry.source = INTRADAY_CACHE_SOURCE
+        cache_entry.source = upstream_source or INTRADAY_CACHE_SOURCE
         cache_entry.row_count = len(normalized_bars)
         cache_entry.first_ts = first_ts
         cache_entry.last_ts = last_ts
@@ -1402,8 +1842,12 @@ def _persist_intraday_cache_bars(
     )
 
 
-def _can_use_persistent_intraday_cache(provider_name: str, symbol: str) -> bool:
-    return _infer_intraday_market(provider_name, symbol) in INTRADAY_MARKET_META
+def _can_use_persistent_intraday_cache(
+    provider_name: str,
+    symbol: str,
+    market: str | None = None,
+) -> bool:
+    return _infer_intraday_market(provider_name, symbol, market) in INTRADAY_MARKET_META
 
 
 def _get_or_create_intraday_cache_instrument(
@@ -1411,8 +1855,9 @@ def _get_or_create_intraday_cache_instrument(
     session: Session,
     provider_name: str,
     symbol: str,
+    market: str | None = None,
 ) -> Instrument:
-    market_code = _infer_intraday_market(provider_name, symbol)
+    market_code = _infer_intraday_market(provider_name, symbol, market)
     if market_code is None:
         msg = f"Cannot infer intraday cache market for provider={provider_name} symbol={symbol}"
         raise ValueError(msg)
@@ -1522,16 +1967,28 @@ def _intraday_session_status_for_reason(reason: str, trade_date: date) -> str:
     return "unknown"
 
 
-def _infer_intraday_market(provider_name: str, symbol: str) -> str | None:
+def _infer_intraday_market(
+    provider_name: str,
+    symbol: str,
+    market: str | None = None,
+) -> str | None:
+    normalized_market = market.strip().upper() if market and market.strip() else None
+    if normalized_market in INTRADAY_MARKET_META:
+        return normalized_market
     if provider_name == "yfinance" and _symbol_looks_like_us_equity(symbol):
         return "US"
     return None
 
 
-def _infer_intraday_timezone(provider_name: str, symbol: str) -> str | None:
-    if provider_name == "yfinance" and _symbol_looks_like_us_equity(symbol):
-        return "America/New_York"
-    return None
+def _infer_intraday_timezone(
+    provider_name: str,
+    symbol: str,
+    market: str | None = None,
+) -> str | None:
+    market_code = _infer_intraday_market(provider_name, symbol, market)
+    if market_code is None:
+        return None
+    return INTRADAY_MARKET_META[market_code]["timezone"]
 
 
 def _get_previous_close_reference(
@@ -1540,6 +1997,7 @@ def _get_previous_close_reference(
     trade_date: date,
     session: Session | None,
     provider_name: str,
+    market: str | None = None,
 ) -> float | None:
     lookback_start = trade_date - timedelta(days=INTRADAY_PREVIOUS_CLOSE_LOOKBACK_DAYS)
     lookback_end = trade_date - timedelta(days=1)
@@ -1554,6 +2012,7 @@ def _get_previous_close_reference(
             lookback_end,
             session=session,
             provider_name=provider_name,
+            market=market,
         )
     except (MarketDataProviderError, ValueError, SQLAlchemyError):
         return None
@@ -1577,6 +2036,7 @@ def _get_previous_close_reference_from_database(
     symbol: str,
     trade_date: date,
     session: Session | None,
+    market: str | None = None,
 ) -> float | None:
     if session is None:
         return None
@@ -1587,7 +2047,13 @@ def _get_previous_close_reference_from_database(
         return None
 
     try:
-        db_bars = _fetch_daily_bars_from_database(symbol, lookback_start, lookback_end, session)
+        db_bars = _fetch_daily_bars_from_database(
+            symbol,
+            lookback_start,
+            lookback_end,
+            session,
+            market,
+        )
     except SQLAlchemyError:
         session.rollback()
         return None

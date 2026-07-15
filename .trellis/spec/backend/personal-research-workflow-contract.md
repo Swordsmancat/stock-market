@@ -286,3 +286,88 @@ result = coordinator.fetch(
 
 The coordinator selects one validated configured source, preserves sanitized
 provenance, and returns explicit no-data/degraded state when none succeeds.
+
+## Scenario: Mixed-Provenance Daily Recovery
+
+### 1. Scope / Trigger
+
+- Trigger: a CN daily-bar read finds a research-ready stored range, but mixed
+  provider/source/adjustment provenance leaves the newest coherent cohort too
+  short for personal research.
+- Non-goals: writing recovered bars, stitching sources, changing readiness
+  thresholds, backfill, or non-CN fallback.
+
+### 2. Signatures
+
+- Existing bars API and service signatures remain unchanged.
+- `DailyBarFetchCoordinator.fetch(...)` accepts additive
+  `required_coverage: tuple[date, date] | None` and
+  `minimum_row_count: int | None`.
+
+### 3. Contracts
+
+- A coherent database cohort remains authoritative and triggers no provider
+  request.
+- A mixed, research-ready stored range may run the existing CN resilient
+  coordinator with the full stored date range as required coverage.
+- A remote candidate outside the required start/end coverage is recorded as
+  `insufficient_coverage`; the coordinator continues without merging rows.
+- A boundary-spanning remote candidate is still insufficient when it contains
+  fewer rows than the complete mixed stored range. Recovery passes the original
+  stored row count as `minimum_row_count`; it never substitutes the fixed
+  35-row research-readiness threshold for completeness.
+- The first complete validated remote series replaces the projection for that
+  response only. GET remains read-only.
+- Exhaustion returns the prior non-empty coherent database cohort as degraded,
+  including mixed-provenance diagnostics and sanitized source attempts.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| One coherent stored cohort | Return database immediately |
+| Mixed stored range below recovery threshold | Keep current coherent cohort |
+| Primary remote misses required boundary | `insufficient_coverage`; continue |
+| Primary spans boundaries but has fewer rows than stored range | `insufficient_coverage`; continue |
+| Later remote covers and validates | Return that source only, `status="ok"` |
+| Every remote empty/invalid/failed/short | Return prior database cohort, degraded |
+| Any remote response contains mixed/invalid rows | Reject the whole candidate |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a two-row newest cohort over 60 stored rows rejects a sparse
+  boundary-spanning 35-row source, then selects a complete 60-row AkShare
+  series without changing the database.
+- Base: a coherent stored series remains a zero-network database hit.
+- Bad: accept a sparse latest-only remote result, merge qfq/raw rows, or return
+  an empty payload after recovery exhaustion.
+
+### 6. Tests Required
+
+- Coordinator tests assert insufficient coverage continues in exact order and
+  attempts expose no exception messages or provider bodies. A dedicated test
+  must prove first/last-date coverage alone cannot satisfy a larger
+  `minimum_row_count`.
+- Service tests assert complete recovery, read-only row count, and preservation
+  of the degraded non-empty cohort when all remote candidates fail.
+- Existing latest/indicator/assistant provenance tests remain green.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+if database_is_mixed:
+    return remote_rows or []
+```
+
+#### Correct
+
+```python
+result = coordinator.fetch(
+    ...,
+    required_coverage=(stored_start, stored_end),
+    minimum_row_count=stored_row_count,
+)
+return serialize(result.bars) if result.bars else degraded_database_payload
+```

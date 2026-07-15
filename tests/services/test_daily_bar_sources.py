@@ -360,6 +360,63 @@ def test_resilient_policy_skips_provider_bars_with_non_finite_amount() -> None:
     assert result.attempts[0]["code"] == "NON_FINITE_VALUE"
 
 
+def test_minimum_row_count_rejects_sparse_boundary_spanning_source() -> None:
+    first_trade_date = date(2026, 5, 1)
+    trade_dates = [
+        date.fromordinal(first_trade_date.toordinal() + offset)
+        for offset in range(60)
+    ]
+
+    def bars_for(dates: list[date]) -> list[ProviderBar]:
+        return [
+            ProviderBar(
+                symbol="600519",
+                timestamp=trade_date,
+                open=Decimal("100"),
+                high=Decimal("101"),
+                low=Decimal("99"),
+                close=Decimal("100"),
+                volume=Decimal("1000"),
+            )
+            for trade_date in dates
+        ]
+
+    coordinator = DailyBarFetchCoordinator(
+        [
+            _source(
+                "yfinance.fetch_bars",
+                0,
+                lambda *_args: bars_for(trade_dates[:34] + [trade_dates[-1]]),
+                provider="yfinance",
+            ),
+            _source(
+                "akshare.stock_zh_a_hist",
+                1,
+                lambda *_args: bars_for(trade_dates),
+            ),
+        ]
+    )
+
+    result = coordinator.fetch(
+        "600519",
+        "1d",
+        trade_dates[0],
+        trade_dates[-1],
+        policy=CN_RESILIENT_POLICY,
+        required_coverage=(trade_dates[0], trade_dates[-1]),
+        minimum_row_count=len(trade_dates),
+    )
+
+    assert result.status == "ok"
+    assert result.source == "akshare.stock_zh_a_hist"
+    assert result.attempts[0] == {
+        "provider": "yfinance",
+        "source": "yfinance.fetch_bars",
+        "status": "insufficient_coverage",
+        "row_count": 35,
+    }
+
+
 def test_selected_daily_bars_are_normalized_to_ascending_trade_date() -> None:
     older = _bar(close="100")
     newer = _bar(close="110")

@@ -1,4 +1,10 @@
 import { backendFetch } from "@/lib/backend-api";
+import {
+  isInstrumentNewsPayload,
+  type InstrumentNewsPayload,
+} from "@/lib/news-payload";
+
+export type { InstrumentNewsPayload } from "@/lib/news-payload";
 
 const DETAIL_BARS_LOOKBACK_DAYS = 180;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -190,24 +196,6 @@ export type InstrumentFundamentalsPayload = {
   } | null;
 };
 
-export type InstrumentNewsPayload = {
-  symbol: string;
-  source?: string | null;
-  summary?: {
-    latest_sentiment?: string | null;
-    article_count?: number | null;
-  } | null;
-  items?: Array<{
-    title: string;
-    url?: string | null;
-    source?: string | null;
-    published_at?: string | null;
-    summary?: string | null;
-    sentiment?: string | null;
-    confidence?: number | null;
-  }>;
-};
-
 export type InstrumentDailyReportPayload = {
   symbol: string;
   report_type?: string | null;
@@ -271,6 +259,7 @@ export type InstrumentDetailPayload = {
   indicators?: InstrumentIndicatorsPayload;
   fundamentals?: InstrumentFundamentalsPayload;
   news?: InstrumentNewsPayload;
+  news_load_status?: "loaded" | "failed";
   latest_daily_report?: InstrumentDailyReportPayload;
   daily_report_history?: InstrumentDailyReportHistoryPayload;
   range: {
@@ -444,16 +433,32 @@ function copyContentType(response: Response): HeadersInit {
   return contentType ? { "content-type": contentType } : {};
 }
 
-async function fetchOptionalBackendJson<T>(path: string, fallback: T): Promise<T> {
+type OptionalBackendJsonResult<T> =
+  | { status: "loaded"; payload: T }
+  | { status: "failed"; payload: T };
+
+async function fetchOptionalBackendJsonResult<T>(
+  path: string,
+  fallback: T,
+  isValid?: (value: unknown) => value is T,
+): Promise<OptionalBackendJsonResult<T>> {
   try {
     const response = await backendFetch(path, { cache: "no-store" });
     if (!response.ok) {
-      return fallback;
+      return { status: "failed", payload: fallback };
     }
-    return (await response.json()) as T;
+    const payload = (await response.json()) as unknown;
+    if (isValid && !isValid(payload)) {
+      return { status: "failed", payload: fallback };
+    }
+    return { status: "loaded", payload: payload as T };
   } catch {
-    return fallback;
+    return { status: "failed", payload: fallback };
   }
+}
+
+async function fetchOptionalBackendJson<T>(path: string, fallback: T): Promise<T> {
+  return (await fetchOptionalBackendJsonResult(path, fallback)).payload;
 }
 
 function buildUnavailableIntradayPayload({
@@ -594,25 +599,28 @@ export async function fetchInstrumentDetailPayload({
   const requestSymbol = resolveInstrumentDetailRequestSymbol(symbol, normalizedProviderName);
   const usesProviderSpecificSymbol =
     requestSymbol.trim().toUpperCase() !== symbol.trim().toUpperCase();
-  const dailyMarketQuerySuffix = normalizedMarket && !usesProviderSpecificSymbol
+  const marketQuerySuffix = normalizedMarket && !usesProviderSpecificSymbol
     ? `&market=${encodeURIComponent(normalizedMarket)}`
+    : "";
+  const newsMarketQuery = normalizedMarket && !usesProviderSpecificSymbol
+    ? `?market=${encodeURIComponent(normalizedMarket)}`
     : "";
   const encodedSymbol = encodeURIComponent(requestSymbol);
   const encodedOriginalSymbol = encodeURIComponent(symbol);
-  const barsPath = `/market-data/${encodedSymbol}/bars?timeframe=1d&start=${start}&end=${end}${providerQuerySuffix}${dailyMarketQuerySuffix}`;
+  const barsPath = `/market-data/${encodedSymbol}/bars?timeframe=1d&start=${start}&end=${end}${providerQuerySuffix}${marketQuerySuffix}`;
 
   const [
     marketDataResults,
     indicatorsData,
     fundamentalsData,
-    newsData,
+    newsDataResult,
     latestDailyReportData,
     dailyReportHistoryData,
   ] = await Promise.all([
     Promise.allSettled([
       backendFetch(barsPath, { cache: "no-store" }),
       backendFetch(
-        `/market-data/${encodedSymbol}/intraday?date=${end}&timeframe=1m${providerQuerySuffix}`,
+        `/market-data/${encodedSymbol}/intraday?date=${end}&timeframe=1m${providerQuerySuffix}${marketQuerySuffix}`,
         { cache: "no-store" },
       ),
       backendFetch(
@@ -630,12 +638,17 @@ export async function fetchInstrumentDetailPayload({
       source: null,
       item: null,
     }),
-    fetchOptionalBackendJson<InstrumentNewsPayload>(`/news/${encodedOriginalSymbol}`, {
-      symbol,
-      source: null,
-      summary: { latest_sentiment: null, article_count: 0 },
-      items: [],
-    }),
+    fetchOptionalBackendJsonResult<InstrumentNewsPayload>(
+      `/news/${encodedOriginalSymbol}${newsMarketQuery}`,
+      {
+        symbol,
+        source: null,
+        summary: { latest_sentiment: null, article_count: 0 },
+        items: [],
+      },
+      (value): value is InstrumentNewsPayload =>
+        isInstrumentNewsPayload(value, symbol),
+    ),
     fetchOptionalBackendJson<InstrumentDailyReportPayload>(`/reports/${encodedOriginalSymbol}/daily/latest`, {
       symbol,
       report_type: "stock_daily",
@@ -704,7 +717,8 @@ export async function fetchInstrumentDetailPayload({
       market_depth: marketDepthData,
       indicators: indicatorsData,
       fundamentals: fundamentalsData,
-      news: newsData,
+      news: newsDataResult.payload,
+      news_load_status: newsDataResult.status,
       latest_daily_report: latestDailyReportData,
       daily_report_history: dailyReportHistoryData,
       range: { timeframe: "1d", start, end },

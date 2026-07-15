@@ -236,11 +236,12 @@ class IntradayMinuteCacheEntry(Base):
     __tablename__ = "intraday_minute_cache_entries"
     __table_args__ = (
         UniqueConstraint(
+            "instrument_id",
             "provider",
             "symbol",
             "trade_date",
             "timeframe",
-            name="uq_intraday_minute_cache_provider_symbol_date_timeframe",
+            name="uq_intraday_cache_instrument_provider_symbol_date_timeframe",
         ),
     )
 
@@ -427,14 +428,20 @@ class PortfolioPosition(Base):
     portfolio: Mapped[Portfolio] = relationship("Portfolio", back_populates="positions")
 
 
+NEWS_ARTICLE_SYMBOL_MAX_LENGTH = 64
+NEWS_ARTICLE_TITLE_MAX_LENGTH = 512
+NEWS_ARTICLE_URL_MAX_LENGTH = 1024
+NEWS_ARTICLE_SOURCE_MAX_LENGTH = 128
+
+
 class NewsArticle(Base):
     __tablename__ = "news_articles"
 
     id: Mapped[PythonUUID] = uuid_pk()
-    symbol: Mapped[str] = mapped_column(String(64))
-    title: Mapped[str] = mapped_column(String(512))
-    url: Mapped[str] = mapped_column(String(1024))
-    source: Mapped[str] = mapped_column(String(128))
+    symbol: Mapped[str] = mapped_column(String(NEWS_ARTICLE_SYMBOL_MAX_LENGTH))
+    title: Mapped[str] = mapped_column(String(NEWS_ARTICLE_TITLE_MAX_LENGTH))
+    url: Mapped[str] = mapped_column(String(NEWS_ARTICLE_URL_MAX_LENGTH))
+    source: Mapped[str] = mapped_column(String(NEWS_ARTICLE_SOURCE_MAX_LENGTH))
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     summary: Mapped[str | None] = mapped_column(Text, default=None)
     dedupe_hash: Mapped[str] = mapped_column(String(64), unique=True)

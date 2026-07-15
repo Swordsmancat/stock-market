@@ -478,6 +478,27 @@ def test_market_assistant_reports_missing_macro_observations_without_citations(m
 
 
 def test_market_assistant_generates_research_evidence_citations_for_available_sources(monkeypatch):
+    news_requests: list[tuple[str, str | None]] = []
+
+    def fake_news_payload(symbol, session, *, market):
+        news_requests.append((symbol, market))
+        return {
+            "symbol": symbol,
+            "source": "database",
+            "summary": {"latest_sentiment": "positive", "article_count": 1},
+            "items": [
+                {
+                    "title": "Apple expands services revenue",
+                    "url": "https://example.com/aapl-services",
+                    "source": "mock_news",
+                    "published_at": "2026-01-03T12:00:00+00:00",
+                    "summary": "Apple expands services revenue in the quarter.",
+                    "sentiment": "positive",
+                    "confidence": 0.91,
+                }
+            ],
+        }
+
     monkeypatch.setattr(
         market_assistant_service,
         "get_bars_payload",
@@ -524,22 +545,7 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     monkeypatch.setattr(
         market_assistant_service,
         "get_news_sentiment_payload",
-        lambda symbol, session: {
-            "symbol": symbol,
-            "source": "database",
-            "summary": {"latest_sentiment": "positive", "article_count": 1},
-            "items": [
-                {
-                    "title": "Apple expands services revenue",
-                    "url": "https://example.com/aapl-services",
-                    "source": "mock_news",
-                    "published_at": "2026-01-03T12:00:00+00:00",
-                    "summary": "Apple expands services revenue in the quarter.",
-                    "sentiment": "positive",
-                    "confidence": 0.91,
-                }
-            ],
-        },
+        fake_news_payload,
     )
     monkeypatch.setattr(
         market_assistant_service,
@@ -650,6 +656,7 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
         start=date(2026, 1, 1),
         end=date(2026, 1, 3),
         provider_name="mock",
+        market="US",
         session=object(),
     )
 
@@ -664,6 +671,7 @@ def test_market_assistant_generates_research_evidence_citations_for_available_so
     assert "official_disclosure" in citations_by_source_type
     assert "official_disclosure_section" in citations_by_source_type
     assert citations_by_source_type["news"]["url"] == "https://example.com/aapl-services"
+    assert news_requests == [("AAPL", "US")]
     assert citations_by_source_type["generated_report"]["id"] == "generated_report:11111111-1111-1111-1111-111111111111"
     assert citations_by_source_type["research_source_note"]["id"].startswith("research_source_note:")
     assert "Reviewed source notebook entries available" in payload["context"]["research_summary"]

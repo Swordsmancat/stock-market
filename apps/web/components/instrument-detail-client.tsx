@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ArrowLeft, ExternalLink, LoaderCircle, RefreshCw, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/src/i18n/routing";
@@ -33,6 +33,10 @@ import type {
   InstrumentDetailContext,
   InstrumentDetailPayload,
 } from "@/lib/instrument-detail";
+import {
+  isNewsRefreshPayload,
+  type NewsRefreshPayload,
+} from "@/lib/news-payload";
 
 type ChartBarData = InstrumentBar & {
   timestamp: string;
@@ -41,6 +45,35 @@ type ChartBarData = InstrumentBar & {
   low: number;
   close: number;
 };
+
+type NewsRecoveryState =
+  | "idle"
+  | "recovering"
+  | "recovered"
+  | "no_data"
+  | "provider_error"
+  | "unsupported";
+
+type NewsRecoverySessionValue =
+  | "attempted"
+  | "no_data"
+  | "provider_error"
+  | "unsupported";
+
+const NEWS_DIAGNOSTIC_PRIORITY = [
+  "PROVIDER_ERROR",
+  "PROVIDER_TIMEOUT",
+  "PERSISTENCE_ERROR",
+  "UNSUPPORTED_IDENTITY",
+  "UNSUPPORTED_MARKET",
+  "MISSING_CREDENTIALS",
+  "PROVIDER_DISABLED",
+  "NO_PERSISTABLE_CANDIDATES",
+  "EMPTY_RESPONSE",
+  "DATABASE_FALLBACK_EMPTY",
+  "PROVIDER_PERSISTED",
+  "DATABASE_HIT",
+] as const;
 
 const SUPPORTED_ASSISTANT_MARKET_DATA_PROVIDERS = new Set([
   "mock",
@@ -71,6 +104,75 @@ function isChartBarData(bar: InstrumentBar): bar is ChartBarData {
     Number.isFinite(bar.high) &&
     Number.isFinite(bar.low) &&
     Number.isFinite(bar.close)
+  );
+}
+
+function getLocalDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getNewsRecoverySessionKey(identity: {
+  market: string;
+  symbol: string;
+}): string {
+  return `news-fallback:v1:${identity.market}:${identity.symbol}:${getLocalDateKey()}`;
+}
+
+function readNewsRecoverySessionValue(
+  sessionKey: string,
+): NewsRecoverySessionValue | null {
+  try {
+    const value = window.sessionStorage.getItem(sessionKey);
+    return value === "attempted" ||
+      value === "no_data" ||
+      value === "provider_error" ||
+      value === "unsupported"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeNewsRecoverySessionValue(
+  sessionKey: string,
+  value: NewsRecoverySessionValue,
+) {
+  try {
+    window.sessionStorage.setItem(sessionKey, value);
+  } catch {
+    // The in-memory guard still prevents duplicate attempts when storage is unavailable.
+  }
+}
+
+function clearTransientNewsRecoveryAttempt(sessionKey: string | null) {
+  if (!sessionKey) {
+    return;
+  }
+  try {
+    if (window.sessionStorage.getItem(sessionKey) === "attempted") {
+      window.sessionStorage.removeItem(sessionKey);
+    }
+  } catch {
+    // The in-memory guard remains authoritative when storage is unavailable.
+  }
+}
+
+function selectNewsDiagnosticCode(
+  diagnostics: NewsRefreshPayload["diagnostics"],
+): string | null {
+  const codes = new Set(
+    (diagnostics ?? [])
+      .map((diagnostic) => diagnostic.code)
+      .filter((code): code is string => typeof code === "string"),
+  );
+  return (
+    NEWS_DIAGNOSTIC_PRIORITY.find((code) => codes.has(code)) ??
+    codes.values().next().value ??
+    null
   );
 }
 
@@ -204,17 +306,174 @@ export function InstrumentDetailClient({
     initialData === null && initialError === null,
   );
   const [error, setError] = useState<string | null>(initialError);
+  const [newsRecoveryState, setNewsRecoveryState] =
+    useState<NewsRecoveryState>(
+      initialData?.news_load_status === "failed" ? "provider_error" : "idle",
+    );
+  const [manualNewsRetryUsed, setManualNewsRetryUsed] = useState(false);
+  const [newsDiagnosticCode, setNewsDiagnosticCode] = useState<string | null>(null);
+  const automaticNewsRecoveryAttempted = useRef(false);
+  const detailIdentityKey = detailContext?.identity
+    ? `${detailContext.identity.market.trim().toUpperCase()}:${detailContext.identity.symbol.trim().toUpperCase()}`
+    : `UNKNOWN:${symbol.trim().toUpperCase()}`;
+  const previousDetailIdentityKey = useRef(detailIdentityKey);
+  const activeDetailIdentityKey = useRef(detailIdentityKey);
+  const detailRequestController = useRef<AbortController | null>(null);
+  const newsRequestController = useRef<AbortController | null>(null);
+  const newsRequestSessionKey = useRef<string | null>(null);
+  activeDetailIdentityKey.current = detailIdentityKey;
+
+  useEffect(() => {
+    if (previousDetailIdentityKey.current === detailIdentityKey) {
+      return;
+    }
+
+    previousDetailIdentityKey.current = detailIdentityKey;
+    detailRequestController.current?.abort();
+    newsRequestController.current?.abort();
+    clearTransientNewsRecoveryAttempt(newsRequestSessionKey.current);
+    newsRequestController.current = null;
+    newsRequestSessionKey.current = null;
+    automaticNewsRecoveryAttempted.current = false;
+    setData(initialData);
+    setLoading(initialData === null && initialError === null);
+    setError(initialError);
+    setNewsRecoveryState(
+      initialData?.news_load_status === "failed" ? "provider_error" : "idle",
+    );
+    setManualNewsRetryUsed(false);
+    setNewsDiagnosticCode(null);
+  }, [detailIdentityKey, initialData, initialError]);
+
+  async function refreshNews() {
+    const identity = detailContext?.identity;
+    if (!identity) {
+      setNewsRecoveryState("unsupported");
+      return;
+    }
+
+    const requestIdentityKey = detailIdentityKey;
+    const sessionKey = getNewsRecoverySessionKey(identity);
+    const controller = new AbortController();
+    newsRequestController.current?.abort();
+    clearTransientNewsRecoveryAttempt(newsRequestSessionKey.current);
+    newsRequestController.current = controller;
+    newsRequestSessionKey.current = sessionKey;
+    setNewsRecoveryState("recovering");
+    setNewsDiagnosticCode(null);
+    try {
+      const query = new URLSearchParams({ market: identity.market });
+      const response = await fetch(
+        `/api/news/${encodeURIComponent(identity.symbol)}/refresh?${query.toString()}`,
+        { method: "POST", signal: controller.signal },
+      );
+      const payload = (await response.json()) as unknown;
+      if (
+        controller.signal.aborted ||
+        activeDetailIdentityKey.current !== requestIdentityKey
+      ) {
+        return;
+      }
+      if (!response.ok) {
+        const terminalState =
+          response.status >= 400 && response.status < 500
+            ? "unsupported"
+            : "provider_error";
+        setNewsRecoveryState(terminalState);
+        writeNewsRecoverySessionValue(sessionKey, terminalState);
+        return;
+      }
+
+      if (!isNewsRefreshPayload(payload, identity.symbol, identity.market)) {
+        setNewsRecoveryState("provider_error");
+        writeNewsRecoverySessionValue(sessionKey, "provider_error");
+        return;
+      }
+
+      setNewsDiagnosticCode(selectNewsDiagnosticCode(payload.diagnostics));
+
+      setData((currentData) =>
+        currentData
+          ? {
+              ...currentData,
+              news: payload.news,
+              news_load_status: "loaded",
+            }
+          : currentData,
+      );
+
+      if (payload.status === "database_hit" || payload.status === "refreshed") {
+        setNewsRecoveryState("recovered");
+      } else if (
+        payload.status === "no_data" ||
+        payload.status === "provider_error" ||
+        payload.status === "unsupported"
+      ) {
+        setNewsRecoveryState(payload.status);
+        writeNewsRecoverySessionValue(sessionKey, payload.status);
+      } else {
+        setNewsRecoveryState("provider_error");
+        writeNewsRecoverySessionValue(sessionKey, "provider_error");
+      }
+    } catch {
+      if (
+        controller.signal.aborted ||
+        activeDetailIdentityKey.current !== requestIdentityKey
+      ) {
+        return;
+      }
+      setNewsRecoveryState("provider_error");
+      writeNewsRecoverySessionValue(sessionKey, "provider_error");
+    } finally {
+      if (newsRequestController.current === controller) {
+        if (controller.signal.aborted) {
+          clearTransientNewsRecoveryAttempt(sessionKey);
+        }
+        newsRequestController.current = null;
+        newsRequestSessionKey.current = null;
+      }
+    }
+  }
+
+  function retryNews() {
+    if (manualNewsRetryUsed || newsRecoveryState === "recovering") {
+      return;
+    }
+    setManualNewsRetryUsed(true);
+    void refreshNews();
+  }
+
+  useEffect(() => {
+    return () => {
+      newsRequestController.current?.abort();
+      clearTransientNewsRecoveryAttempt(newsRequestSessionKey.current);
+      newsRequestController.current = null;
+      newsRequestSessionKey.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (initialData !== null || initialError !== null) {
       return;
     }
 
+    const requestIdentityKey = detailIdentityKey;
+    const controller = new AbortController();
+    detailRequestController.current?.abort();
+    detailRequestController.current = controller;
+
     async function fetchData() {
       try {
         setLoading(true);
+        const query = new URLSearchParams();
+        const market = detailContext?.identity?.market;
+        if (market) {
+          query.set("market", market);
+        }
+        const querySuffix = query.size > 0 ? `?${query.toString()}` : "";
         const response = await fetch(
-          `/api/instruments/${encodeURIComponent(symbol)}`,
+          `/api/instruments/${encodeURIComponent(symbol)}${querySuffix}`,
+          { signal: controller.signal },
         );
 
         if (!response.ok) {
@@ -222,17 +481,80 @@ export function InstrumentDetailClient({
         }
 
         const result = await response.json();
+        if (
+          controller.signal.aborted ||
+          activeDetailIdentityKey.current !== requestIdentityKey
+        ) {
+          return;
+        }
         setData(result);
       } catch (err) {
+        if (
+          controller.signal.aborted ||
+          activeDetailIdentityKey.current !== requestIdentityKey
+        ) {
+          return;
+        }
         console.error("Fetch error:", err);
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
-        setLoading(false);
+        if (
+          !controller.signal.aborted &&
+          activeDetailIdentityKey.current === requestIdentityKey
+        ) {
+          setLoading(false);
+        }
       }
     }
 
-    fetchData();
-  }, [symbol]);
+    void fetchData();
+    return () => {
+      controller.abort();
+      if (detailRequestController.current === controller) {
+        detailRequestController.current = null;
+      }
+    };
+  }, [detailContext?.identity?.market, detailIdentityKey, initialData, initialError, symbol]);
+
+  useEffect(() => {
+    const identity = detailContext?.identity;
+    const hasStoredNews = (data?.news?.items?.length ?? 0) > 0;
+    const hasInitialStoredNews = (initialData?.news?.items?.length ?? 0) > 0;
+    if (hasInitialStoredNews) {
+      return;
+    }
+    if (data?.news_load_status === "failed") {
+      setNewsRecoveryState("provider_error");
+      return;
+    }
+    if (
+      !identity ||
+      !data ||
+      hasStoredNews ||
+      automaticNewsRecoveryAttempted.current
+    ) {
+      return;
+    }
+
+    automaticNewsRecoveryAttempted.current = true;
+    const sessionKey = getNewsRecoverySessionKey(identity);
+    const sessionValue = readNewsRecoverySessionValue(sessionKey);
+    if (
+      sessionValue === "no_data" ||
+      sessionValue === "provider_error" ||
+      sessionValue === "unsupported"
+    ) {
+      setNewsRecoveryState(sessionValue);
+      return;
+    }
+    if (sessionValue === "attempted") {
+      setNewsRecoveryState("provider_error");
+      return;
+    }
+    writeNewsRecoverySessionValue(sessionKey, "attempted");
+
+    void refreshNews();
+  }, [data, detailContext, initialData]);
 
   if (loading) {
     return (
@@ -357,6 +679,23 @@ export function InstrumentDetailClient({
   const fundamentalsItem = data.fundamentals?.item ?? null;
   const newsItems = data.news?.items ?? [];
   const latestNews = newsItems[0] ?? null;
+  const newsDiagnosticMessages: Record<string, string> = {
+    DATABASE_HIT: t("newsDiagnosticDatabaseHit"),
+    MISSING_CREDENTIALS: t("newsDiagnosticMissingCredentials"),
+    PROVIDER_DISABLED: t("newsDiagnosticProviderDisabled"),
+    PROVIDER_TIMEOUT: t("newsDiagnosticProviderTimeout"),
+    PROVIDER_ERROR: t("newsDiagnosticProviderError"),
+    PERSISTENCE_ERROR: t("newsDiagnosticPersistenceError"),
+    EMPTY_RESPONSE: t("newsDiagnosticEmptyResponse"),
+    NO_PERSISTABLE_CANDIDATES: t("newsDiagnosticNoPersistableCandidates"),
+    PROVIDER_PERSISTED: t("newsDiagnosticProviderPersisted"),
+    UNSUPPORTED_IDENTITY: t("newsDiagnosticUnsupportedIdentity"),
+    UNSUPPORTED_MARKET: t("newsDiagnosticUnsupportedMarket"),
+    DATABASE_FALLBACK_EMPTY: t("newsDiagnosticDatabaseFallbackEmpty"),
+  };
+  const newsDiagnosticMessage = newsDiagnosticCode
+    ? newsDiagnosticMessages[newsDiagnosticCode] ?? t("newsDiagnosticUnknown")
+    : null;
 
   return (
     <div className="space-y-6">
@@ -668,6 +1007,70 @@ export function InstrumentDetailClient({
               <CardDescription>{t("latestNewsDesc")}</CardDescription>
             </FinancialTerminalCardHeader>
             <FinancialTerminalCardContent className="space-y-3">
+              {newsRecoveryState === "recovering" ? (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 border bg-muted/20 p-3 text-sm text-muted-foreground"
+                >
+                  <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+                  {t("newsRecoveryRecovering")}
+                </div>
+              ) : null}
+              {newsRecoveryState === "provider_error" ? (
+                <div
+                  role="alert"
+                  className="flex flex-wrap items-center justify-between gap-3 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+                >
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {t("newsRecoveryProviderError")}
+                  </span>
+                  {!manualNewsRetryUsed ? (
+                    <Button type="button" variant="outline" size="sm" onClick={retryNews}>
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                      {t("newsRecoveryRetry")}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              {newsRecoveryState === "no_data" ? (
+                <div
+                  role="status"
+                  className="flex flex-wrap items-center justify-between gap-3 border bg-muted/20 p-3 text-sm text-muted-foreground"
+                >
+                  <span>{t("newsRecoveryNoData")}</span>
+                  {!manualNewsRetryUsed ? (
+                    <Button type="button" variant="outline" size="sm" onClick={retryNews}>
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                      {t("newsRecoveryRetry")}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              {newsRecoveryState === "unsupported" ? (
+                <div
+                  role="status"
+                  className="flex flex-wrap items-center justify-between gap-3 border bg-muted/20 p-3 text-sm text-muted-foreground"
+                >
+                  <span>{t("newsRecoveryUnsupported")}</span>
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <Link href="/settings">
+                      <Settings2 className="h-4 w-4" aria-hidden="true" />
+                      {t("newsRecoveryConfigure")}
+                    </Link>
+                  </Button>
+                </div>
+              ) : null}
+              {newsRecoveryState === "recovered" ? (
+                <p role="status" className="text-xs text-muted-foreground">
+                  {t("newsRecoveryRecovered")}
+                </p>
+              ) : null}
+              {newsRecoveryState !== "recovering" && newsDiagnosticMessage ? (
+                <p className="text-xs text-muted-foreground">
+                  {newsDiagnosticMessage}
+                </p>
+              ) : null}
               {latestNews ? (
                 <>
                   <FinancialTerminalSurface className="space-y-2 p-3">
@@ -720,9 +1123,9 @@ export function InstrumentDetailClient({
                     </div>
                   ) : null}
                 </>
-              ) : (
+              ) : newsRecoveryState === "idle" ? (
                 <p className="text-sm text-muted-foreground">{t("noNews")}</p>
-              )}
+              ) : null}
             </FinancialTerminalCardContent>
           </FinancialTerminalCard>
         </div>

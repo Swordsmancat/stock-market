@@ -71,6 +71,58 @@ def seed_us_daily_close(session, symbol: str, trade_date: date, close: Decimal) 
     session.commit()
 
 
+def seed_cn_intraday_cache(
+    session,
+    *,
+    provider: str,
+    source: str,
+) -> None:
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    instrument = Instrument(
+        symbol="600519",
+        name="Kweichow Moutai",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    timestamp = datetime(2026, 7, 14, 1, 31, tzinfo=timezone.utc)
+    session.add_all([market, instrument])
+    session.flush()
+    session.add(
+        MinuteBar(
+            instrument_id=instrument.id,
+            ts=timestamp,
+            open=Decimal("1480"),
+            high=Decimal("1490"),
+            low=Decimal("1475"),
+            close=Decimal("1488"),
+            volume=Decimal("1200"),
+            amount=Decimal("1785600"),
+        )
+    )
+    session.add(
+        IntradayMinuteCacheEntry(
+            instrument_id=instrument.id,
+            provider=provider,
+            symbol="600519",
+            trade_date=date(2026, 7, 14),
+            timeframe="1m",
+            source=source,
+            row_count=1,
+            first_ts=timestamp,
+            last_ts=timestamp,
+            fetched_at=timestamp,
+            cached_at=timestamp,
+        )
+    )
+    session.commit()
+
+
 def test_get_bars_payload_serializes_provider_bars():
     payload = get_bars_payload(
         "AAPL",
@@ -822,6 +874,216 @@ def test_get_bars_payload_returns_one_coherent_database_provenance_series(
     ]
 
 
+def test_get_bars_payload_rejects_sparse_source_before_complete_mixed_recovery(
+    monkeypatch,
+):
+    session = make_session()
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    instrument = Instrument(
+        symbol="600519",
+        name="Kweichow Moutai",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    session.add_all([market, instrument])
+    session.flush()
+
+    first_trade_date = date(2026, 5, 1)
+    trade_dates = [
+        date.fromordinal(first_trade_date.toordinal() + offset)
+        for offset in range(60)
+    ]
+    for index, trade_date in enumerate(trade_dates):
+        price = Decimal(100 + index)
+        session.add(
+            DailyBar(
+                instrument_id=instrument.id,
+                trade_date=trade_date,
+                open=price,
+                high=price,
+                low=price,
+                close=price,
+                volume=Decimal("1000"),
+                provider="tushare" if index < 58 else "akshare",
+                source=(
+                    "tushare.pro.daily"
+                    if index < 58
+                    else "akshare.stock_zh_a_hist"
+                ),
+                adjustment="raw" if index < 58 else "qfq",
+            )
+        )
+    session.commit()
+
+    def provider_bars(symbol: str, dates: list[date]) -> list[ProviderBar]:
+        return [
+            ProviderBar(
+                symbol=symbol,
+                timestamp=trade_date,
+                open=Decimal(200 + index),
+                high=Decimal(200 + index),
+                low=Decimal(200 + index),
+                close=Decimal(200 + index),
+                volume=Decimal("2000"),
+            )
+            for index, trade_date in enumerate(dates)
+        ]
+
+    class Provider:
+        def __init__(self, bars: list[ProviderBar]) -> None:
+            self.bars = bars
+
+        def fetch_bars(self, *_args):
+            return self.bars
+
+    providers = {
+        "yfinance": Provider(
+            provider_bars("600519", trade_dates[:34] + [trade_dates[-1]])
+        ),
+        "akshare": Provider(provider_bars("600519", trade_dates)),
+        "tushare": Provider([]),
+    }
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True, "tushare_token": ""},
+    )
+
+    payload = get_bars_payload(
+        "600519",
+        "1d",
+        trade_dates[0],
+        trade_dates[-1],
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["effective_provider"] == "akshare"
+    assert payload["upstream_source"] == "akshare.stock_zh_a_hist"
+    assert payload["adjustment"] == "qfq"
+    assert len(payload["items"]) == 60
+    assert payload["items"][0]["timestamp"] == trade_dates[0].isoformat()
+    assert payload["items"][-1]["timestamp"] == trade_dates[-1].isoformat()
+    assert payload["source_attempts"][0]["status"] == "insufficient_coverage"
+    assert session.query(DailyBar).count() == 60
+
+
+def test_get_bars_payload_retains_ready_mixed_database_when_recovery_is_incomplete(
+    monkeypatch,
+):
+    session = make_session()
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    instrument = Instrument(
+        symbol="600519",
+        name="Kweichow Moutai",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    session.add_all([market, instrument])
+    session.flush()
+    first_trade_date = date(2026, 5, 1)
+    trade_dates = [
+        date.fromordinal(first_trade_date.toordinal() + offset)
+        for offset in range(35)
+    ]
+    for index, trade_date in enumerate(trade_dates):
+        price = Decimal(100 + index)
+        session.add(
+            DailyBar(
+                instrument_id=instrument.id,
+                trade_date=trade_date,
+                open=price,
+                high=price,
+                low=price,
+                close=price,
+                volume=Decimal("1000"),
+                provider="tushare" if index < 33 else "akshare",
+                source=(
+                    "tushare.pro.daily"
+                    if index < 33
+                    else "akshare.stock_zh_a_hist"
+                ),
+                adjustment="raw" if index < 33 else "qfq",
+            )
+        )
+    session.commit()
+
+    class EmptyProvider:
+        def fetch_bars(self, *_args):
+            return []
+
+    class EmptySinaProvider:
+        download_sina_daily_bars = staticmethod(lambda *_args: None)
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_bars(self, *_args):
+            return []
+
+    providers = {
+        "yfinance": EmptyProvider(),
+        "akshare": EmptyProvider(),
+        "tushare": EmptyProvider(),
+    }
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(market_data_service, "AkShareProvider", EmptySinaProvider)
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True, "tushare_token": ""},
+    )
+
+    payload = get_bars_payload(
+        "600519",
+        "1d",
+        trade_dates[0],
+        trade_dates[-1],
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert payload["status"] == "degraded"
+    assert payload["source"] == "database"
+    assert payload["effective_provider"] == "akshare"
+    assert [item["timestamp"] for item in payload["items"]] == [
+        trade_dates[-2].isoformat(),
+        trade_dates[-1].isoformat(),
+    ]
+    assert [attempt["status"] for attempt in payload["source_attempts"]] == [
+        "no_data",
+        "no_data",
+        "no_data",
+        "skipped_unconfigured",
+    ]
+    assert payload["diagnostics"][0]["code"] == "MIXED_DAILY_BAR_PROVENANCE"
+    assert session.query(DailyBar).count() == 35
+
+
 def test_get_latest_bar_payload_preserves_mixed_database_provenance(monkeypatch):
     session = make_session()
     market = Market(
@@ -1380,6 +1642,849 @@ def test_get_intraday_bars_payload_returns_verified_provider_minutes(monkeypatch
     ]
 
 
+def test_get_intraday_bars_payload_falls_back_to_akshare_for_exact_cn_stock(
+    monkeypatch,
+):
+    session = make_session()
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    instrument = Instrument(
+        symbol="600519",
+        name="Kweichow Moutai",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    session.add_all([market, instrument])
+    session.flush()
+    session.add(
+        DailyBar(
+            instrument_id=instrument.id,
+            trade_date=date(2026, 7, 14),
+            open=Decimal("1470"),
+            high=Decimal("1480"),
+            low=Decimal("1465"),
+            close=Decimal("1478"),
+            volume=Decimal("1000"),
+            provider="akshare",
+            source="akshare.stock_zh_a_hist",
+            adjustment="qfq",
+        )
+    )
+    session.commit()
+    provider_calls: list[tuple[str, str | None]] = []
+
+    class Provider:
+        def __init__(self, name: str, intraday_bars: list[ProviderIntradayBar]) -> None:
+            self.name = name
+            self.intraday_bars = intraday_bars
+
+        def fetch_bars(self, *_args):
+            return []
+
+        def fetch_intraday_bars(self, *_args):
+            return self.intraday_bars
+
+    trade_date = date(2026, 7, 15)
+    akshare_bar = ProviderIntradayBar(
+        symbol="600519",
+        timestamp=datetime(2026, 7, 15, 9, 31, tzinfo=timezone.utc),
+        open=Decimal("1480"),
+        high=Decimal("1490"),
+        low=Decimal("1475"),
+        close=Decimal("1488"),
+        volume=1200,
+        amount=Decimal("1785600"),
+    )
+    malformed_primary_bar = ProviderIntradayBar(
+        symbol="600519",
+        timestamp=datetime(2026, 7, 15, 9, 31, tzinfo=timezone.utc),
+        open=Decimal("1480"),
+        high=Decimal("1490"),
+        low=Decimal("1475"),
+        close=Decimal("1488"),
+        volume=1200,
+    )
+    object.__setattr__(malformed_primary_bar, "symbol", None)
+    providers = {
+        "yfinance": Provider("yfinance", [malformed_primary_bar]),
+        "akshare": Provider("akshare", [akshare_bar]),
+    }
+
+    def provider_factory(provider_name=None, market=None):
+        normalized_name = str(provider_name)
+        provider_calls.append((normalized_name, market))
+        return providers[normalized_name]
+
+    monkeypatch.setattr(market_data_service, "get_provider", provider_factory)
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+
+    payload = get_intraday_bars_payload(
+        "600519",
+        trade_date,
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert provider_calls == [("yfinance", "CN"), ("akshare", "CN")]
+    assert payload["status"] == "ok"
+    assert payload["source"] == "provider"
+    assert payload["provider"] == "akshare"
+    assert payload["requested_provider"] == "yfinance"
+    assert payload["effective_provider"] == "akshare"
+    assert payload["upstream_source"] == "akshare.stock_zh_a_hist_min_em"
+    assert payload["fallback_used"] is True
+    assert payload["source_attempts"] == [
+        {
+            "provider": "yfinance",
+            "source": "yfinance.fetch_intraday_bars",
+            "status": "invalid",
+            "code": "MALFORMED_INTRADAY_BAR",
+        },
+        {
+            "provider": "akshare",
+            "source": "akshare.stock_zh_a_hist_min_em",
+            "status": "selected",
+            "row_count": 1,
+        },
+    ]
+    assert payload["session"]["market"] == "CN"
+    assert payload["session"]["timezone"] == "Asia/Shanghai"
+    assert payload["items"][0]["close"] == 1488.0
+
+
+def test_get_intraday_bars_payload_falls_back_after_mixed_timestamp_awareness(
+    monkeypatch,
+):
+    trade_date = date(2026, 7, 15)
+
+    class Provider:
+        def __init__(self, bars: list[ProviderIntradayBar]) -> None:
+            self.bars = bars
+
+        def fetch_intraday_bars(self, *_args):
+            return self.bars
+
+    primary = Provider(
+        [
+            ProviderIntradayBar(
+                symbol="600519",
+                timestamp=datetime(2026, 7, 15, 1, 31, tzinfo=timezone.utc),
+                open=Decimal("1480"),
+                high=Decimal("1490"),
+                low=Decimal("1475"),
+                close=Decimal("1488"),
+                volume=1200,
+            ),
+            ProviderIntradayBar(
+                symbol="600519",
+                timestamp=datetime(2026, 7, 15, 9, 32),
+                open=Decimal("1488"),
+                high=Decimal("1492"),
+                low=Decimal("1486"),
+                close=Decimal("1490"),
+                volume=900,
+            ),
+        ]
+    )
+    fallback = Provider(
+        [
+            ProviderIntradayBar(
+                symbol="600519",
+                timestamp=datetime(2026, 7, 15, 1, 31, tzinfo=timezone.utc),
+                open=Decimal("1480"),
+                high=Decimal("1490"),
+                low=Decimal("1475"),
+                close=Decimal("1488"),
+                volume=1200,
+            )
+        ]
+    )
+    providers = {"yfinance": primary, "akshare": fallback}
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "_get_previous_close_reference",
+        lambda **_kwargs: None,
+    )
+
+    payload = get_intraday_bars_payload(
+        "600519",
+        trade_date,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["effective_provider"] == "akshare"
+    assert payload["fallback_used"] is True
+    assert payload["source_attempts"] == [
+        {
+            "provider": "yfinance",
+            "source": "yfinance.fetch_intraday_bars",
+            "status": "invalid",
+            "code": "MIXED_INTRADAY_TIMESTAMP_AWARENESS",
+        },
+        {
+            "provider": "akshare",
+            "source": "akshare.stock_zh_a_hist_min_em",
+            "status": "selected",
+            "row_count": 1,
+        },
+    ]
+
+
+def test_get_intraday_bars_payload_uses_sina_after_sanitized_cn_failures(
+    monkeypatch,
+):
+    session = make_session()
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    instrument = Instrument(
+        symbol="600519",
+        name="Kweichow Moutai",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    session.add_all([market, instrument])
+    session.flush()
+    session.add(
+        DailyBar(
+            instrument_id=instrument.id,
+            trade_date=date(2026, 7, 14),
+            open=Decimal("1470"),
+            high=Decimal("1480"),
+            low=Decimal("1465"),
+            close=Decimal("1478"),
+            volume=Decimal("1000"),
+            provider="akshare",
+            source="akshare.stock_zh_a_hist",
+            adjustment="qfq",
+        )
+    )
+    session.commit()
+
+    class PrimaryProvider:
+        def fetch_bars(self, *_args):
+            return []
+
+        def fetch_intraday_bars(self, *_args):
+            raise TimeoutError("private token=secret")
+
+    class EmptyEastmoneyProvider:
+        def fetch_bars(self, *_args):
+            return []
+
+        def fetch_intraday_bars(self, *_args):
+            return []
+
+    class SinaProvider:
+        download_sina_intraday_bars = staticmethod(lambda *_args: None)
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_intraday_bars(self, symbol, trade_date, timeframe):
+            return [
+                ProviderIntradayBar(
+                    symbol=symbol,
+                    timestamp=datetime(2026, 7, 15, 1, 31, tzinfo=timezone.utc),
+                    open=Decimal("1480"),
+                    high=Decimal("1490"),
+                    low=Decimal("1475"),
+                    close=Decimal("1488"),
+                    volume=1200,
+                )
+            ]
+
+    providers = {
+        "yfinance": PrimaryProvider(),
+        "akshare": EmptyEastmoneyProvider(),
+    }
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(market_data_service, "AkShareProvider", SinaProvider)
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+
+    payload = get_intraday_bars_payload(
+        "600519",
+        date(2026, 7, 15),
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["effective_provider"] == "akshare"
+    assert payload["upstream_source"] == "akshare.stock_zh_a_minute"
+    assert payload["fallback_used"] is True
+    assert [attempt["status"] for attempt in payload["source_attempts"]] == [
+        "failed",
+        "no_data",
+        "selected",
+    ]
+    assert payload["source_attempts"][0]["exception_type"] == "TimeoutError"
+    assert "private token=secret" not in str(payload)
+
+
+@pytest.mark.parametrize(
+    ("primary_fails", "expected_status"),
+    [(False, "no_data"), (True, "degraded")],
+)
+def test_get_intraday_bars_payload_distinguishes_cn_empty_from_failed_exhaustion(
+    monkeypatch,
+    primary_fails,
+    expected_status,
+):
+    class PrimaryProvider:
+        def fetch_intraday_bars(self, *_args):
+            if primary_fails:
+                raise RuntimeError("private token=secret")
+            return []
+
+    class EmptyAkShareProvider:
+        download_sina_intraday_bars = staticmethod(lambda *_args: None)
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_intraday_bars(self, *_args):
+            return []
+
+    providers = {
+        "yfinance": PrimaryProvider(),
+        "akshare": EmptyAkShareProvider(),
+    }
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(market_data_service, "AkShareProvider", EmptyAkShareProvider)
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "_get_previous_close_reference",
+        lambda **_kwargs: None,
+    )
+
+    payload = get_intraday_bars_payload(
+        "600519",
+        date(2026, 7, 15),
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert payload["status"] == expected_status
+    assert payload["availability"]["status"] == expected_status
+    assert [attempt["status"] for attempt in payload["source_attempts"]] == [
+        "failed" if primary_fails else "no_data",
+        "no_data",
+        "no_data",
+    ]
+    if primary_fails:
+        assert payload["source_attempts"][0]["exception_type"] == "RuntimeError"
+    assert "private token=secret" not in str(payload)
+
+
+def test_get_intraday_bars_payload_reuses_cn_fallback_cache_for_requested_provider(
+    monkeypatch,
+):
+    session = make_session()
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    instrument = Instrument(
+        symbol="600519",
+        name="Kweichow Moutai",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    session.add_all([market, instrument])
+    session.flush()
+    session.add(
+        DailyBar(
+            instrument_id=instrument.id,
+            trade_date=date(2026, 7, 13),
+            open=Decimal("1470"),
+            high=Decimal("1480"),
+            low=Decimal("1465"),
+            close=Decimal("1478"),
+            volume=Decimal("1000"),
+            provider="akshare",
+            source="akshare.stock_zh_a_hist",
+            adjustment="qfq",
+        )
+    )
+    session.commit()
+
+    class Provider:
+        def __init__(self, bars: list[ProviderIntradayBar]) -> None:
+            self.bars = bars
+            self.intraday_calls = 0
+
+        def fetch_bars(self, *_args):
+            return []
+
+        def fetch_intraday_bars(self, *_args):
+            self.intraday_calls += 1
+            return self.bars
+
+    trade_date = date(2026, 7, 14)
+    yfinance = Provider([])
+    akshare = Provider(
+        [
+            ProviderIntradayBar(
+                symbol="600519",
+                timestamp=datetime(2026, 7, 14, 1, 31, tzinfo=timezone.utc),
+                open=Decimal("1480"),
+                high=Decimal("1490"),
+                low=Decimal("1475"),
+                close=Decimal("1488"),
+                volume=1200,
+                amount=Decimal("1785600"),
+            )
+        ]
+    )
+    providers = {"yfinance": yfinance, "akshare": akshare}
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+
+    first_payload = get_intraday_bars_payload(
+        "600519",
+        trade_date,
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+    second_payload = get_intraday_bars_payload(
+        "600519",
+        trade_date,
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert first_payload["source"] == "provider"
+    assert first_payload["effective_provider"] == "akshare"
+    assert second_payload["source"] == "cache"
+    assert second_payload["effective_provider"] == "akshare"
+    assert second_payload["upstream_source"] == "akshare.stock_zh_a_hist_min_em"
+    assert second_payload["fallback_used"] is True
+    assert second_payload["freshness"]["cache_status"] == "hit"
+    assert yfinance.intraday_calls == 1
+    assert akshare.intraday_calls == 1
+    cache_entry = session.query(IntradayMinuteCacheEntry).one()
+    assert cache_entry.provider == "akshare"
+    assert cache_entry.source == "akshare.stock_zh_a_hist_min_em"
+
+
+@pytest.mark.parametrize("requested_provider", ["akshare", "tushare"])
+def test_get_intraday_bars_payload_reuses_exact_cache_after_provider_change(
+    monkeypatch,
+    requested_provider,
+):
+    session = make_session()
+    seed_cn_intraday_cache(
+        session,
+        provider="yfinance",
+        source="yfinance.fetch_intraday_bars",
+    )
+
+    class ProviderThatMustNotRun:
+        def fetch_bars(self, *_args):
+            raise AssertionError("provider daily fetch must not run for a cache hit")
+
+        def fetch_intraday_bars(self, *_args):
+            raise AssertionError("provider minute fetch must not run for a cache hit")
+
+    provider = ProviderThatMustNotRun()
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: provider,
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": False},
+    )
+
+    payload = get_intraday_bars_payload(
+        "600519",
+        date(2026, 7, 14),
+        session=session,
+        provider_name=requested_provider,
+        market="CN",
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["source"] == "cache"
+    assert payload["effective_provider"] == "yfinance"
+    assert payload["upstream_source"] == "yfinance.fetch_intraday_bars"
+    assert payload["fallback_used"] is True
+    assert payload["freshness"]["cache_status"] == "hit"
+    assert payload["items"][0]["close"] == 1488.0
+
+
+def test_get_intraday_bars_payload_reuses_disabled_akshare_cache(monkeypatch):
+    session = make_session()
+    seed_cn_intraday_cache(
+        session,
+        provider="akshare",
+        source="akshare.stock_zh_a_minute",
+    )
+
+    class ProviderThatMustNotRun:
+        def fetch_bars(self, *_args):
+            raise AssertionError("provider daily fetch must not run for a cache hit")
+
+        def fetch_intraday_bars(self, *_args):
+            raise AssertionError("provider minute fetch must not run for a cache hit")
+
+    provider = ProviderThatMustNotRun()
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: provider,
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": False},
+    )
+
+    payload = get_intraday_bars_payload(
+        "600519",
+        date(2026, 7, 14),
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["source"] == "cache"
+    assert payload["effective_provider"] == "akshare"
+    assert payload["upstream_source"] == "akshare.stock_zh_a_minute"
+    assert payload["fallback_used"] is True
+    assert payload["freshness"]["cache_status"] == "hit"
+
+
+def test_get_intraday_bars_payload_replaces_conflicting_cn_cache_metadata(
+    monkeypatch,
+):
+    session = make_session()
+    market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    instrument = Instrument(
+        symbol="600519",
+        name="Kweichow Moutai",
+        market=market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    session.add_all([market, instrument])
+    session.flush()
+    session.add(
+        DailyBar(
+            instrument_id=instrument.id,
+            trade_date=date(2026, 7, 13),
+            open=Decimal("1470"),
+            high=Decimal("1480"),
+            low=Decimal("1465"),
+            close=Decimal("1478"),
+            volume=Decimal("1000"),
+            provider="akshare",
+            source="akshare.stock_zh_a_hist",
+            adjustment="qfq",
+        )
+    )
+    timestamp = datetime(2026, 7, 14, 1, 31, tzinfo=timezone.utc)
+    session.add(
+        MinuteBar(
+            instrument_id=instrument.id,
+            ts=timestamp,
+            open=Decimal("100"),
+            high=Decimal("100"),
+            low=Decimal("100"),
+            close=Decimal("100"),
+            volume=Decimal("100"),
+        )
+    )
+    session.add(
+        IntradayMinuteCacheEntry(
+            instrument_id=instrument.id,
+            provider="yfinance",
+            symbol="600519",
+            trade_date=date(2026, 7, 14),
+            timeframe="1m",
+            source="yfinance.fetch_intraday_bars",
+            row_count=2,
+            first_ts=timestamp,
+            last_ts=timestamp,
+            fetched_at=timestamp,
+            cached_at=timestamp,
+        )
+    )
+    session.commit()
+
+    class Provider:
+        def __init__(self, bars: list[ProviderIntradayBar]) -> None:
+            self.bars = bars
+
+        def fetch_bars(self, *_args):
+            return []
+
+        def fetch_intraday_bars(self, *_args):
+            return self.bars
+
+    providers = {
+        "yfinance": Provider([]),
+        "akshare": Provider(
+            [
+                ProviderIntradayBar(
+                    symbol="600519",
+                    timestamp=timestamp,
+                    open=Decimal("1480"),
+                    high=Decimal("1490"),
+                    low=Decimal("1475"),
+                    close=Decimal("1488"),
+                    volume=1200,
+                    amount=Decimal("1785600"),
+                )
+            ]
+        ),
+    }
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+
+    payload = get_intraday_bars_payload(
+        "600519",
+        date(2026, 7, 14),
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["effective_provider"] == "akshare"
+    cache_entries = session.query(IntradayMinuteCacheEntry).all()
+    assert [(entry.provider, entry.source) for entry in cache_entries] == [
+        ("akshare", "akshare.stock_zh_a_hist_min_em")
+    ]
+    minute_bars = session.query(MinuteBar).all()
+    assert len(minute_bars) == 1
+    assert minute_bars[0].close == Decimal("1488")
+
+
+def test_get_intraday_bars_payload_persists_and_reuses_each_market_cache_independently(
+    monkeypatch,
+):
+    session = make_session()
+    cn_market = Market(
+        code="CN",
+        name="China A Share",
+        timezone="Asia/Shanghai",
+        currency="CNY",
+    )
+    hk_market = Market(
+        code="HK",
+        name="Hong Kong Stock",
+        timezone="Asia/Hong_Kong",
+        currency="HKD",
+    )
+    cn_instrument = Instrument(
+        symbol="000001",
+        name="CN listing",
+        market=cn_market,
+        asset_type="stock",
+        currency="CNY",
+    )
+    hk_instrument = Instrument(
+        symbol="000001",
+        name="HK listing",
+        market=hk_market,
+        asset_type="stock",
+        currency="HKD",
+    )
+    session.add_all([cn_market, hk_market, cn_instrument, hk_instrument])
+    session.flush()
+    session.add(
+        DailyBar(
+            instrument_id=cn_instrument.id,
+            trade_date=date(2026, 7, 13),
+            open=Decimal("10"),
+            high=Decimal("10"),
+            low=Decimal("10"),
+            close=Decimal("10"),
+            volume=Decimal("1000"),
+            provider="akshare",
+            source="akshare.stock_zh_a_hist",
+            adjustment="qfq",
+        )
+    )
+    timestamp = datetime(2026, 7, 14, 1, 31, tzinfo=timezone.utc)
+    session.add(
+        MinuteBar(
+            instrument_id=hk_instrument.id,
+            ts=timestamp,
+            open=Decimal("99"),
+            high=Decimal("99"),
+            low=Decimal("99"),
+            close=Decimal("99"),
+            volume=Decimal("100"),
+        )
+    )
+    session.add(
+        IntradayMinuteCacheEntry(
+            instrument_id=hk_instrument.id,
+            provider="yfinance",
+            symbol="000001",
+            trade_date=date(2026, 7, 14),
+            timeframe="1m",
+            source="yfinance.fetch_intraday_bars",
+            row_count=1,
+            first_ts=timestamp,
+            last_ts=timestamp,
+            fetched_at=timestamp,
+            cached_at=timestamp,
+        )
+    )
+    session.commit()
+
+    class Provider:
+        def __init__(self, bars: list[ProviderIntradayBar]) -> None:
+            self.bars = bars
+            self.intraday_calls = 0
+
+        def fetch_bars(self, *_args):
+            return []
+
+        def fetch_intraday_bars(self, *_args):
+            self.intraday_calls += 1
+            return self.bars
+
+    yfinance = Provider(
+        [
+            ProviderIntradayBar(
+                symbol="000001",
+                timestamp=timestamp,
+                open=Decimal("11"),
+                high=Decimal("12"),
+                low=Decimal("10"),
+                close=Decimal("11"),
+                volume=1200,
+            )
+        ]
+    )
+    providers = {"yfinance": yfinance, "akshare": Provider([])}
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: providers[str(provider_name)],
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_platform_settings",
+        lambda: {"akshare_enabled": False},
+    )
+
+    first_payload = get_intraday_bars_payload(
+        "000001",
+        date(2026, 7, 14),
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+    second_payload = get_intraday_bars_payload(
+        "000001",
+        date(2026, 7, 14),
+        session=session,
+        provider_name="yfinance",
+        market="CN",
+    )
+
+    assert first_payload["status"] == "ok"
+    assert first_payload["source"] == "provider"
+    assert first_payload["items"][0]["close"] == 11.0
+    assert first_payload["freshness"]["cache_status"] == "miss"
+    assert second_payload["status"] == "ok"
+    assert second_payload["source"] == "cache"
+    assert second_payload["items"][0]["close"] == 11.0
+    assert second_payload["freshness"]["cache_status"] == "hit"
+    assert yfinance.intraday_calls == 1
+    cache_entries = session.query(IntradayMinuteCacheEntry).order_by(
+        IntradayMinuteCacheEntry.instrument_id
+    ).all()
+    assert {entry.instrument_id for entry in cache_entries} == {
+        cn_instrument.id,
+        hk_instrument.id,
+    }
+    minute_bars = session.query(MinuteBar).all()
+    assert {(bar.instrument_id, bar.close) for bar in minute_bars} == {
+        (cn_instrument.id, Decimal("11")),
+        (hk_instrument.id, Decimal("99")),
+    }
+
+
 def test_get_intraday_bars_payload_reuses_persistent_cache_without_provider_call(monkeypatch):
     session = make_session()
     seed_us_daily_close(session, "AAPL", date(2026, 7, 1), Decimal("213.55"))
@@ -1731,6 +2836,46 @@ def test_get_intraday_bars_payload_keeps_unsupported_provider_degraded_without_d
     assert payload["items"] == []
     assert payload["availability"]["reason"] == market_data_service.INTRADAY_UNSUPPORTED_REASON
     assert requested_timeframes == []
+
+
+@pytest.mark.parametrize(
+    ("symbol", "market"),
+    [
+        pytest.param("00700", "HK", id="hong-kong"),
+        pytest.param("AAPL", "US", id="united-states"),
+        pytest.param("600519", None, id="ambiguous-market"),
+        pytest.param("60051", "CN", id="non-six-digit-cn"),
+    ],
+)
+def test_get_intraday_bars_payload_does_not_call_akshare_minutes_for_non_cn_identity(
+    monkeypatch,
+    symbol,
+    market,
+):
+    minute_calls: list[tuple[str, date, str]] = []
+
+    class AkShareMinuteProvider:
+        def fetch_intraday_bars(self, requested_symbol, trade_date, timeframe):
+            minute_calls.append((requested_symbol, trade_date, timeframe))
+            return []
+
+    monkeypatch.setattr(
+        market_data_service,
+        "get_provider",
+        lambda provider_name=None, market=None: AkShareMinuteProvider(),
+    )
+
+    payload = get_intraday_bars_payload(
+        symbol,
+        date(2026, 7, 15),
+        provider_name="akshare",
+        market=market,
+    )
+
+    assert payload["status"] == "degraded"
+    assert payload["source"] == "none"
+    assert payload["availability"]["reason"] == market_data_service.INTRADAY_UNSUPPORTED_REASON
+    assert minute_calls == []
 
 
 def test_get_market_depth_payload_returns_verified_provider_sections(monkeypatch):

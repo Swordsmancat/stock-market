@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, text
@@ -197,6 +198,21 @@ def load_research_shortlist_task_run_migration():
     migration_path = Path("alembic/versions/0022_research_shortlist_task_run.py")
     spec = importlib.util.spec_from_file_location(
         "research_shortlist_task_run_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_intraday_cache_market_identity_migration():
+    migration_path = Path(
+        "alembic/versions/0023_intraday_cache_market_identity.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "intraday_cache_market_identity_migration",
         migration_path,
     )
     assert spec is not None
@@ -755,6 +771,119 @@ def test_intraday_minute_cache_migration_creates_cache_metadata_table():
         "fetched_at",
         "cached_at",
     }.issubset(columns)
+
+
+def test_intraday_cache_market_identity_migration_scopes_uniqueness_to_instrument():
+    initial_migration = load_initial_migration()
+    cache_migration = load_intraday_minute_cache_migration()
+    migration = load_intraday_cache_market_identity_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(cache_migration, connection)
+        run_migration(migration, connection)
+
+        constraints = inspect(connection).get_unique_constraints(
+            "intraday_minute_cache_entries"
+        )
+
+    assert any(
+        constraint["name"]
+        == "uq_intraday_cache_instrument_provider_symbol_date_timeframe"
+        and constraint["column_names"]
+        == [
+            "instrument_id",
+            "provider",
+            "symbol",
+            "trade_date",
+            "timeframe",
+        ]
+        for constraint in constraints
+    )
+    assert not any(
+        constraint["name"]
+        == "uq_intraday_minute_cache_provider_symbol_date_timeframe"
+        for constraint in constraints
+    )
+
+
+def test_intraday_cache_market_identity_downgrade_refuses_ambiguous_rows():
+    initial_migration = load_initial_migration()
+    cache_migration = load_intraday_minute_cache_migration()
+    migration = load_intraday_cache_market_identity_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(cache_migration, connection)
+        run_migration(migration, connection)
+        connection.execute(
+            text(
+                """
+                INSERT INTO markets (id, code, name, timezone, currency)
+                VALUES
+                    ('11111111-1111-1111-1111-111111111111', 'CN', 'CN', 'UTC', 'CNY'),
+                    ('22222222-2222-2222-2222-222222222222', 'HK', 'HK', 'UTC', 'HKD')
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO instruments (
+                    id, symbol, name, market_id, asset_type, currency, is_active
+                ) VALUES
+                    (
+                        '33333333-3333-3333-3333-333333333333', '000001', 'CN',
+                        '11111111-1111-1111-1111-111111111111', 'stock', 'CNY', 1
+                    ),
+                    (
+                        '44444444-4444-4444-4444-444444444444', '000001', 'HK',
+                        '22222222-2222-2222-2222-222222222222', 'stock', 'HKD', 1
+                    )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO intraday_minute_cache_entries (
+                    id, instrument_id, provider, symbol, trade_date, timeframe,
+                    source, row_count, first_ts, last_ts, fetched_at, cached_at
+                ) VALUES
+                    (
+                        '55555555-5555-5555-5555-555555555555',
+                        '33333333-3333-3333-3333-333333333333',
+                        'yfinance', '000001', '2026-07-14', '1m', 'provider', 1,
+                        '2026-07-14 01:31:00', '2026-07-14 01:31:00',
+                        '2026-07-14 08:00:00', '2026-07-14 08:00:00'
+                    ),
+                    (
+                        '66666666-6666-6666-6666-666666666666',
+                        '44444444-4444-4444-4444-444444444444',
+                        'yfinance', '000001', '2026-07-14', '1m', 'provider', 1,
+                        '2026-07-14 01:31:00', '2026-07-14 01:31:00',
+                        '2026-07-14 08:00:00', '2026-07-14 08:00:00'
+                    )
+                """
+            )
+        )
+
+        context = MigrationContext.configure(connection)
+        original_op = migration.op
+        migration.op = Operations(context)
+        try:
+            with pytest.raises(RuntimeError, match="Cannot downgrade intraday cache"):
+                migration.downgrade()
+        finally:
+            migration.op = original_op
+
+        assert len(
+            inspect(connection).get_unique_constraints(
+                "intraday_minute_cache_entries"
+            )
+        ) == 1
 
 
 def test_research_source_notes_migration_creates_notebook_table():

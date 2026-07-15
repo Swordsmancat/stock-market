@@ -61,6 +61,150 @@ def test_akshare_provider_does_not_convert_provider_failure_into_no_data():
         provider.fetch_bars("600519", "1d", date(2026, 1, 1), date(2026, 1, 10))
 
 
+def test_akshare_provider_normalizes_exact_trade_date_intraday_bars():
+    frame = pd.DataFrame(
+        {
+            "timestamp": ["2026-07-14 15:00:00", "2026-07-15 09:31:00"],
+            "open": [100, 101],
+            "high": [102, 103],
+            "low": [99, 100],
+            "close": [101, 102],
+            "volume": [1000, 1200],
+            "amount": [101000, 122400],
+            "average_price": [100.5, 101.5],
+        }
+    )
+    provider = AkShareProvider(
+        intraday_downloader=lambda _symbol, _trade_date, _timeframe: frame
+    )
+
+    bars = provider.fetch_intraday_bars("600519", date(2026, 7, 15), "1m")
+
+    assert len(bars) == 1
+    assert bars[0].symbol == "600519"
+    assert bars[0].timestamp.isoformat() == "2026-07-15T09:31:00+08:00"
+    assert bars[0].close == Decimal("102")
+    assert bars[0].volume == 1200
+    assert bars[0].amount == Decimal("122400")
+    assert bars[0].average_price == Decimal("101.5")
+
+
+def test_akshare_provider_keeps_empty_intraday_frame_as_no_data():
+    provider = AkShareProvider(
+        intraday_downloader=lambda _symbol, _trade_date, _timeframe: pd.DataFrame()
+    )
+
+    bars = provider.fetch_intraday_bars("600519", date(2026, 7, 15), "1m")
+
+    assert bars == []
+
+
+def test_akshare_provider_rejects_malformed_intraday_schema():
+    frame = pd.DataFrame(
+        {
+            "timestamp": ["2026-07-15 09:31:00"],
+            "open": [101],
+            "high": [103],
+            "low": [100],
+            "volume": [1200],
+        }
+    )
+    provider = AkShareProvider(
+        intraday_downloader=lambda _symbol, _trade_date, _timeframe: frame
+    )
+
+    with pytest.raises(TypeError, match="intraday close is malformed"):
+        provider.fetch_intraday_bars("600519", date(2026, 7, 15), "1m")
+
+
+def test_akshare_eastmoney_intraday_downloader_normalizes_public_frame(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def stock_zh_a_hist_min_em(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame(
+            {
+                "时间": ["2026-07-15 09:31:00"],
+                "开盘": [101],
+                "收盘": [102],
+                "最高": [103],
+                "最低": [100],
+                "成交量": [1200],
+                "成交额": [122400],
+                "均价": [101.5],
+            }
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "akshare",
+        SimpleNamespace(stock_zh_a_hist_min_em=stock_zh_a_hist_min_em),
+    )
+
+    bars = AkShareProvider().fetch_intraday_bars(
+        "600519",
+        date(2026, 7, 15),
+        "1m",
+    )
+
+    assert captured == {
+        "symbol": "600519",
+        "start_date": "2026-07-15 00:00:00",
+        "end_date": "2026-07-15 23:59:59",
+        "period": "1",
+        "adjust": "",
+    }
+    assert len(bars) == 1
+    assert bars[0].timestamp.isoformat() == "2026-07-15T09:31:00+08:00"
+    assert bars[0].average_price == Decimal("101.5")
+
+
+@pytest.mark.parametrize(
+    ("symbol", "expected_provider_symbol"),
+    [("600519", "sh600519"), ("000001", "sz000001"), ("920002", "bj920002")],
+)
+def test_akshare_sina_intraday_downloader_maps_cn_exchange_prefix(
+    monkeypatch,
+    symbol,
+    expected_provider_symbol,
+):
+    captured: dict[str, object] = {}
+
+    def stock_zh_a_minute(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame(
+            {
+                "day": ["2026-07-15 09:31:00"],
+                "open": [101],
+                "high": [103],
+                "low": [100],
+                "close": [102],
+                "volume": [1200],
+                "amount": [122400],
+            }
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "akshare",
+        SimpleNamespace(stock_zh_a_minute=stock_zh_a_minute),
+    )
+    provider = AkShareProvider(
+        intraday_downloader=AkShareProvider.download_sina_intraday_bars
+    )
+
+    bars = provider.fetch_intraday_bars(symbol, date(2026, 7, 15), "1m")
+
+    assert captured == {
+        "symbol": expected_provider_symbol,
+        "period": "1",
+        "adjust": "",
+    }
+    assert len(bars) == 1
+    assert bars[0].symbol == symbol
+    assert bars[0].timestamp.isoformat() == "2026-07-15T09:31:00+08:00"
+
+
 def test_akshare_sina_daily_downloader_prefixes_symbol_and_normalizes_frame(monkeypatch):
     captured: dict[str, object] = {}
 

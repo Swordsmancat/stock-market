@@ -118,7 +118,7 @@ it("fetches instrument bars and derives latest using the backend date-range cont
   );
   expect(backendFetchMock).toHaveBeenNthCalledWith(
     2,
-    "/market-data/AAPL/intraday?date=2026-07-03&timeframe=1m&provider=yfinance",
+    "/market-data/AAPL/intraday?date=2026-07-03&timeframe=1m&provider=yfinance&market=CN",
     { cache: "no-store" },
   );
   expect(backendFetchMock).toHaveBeenNthCalledWith(
@@ -128,7 +128,7 @@ it("fetches instrument bars and derives latest using the backend date-range cont
   );
   expect(backendFetchMock).toHaveBeenCalledWith("/indicators/AAPL", { cache: "no-store" });
   expect(backendFetchMock).toHaveBeenCalledWith("/fundamentals/AAPL", { cache: "no-store" });
-  expect(backendFetchMock).toHaveBeenCalledWith("/news/AAPL", { cache: "no-store" });
+  expect(backendFetchMock).toHaveBeenCalledWith("/news/AAPL?market=CN", { cache: "no-store" });
   expect(backendFetchMock).toHaveBeenCalledWith("/reports/AAPL/daily/latest", { cache: "no-store" });
   expect(backendFetchMock).toHaveBeenCalledWith("/reports/AAPL/daily/history?limit=5", { cache: "no-store" });
   expect(
@@ -169,6 +169,7 @@ it("fetches instrument bars and derives latest using the backend date-range cont
       summary: { latest_sentiment: null, article_count: 0 },
       items: [],
     },
+    news_load_status: "failed",
     latest_daily_report: {
       symbol: "AAPL",
       report_type: "stock_daily",

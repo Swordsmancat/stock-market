@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from apps.api.main import app
+from apps.api.routers import market_data as market_data_router
 import packages.domain.models  # noqa: F401
 from packages.domain.models import DailyBar, Instrument, Market
 from packages.providers.base import ProviderBar, ProviderIntradayBar
@@ -136,6 +137,47 @@ def test_get_intraday_returns_verified_minute_payload_for_intraday_provider(monk
     assert payload["freshness"]["cache_status"] == "unavailable"
     assert payload["session"]["status"] == "closed_session"
     assert payload["session"]["trading_date"] == "2026-07-02"
+
+
+def test_get_intraday_forwards_optional_market_to_service(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def intraday_stub(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return {
+            "symbol": "600519",
+            "date": "2026-07-15",
+            "timeframe": "1m",
+            "source": "provider",
+            "provider": "akshare",
+            "requested_provider": "yfinance",
+            "effective_provider": "akshare",
+            "status": "ok",
+            "items": [],
+        }
+
+    monkeypatch.setattr(
+        market_data_router,
+        "get_intraday_bars_payload",
+        intraday_stub,
+    )
+    app.dependency_overrides[get_session] = override_no_database_session
+    try:
+        response = TestClient(app).get(
+            "/market-data/600519/intraday",
+            params={
+                "date": "2026-07-15",
+                "timeframe": "1m",
+                "provider": "yfinance",
+                "market": "CN",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["kwargs"]["market"] == "CN"
 
 
 def test_get_intraday_returns_persistent_cache_hit_without_provider_call(monkeypatch):

@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -9,11 +10,13 @@ from packages.providers.base import ProviderCorporateActionSnapshot
 from packages.providers.base import ProviderFundFlow
 from packages.providers.base import ProviderInstrument
 from packages.providers.base import ProviderInstrumentUniverseSnapshot
+from packages.providers.base import ProviderIntradayBar
 from packages.providers.base import ProviderMarketDepthSnapshot
 from packages.providers.base import ProviderOrderBookLevel
 from packages.providers.base import ProviderRecentTrade
 
 DailyBarsDownloader = Callable[[str, date, date], pd.DataFrame]
+IntradayBarsDownloader = Callable[[str, date, str], pd.DataFrame]
 MarketDepthDownloader = Callable[[str, int], dict[str, object]]
 InstrumentUniverseDownloader = Callable[[], pd.DataFrame]
 DividendBonusDownloader = Callable[[str], pd.DataFrame]
@@ -26,12 +29,14 @@ class AkShareProvider:
     def __init__(
         self,
         downloader: DailyBarsDownloader | None = None,
+        intraday_downloader: IntradayBarsDownloader | None = None,
         market_depth_downloader: MarketDepthDownloader | None = None,
         instrument_universe_downloader: InstrumentUniverseDownloader | None = None,
         dividend_bonus_downloader: DividendBonusDownloader | None = None,
         rights_allotment_downloader: RightsAllotmentDownloader | None = None,
     ) -> None:
         self._downloader = downloader or self._download
+        self._intraday_downloader = intraday_downloader or self._download_intraday
         self._market_depth_downloader = market_depth_downloader or self._download_market_depth
         self._instrument_universe_downloader = (
             instrument_universe_downloader or self._download_instrument_universe
@@ -173,6 +178,53 @@ class AkShareProvider:
             )
         return bars
 
+    def fetch_intraday_bars(
+        self,
+        symbol: str,
+        trade_date: date,
+        timeframe: str,
+    ) -> list[ProviderIntradayBar]:
+        if timeframe != "1m":
+            raise ValueError(f"Unsupported intraday timeframe for AkShare provider: {timeframe}")
+        frame = self._intraday_downloader(symbol, trade_date, timeframe)
+        if frame is None or frame.empty:
+            return []
+
+        bars: list[ProviderIntradayBar] = []
+        shanghai_timezone = ZoneInfo("Asia/Shanghai")
+        for _, row in frame.iterrows():
+            timestamp = _datetime_or_none(row.get("timestamp"))
+            if timestamp is None:
+                raise TypeError("AkShare intraday timestamp is malformed.")
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=shanghai_timezone)
+            else:
+                timestamp = timestamp.astimezone(shanghai_timezone)
+            if timestamp.date() != trade_date:
+                continue
+
+            open_value = _required_intraday_decimal(row, "open")
+            high_value = _required_intraday_decimal(row, "high")
+            low_value = _required_intraday_decimal(row, "low")
+            close_value = _required_intraday_decimal(row, "close")
+            volume_value = _int_or_none(row.get("volume"))
+            if volume_value is None:
+                raise TypeError("AkShare intraday volume is malformed.")
+            bars.append(
+                ProviderIntradayBar(
+                    symbol=symbol,
+                    timestamp=timestamp,
+                    open=open_value,
+                    high=high_value,
+                    low=low_value,
+                    close=close_value,
+                    volume=volume_value,
+                    amount=_decimal_or_none(row.get("amount")),
+                    average_price=_decimal_or_none(row.get("average_price")),
+                )
+            )
+        return sorted(bars, key=lambda item: item.timestamp)
+
     def fetch_market_depth(self, symbol: str, depth_levels: int) -> ProviderMarketDepthSnapshot:
         raw_payload = self._market_depth_downloader(symbol, depth_levels)
         bids = _parse_order_book_levels(_dataframe_or_none(raw_payload.get("bids")), depth_levels)
@@ -280,6 +332,61 @@ class AkShareProvider:
             return frame.dropna(subset=numeric_cols)
         except ImportError as exc:
             raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+    @staticmethod
+    def _download_intraday(symbol: str, trade_date: date, timeframe: str) -> pd.DataFrame:
+        try:
+            import akshare as ak
+        except ImportError as exc:
+            raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+        frame = ak.stock_zh_a_hist_min_em(
+            symbol=symbol,
+            start_date=f"{trade_date.isoformat()} 00:00:00",
+            end_date=f"{trade_date.isoformat()} 23:59:59",
+            period=timeframe.removesuffix("m"),
+            adjust="",
+        )
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        return frame.rename(
+            columns={
+                "时间": "timestamp",
+                "开盘": "open",
+                "收盘": "close",
+                "最高": "high",
+                "最低": "low",
+                "成交量": "volume",
+                "成交额": "amount",
+                "均价": "average_price",
+            }
+        )
+
+    @staticmethod
+    def download_sina_intraday_bars(
+        symbol: str,
+        trade_date: date,
+        timeframe: str,
+    ) -> pd.DataFrame:
+        try:
+            import akshare as ak
+        except ImportError as exc:
+            raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+        if symbol.startswith(("4", "8", "9")):
+            prefixed_symbol = f"bj{symbol}"
+        elif symbol.startswith("6"):
+            prefixed_symbol = f"sh{symbol}"
+        else:
+            prefixed_symbol = f"sz{symbol}"
+        frame = ak.stock_zh_a_minute(
+            symbol=prefixed_symbol,
+            period=timeframe.removesuffix("m"),
+            adjust="",
+        )
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        return frame.rename(columns={"day": "timestamp"})
 
     @staticmethod
     def _download_market_depth(symbol: str, depth_levels: int) -> dict[str, object]:
@@ -801,6 +908,13 @@ def _fund_flow_row_or_none(raw_fund_flow: object) -> pd.Series | None:
 
 def _decimal_from_row(row: pd.Series, candidate_columns: list[str]) -> Decimal | None:
     return _decimal_or_none(_first_row_value(row, candidate_columns))
+
+
+def _required_intraday_decimal(row: pd.Series, column: str) -> Decimal:
+    value = _decimal_or_none(row.get(column))
+    if value is None:
+        raise TypeError(f"AkShare intraday {column} is malformed.")
+    return value
 
 
 def _int_from_row(row: pd.Series, candidate_columns: list[str]) -> int | None:

@@ -18,6 +18,10 @@ import {
   type NewsSearchProviderCapability,
 } from "@/lib/platform-settings-store";
 import { backendFetch } from "@/lib/backend-api";
+import {
+  isLatestStoredNewsPayload,
+  type LatestStoredNewsPayload,
+} from "@/lib/news-payload";
 
 type Instrument = {
   symbol: string;
@@ -37,14 +41,7 @@ type LatestBarPayload = {
   item?: { timestamp?: string; close: number } | null;
 };
 
-type NewsPayload = {
-  source: string;
-  items: Array<{
-    title: string;
-    sentiment: string;
-    confidence: number;
-  }>;
-};
+type NewsPayload = LatestStoredNewsPayload;
 
 type WatchlistPayload = {
   items: Array<{
@@ -325,10 +322,15 @@ type MarketOverviewLoadResult =
   | { status: "loaded"; payload: MarketOverviewPayload }
   | { status: "failed" };
 
+type NewsLoadResult =
+  | { status: "loaded"; payload: NewsPayload }
+  | { status: "failed" };
+
 const DASHBOARD_HEALTH_SAMPLE_LIMIT = 25;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const FALLBACK_DASHBOARD_LOCALE = "en-US";
 const OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS = 5000;
+const HOMEPAGE_NEWS_LIMIT = 6;
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
 type LatestBarLoadResult =
@@ -505,6 +507,27 @@ function formatSignedPercent(value: number | null, locale: string, unavailableLa
     return `-${formattedValue}`;
   }
   return formattedValue;
+}
+
+async function fetchLatestNewsResult(): Promise<NewsLoadResult> {
+  const timeout = createDashboardFetchTimeout(OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS);
+  try {
+    const response = await backendFetch(
+      `/news/latest?limit=${HOMEPAGE_NEWS_LIMIT}`,
+      { cache: "no-store", signal: timeout.signal },
+    );
+    if (!response.ok) {
+      return { status: "failed" };
+    }
+    const payload = (await response.json()) as unknown;
+    return isLatestStoredNewsPayload(payload)
+      ? { status: "loaded", payload }
+      : { status: "failed" };
+  } catch {
+    return { status: "failed" };
+  } finally {
+    timeout.clear();
+  }
 }
 
 function formatSignedDashboardNumber(value: number | null | undefined, locale: string, unavailableLabel: string): string {
@@ -1096,16 +1119,18 @@ function HotSectorTablePanel({
 
 function LatestNewsSentimentPanel({
   items,
+  loadFailed,
   moreHref,
   unavailableLabel,
   t,
 }: {
   items: NewsPayload["items"];
+  loadFailed: boolean;
   moreHref: string;
   unavailableLabel: string;
   t: (key: any, values?: Record<string, string | number>) => string;
 }) {
-  const newsRows = items.slice(0, 6);
+  const newsRows = items;
   return (
     <TerminalPanel
       title={t("terminalLatestNewsTitle")}
@@ -1116,9 +1141,27 @@ function LatestNewsSentimentPanel({
       action={<TerminalActionLink href={moreHref} label={t("terminalActionMore")} />}
       contentClassName="flex min-h-0 flex-col"
     >
-      {newsRows.length > 0 ? (
-        <div className="min-h-0 flex-1 divide-y divide-border/65 overflow-y-auto scrollbar-thin">
+      {loadFailed ? (
+        <div
+          role="alert"
+          className="flex min-h-0 flex-1 items-center p-4 text-sm text-destructive"
+        >
+          {t("terminalLatestNewsUnavailable")}
+        </div>
+      ) : newsRows.length > 0 ? (
+        <div
+          role="region"
+          aria-labelledby="terminal-latest-news-heading"
+          tabIndex={0}
+          className="min-h-0 flex-1 divide-y divide-border/65 overflow-y-auto scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring xl:overscroll-contain"
+        >
           {newsRows.map((item, index) => {
+            const identity = [item.symbol, item.source]
+              .filter((value): value is string => typeof value === "string" && value.length > 0)
+              .join(" · ");
+            const confidence = typeof item.confidence === "number"
+              ? t("confidence", { score: Math.round(item.confidence * 100) })
+              : unavailableLabel;
             const sentimentClassName =
               item.sentiment === "positive"
                 ? "border-positive/35 bg-positive/10 text-positive"
@@ -1130,8 +1173,8 @@ function LatestNewsSentimentPanel({
                 <div className="font-mono text-[11px] font-semibold text-primary">{index + 1}</div>
                 <div className="min-w-0">
                   <div className="line-clamp-1 font-medium text-foreground">{item.title}</div>
-                  <div className="mt-1 text-[10px] text-muted-foreground">
-                    {t("confidence", { score: Math.round(item.confidence * 100) })}
+                  <div className="mt-1 truncate text-[10px] text-muted-foreground">
+                    {identity ? `${identity} · ${confidence}` : confidence}
                   </div>
                 </div>
                 <div className={`rounded-sm border px-1.5 py-1 text-center text-[10px] ${sentimentClassName}`}>
@@ -1324,8 +1367,9 @@ function buildAiSentimentSummary({
   const newsScore = newsItems.length === 0
     ? 50
     : newsItems.reduce((total, item) => {
-        if (item.sentiment === "positive") return total + 50 + item.confidence * 45;
-        if (item.sentiment === "negative") return total + 50 - item.confidence * 45;
+        const confidence = typeof item.confidence === "number" ? item.confidence : 0;
+        if (item.sentiment === "positive") return total + 50 + confidence * 45;
+        if (item.sentiment === "negative") return total + 50 - confidence * 45;
         return total + 50;
       }, 0) / newsItems.length;
   const sectorChanges = sectors
@@ -1548,18 +1592,12 @@ export default async function HomePage({
 
   const primaryInstrument = instrumentsPayload.items[0];
   const [
-    newsPayload,
+    latestNewsResult,
     watchlistPayload,
     marketOverviewResult,
   ] =
     await Promise.all([
-      fetchOptionalJson<NewsPayload>(
-        `/news/${primaryInstrument.symbol}`,
-        {
-          source: "unavailable",
-          items: [],
-        },
-      ),
+      fetchLatestNewsResult(),
       fetchOptionalJson<WatchlistPayload>("/watchlist", { items: [] }),
       fetchMarketOverviewResult(provider),
     ]);
@@ -1599,6 +1637,9 @@ export default async function HomePage({
 
   const hotSectorItemsForHome = hotSectors.slice(0, 6);
   const newsSearchProviderCapabilities = platformSettings.news_search_provider_capabilities ?? [];
+  const newsPayload = latestNewsResult.status === "loaded"
+    ? latestNewsResult.payload
+    : { source: "unavailable", items: [] };
   const newsItemsForHome = newsPayload.items.slice(0, 6);
   const aiSentimentSummary = buildAiSentimentSummary({
     newsItems: newsItemsForHome,
@@ -1696,7 +1737,8 @@ export default async function HomePage({
           />
           <LatestNewsSentimentPanel
             items={newsItemsForHome}
-            moreHref={`/instruments/${primaryInstrument.symbol}`}
+            loadFailed={latestNewsResult.status === "failed"}
+            moreHref="/instruments"
             unavailableLabel={t("unavailableShort")}
             t={t}
           />

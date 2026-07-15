@@ -35,9 +35,13 @@ function mockInstrumentDetailBackend({
     },
   ],
   barStatus,
+  newsStatus = 200,
+  newsPayload = { symbol: "600519", source: "database", items: [] },
 }: {
   barItems?: Array<Record<string, number | string>>;
   barStatus?: string;
+  newsStatus?: number;
+  newsPayload?: unknown;
 } = {}) {
   backendFetchMock.mockImplementation((path: string) => {
     if (path.includes("/bars?")) {
@@ -60,6 +64,16 @@ function mockInstrumentDetailBackend({
           status: "ok",
           item: { timestamp: "2026-07-15", close: 4010 },
         }),
+      );
+    }
+    if (path.startsWith("/news/")) {
+      return Promise.resolve(
+        jsonResponse(
+          newsStatus === 200
+            ? newsPayload
+            : { detail: "news unavailable" },
+          newsStatus,
+        ),
       );
     }
     return Promise.resolve(jsonResponse({}));
@@ -152,6 +166,115 @@ it("keeps provider-specific market indexes out of CN stock fallback", async () =
   expect(
     requestedPaths.filter((path) => path.startsWith("/market-data/000300/")),
   ).not.toEqual(expect.arrayContaining([expect.stringContaining("market=CN")]));
+  expect(requestedPaths).toContain("/news/cn_csi_300");
+  expect(requestedPaths).not.toContain("/news/cn_csi_300?market=CN");
+});
+
+it("forwards exact market identity to intraday detail requests", async () => {
+  mockInstrumentDetailBackend();
+
+  await fetchInstrumentDetailPayload({
+    symbol: "600519",
+    providerName: "yfinance",
+    market: "CN",
+  });
+
+  const requestedPaths = backendFetchMock.mock.calls.map(([path]) =>
+    String(path),
+  );
+  expect(requestedPaths).toContainEqual(
+    expect.stringMatching(
+      /^\/market-data\/600519\/intraday\?.*&provider=yfinance&market=CN$/,
+    ),
+  );
+  expect(requestedPaths).toContain("/news/600519?market=CN");
+});
+
+it("keeps a failed stored-news read distinct from a genuine empty result", async () => {
+  mockInstrumentDetailBackend({ newsStatus: 503 });
+
+  const result = await fetchInstrumentDetailPayload({
+    symbol: "600519",
+    providerName: "yfinance",
+    market: "CN",
+  });
+
+  expect(result.status).toBe("loaded");
+  if (result.status !== "loaded") {
+    throw new Error("expected loaded instrument detail");
+  }
+  expect(result.payload.news_load_status).toBe("failed");
+  expect(result.payload.news?.items).toEqual([]);
+});
+
+it("treats a malformed successful stored-news payload as a failed read", async () => {
+  mockInstrumentDetailBackend({
+    newsPayload: { symbol: "600519", source: "database", items: "invalid" },
+  });
+
+  const result = await fetchInstrumentDetailPayload({
+    symbol: "600519",
+    providerName: "yfinance",
+    market: "CN",
+  });
+
+  expect(result.status).toBe("loaded");
+  if (result.status !== "loaded") {
+    throw new Error("expected loaded instrument detail");
+  }
+  expect(result.payload.news_load_status).toBe("failed");
+  expect(result.payload.news?.items).toEqual([]);
+});
+
+it("rejects stored-news payloads containing credential or non-http URLs", async () => {
+  mockInstrumentDetailBackend({
+    newsPayload: {
+      symbol: "600519",
+      source: "database",
+      items: [
+        {
+          title: "Unsafe legacy news row",
+          url: "https://user:secret@example.com/news",
+        },
+      ],
+    },
+  });
+
+  const result = await fetchInstrumentDetailPayload({
+    symbol: "600519",
+    providerName: "yfinance",
+    market: "CN",
+  });
+
+  expect(result.status).toBe("loaded");
+  if (result.status !== "loaded") {
+    throw new Error("expected loaded instrument detail");
+  }
+  expect(result.payload.news_load_status).toBe("failed");
+  expect(result.payload.news?.items).toEqual([]);
+});
+
+it("rejects a stored-news projection for a different instrument symbol", async () => {
+  mockInstrumentDetailBackend({
+    newsPayload: {
+      symbol: "000001",
+      source: "database",
+      items: [{ title: "News for a different instrument" }],
+    },
+  });
+
+  const result = await fetchInstrumentDetailPayload({
+    symbol: "600519",
+    providerName: "yfinance",
+    market: "CN",
+  });
+
+  expect(result.status).toBe("loaded");
+  if (result.status !== "loaded") {
+    throw new Error("expected loaded instrument detail");
+  }
+  expect(result.payload.news_load_status).toBe("failed");
+  expect(result.payload.news?.items).toEqual([]);
 });
 
 it("derives latest provenance from nonempty bars without another provider request", async () => {

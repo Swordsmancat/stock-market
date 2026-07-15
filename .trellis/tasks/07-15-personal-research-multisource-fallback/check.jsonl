@@ -1,0 +1,9 @@
+{"file":".trellis/spec/backend/personal-research-workflow-contract.md","reason":"Check exact identity, one-source daily recovery, provenance, AI forwarding, and no mock."}
+{"file":".trellis/spec/backend/intraday-cache-contract.md","reason":"Check cache ownership, market forwarding, verified rows, and session-policy no-call branches."}
+{"file":".trellis/spec/backend/news-search-provider-contract.md","reason":"Check DB-first source order, one attempt, persistence/dedupe, social separation, and secret safety."}
+{"file":".trellis/spec/backend/assistant-research-citation-contract.md","reason":"Check live candidates never become citations before storage and refreshed news remains safety-bounded."}
+{"file":".trellis/spec/backend/market-depth-contract.md","reason":"Check depth remains explicit unsupported and never uses fallback bars or crawling."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Run proportional focused and full backend validation."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check visible one-shot recovery, localized states, accessibility, and no hidden homepage fan-out."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Run proxy/component/page tests, TypeScript, locale, build, and browser checks."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Audit all payload fields and status semantics across provider, persistence, API, and UI layers."}
