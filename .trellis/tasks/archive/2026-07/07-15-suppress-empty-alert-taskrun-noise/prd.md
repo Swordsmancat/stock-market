@@ -44,7 +44,7 @@ contains no actionable alert rules.
       and diff checks pass.
 - [x] Live queued acceptance returns skipped while the latest persisted alert
       TaskRun ID/count remains unchanged.
-- [ ] Minimal code/spec/task files are committed and pushed, this task is
+- [x] Minimal code/spec/task files are committed and pushed, this task is
       archived, and the five-day acceptance is restored as current.
 
 ## Out of Scope
