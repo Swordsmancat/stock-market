@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 65
+- **Total Sessions**: 66
 - **Last Active**: 2026-07-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~205 | Active |
+| `journal-2.md` | ~238 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 66 | 2026-07-15 | Resilient CN daily-bar fallback | `e3df27d` | `master` |
 | 65 | 2026-07-15 | Fix homepage fund-flow scrolling | `660f0c1` | `master` |
 | 64 | 2026-07-15 | Suppress empty alert TaskRun noise | `043dc5f` | `master` |
 | 63 | 2026-07-15 | Fix empty watchlist report no-op | `3c2aa56` | `master` |

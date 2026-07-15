@@ -203,3 +203,36 @@ Made the fixed-height homepage fund-flow panel natively scrollable and focusable
 ### Next Steps
 
 - None - task complete
+
+
+## Session 66: Resilient CN daily-bar fallback
+
+**Date**: 2026-07-15
+**Task**: Resilient CN daily-bar fallback
+**Branch**: `master`
+
+### Summary
+
+Added market-aware CN daily-bar source fallback from yfinance to configured AkShare/Tushare, preserved provenance through detail and AI, hardened search market resolution and database cohort diagnostics, and verified the isolated live path without disturbing normal services.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3df27d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
