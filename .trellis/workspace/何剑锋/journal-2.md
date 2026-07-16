@@ -699,3 +699,36 @@ Replaced the stretched instrument-detail report grid with independent primary/ev
 ### Next Steps
 
 - None - task complete
+
+
+## Session 81: Localize instrument technical indicators
+
+**Date**: 2026-07-17
+**Task**: Localize instrument technical indicators
+**Branch**: `master`
+
+### Summary
+
+Localized all known instrument-detail technical indicator names and Bollinger/MACD fields in Chinese and English, preserved unknown-key fallback, added component and page coverage, and deployed the verified Web image to the normal 3000 stack.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `252d31b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

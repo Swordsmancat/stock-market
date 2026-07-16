@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 80
+- **Total Sessions**: 81
 - **Last Active**: 2026-07-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~701 | Active |
+| `journal-2.md` | ~734 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 81 | 2026-07-17 | Localize instrument technical indicators | `252d31b` | `master` |
 | 80 | 2026-07-17 | Rebalance instrument detail research layout | `80719bb` | `master` |
 | 79 | 2026-07-16 | Collapse long company profile | `e32ddb9` | `master` |
 | 78 | 2026-07-16 | Select complete A-share fundamentals fallback | `0865f5e` | `master` |
