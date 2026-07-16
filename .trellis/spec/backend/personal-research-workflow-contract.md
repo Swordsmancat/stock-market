@@ -127,8 +127,9 @@ states distinct.
 ### 1. Scope / Trigger
 
 - Trigger: a personal user opens a searched instrument detail page or requests
-  AI analysis and the requested daily-bar provider returns no rows, raises, is
-  rate-limited, or returns malformed rows.
+  AI analysis and stored daily bars are empty or severely sparse, or the
+  requested daily-bar provider returns no rows, raises, is rate-limited, or
+  returns malformed rows.
 - Scope: canonical search identity, daily bars/latest/indicators APIs,
   database-first reads, CN provider coordination, detail provenance, and the
   market assistant's daily-bar context.
@@ -154,6 +155,15 @@ states distinct.
 
 - Database daily bars remain first. When market is known, lookup identity is
   `(Market.code, Instrument.symbol)`; another market's same symbol cannot win.
+- For an exact CN six-digit stock daily range, severe sparsity is measured as
+  `min(35, max(1, ceil(requested_weekday_count / 2)))`. Weekdays are calculated
+  arithmetically from the requested dates; this detector does not claim trading-
+  calendar completeness or require weekend/holiday boundary rows.
+- A coherent database cohort meeting that minimum remains a zero-network hit.
+  A smaller non-empty cohort is retained as the degraded fallback while the
+  existing CN resilient coordinator runs with the same `minimum_row_count`.
+  Remote providers and adjustments are never stitched, and GET never writes
+  recovered bars.
 - A database response contains only the latest continuous cohort with one
   effective `(provider, source, adjustment)` identity. Dropped earlier cohorts
   produce `status="degraded"` and `MIXED_DAILY_BAR_PROVENANCE`; incomplete
@@ -193,6 +203,14 @@ requested provider
 - Successful alternate selection returns `status="ok"`. All configured sources
   returning empty is `no_data`; any failed/invalid source with no selected rows
   is `degraded`. Latest, indicators, and assistant context preserve that state.
+- When severe-sparsity recovery exhausts all remote sources, return the retained
+  non-empty database cohort with sanitized source attempts, `status="degraded"`,
+  and `INSUFFICIENT_DATABASE_COVERAGE`; never replace useful stored evidence
+  with an empty response.
+- Intraday previous-close resolution keeps its direct database reference. When
+  that reference exists, a minute request must not re-enter sparse daily-bar
+  recovery; only a missing stored reference may use the provider-backed daily
+  path. This preserves intraday behavior and prevents new page-load fan-out.
 - Detail fetches daily bars once and derives latest from the same payload,
   including the empty/degraded state. It does not run a second fallback chain.
 - Search resolves an exact market before navigation when one unique exact
@@ -219,6 +237,10 @@ requested provider
 | HK/US/missing market or non-1d | Existing single-provider behavior; no CN alternate |
 | Provider-specific logical index | Omit CN market forwarding; no stock fallback |
 | DB range crosses provenance cohorts | Return latest continuous cohort and degraded diagnostic |
+| Coherent exact-CN DB cohort meets severe-sparsity minimum | Return database immediately; zero provider calls |
+| Coherent exact-CN DB cohort is below the minimum | Run the resilient coordinator with that minimum row count |
+| Sparse DB recovery exhausts remote sources | Return retained DB cohort with `INSUFFICIENT_DATABASE_COVERAGE` |
+| Intraday request has a stored previous close | Reuse it; zero daily coordinator calls |
 | Legacy DB provenance unknown | Effective provider remains null; never pass `database` as adapter |
 | Latest provenance-boundary audit fails | Return degraded unknown-provenance diagnostics; never assume a coherent series |
 | Assistant receives degraded empty bars | No LLM call; `SOURCE_UNAVAILABLE`, not `SOURCE_NO_DATA` |
@@ -230,11 +252,15 @@ requested provider
   and AI cites the same daily-bar provider.
 - Good: a stored qfq cohort follows older raw rows; detail uses only the latest
   continuous cohort, marks degraded, and AI receives the diagnostic.
+- Good: one stored row exists in a multi-week exact-CN request; the first
+  validated remote source meeting half the requested weekdays replaces only
+  the response projection.
 - Base: a US symbol has no yfinance rows; it remains explicit no-data and never
   calls AkShare/Tushare.
 - Bad: convert provider exceptions to empty frames, mix raw/qfq rows, launch
   `/latest` and `/bars` fallback chains together, infer CN from a numeric symbol,
-  pass `database` as an assistant adapter, or render raw exception text.
+  accept any non-empty sparse database cohort as sufficient, pass `database`
+  as an assistant adapter, or render raw exception text.
 
 ### 6. Tests Required
 
@@ -246,9 +272,12 @@ requested provider
   schema failure, and true empty frames.
 - Service tests cover four-source priority, no mock, all-empty versus failed
   exhaustion, env-only Tushare, market-scoped DB reads, latest continuous DB
-  cohort, legacy adjustment correction, latest/indicator provenance, and a
-  latest-bar regression that forbids the full-history range helper. Boundary
-  audit query failures remain explicitly degraded.
+  cohort, severe-sparsity threshold boundaries, remote recovery and retained
+  database exhaustion, non-CN/short-range compatibility, legacy adjustment
+  correction, latest/indicator provenance, intraday stored-close reuse with
+  zero daily-provider calls, and a latest-bar regression that forbids the full-
+  history range helper. Boundary audit query failures remain explicitly
+  degraded.
 - API tests assert optional market forwarding for bars/latest/indicators and
   assistant requests.
 - Frontend tests assert immediate search submit retains a unique market, index
@@ -281,6 +310,7 @@ result = coordinator.fetch(
     start,
     end,
     policy=CN_RESILIENT_POLICY,
+    minimum_row_count=severe_sparsity_minimum(start, end),
 )
 ```
 
@@ -306,10 +336,16 @@ provenance, and returns explicit no-data/degraded state when none succeeds.
 
 ### 3. Contracts
 
-- A coherent database cohort remains authoritative and triggers no provider
-  request.
+- A coherent database cohort meeting the severe-sparsity minimum remains
+  authoritative and triggers no provider request.
 - A mixed, research-ready stored range may run the existing CN resilient
-  coordinator with the full stored date range as required coverage.
+  coordinator with the full stored date range as required coverage. This
+  mixed-provenance recovery takes precedence over the weaker sparse-cohort
+  branch and keeps the original stored row count as its minimum.
+- `minimum_row_count` checks candidate count only. First/last date boundaries
+  are enforced only when `required_coverage` is supplied, so a sparse coherent
+  request whose dates fall on weekends or holidays is not rejected solely for
+  missing those boundary dates.
 - A remote candidate outside the required start/end coverage is recorded as
   `insufficient_coverage`; the coordinator continues without merging rows.
 - A boundary-spanning remote candidate is still insufficient when it contains
@@ -325,7 +361,7 @@ provenance, and returns explicit no-data/degraded state when none succeeds.
 
 | Condition | Required behavior |
 | --- | --- |
-| One coherent stored cohort | Return database immediately |
+| Coherent stored cohort meets severe-sparsity minimum | Return database immediately |
 | Mixed stored range below recovery threshold | Keep current coherent cohort |
 | Primary remote misses required boundary | `insufficient_coverage`; continue |
 | Primary spans boundaries but has fewer rows than stored range | `insufficient_coverage`; continue |
@@ -338,7 +374,7 @@ provenance, and returns explicit no-data/degraded state when none succeeds.
 - Good: a two-row newest cohort over 60 stored rows rejects a sparse
   boundary-spanning 35-row source, then selects a complete 60-row AkShare
   series without changing the database.
-- Base: a coherent stored series remains a zero-network database hit.
+- Base: a sufficient coherent stored series remains a zero-network database hit.
 - Bad: accept a sparse latest-only remote result, merge qfq/raw rows, or return
   an empty payload after recovery exhaustion.
 

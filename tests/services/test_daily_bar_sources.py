@@ -417,6 +417,52 @@ def test_minimum_row_count_rejects_sparse_boundary_spanning_source() -> None:
     }
 
 
+def test_minimum_row_count_does_not_require_weekend_request_boundaries() -> None:
+    trade_dates = [date(2026, 7, 13), date(2026, 7, 14), date(2026, 7, 15)]
+    bars = [
+        ProviderBar(
+            symbol="600519",
+            timestamp=trade_date,
+            open=Decimal("100"),
+            high=Decimal("101"),
+            low=Decimal("99"),
+            close=Decimal("100"),
+            volume=Decimal("1000"),
+        )
+        for trade_date in trade_dates
+    ]
+    coordinator = DailyBarFetchCoordinator(
+        [
+            _source(
+                "yfinance.fetch_bars",
+                0,
+                lambda *_args: bars,
+                provider="yfinance",
+            )
+        ]
+    )
+
+    result = coordinator.fetch(
+        "600519",
+        "1d",
+        date(2026, 7, 12),
+        date(2026, 7, 18),
+        policy=CN_RESILIENT_POLICY,
+        minimum_row_count=3,
+    )
+
+    assert result.status == "ok"
+    assert result.bars == bars
+    assert result.attempts == [
+        {
+            "provider": "yfinance",
+            "source": "yfinance.fetch_bars",
+            "status": "selected",
+            "row_count": 3,
+        }
+    ]
+
+
 def test_selected_daily_bars_are_normalized_to_ascending_trade_date() -> None:
     older = _bar(close="100")
     newer = _bar(close="110")

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 import pandas as pd
@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
+from packages.providers.eastmoney_public_news import EastmoneyPublicNewsItem
 from packages.services.fundamentals import ingest_akshare_fundamentals, ingest_fundamentals
 from packages.services.news import ingest_akshare_news, ingest_news
 from packages.shared.database import Base
@@ -61,38 +62,54 @@ def test_ingest_akshare_fundamentals_persists_snapshot():
     assert result["item"]["revenue_growth"] == 0.105
 
 
-def test_ingest_news_routes_to_akshare(monkeypatch):
+def test_ingest_news_keeps_akshare_name_as_eastmoney_public_compatibility_route(
+    monkeypatch,
+):
     session = make_session()
 
     def fake_akshare_news(symbol, session):
-        return {"symbol": symbol, "status": "ingested", "source": "akshare", "article_count": 1}
+        return {
+            "symbol": symbol,
+            "status": "ingested",
+            "source": "eastmoney_public",
+            "article_count": 1,
+        }
 
     monkeypatch.setattr("packages.services.news.ingest_akshare_news", fake_akshare_news)
 
     result = ingest_news("600519", session=session, provider_name="akshare")
 
     assert result["status"] == "ingested"
-    assert result["source"] == "akshare"
+    assert result["source"] == "eastmoney_public"
     assert result["article_count"] == 1
 
 
-def test_ingest_akshare_news_persists_articles():
+def test_ingest_akshare_news_compatibility_path_uses_eastmoney_public(monkeypatch):
     session = make_session()
-    frame = pd.DataFrame(
-        [
-            {
-                "新闻标题": "Moutai revenue grows",
-                "新闻链接": "https://example.com/moutai-news",
-                "发布时间": "2026-06-29 14:13:41",
-                "文章来源": "eastmoney",
-                "新闻内容": "Moutai revenue grows strongly in the quarter.",
-            }
-        ]
+    item = EastmoneyPublicNewsItem(
+        symbol="600519",
+        title="Moutai revenue grows",
+        url="https://finance.eastmoney.com/a/202606293806093223.html",
+        publisher="Eastmoney",
+        summary="Moutai revenue grows strongly in the quarter.",
+        published_at=datetime(2026, 6, 29, 14, 13, 41, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(
+        "packages.services.news.fetch_eastmoney_public_news",
+        lambda symbol, **kwargs: (item,),
+    )
+    monkeypatch.setattr(
+        "packages.services.news.get_platform_settings",
+        lambda: {
+            "akshare_enabled": True,
+            "news_search_timeout_seconds": 3,
+            "news_search_max_results": 10,
+        },
     )
 
-    with patch("akshare.stock_news_em", return_value=frame):
-        result = ingest_akshare_news("600519", session=session)
+    result = ingest_akshare_news("600519", session=session)
 
     assert result["status"] == "ingested"
+    assert result["source"] == "eastmoney_public"
     assert result["article_count"] == 1
     assert result["sentiment_count"] == 1

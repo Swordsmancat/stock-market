@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-research-workflow-contract.md","reason":"Defines exact CN identity, database-first daily-bar fallback, coherent source selection, and 95/90/80 boundaries."}
+{"file":".trellis/spec/backend/news-search-provider-contract.md","reason":"Defines sequential news refresh, persistence/citation safety, diagnostics, and crawler/Cookie boundaries."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Defines provider failure sanitization and recoverable database fallback behavior."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Defines secret/raw-provider diagnostic restrictions."}
+{"file":".trellis/tasks/07-16-eastmoney-readonly-access-feasibility/research/feasibility.md","reason":"Provides the approved public-only Eastmoney feasibility, endpoint, licensing, and login no-go decisions."}

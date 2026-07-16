@@ -40,7 +40,10 @@
 ### 3. Contracts
 
 - The provider registry must represent `anspire`, `serpapi_baidu`, `tavily`, `bocha`, `brave`, `minimax`, `yfinance`, `akshare`, `tushare`, and `mock`.
-- Live adapter status is limited to `anspire` and `serpapi_baidu` for this slice.
+- Registry-driven `/news/search` live adapter status is limited to `anspire`
+  and `serpapi_baidu` for this slice. The built-in `eastmoney_public` exact-CN
+  refresh adapter is outside saved provider order; `akshare` remains its
+  compatibility/settings capability identifier.
 - Provider keys are stored only in `news_search_provider_keys`; blank updates preserve existing saved keys.
 - Public settings and diagnostics must never include raw provider keys, authorization headers, or full raw provider payloads.
 - Search candidates are collection inputs. They become citable news evidence only after storage as `NewsArticle` with URL, source, summary, and publication or retrieval timestamp metadata.
@@ -177,6 +180,14 @@ Social candidates stay visible as low-strength collection inputs while waiting f
   projection.
 - Shared write boundary:
   `persist_news_search_candidates(..., expected_symbol=None, expected_provider=None)`.
+- Public CN provider:
+  `fetch_eastmoney_public_news(symbol, *, timeout=8.0, max_rows=10, http_get=None) -> tuple[EastmoneyPublicNewsItem, ...]`.
+  Each item contains `symbol`, `title`, fixed article `url`, `publisher`,
+  optional normalized `summary`, and timezone-aware `published_at`; service
+  settings normalize timeout to 1..30 seconds and rows to 1..20.
+- Legacy compatibility entry point:
+  `ingest_akshare_news(symbol, session)` delegates to `eastmoney_public` and
+  truthfully reports that source name.
 - Frontend decoders:
   `isInstrumentNewsPayload(value, expectedSymbol?)`,
   `isNewsRefreshPayload(value, expectedSymbol?)`, and
@@ -187,10 +198,26 @@ Social candidates stay visible as low-strength collection inputs while waiting f
 - Refresh checks stored `NewsArticle` rows first. A hit returns
   `status="database_hit"` and performs zero external calls.
 - The fixed source order is configured executable search providers in saved
-  order, eligible AkShare stock news for an exact CN six-digit symbol, then
-  market-aware yfinance. Built-in AkShare/yfinance fallback is not dependent on
-  membership in `news_search_enabled_providers`; AkShare still respects the
-  platform-wide `akshare_enabled` gate.
+  order, `eastmoney_public` for an exact CN six-digit symbol, then market-aware
+  yfinance. Built-in Eastmoney/yfinance fallback is not dependent on membership
+  in `news_search_enabled_providers`; Eastmoney still respects the platform-wide
+  `akshare_enabled` compatibility gate.
+- `eastmoney_public` owns exactly one GET to the fixed HTTPS
+  `search-api-web.eastmoney.com/search/jsonp` operation. It uses fixed public
+  headers/query structure, `follow_redirects=False`, `trust_env=False`, the
+  configured timeout, a 256 KiB response cap, an exact JSONP callback, strict
+  media/result/row schema validation, bounded rows, normalized plain text, and
+  fixed Eastmoney article URLs. It never sends Cookie, Authorization, browser
+  session state, or caller-supplied URL/header values and does not retry.
+- Refresh attempts and `selected_provider` use `eastmoney_public`; the upstream
+  publisher remains `NewsArticle.source`. The current schema has no acquisition-
+  provider field, so persistence must not fabricate one.
+- `akshare_enabled=false` or a missing flag makes both detail refresh and the
+  legacy AkShare-named ingestion path skip `eastmoney_public` before any
+  request. The legacy result is `status="skipped"`,
+  `code="PROVIDER_DISABLED"`, `source="eastmoney_public"`, and zero counts.
+- Production news paths must not call `ak.stock_news_em`; its bundled Cookie
+  and unbounded transport do not meet this provider boundary.
 - Each executable source is called at most once with no retry. Stop immediately
   after the first source persists at least one deduplicated news row and return
   `status="refreshed"` plus a fresh stored projection.
@@ -200,7 +227,7 @@ Social candidates stay visible as low-strength collection inputs while waiting f
   `unsupported`.
 - Candidate normalization may retain only title, URL, source, summary,
   publication/retrieval time, language/region, result kind, and evidence-boundary
-  metadata. Diagnostics never include keys, cookies, authorization headers,
+  metadata. Diagnostics never include keys, Cookies, authorization headers,
   raw provider bodies, credential URLs, prompts, stack traces, or exception
   messages.
 - Every provider batch is validated before it is returned by search, accepted
@@ -216,8 +243,8 @@ Social candidates stay visible as low-strength collection inputs while waiting f
   stored/returned summary text is capped at 1000 characters. Visible bare
   `Bearer <token>` text and Cookie/authorization/key/token assignments,
   including quoted JSON fields, invalidate the candidate. The legacy yfinance,
-  AkShare, and mock ingestion entry points use the same sanitizer and single
-  `NewsArticle` write helper.
+  Eastmoney-public/AkShare-named, and mock ingestion entry points use the same
+  sanitizer and single `NewsArticle` write helper.
 - Any invalid member rejects the whole provider batch as
   `PROVIDER_INVALID_CANDIDATE`; shared persistence performs zero writes for a
   mixed valid/invalid batch. Diagnostics contain no candidate fields.
@@ -249,8 +276,9 @@ Social candidates stay visible as low-strength collection inputs while waiting f
 - Generic crawling, browser-Cookie extraction/storage/replay, authenticated
   scraping, CAPTCHA/paywall bypass, proxy rotation, and raw HTML storage remain
   forbidden.
-- A future public-web adapter must be site-specific, public/no-login,
-  allowlisted, rate-limited, terms/robots aware, and disabled by default.
+- A public-web adapter must be site-specific, public/no-login, allowlisted,
+  low-frequency, terms/robots aware, independently disableable, and covered by
+  endpoint-specific schema tests. It must not become a generic crawler.
 - Login-only material uses the existing manual visible-text/link import and
   reviewed Source Notebook citation gate. Browser credentials never cross into
   the backend refresh service.
@@ -261,6 +289,10 @@ Social candidates stay visible as low-strength collection inputs while waiting f
 | --- | --- |
 | Stored news exists | `database_hit`; zero external calls |
 | Enabled credentialed source lacks key | Sanitized `MISSING_CREDENTIALS`; continue |
+| `akshare_enabled` is false or absent | Skip `eastmoney_public` before transport; `PROVIDER_DISABLED` |
+| Eastmoney timeout | Provider raises `EASTMONEY_NEWS_TIMEOUT`; refresh reports `PROVIDER_TIMEOUT`; no retry; continue |
+| Eastmoney redirect/status/media/size/JSONP/schema failure | Stable `EASTMONEY_NEWS_*` provider code; refresh reports `PROVIDER_ERROR`; no retry; continue |
+| Eastmoney returns a valid empty result | Record empty attempt and continue to yfinance |
 | Source returns persistable candidates | Persist/dedupe, return `refreshed`, stop |
 | Source returns only social candidates | Defer; do not persist; continue |
 | Candidate symbol/provider/URL/field bounds are invalid | `PROVIDER_INVALID_CANDIDATE`; reject batch and continue |
@@ -272,29 +304,32 @@ Social candidates stay visible as low-strength collection inputs while waiting f
 
 ### 5. Good / Base / Bad Cases
 
-- Good: no stored CN news, configured sources are unavailable, AkShare returns
-  verified candidates, one deduplicated batch is stored, and yfinance is not
-  called.
-- Good: AkShare is empty and market-aware yfinance maps `000001` to
+- Good: no stored CN news, configured sources are unavailable,
+  `eastmoney_public` returns validated candidates, one deduplicated batch is
+  stored, and yfinance is not called.
+- Good: Eastmoney returns a valid empty result and market-aware yfinance maps `000001` to
   `000001.SZ`, persists news, and only stored rows become citable.
 - Base: every source returns a legitimate empty result; detail shows a localized
   no-data state and permits one explicit retry.
 - Bad: call every provider after success, retry a timeout, render raw provider
   text, persist an unsafe search-ingest candidate, persist social chatter as
-  news, or forward browser Cookie/auth headers.
+  news, call `ak.stock_news_em`, or forward browser Cookie/auth headers.
 
 ### 6. Tests Required
 
-- Adapter tests use injected frames/tickers and assert CN/HK/US symbol mapping,
-  normalized fields, timezones, malformed shapes, and empty results without
-  live network access.
+- Adapter tests use injected transports/tickers and assert fixed Eastmoney
+  request construction, no Cookie/Authorization, redirects/proxy inheritance
+  disabled, timeout and response caps, exact JSONP/schema validation, bounded
+  normalization, CN/HK/US symbol mapping, timezones, malformed shapes, and
+  empty results without live network access.
 - Service/API tests cover DB-first zero calls, fixed order, first-persist stop,
   dedupe, social deferral, sanitized errors, no-data/provider-error/unsupported,
   unsafe candidate rejection on refresh and search-ingest, shared persistence
   defense, credential query/fragment rejection, plain bounded summaries,
   bare-Bearer and quoted-JSON credential text rejection, invalid-batch
-  atomicity, legacy ingestion safety, GET read-only behavior, and bounded
-  cross-symbol latest ordering.
+  atomicity, legacy ingestion safety, disabled legacy zero-call/zero-write
+  behavior, no `ak.stock_news_em` production call, GET read-only behavior, and
+  bounded cross-symbol latest ordering.
 - Route/component/page tests cover header/body non-forwarding, generic transport
   502, stored-news zero POST, one automatic POST, direct projection replacement,
   pending and terminal states, one manual retry, homepage no-fan-out, and

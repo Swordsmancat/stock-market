@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 
-import pandas as pd
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from apps.api.main import app
+from packages.providers.eastmoney_public_news import EastmoneyPublicNewsItem
 from packages.services.news_search import NewsSearchCandidate, persist_news_search_candidates
 from packages.shared.database import Base, get_session
 
@@ -96,7 +96,7 @@ def test_get_news_stays_read_only_when_stored_news_is_empty(monkeypatch):
         raise AssertionError("GET /news/{symbol} must not call external providers")
 
     monkeypatch.setattr(
-        "packages.services.news_search._default_akshare_news_fetcher",
+        "packages.services.news_search.fetch_eastmoney_public_news",
         unexpected_source_call,
     )
     monkeypatch.setattr(
@@ -237,22 +237,21 @@ def test_news_refresh_api_persists_first_builtin_cn_source(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "packages.services.news_search._default_akshare_news_fetcher",
-        lambda symbol: pd.DataFrame(
-            [
-                {
-                    "新闻标题": "Ping An Bank publishes operating update",
-                    "新闻链接": "https://example.com/pab-api-update",
-                    "发布时间": "2026-07-15 14:30:00",
-                    "文章来源": "eastmoney",
-                    "新闻内容": "Ping An Bank published an operating update.",
-                }
-            ]
+        "packages.services.news_search.fetch_eastmoney_public_news",
+        lambda symbol, **kwargs: (
+            EastmoneyPublicNewsItem(
+                symbol=symbol,
+                title="Ping An Bank publishes operating update",
+                url="https://finance.eastmoney.com/a/202607153806093223.html",
+                publisher="Eastmoney",
+                summary="Ping An Bank published an operating update.",
+                published_at=datetime(2026, 7, 15, 14, 30, tzinfo=timezone.utc),
+            ),
         ),
     )
 
     def unexpected_yfinance_factory(symbol: str):
-        raise AssertionError("yfinance must not run after AkShare persisted success")
+        raise AssertionError("yfinance must not run after Eastmoney persisted success")
 
     monkeypatch.setattr(
         "packages.services.news_search._default_yfinance_ticker_factory",
@@ -276,7 +275,7 @@ def test_news_refresh_api_persists_first_builtin_cn_source(monkeypatch):
     assert refresh_response.status_code == 200
     refresh_payload = refresh_response.json()
     assert refresh_payload["status"] == "refreshed"
-    assert refresh_payload["selected_provider"] == "akshare"
+    assert refresh_payload["selected_provider"] == "eastmoney_public"
     assert refresh_payload["persisted_article_count"] == 1
     assert stored_response.status_code == 200
     assert stored_response.json()["summary"]["article_count"] == 1

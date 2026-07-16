@@ -15,12 +15,17 @@ from packages.domain.models import (
     NewsArticle,
     SentimentSignal,
 )
-from packages.providers.cn_market_helpers import (
-    find_column,
-    normalize_cn_symbol,
-    parse_cn_datetime,
+from packages.providers.cn_market_helpers import normalize_cn_symbol
+from packages.providers.eastmoney_public_news import (
+    EastmoneyPublicNewsProviderError,
+    fetch_eastmoney_public_news,
 )
 from packages.providers.yfinance_helpers import map_symbol_to_ticker
+from packages.services.news_provider_registry import (
+    normalize_news_search_max_results,
+    normalize_news_search_timeout_seconds,
+)
+from packages.services.platform_settings import get_platform_settings
 from packages.shared.config import settings
 
 
@@ -397,55 +402,54 @@ def ingest_yfinance_news(symbol: str, session: Session) -> dict[str, object]:
 
 
 def ingest_akshare_news(symbol: str, session: Session) -> dict[str, object]:
-    try:
-        import akshare as ak
-    except ImportError:
-        return {"symbol": symbol, "status": "skipped", "source": "akshare", "reason": "akshare not installed"}
-
     code = normalize_cn_symbol(symbol)
+    settings_payload = get_platform_settings()
+    if not bool(settings_payload.get("akshare_enabled", False)):
+        return {
+            "symbol": symbol,
+            "status": "skipped",
+            "source": "eastmoney_public",
+            "code": "PROVIDER_DISABLED",
+            "article_count": 0,
+            "sentiment_count": 0,
+        }
+    timeout = normalize_news_search_timeout_seconds(
+        settings_payload.get("news_search_timeout_seconds")
+    )
+    max_rows = normalize_news_search_max_results(
+        settings_payload.get("news_search_max_results")
+    )
     try:
-        df = ak.stock_news_em(symbol=code)
-    except Exception:
-        return {"symbol": symbol, "status": "empty", "source": "akshare", "article_count": 0, "sentiment_count": 0}
-
-    if df is None or df.empty:
-        return {"symbol": symbol, "status": "empty", "source": "akshare", "article_count": 0, "sentiment_count": 0}
-
-    columns = [str(column) for column in df.columns]
-    title_col = find_column(columns, "新闻标题") or find_column(columns, "标题")
-    url_col = find_column(columns, "新闻链接") or find_column(columns, "链接")
-    published_col = find_column(columns, "发布时间")
-    source_col = find_column(columns, "文章来源") or find_column(columns, "来源")
-    summary_col = find_column(columns, "新闻内容") or find_column(columns, "内容")
+        items = fetch_eastmoney_public_news(
+            code,
+            timeout=timeout,
+            max_rows=max_rows,
+        )
+    except EastmoneyPublicNewsProviderError as error:
+        return {
+            "symbol": symbol,
+            "status": "provider_error",
+            "source": "eastmoney_public",
+            "code": error.code,
+            "article_count": 0,
+            "sentiment_count": 0,
+        }
 
     article_count = 0
     sentiment_count = 0
-    for _, entry in df.head(10).iterrows():
-        raw_title = entry[title_col] if title_col else None
-        raw_url = entry[url_col] if url_col else None
-        if not isinstance(raw_title, str) or not isinstance(raw_url, str):
-            continue
-        title = raw_title.strip()
-        url = raw_url.strip()
-        if not title or not url:
-            continue
-        published_at = parse_cn_datetime(entry[published_col]) if published_col else datetime.now(timezone.utc)
+    for item in items:
         candidate = normalize_news_article_fields(
             symbol=code,
-            title=title,
-            url=url,
-            source=(
-                entry[source_col] if source_col else "akshare"
-            ),
-            published_at=published_at,
-            summary=(
-                entry[summary_col] if summary_col else title
-            ),
+            title=item.title,
+            url=item.url,
+            source=item.publisher,
+            published_at=item.published_at,
+            summary=item.summary or item.title,
         )
         if candidate is None or not persist_normalized_news_article(
             candidate,
             session=session,
-            sentiment_reason="Keyword sentiment classifier on akshare headline",
+            sentiment_reason="Keyword sentiment classifier on Eastmoney public headline",
         ):
             continue
         article_count += 1
@@ -454,8 +458,8 @@ def ingest_akshare_news(symbol: str, session: Session) -> dict[str, object]:
     session.commit()
     return {
         "symbol": symbol,
-        "status": "ingested",
-        "source": "akshare",
+        "status": "ingested" if article_count > 0 else "empty",
+        "source": "eastmoney_public",
         "article_count": article_count,
         "sentiment_count": sentiment_count,
     }

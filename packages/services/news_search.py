@@ -10,7 +10,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from packages.analytics.sentiment import make_dedupe_hash
-from packages.providers.cn_market_helpers import find_column, normalize_cn_symbol
+from packages.providers.cn_market_helpers import normalize_cn_symbol
+from packages.providers.eastmoney_public_news import (
+    EastmoneyPublicNewsItem,
+    EastmoneyPublicNewsProviderError,
+    fetch_eastmoney_public_news,
+)
 from packages.providers.yfinance_helpers import map_symbol_to_ticker
 from packages.services.news import (
     build_empty_news_sentiment_payload,
@@ -236,11 +241,17 @@ class SerpApiBaiduNewsSearchAdapter:
         )
 
 
-class AkShareNewsSearchAdapter:
-    provider = "akshare"
+class EastmoneyPublicNewsSearchAdapter:
+    provider = "eastmoney_public"
 
-    def __init__(self, *, fetcher: Callable[[str], object] | None = None) -> None:
-        self._fetcher = fetcher or _default_akshare_news_fetcher
+    def __init__(
+        self,
+        *,
+        fetcher: Callable[..., tuple[EastmoneyPublicNewsItem, ...]] | None = None,
+        timeout: float = 8.0,
+    ) -> None:
+        self._fetcher = fetcher or fetch_eastmoney_public_news
+        self._timeout = timeout
 
     def search(
         self,
@@ -249,55 +260,36 @@ class AkShareNewsSearchAdapter:
         query: str,
         max_results: int,
     ) -> list[NewsSearchCandidate]:
-        frame = self._fetcher(normalize_cn_symbol(symbol))
-        if frame is None or bool(getattr(frame, "empty", False)):
-            return []
-        columns = [str(column) for column in getattr(frame, "columns", [])]
-        title_column = find_column(columns, "新闻标题") or find_column(columns, "标题")
-        url_column = find_column(columns, "新闻链接") or find_column(columns, "链接")
-        if title_column is None or url_column is None:
-            raise NewsSearchProviderError(
-                "AkShare news response did not contain title and URL columns."
-            )
-        published_column = find_column(columns, "发布时间")
-        source_column = find_column(columns, "文章来源") or find_column(columns, "来源")
-        summary_column = find_column(columns, "新闻内容") or find_column(columns, "内容")
         try:
-            rows = frame.head(max_results).iterrows()
-        except (AttributeError, TypeError) as error:
+            items = self._fetcher(
+                normalize_cn_symbol(symbol),
+                timeout=self._timeout,
+                max_rows=max_results,
+            )
+        except EastmoneyPublicNewsProviderError as error:
+            if error.code == "EASTMONEY_NEWS_TIMEOUT":
+                raise NewsSearchProviderTimeout(error.message) from error
             raise NewsSearchProviderError(
-                "AkShare news response was not a supported table."
+                error.message
             ) from error
 
         retrieved_at = datetime.now(timezone.utc)
-        candidates: list[NewsSearchCandidate] = []
-        for _, row in rows:
-            title = _frame_text(row[title_column])
-            url = _frame_text(row[url_column])
-            if title is None or url is None:
-                continue
-            summary = _frame_text(row[summary_column]) if summary_column else None
-            source = _frame_text(row[source_column]) if source_column else None
-            candidates.append(
-                NewsSearchCandidate(
-                    symbol=symbol.strip().upper(),
-                    query=query,
-                    title=title,
-                    url=url,
-                    source=source or "AkShare",
-                    summary=summary or title,
-                    published_at=(
-                        _parse_cn_news_datetime(row[published_column])
-                        if published_column
-                        else None
-                    ),
-                    retrieved_at=retrieved_at,
-                    provider=self.provider,
-                    language="zh",
-                    region="CN",
-                )
+        return [
+            NewsSearchCandidate(
+                symbol=symbol.strip().upper(),
+                query=query,
+                title=item.title,
+                url=item.url,
+                source=item.publisher,
+                summary=item.summary or item.title,
+                published_at=item.published_at,
+                retrieved_at=retrieved_at,
+                provider=self.provider,
+                language="zh",
+                region="CN",
             )
-        return candidates
+            for item in items
+        ]
 
 
 class YFinanceNewsSearchAdapter:
@@ -730,14 +722,14 @@ def refresh_news_candidates(
 
     if _is_exact_cn_stock(normalized_symbol, normalized_market):
         if bool(resolved_settings.get("akshare_enabled", False)):
-            akshare_adapter = (
-                adapters["akshare"]
-                if adapters is not None and "akshare" in adapters
-                else AkShareNewsSearchAdapter()
+            eastmoney_adapter = (
+                adapters["eastmoney_public"]
+                if adapters is not None and "eastmoney_public" in adapters
+                else EastmoneyPublicNewsSearchAdapter(timeout=timeout_seconds)
             )
             success_payload, provider_failed = _run_refresh_source(
-                akshare_adapter,
-                provider="akshare",
+                eastmoney_adapter,
+                provider="eastmoney_public",
                 symbol=normalized_symbol,
                 market=normalized_market,
                 max_results=max_results,
@@ -751,7 +743,7 @@ def refresh_news_candidates(
         else:
             diagnostics.append(
                 _refresh_diagnostic(
-                    "akshare", "skipped", "info", "PROVIDER_DISABLED"
+                    "eastmoney_public", "skipped", "info", "PROVIDER_DISABLED"
                 )
             )
 
@@ -1187,12 +1179,6 @@ def _default_http_getter(url: str, **kwargs: object) -> object:
     import httpx
 
     return httpx.get(url, **kwargs)
-
-
-def _default_akshare_news_fetcher(symbol: str) -> object:
-    import akshare as ak
-
-    return ak.stock_news_em(symbol=symbol)
 
 
 def _default_yfinance_ticker_factory(symbol: str) -> object:

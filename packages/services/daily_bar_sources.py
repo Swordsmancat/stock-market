@@ -160,29 +160,29 @@ class DailyBarFetchCoordinator:
                     else bar.timestamp
                 ),
             )
-            if required_coverage is not None or minimum_row_count is not None:
-                required_start, required_end = required_coverage or (start, end)
+            coverage_is_insufficient = False
+            if required_coverage is not None:
+                required_start, required_end = required_coverage
                 first_date = _bar_trade_date(bars[0])
                 last_date = _bar_trade_date(bars[-1])
-                if (
+                coverage_is_insufficient = (
                     first_date > required_start
                     or last_date < required_end
-                    or (
-                        minimum_row_count is not None
-                        and len(bars) < minimum_row_count
+                )
+            if minimum_row_count is not None and len(bars) < minimum_row_count:
+                coverage_is_insufficient = True
+            if coverage_is_insufficient:
+                self._failure_counts[source.source] = 0
+                self._increment(source.source, "insufficient_coverage")
+                had_failure = True
+                attempts.append(
+                    self._attempt(
+                        source,
+                        "insufficient_coverage",
+                        row_count=len(bars),
                     )
-                ):
-                    self._failure_counts[source.source] = 0
-                    self._increment(source.source, "insufficient_coverage")
-                    had_failure = True
-                    attempts.append(
-                        self._attempt(
-                            source,
-                            "insufficient_coverage",
-                            row_count=len(bars),
-                        )
-                    )
-                    continue
+                )
+                continue
             self._failure_counts[source.source] = 0
             self._increment(source.source, "selected")
             attempts.append(self._attempt(source, "selected", row_count=len(bars)))

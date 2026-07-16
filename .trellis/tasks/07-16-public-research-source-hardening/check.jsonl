@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-research-workflow-contract.md","reason":"Verify database-first recovery remains coherent, read-only, market-scoped, and threshold-preserving."}
+{"file":".trellis/spec/backend/news-search-provider-contract.md","reason":"Verify the replacement provider preserves one-shot refresh, stored evidence, and no-Cookie boundaries."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify focused tests, regression scope, and non-mutating diagnostics follow repository practice."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Verify no Cookie, authorization, raw response, query payload, or exception leakage."}
+{"file":".trellis/tasks/07-16-eastmoney-readonly-access-feasibility/research/feasibility.md","reason":"Verify implementation stays within the conditionally approved public fallback scope."}

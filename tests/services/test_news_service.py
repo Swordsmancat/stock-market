@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 
-import pandas as pd
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from packages.domain.models import NewsArticle
+from packages.providers.eastmoney_public_news import EastmoneyPublicNewsItem
 from packages.services.news import (
     get_news_sentiment_payload,
     ingest_akshare_news,
@@ -16,8 +16,8 @@ from packages.services.news import (
     ingest_yfinance_news,
 )
 from packages.services.news_search import (
-    AkShareNewsSearchAdapter,
     AnspireNewsSearchAdapter,
+    EastmoneyPublicNewsSearchAdapter,
     NewsSearchCandidate,
     NewsSearchProviderTimeout,
     SerpApiBaiduNewsSearchAdapter,
@@ -151,37 +151,35 @@ def test_serpapi_baidu_adapter_normalizes_news_and_web_results():
     assert candidates[1].score == 2.0
 
 
-def test_akshare_adapter_returns_cn_candidates_without_persisting():
-    requested_symbols: list[str] = []
-    frame = pd.DataFrame(
-        [
-            {
-                "新闻标题": "Ping An Bank publishes operating update",
-                "新闻链接": "https://example.com/pab-update",
-                "发布时间": "2026-07-15 14:30:00",
-                "文章来源": "eastmoney",
-                "新闻内容": "Ping An Bank published an operating update.",
-            }
-        ]
-    )
+def test_eastmoney_public_adapter_returns_cn_candidates_without_persisting():
+    calls: list[tuple[str, float, int]] = []
 
-    def fetcher(symbol: str):
-        requested_symbols.append(symbol)
-        return frame
+    def fetcher(symbol: str, *, timeout: float, max_rows: int):
+        calls.append((symbol, timeout, max_rows))
+        return (
+            EastmoneyPublicNewsItem(
+                symbol=symbol,
+                title="Ping An Bank publishes operating update",
+                url="https://finance.eastmoney.com/a/202607153806093223.html",
+                publisher="Eastmoney",
+                summary="Ping An Bank published an operating update.",
+                published_at=datetime(2026, 7, 15, 14, 30, tzinfo=timezone.utc),
+            ),
+        )
 
-    adapter = AkShareNewsSearchAdapter(fetcher=fetcher)
+    adapter = EastmoneyPublicNewsSearchAdapter(fetcher=fetcher, timeout=3.0)
     candidates = adapter.search(
         symbol="000001.SZ",
         query="000001 平安银行 新闻",
         max_results=5,
     )
 
-    assert requested_symbols == ["000001"]
+    assert calls == [("000001", 3.0, 5)]
     assert len(candidates) == 1
     assert candidates[0].symbol == "000001.SZ"
-    assert candidates[0].provider == "akshare"
-    assert candidates[0].source == "eastmoney"
-    assert candidates[0].published_at.isoformat() == "2026-07-15T14:30:00+08:00"
+    assert candidates[0].provider == "eastmoney_public"
+    assert candidates[0].source == "Eastmoney"
+    assert candidates[0].published_at.isoformat() == "2026-07-15T14:30:00+00:00"
 
 
 def test_yfinance_adapter_maps_exact_cn_market_and_normalizes_nested_news():
@@ -513,7 +511,7 @@ def test_refresh_news_rolls_back_persistence_failure_and_uses_next_source(monkey
     ]
 
 
-def test_refresh_news_falls_back_to_builtin_akshare_for_exact_cn_symbol():
+def test_refresh_news_uses_eastmoney_public_for_exact_cn_symbol():
     session = make_session()
     candidate = NewsSearchCandidate(
         symbol="000001",
@@ -524,11 +522,11 @@ def test_refresh_news_falls_back_to_builtin_akshare_for_exact_cn_symbol():
         summary="Ping An Bank published an operating update.",
         published_at=datetime(2026, 7, 15, 8, 0, tzinfo=timezone.utc),
         retrieved_at=datetime(2026, 7, 15, 9, 0, tzinfo=timezone.utc),
-        provider="akshare",
+        provider="eastmoney_public",
     )
 
-    class SuccessfulAkShareAdapter:
-        provider = "akshare"
+    class SuccessfulEastmoneyAdapter:
+        provider = "eastmoney_public"
 
         def search(self, **kwargs):
             return [candidate]
@@ -537,7 +535,7 @@ def test_refresh_news_falls_back_to_builtin_akshare_for_exact_cn_symbol():
         provider = "yfinance"
 
         def search(self, **kwargs):
-            raise AssertionError("yfinance must not run after AkShare persisted success")
+            raise AssertionError("yfinance must not run after Eastmoney persisted success")
 
     result = refresh_news_candidates(
         "000001",
@@ -552,15 +550,19 @@ def test_refresh_news_falls_back_to_builtin_akshare_for_exact_cn_symbol():
             "akshare_enabled": True,
         },
         adapters={
-            "akshare": SuccessfulAkShareAdapter(),
+            "eastmoney_public": SuccessfulEastmoneyAdapter(),
             "yfinance": UnexpectedYFinanceAdapter(),
         },
     )
 
     assert result["status"] == "refreshed"
-    assert result["selected_provider"] == "akshare"
+    assert result["selected_provider"] == "eastmoney_public"
     assert result["attempts"] == [
-        {"provider": "akshare", "status": "persisted", "candidate_count": 1}
+        {
+            "provider": "eastmoney_public",
+            "status": "persisted",
+            "candidate_count": 1,
+        }
     ]
     assert [item["code"] for item in result["diagnostics"]] == [
         "MISSING_CREDENTIALS",
@@ -570,7 +572,54 @@ def test_refresh_news_falls_back_to_builtin_akshare_for_exact_cn_symbol():
     assert result["news"]["items"][0]["title"] == candidate.title
 
 
-def test_refresh_news_uses_market_aware_yfinance_after_akshare_is_empty():
+def test_refresh_news_skips_eastmoney_public_when_compatibility_gate_is_disabled():
+    session = make_session()
+    eastmoney_calls: list[str] = []
+
+    class UnexpectedEastmoneyAdapter:
+        provider = "eastmoney_public"
+
+        def search(self, **kwargs):
+            eastmoney_calls.append(str(kwargs.get("symbol")))
+            return []
+
+    class EmptyYFinanceAdapter:
+        provider = "yfinance"
+
+        def search(self, **kwargs):
+            return []
+
+    result = refresh_news_candidates(
+        "000001",
+        market="CN",
+        session=session,
+        settings_payload={
+            "news_search_provider_order": [],
+            "news_search_enabled_providers": [],
+            "news_search_provider_keys": {},
+            "news_search_max_results": 5,
+            "news_search_timeout_seconds": 3,
+            "akshare_enabled": False,
+        },
+        adapters={
+            "eastmoney_public": UnexpectedEastmoneyAdapter(),
+            "yfinance": EmptyYFinanceAdapter(),
+        },
+    )
+
+    assert eastmoney_calls == []
+    assert result["status"] == "no_data"
+    assert result["attempts"] == [
+        {"provider": "yfinance", "status": "empty", "candidate_count": 0}
+    ]
+    assert [item["code"] for item in result["diagnostics"]] == [
+        "PROVIDER_DISABLED",
+        "EMPTY_RESPONSE",
+        "DATABASE_FALLBACK_EMPTY",
+    ]
+
+
+def test_refresh_news_uses_market_aware_yfinance_after_eastmoney_is_empty():
     session = make_session()
     candidate = NewsSearchCandidate(
         symbol="000001",
@@ -584,8 +633,8 @@ def test_refresh_news_uses_market_aware_yfinance_after_akshare_is_empty():
         provider="yfinance",
     )
 
-    class EmptyAkShareAdapter:
-        provider = "akshare"
+    class EmptyEastmoneyAdapter:
+        provider = "eastmoney_public"
 
         def search(self, **kwargs):
             return []
@@ -609,7 +658,7 @@ def test_refresh_news_uses_market_aware_yfinance_after_akshare_is_empty():
             "akshare_enabled": True,
         },
         adapters={
-            "akshare": EmptyAkShareAdapter(),
+            "eastmoney_public": EmptyEastmoneyAdapter(),
             "yfinance": SuccessfulYFinanceAdapter(),
         },
     )
@@ -617,7 +666,11 @@ def test_refresh_news_uses_market_aware_yfinance_after_akshare_is_empty():
     assert result["status"] == "refreshed"
     assert result["selected_provider"] == "yfinance"
     assert result["attempts"] == [
-        {"provider": "akshare", "status": "empty", "candidate_count": 0},
+        {
+            "provider": "eastmoney_public",
+            "status": "empty",
+            "candidate_count": 0,
+        },
         {"provider": "yfinance", "status": "persisted", "candidate_count": 1},
     ]
     assert [item["code"] for item in result["diagnostics"]][-2:] == [
@@ -647,14 +700,14 @@ def test_refresh_news_reports_no_data_when_every_eligible_source_is_empty():
             "akshare_enabled": True,
         },
         adapters={
-            "akshare": EmptyAdapter(),
+            "eastmoney_public": EmptyAdapter(),
             "yfinance": EmptyAdapter(),
         },
     )
 
     assert result["status"] == "no_data"
     assert [attempt["provider"] for attempt in result["attempts"]] == [
-        "akshare",
+        "eastmoney_public",
         "yfinance",
     ]
     assert [item["code"] for item in result["diagnostics"]] == [
@@ -731,8 +784,8 @@ def test_refresh_news_sanitizes_failures_and_never_persists_social_candidates():
         def search(self, **kwargs):
             return [social_candidate]
 
-    class TimeoutAkShareAdapter:
-        provider = "akshare"
+    class TimeoutEastmoneyAdapter:
+        provider = "eastmoney_public"
 
         def search(self, **kwargs):
             raise NewsSearchProviderTimeout("private upstream body")
@@ -761,7 +814,7 @@ def test_refresh_news_sanitizes_failures_and_never_persists_social_candidates():
         adapters={
             "anspire": FailingConfiguredAdapter(),
             "serpapi_baidu": SocialOnlyAdapter(),
-            "akshare": TimeoutAkShareAdapter(),
+            "eastmoney_public": TimeoutEastmoneyAdapter(),
             "yfinance": EmptyYFinanceAdapter(),
         },
     )
@@ -1368,51 +1421,99 @@ def test_legacy_yfinance_ingest_uses_shared_news_safety_boundary(monkeypatch):
     assert "<" not in article.summary
 
 
-def test_legacy_akshare_ingest_uses_shared_news_safety_boundary(monkeypatch):
+def test_legacy_akshare_named_ingest_uses_cookie_free_shared_safety_boundary(
+    monkeypatch,
+):
     session = make_session()
-    frame = pd.DataFrame(
-        [
-            {
-                "新闻标题": "Credential URL row",
-                "新闻链接": "https://example.com/private#sig=private",
-                "发布时间": "2026-07-15 09:00:00",
-                "新闻内容": "Must not persist.",
-                "文章来源": "Unsafe Provider",
-            },
-            {
-                "新闻标题": "Sensitive summary row",
-                "新闻链接": "https://example.com/sensitive-summary",
-                "发布时间": "2026-07-15 09:05:00",
-                "新闻内容": "Authorization: Bearer private-value",
-                "文章来源": "Unsafe Provider",
-            },
-            {
-                "新闻标题": "Structured provider body row",
-                "新闻链接": "https://example.com/structured-body",
-                "发布时间": "2026-07-15 09:07:00",
-                "新闻内容": {"raw": "provider response body"},
-                "文章来源": "Unsafe Provider",
-            },
-            {
-                "新闻标题": "Safe AkShare row",
-                "新闻链接": "https://example.com/public?page=2",
-                "发布时间": "2026-07-15 09:10:00",
-                "新闻内容": "<p>公司&nbsp; 公告</p>" + (" 经营更新" * 300),
-                "文章来源": "Example Finance",
-            },
-        ]
+    published_at = datetime(2026, 7, 15, 9, 0, tzinfo=timezone.utc)
+    items = (
+        EastmoneyPublicNewsItem(
+            symbol="600519",
+            title="Credential URL row",
+            url="https://example.com/private#sig=private",
+            publisher="Unsafe Provider",
+            summary="Must not persist.",
+            published_at=published_at,
+        ),
+        EastmoneyPublicNewsItem(
+            symbol="600519",
+            title="Sensitive summary row",
+            url="https://example.com/sensitive-summary",
+            publisher="Unsafe Provider",
+            summary="Authorization: Bearer private-value",
+            published_at=published_at,
+        ),
+        EastmoneyPublicNewsItem(
+            symbol="600519",
+            title="Structured provider body row",
+            url="https://example.com/structured-body",
+            publisher="Unsafe Provider",
+            summary={"raw": "provider response body"},
+            published_at=published_at,
+        ),
+        EastmoneyPublicNewsItem(
+            symbol="600519",
+            title="Safe Eastmoney row",
+            url="https://example.com/public?page=2",
+            publisher="Example Finance",
+            summary="<p>公司&nbsp; 公告</p>" + (" 经营更新" * 300),
+            published_at=published_at,
+        ),
     )
-    monkeypatch.setattr("akshare.stock_news_em", lambda symbol: frame)
+    monkeypatch.setattr(
+        "packages.services.news.fetch_eastmoney_public_news",
+        lambda symbol, **kwargs: items,
+    )
+    monkeypatch.setattr(
+        "packages.services.news.get_platform_settings",
+        lambda: {
+            "akshare_enabled": True,
+            "news_search_timeout_seconds": 3,
+            "news_search_max_results": 10,
+        },
+    )
 
     result = ingest_akshare_news("600519", session=session)
 
+    assert result["source"] == "eastmoney_public"
     assert result["article_count"] == 1
     article = session.query(NewsArticle).one()
-    assert article.title == "Safe AkShare row"
+    assert article.title == "Safe Eastmoney row"
     assert article.url == "https://example.com/public?page=2"
     assert article.summary.startswith("公司 公告 经营更新")
     assert len(article.summary) == 1000
     assert "<" not in article.summary
+
+
+def test_legacy_akshare_named_ingest_honors_disabled_public_source(monkeypatch):
+    session = make_session()
+    fetch_calls: list[str] = []
+
+    def unexpected_fetch(symbol: str, **kwargs):
+        fetch_calls.append(symbol)
+        return ()
+
+    monkeypatch.setattr(
+        "packages.services.news.fetch_eastmoney_public_news",
+        unexpected_fetch,
+    )
+    monkeypatch.setattr(
+        "packages.services.news.get_platform_settings",
+        lambda: {"akshare_enabled": False},
+    )
+
+    result = ingest_akshare_news("600519", session=session)
+
+    assert result == {
+        "symbol": "600519",
+        "status": "skipped",
+        "source": "eastmoney_public",
+        "code": "PROVIDER_DISABLED",
+        "article_count": 0,
+        "sentiment_count": 0,
+    }
+    assert fetch_calls == []
+    assert session.query(NewsArticle).count() == 0
 
 
 def test_search_ingest_defers_social_candidates_from_stored_news():

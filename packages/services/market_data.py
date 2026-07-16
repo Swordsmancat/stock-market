@@ -637,6 +637,27 @@ def _is_cn_daily_bar_fallback_eligible(
     )
 
 
+def _minimum_daily_bar_row_count(start: date, end: date) -> int:
+    span_days = max(0, (end - start).days + 1)
+    full_weeks, remaining_days = divmod(span_days, 7)
+    start_weekday = start.weekday()
+    weekdays_before_weekend = min(
+        remaining_days,
+        max(0, 5 - start_weekday),
+    )
+    weekdays_after_weekend = min(
+        max(0, remaining_days - (7 - start_weekday)),
+        5,
+    )
+    weekday_count = (
+        full_weeks * 5 + weekdays_before_weekend + weekdays_after_weekend
+    )
+    return min(
+        RESEARCH_READY_DAILY_BAR_COUNT,
+        max(1, (weekday_count + 1) // 2),
+    )
+
+
 def _daily_bar_source_metadata(provider_name: str) -> tuple[str, str, float]:
     if provider_name == "akshare":
         return "akshare.stock_zh_a_hist", "qfq", 0.25
@@ -972,9 +993,16 @@ def get_bars_payload(
     requested_provider_name = _normalize_requested_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
     normalized_market = market.strip().upper() if market and market.strip() else None
+    cn_daily_bar_fallback_eligible = _is_cn_daily_bar_fallback_eligible(
+        symbol=symbol,
+        timeframe=timeframe,
+        market=normalized_market,
+        provider_name=effective_provider_name,
+    )
     database_fallback_payload: dict[str, object] | None = None
     required_remote_coverage: tuple[date, date] | None = None
     required_remote_row_count: int | None = None
+    sparse_database_minimum_row_count: int | None = None
     if timeframe == "1d" and session is not None:
         try:
             db_bars = _fetch_daily_bars_from_database(
@@ -1016,28 +1044,29 @@ def get_bars_payload(
                 stored_row_count >= RESEARCH_READY_DAILY_BAR_COUNT
                 and len(db_bars) < RESEARCH_READY_DAILY_BAR_COUNT
                 and stored_row_count > len(db_bars)
-                and _is_cn_daily_bar_fallback_eligible(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    market=normalized_market,
-                    provider_name=effective_provider_name,
-                )
+                and cn_daily_bar_fallback_eligible
             )
-            if not should_recover_mixed_database:
+            minimum_database_row_count = _minimum_daily_bar_row_count(start, end)
+            should_recover_sparse_database = bool(
+                cn_daily_bar_fallback_eligible
+                and len(db_bars) < minimum_database_row_count
+            )
+            if not (
+                should_recover_mixed_database or should_recover_sparse_database
+            ):
                 return database_payload
             database_fallback_payload = database_payload
-            required_remote_coverage = (
-                stored_db_bars[0].trade_date,
-                stored_db_bars[-1].trade_date,
-            )
-            required_remote_row_count = stored_row_count
+            if should_recover_mixed_database:
+                required_remote_coverage = (
+                    stored_db_bars[0].trade_date,
+                    stored_db_bars[-1].trade_date,
+                )
+                required_remote_row_count = stored_row_count
+            else:
+                required_remote_row_count = minimum_database_row_count
+                sparse_database_minimum_row_count = minimum_database_row_count
 
-    if _is_cn_daily_bar_fallback_eligible(
-        symbol=symbol,
-        timeframe=timeframe,
-        market=normalized_market,
-        provider_name=effective_provider_name,
-    ):
+    if cn_daily_bar_fallback_eligible:
         fetch_result = _build_cn_daily_bar_fetch_coordinator(effective_provider_name).fetch(
             symbol,
             timeframe,
@@ -1049,6 +1078,23 @@ def get_bars_payload(
         )
         if database_fallback_payload is not None and not fetch_result.bars:
             database_fallback_payload["source_attempts"] = fetch_result.attempts
+            if sparse_database_minimum_row_count is not None:
+                database_fallback_payload["status"] = "degraded"
+                database_fallback_payload["diagnostics"] = [
+                    *database_fallback_payload["diagnostics"],
+                    {
+                        "source": "database",
+                        "status": "degraded",
+                        "code": "INSUFFICIENT_DATABASE_COVERAGE",
+                        "message": (
+                            "Stored daily-bar coverage is below the minimum "
+                            "required for the requested range; remote recovery "
+                            "was unavailable."
+                        ),
+                        "row_count": len(database_fallback_payload["items"]),
+                        "minimum_row_count": sparse_database_minimum_row_count,
+                    },
+                ]
             return database_fallback_payload
         selected_provider = fetch_result.effective_provider or effective_provider_name
         serialized_provider_bars = _serialize_provider_bars(
@@ -1283,13 +1329,15 @@ def get_intraday_bars_payload(
             )
         ]
     )
-    previous_close = _get_previous_close_reference(
-        symbol=symbol,
-        trade_date=trade_date,
-        session=session,
-        provider_name=effective_provider_name,
-        market=normalized_market,
-    )
+    previous_close = database_previous_close
+    if previous_close is None:
+        previous_close = _get_previous_close_reference(
+            symbol=symbol,
+            trade_date=trade_date,
+            session=session,
+            provider_name=effective_provider_name,
+            market=normalized_market,
+        )
     if cn_fallback_eligible:
         fetch_result = _fetch_cn_intraday_bars(
             symbol=symbol,
