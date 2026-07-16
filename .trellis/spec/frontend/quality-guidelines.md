@@ -139,6 +139,17 @@ The known local hosts can load client chunks and hydrate interactive islands.
 
 ## Common Mistakes
 
+### Namespace And Sibling-Key Runtime Checks
+
+- Adding the same key text to both catalogs is insufficient if it is placed in
+  the wrong `next-intl` namespace. Render the real component once with `en` and
+  once with `zh`, and assert the visible label resolved from the namespace the
+  component actually requests.
+- Sibling components that represent the same entity must not use the bare
+  entity ID as their React key. Prefix the ID with the component role, for
+  example `shortlist-${runId}` and `outcomes-${runId}`, and keep a page-level
+  regression that fails on React's non-unique-key warning.
+
 ### Raw JSON In `next-intl` Messages
 
 **Symptom**: A page renders in tests but the browser console reports `INVALID_MESSAGE: MALFORMED_ARGUMENT` from `next-intl`.

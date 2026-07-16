@@ -619,7 +619,15 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
+  const consoleErrorMock = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
   await renderAiResearchPage();
+
+  expect(
+    consoleErrorMock.mock.calls.some((call) =>
+      call.map(String).join(" ").includes("Non-unique keys"),
+    ),
+  ).toBe(false);
 
   expect(screen.getByRole("heading", { name: "AI Research Desk" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Daily A-share research shortlist" })).toBeInTheDocument();

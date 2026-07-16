@@ -141,7 +141,7 @@ export default async function AiResearchPage({
       <DailyResearchShortlistPanel
         key={
           dailyShortlistResult.status === "loaded"
-            ? dailyShortlistResult.payload.run?.id ?? "no-shortlist"
+            ? `shortlist-${dailyShortlistResult.payload.run?.id ?? "no-shortlist"}`
             : "shortlist-load-failed"
         }
         locale={locale}
@@ -206,7 +206,7 @@ export default async function AiResearchPage({
       <ResearchShortlistOutcomePanel
         key={
           outcomeTrackingResult.status === "loaded"
-            ? outcomeTrackingResult.payload.latest?.run.id ?? "no-outcomes"
+            ? `outcomes-${outcomeTrackingResult.payload.latest?.run.id ?? "no-outcomes"}`
             : "outcome-load-failed"
         }
         locale={locale}

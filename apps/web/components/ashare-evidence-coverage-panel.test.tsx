@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
 
 import enMessages from "../messages/en.json";
+import zhMessages from "../messages/zh.json";
 import { AshareEvidenceCoveragePanel, type EvidenceCoveragePayload } from "./ashare-evidence-coverage-panel";
 
 afterEach(() => {
@@ -49,6 +50,17 @@ function renderPanel(payload: EvidenceCoveragePayload = coverage) {
   );
 }
 
+it("renders coverage identity labels from the Chinese namespace", () => {
+  render(
+    <NextIntlClientProvider locale="zh" messages={zhMessages}>
+      <AshareEvidenceCoveragePanel initialCoverage={coverage} />
+    </NextIntlClientProvider>,
+  );
+
+  expect(screen.getByText("数据源")).toBeInTheDocument();
+  expect(screen.getByText("覆盖率日期")).toBeInTheDocument();
+});
+
 it("shows evidence and exchange coverage, then starts a fixed canary", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(new Response(JSON.stringify({ backfill: { id: "run-1" } })))
@@ -94,6 +106,32 @@ it("requires confirmation for a full baseline and active-run cancellation", asyn
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(confirmMock).toHaveBeenCalledOnce();
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("formats run timestamps in Shanghai time independently of the host zone", () => {
+  const previousTimeZone = process.env.TZ;
+  process.env.TZ = "UTC";
+  try {
+    renderPanel({
+      ...coverage,
+      latest_run: {
+        id: "run-time-zone",
+        run_kind: "baseline",
+        status: "running",
+        phase: "daily_bars",
+        cursor: 25,
+        phase_total: 100,
+        processed_count: 25,
+        heartbeat_at: "2026-07-10T08:00:00Z",
+        retry: {},
+        diagnostics: [],
+      },
+    });
+
+    expect(screen.getByText("7/10/26, 4:00:00 PM")).toBeInTheDocument();
+  } finally {
+    process.env.TZ = previousTimeZone;
+  }
 });
 
 it("does not start a full baseline when confirmation is declined", () => {

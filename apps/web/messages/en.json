@@ -1215,8 +1215,6 @@
     "discoverFailed": "Full-universe discovery failed.",
     "universeStatus": "Universe status",
     "activeInstruments": "Active instruments",
-    "provider": "Provider",
-    "asOf": "Coverage as of",
     "managedInstruments": "Provider-managed",
     "latestSync": "Latest universe sync",
     "profile": "Transparent profile",
@@ -1245,6 +1243,8 @@
     "unavailable": "N/A"
   },
   "AshareEvidenceCoverage": {
+    "provider": "Provider",
+    "asOf": "Coverage as of",
     "policy": "Policy: {policy}",
     "sourceMix": "Daily-bar source mix",
     "sourceMixEmpty": "No source-attributed daily bars are stored yet.",
@@ -1813,6 +1813,7 @@
     "updateFailed": "Outcome update failed.",
     "updateFailedDescription": "The saved shortlist and AI Research Desk remain available.",
     "decisionDate": "Decision date",
+    "asOf": "Evaluation cutoff",
     "candidateCount": "Candidates",
     "profile": "Profile",
     "summaryTitle": "Cohort horizon summary",

@@ -1222,8 +1222,6 @@
     "discoverFailed": "全市场选股失败。",
     "universeStatus": "标的全集状态",
     "activeInstruments": "活跃标的",
-    "provider": "数据源",
-    "asOf": "覆盖率日期",
     "managedInstruments": "供应商管理标的",
     "latestSync": "最近全集同步",
     "profile": "透明预设",
@@ -1252,6 +1250,8 @@
     "unavailable": "暂无"
   },
   "AshareEvidenceCoverage": {
+    "provider": "数据源",
+    "asOf": "覆盖率日期",
     "policy": "策略：{policy}",
     "sourceMix": "日线来源分布",
     "sourceMixEmpty": "尚无带来源归属的日线数据。",
@@ -1823,6 +1823,7 @@
     "updateFailed": "结果更新失败。",
     "updateFailedDescription": "已保存的候选清单和 AI 研究台仍可继续使用。",
     "decisionDate": "决策日期",
+    "asOf": "评估截止日",
     "candidateCount": "候选数量",
     "profile": "筛选预设",
     "summaryTitle": "候选集周期汇总",

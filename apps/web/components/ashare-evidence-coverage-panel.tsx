@@ -377,7 +377,11 @@ function formatInteger(value: number, locale: string) {
 
 function formatDate(value: string | null | undefined, locale: string) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "medium" }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "short",
+    timeStyle: "medium",
+    timeZone: "Asia/Shanghai",
+  }).format(new Date(value));
 }
 
 function runStatusLabel(status: string, t: (key: string) => string) {

@@ -276,6 +276,12 @@ it("renders cohort summaries, candidate horizon states, benchmark gaps, history,
   expect(screen.queryByText(/Chinese or English/)).not.toBeInTheDocument();
 });
 
+it("renders the outcome cutoff label from the Chinese namespace", () => {
+  renderPanel(loadedTrackingPayload, false, "zh");
+
+  expect(screen.getByText("评估截止日")).toBeInTheDocument();
+});
+
 it("evaluates the current run and replaces the cohort detail with the frozen response", async () => {
   const evaluated = structuredClone(loadedTrackingPayload.latest!);
   evaluated.items[1].horizons[0] = {
