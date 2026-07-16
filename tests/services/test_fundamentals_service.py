@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime, timezone
 
 from sqlalchemy import create_engine
@@ -126,6 +127,12 @@ def test_stored_a_share_projects_missing_pe_and_enriches_company_without_writes(
             profile="主要从事贵州茅台酒及系列酒的生产和销售。",
         ),
     )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_fundamentals",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("complete stored metrics must skip financial fallback")
+        ),
+    )
 
     payload = get_fundamental_payload(
         "600519",
@@ -142,6 +149,188 @@ def test_stored_a_share_projects_missing_pe_and_enriches_company_without_writes(
     assert payload["item"]["summary"] is None
     assert payload["item"]["company"]["name"] == "贵州茅台酒股份有限公司"
     assert payload["citation"] == "fundamental_metrics:600519:2026-07-13"
+    assert session.query(FundamentalSnapshotModel).count() == 1
+
+
+def test_partial_stored_a_share_selects_more_complete_public_snapshot(monkeypatch):
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 7, 13),
+            currency="CNY",
+            pe_ratio=None,
+            revenue_growth=None,
+            net_margin=None,
+            debt_to_assets=0.1212,
+        ),
+        session=session,
+        source="akshare",
+    )
+    public_snapshot = make_eastmoney_snapshot()
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.get",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.set",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_fundamentals",
+        lambda symbol, *, as_of: public_snapshot,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("selected public snapshot already owns company context")
+        ),
+    )
+
+    payload = get_fundamental_payload(
+        "600519",
+        as_of=date(2026, 7, 16),
+        session=session,
+    )
+
+    assert payload["source"] == "eastmoney_public"
+    assert payload["as_of"] == "2026-06-30"
+    assert payload["item"]["pe_ratio"] is None
+    assert payload["item"]["revenue_growth"] == 0.125
+    assert payload["item"]["net_margin"] == 0.5125
+    assert payload["item"]["debt_to_assets"] == 0.1875
+    assert payload["item"]["company"]["name"] == "Kweichow Moutai"
+    assert payload["citation"] == "fundamental_metrics:600519:2026-06-30"
+    assert session.query(FundamentalSnapshotModel).count() == 1
+    assert not session.new
+    assert not session.dirty
+
+
+def test_partial_stored_a_share_keeps_database_snapshot_on_completeness_tie(
+    monkeypatch,
+):
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 7, 13),
+            currency="CNY",
+            pe_ratio=None,
+            revenue_growth=0.0654,
+            net_margin=None,
+            debt_to_assets=0.1212,
+        ),
+        session=session,
+        source="akshare",
+    )
+    tied_public_snapshot = replace(make_eastmoney_snapshot(), net_margin=None)
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.get",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.set",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_fundamentals",
+        lambda symbol, *, as_of: tied_public_snapshot,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        lambda _symbol: make_eastmoney_snapshot().company,
+    )
+
+    payload = get_fundamental_payload(
+        "600519",
+        as_of=date(2026, 7, 16),
+        session=session,
+    )
+
+    assert payload["source"] == "database"
+    assert payload["as_of"] == "2026-07-13"
+    assert payload["item"]["revenue_growth"] == 0.0654
+    assert payload["item"]["net_margin"] is None
+    assert payload["item"]["debt_to_assets"] == 0.1212
+    assert payload["item"]["company"]["name"] == "Kweichow Moutai"
+
+
+def test_partial_stored_a_share_keeps_database_snapshot_on_public_failure(
+    monkeypatch,
+):
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 7, 13),
+            currency="CNY",
+            pe_ratio=None,
+            revenue_growth=None,
+            net_margin=None,
+            debt_to_assets=0.1212,
+        ),
+        session=session,
+        source="akshare",
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.get",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.set",
+        lambda *_args, **_kwargs: True,
+    )
+
+    def fail_financial(*_args, **_kwargs):
+        raise EastmoneyPublicFundamentalsProviderError(
+            "EASTMONEY_FUNDAMENTALS_TIMEOUT",
+            "sanitized",
+        )
+
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_fundamentals",
+        fail_financial,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        lambda _symbol: make_eastmoney_snapshot().company,
+    )
+
+    payload = get_fundamental_payload(
+        "600519",
+        as_of=date(2026, 7, 16),
+        session=session,
+    )
+
+    assert payload["source"] == "database"
+    assert payload["item"]["debt_to_assets"] == 0.1212
+    assert payload["item"]["company"]["name"] == "Kweichow Moutai"
+    assert session.query(FundamentalSnapshotModel).count() == 1
+
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_fundamentals",
+        lambda *_args, **_kwargs: None,
+    )
+    no_data_payload = get_fundamental_payload(
+        "600519",
+        as_of=date(2026, 7, 16),
+        session=session,
+    )
+
+    assert no_data_payload["source"] == "database"
+    assert no_data_payload["item"]["debt_to_assets"] == 0.1212
     assert session.query(FundamentalSnapshotModel).count() == 1
 
 

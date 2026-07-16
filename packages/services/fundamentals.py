@@ -39,6 +39,13 @@ _EASTMONEY_FUNDAMENTALS_SOURCES = [
     "eastmoney.PC_HSF10.CompanySurvey.PageAjax",
 ]
 _EASTMONEY_COMPANY_SOURCE = "eastmoney.PC_HSF10.CompanySurvey.PageAjax"
+_FUNDAMENTAL_METRIC_FIELDS = (
+    "pe_ratio",
+    "revenue_growth",
+    "net_margin",
+    "debt_to_assets",
+)
+_EASTMONEY_PUBLIC_MAX_METRIC_COMPLETENESS = 3
 
 
 _FUNDAMENTAL_FIXTURES = {
@@ -165,9 +172,10 @@ def get_fundamental_payload(
                 payload = _payload_from_database_row(row)
                 normalized_symbol = str(symbol).strip().upper()
                 if _is_eastmoney_public_eligible(normalized_symbol):
-                    return _enrich_database_payload_with_company(
+                    return _select_a_share_fundamental_payload(
                         payload,
                         symbol=normalized_symbol,
+                        as_of=as_of or date.today(),
                     )
                 return payload
 
@@ -201,6 +209,29 @@ def _payload_from_database_row(
         }
     )
     return payload
+
+
+def _fundamental_metric_completeness(payload: dict[str, object]) -> int:
+    item = payload.get("item")
+    if not isinstance(item, dict):
+        return 0
+    return sum(item.get(field) is not None for field in _FUNDAMENTAL_METRIC_FIELDS)
+
+
+def _select_a_share_fundamental_payload(
+    database_payload: dict[str, object],
+    *,
+    symbol: str,
+    as_of: date,
+) -> dict[str, object]:
+    database_completeness = _fundamental_metric_completeness(database_payload)
+    if database_completeness >= _EASTMONEY_PUBLIC_MAX_METRIC_COMPLETENESS:
+        return _enrich_database_payload_with_company(database_payload, symbol=symbol)
+
+    public_payload = _get_eastmoney_public_payload(symbol, as_of=as_of)
+    if _fundamental_metric_completeness(public_payload) > database_completeness:
+        return public_payload
+    return _enrich_database_payload_with_company(database_payload, symbol=symbol)
 
 
 def _enrich_database_payload_with_company(

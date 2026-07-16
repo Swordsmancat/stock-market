@@ -4,7 +4,8 @@
 
 - Trigger: a fundamentals read targets an exact six-digit A-share symbol, the
   existing `akshare_enabled` public-CN gate is on, and either no stored snapshot
-  exists or a stored financial snapshot lacks company context.
+  exists, the stored financial snapshot is incomplete, or company context is
+  missing.
 - Scope: `packages/providers/eastmoney_public_fundamentals.py`,
   `packages/services/fundamentals.py`, `GET /fundamentals/{symbol}`, instrument
   detail, and the market assistant's existing fundamental evidence citation.
@@ -26,14 +27,18 @@
 
 ## 3. Contracts
 
-- A stored database row is authoritative for report date, currency, and
-  financial metrics. Company enrichment never replaces those values.
-- Historical ingestion used exact PE zero as a missing-value compatibility
-  placeholder. Database read projections expose exact zero as `null`, remove
-  the misleading `PE 0.00` summary, and do not mutate the stored row. Nonzero
-  and negative PE values remain unchanged.
-- An eligible stored A-share payload may call only the independent CompanySurvey
-  operation on a company-cache miss. It must not call the financial endpoint.
+- A stored snapshot with at least three non-null core metrics returns without a
+  public financial call because the verified public source cannot supply PE and
+  therefore cannot be more complete. Company enrichment remains independently
+  bounded and never replaces stored financial values.
+- An eligible stored snapshot with fewer than three non-null core metrics may
+  resolve the existing cached/public Eastmoney payload once. Compare whole
+  snapshots across PE, revenue growth, net margin, and debt-to-assets. Select
+  the public payload only when its non-null count is strictly greater; a tie or
+  worse public payload keeps the stored snapshot.
+- Selection never stitches financial fields across report dates. The selected
+  payload owns its complete provider, report date, currency, metrics, company,
+  diagnostics, and citation projection.
 - Public fallback accepts only fixed HTTPS GETs to
   `RPT_F10_FINANCE_MAINFINADATA` and `CompanySurvey/PageAjax`. It sends no Cookie
   or authorization, disables redirects and environment proxy inheritance, caps
@@ -54,9 +59,11 @@
 | Condition | Required behavior |
 | --- | --- |
 | Stored snapshot exists, gate disabled/non-CN | Return database projection; zero cache/network |
-| Stored A-share exists, company cache miss | Keep database metrics; one CompanySurvey GET |
-| Stored PE is exact zero | Return `pe_ratio=null`, leave the ORM value unchanged |
-| Stored PE is nonzero or negative | Preserve the stored value |
+| Stored A-share has at least three core metrics | Skip public financial; optionally enrich company |
+| Stored A-share has fewer than three core metrics | Resolve one cached/public coherent snapshot |
+| Public snapshot is strictly more complete | Return the whole public projection and provenance |
+| Public snapshot ties or is less complete | Keep the whole stored projection; enrich company normally |
+| Public financial request is unavailable/no-data | Keep the stored projection; company fallback remains bounded |
 | Company result is empty | Keep metrics, cache company no-data, return degraded company state |
 | Company request/schema fails | Keep metrics, sanitized diagnostic, do not cache failure |
 | Symbol is not exact six digits or gate is off | Preserve existing non-CN/fixture behavior |
@@ -71,19 +78,26 @@
 - Good: `600519` has no stored row, the gate is enabled, the 2026-06-30 report
   is selected, ratios and company context render, and PE displays unavailable.
 - Good: a stored `600519` snapshot keeps its 6.54%/52.22%/12.12% financial
-  values, renders PE unavailable, and adds bounded company context.
+  values without a public financial call, renders PE unavailable, and adds
+  bounded company context.
+- Good: stored `000001` has only debt-to-assets while one public 2026-03-31
+  snapshot has growth, margin, and debt; the whole public snapshot wins and its
+  report date/source/citation remain intact.
 - Base: a stored non-CN snapshot or disabled gate returns without Redis/network.
+- Base: stored and public snapshots have equal non-null counts; stored wins.
 - Base: company survey is unavailable but financial metrics remain usable and degraded.
-- Bad: fill PE with zero, stitch metrics across periods, copy a future report,
-  persist fallback data during GET, or import a browser Cookie to improve coverage.
+- Bad: fill PE with zero, stitch metrics across periods, prefer a public tie,
+  copy a future report, persist fallback data during GET, or import a browser
+  Cookie to improve coverage.
 
 ## 6. Tests Required
 
 - Provider tests assert fixed params/headers, no credentials/redirects/retry,
   bounds, identity/date/finite numbers, percentage normalization, and sanitized errors.
-- Service tests assert stored metrics remain authoritative, zero PE projects to
-  null, company success/no-data caches, company failure is non-blocking,
-  no-snapshot fallback remains normalized, and every GET performs zero ORM writes.
+- Service tests assert complete stored metrics skip public financial calls,
+  strictly more complete public snapshots win whole, ties/failures keep stored
+  data, company success/no-data caches remain bounded, no-snapshot fallback is
+  normalized, and every GET performs zero ORM writes.
 - API/component tests assert additive company context and `pe_ratio=null` rendering.
 - Assistant tests assert bounded company metadata and unchanged known citation IDs.
 - Run focused tests, full Python/Web suites, Ruff, TypeScript, task validation,
@@ -103,12 +117,12 @@ This performs a write from a read path and fabricates an unavailable PE value.
 ### Correct
 
 ```python
-row = _latest_fundamental_snapshot(symbol, as_of, session)
-if row is not None:
-    payload = truthful_database_projection(row)
-    return enrich_company_only_when_eligible(payload)
-return normalized_public_financial_payload_or_no_data(symbol, as_of)
+stored = truthful_database_projection(row)
+if metric_count(stored) >= PUBLIC_MAX_METRIC_COUNT:
+    return enrich_company_only_when_eligible(stored)
+public = normalized_public_financial_payload_or_no_data(symbol, as_of)
+return public if metric_count(public) > metric_count(stored) else enrich_company(stored)
 ```
 
-The database financial snapshot remains authoritative while missing company
-context is independently bounded, cached, read-only, and truthfully optional.
+The selected snapshot remains coherent while missing company context is
+independently bounded, cached, read-only, and truthfully optional.
