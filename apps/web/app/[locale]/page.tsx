@@ -338,6 +338,7 @@ const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const FALLBACK_DASHBOARD_LOCALE = "en-US";
 const DASHBOARD_TIME_ZONE = "Asia/Shanghai";
 const OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS = 5000;
+const MARKET_OVERVIEW_FETCH_TIMEOUT_MS = 20_000;
 const HOMEPAGE_NEWS_LIMIT = 6;
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
 
@@ -363,6 +364,17 @@ type DashboardHomeIndexItem = DashboardIndexItem & {
 };
 
 const FAVORITE_MACRO_INDICATOR_LIMIT = 8;
+const BUILT_IN_MACRO_LABEL_KEYS = {
+  buffett_indicator_us: "terminalMacroLabelBuffettUs",
+  buffett_indicator_cn: "terminalMacroLabelBuffettCn",
+  buffett_indicator_hk: "terminalMacroLabelBuffettHk",
+  us_10y_yield: "terminalMacroLabelUs10yYield",
+  us_2y_yield: "terminalMacroLabelUs2yYield",
+  us_10y_2y_spread: "terminalMacroLabelUs10y2ySpread",
+  us_cpi_yoy: "terminalMacroLabelUsCpiYoy",
+  us_m2_yoy: "terminalMacroLabelUsM2Yoy",
+  cn_m2_yoy: "terminalMacroLabelCnM2Yoy",
+} as const satisfies Record<string, string>;
 
 function getSafeDashboardLocale(locale: string): string {
   try {
@@ -566,7 +578,7 @@ function formatCompactDashboardNumber(value: number | null | undefined, locale: 
 }
 
 async function fetchMarketOverviewResult(provider: string): Promise<MarketOverviewLoadResult> {
-  const timeout = createDashboardFetchTimeout(OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS);
+  const timeout = createDashboardFetchTimeout(MARKET_OVERVIEW_FETCH_TIMEOUT_MS);
   try {
     const response = await backendFetch(
       withProviderQuery("/dashboard/market-overview", provider),
@@ -1038,30 +1050,46 @@ function MacroIndicatorsPanel({
       }
       contentClassName="flex min-h-0 flex-col"
     >
-      <div className="grid shrink-0 grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground">
+      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_5.5rem] border-b border-border/70 bg-background/40 px-3 py-2 text-[10px] uppercase text-muted-foreground sm:grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem]">
         <span>{t("terminalIndicator")}</span>
         <span className="text-right">{t("terminalLatestValue")}</span>
-        <span className="text-right">{t("terminalTrend")}</span>
-        <span className="text-right">{t("terminalUpdated")}</span>
+        <span className="hidden text-right sm:block">{t("terminalTrend")}</span>
+        <span className="hidden text-right sm:block">{t("terminalUpdated")}</span>
       </div>
-      <div className="min-h-0 flex-1 divide-y divide-border/65 overflow-y-auto scrollbar-thin">
+      <div
+        role="region"
+        aria-labelledby="terminal-macro-heading"
+        tabIndex={0}
+        className="min-h-0 flex-1 divide-y divide-border/65 overflow-y-auto scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring xl:overscroll-contain"
+      >
         {rows.map(({ code, item }) => {
           const isAvailable = item?.status === "ok";
-          const displayName = item?.name ?? code;
+          const builtInLabelKey = BUILT_IN_MACRO_LABEL_KEYS[code as keyof typeof BUILT_IN_MACRO_LABEL_KEYS];
+          const displayName = builtInLabelKey ? t(builtInLabelKey) : (item?.name ?? code);
+          const statusLabel = isAvailable ? t("available") : t("no_data");
+          const updatedLabel = item ? formatDashboardDate(item.as_of, locale, unavailableLabel) : unavailableLabel;
           return (
-            <div key={code} className="grid min-h-[2.25rem] grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem] items-center gap-2 px-3 py-1.5 text-xs">
+            <div key={code} className="grid min-h-[2.75rem] grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-2 px-3 py-1.5 text-xs sm:grid-cols-[minmax(0,1.35fr)_5.5rem_4.5rem_5.5rem]">
               <div className="min-w-0">
-                <div className="truncate font-medium text-foreground">{displayName}</div>
-                <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{code}</div>
+                <div
+                  className="line-clamp-2 break-words font-medium leading-tight text-foreground"
+                  title={displayName}
+                >
+                  {displayName}
+                </div>
+                <div className="mt-1 flex min-w-0 items-center gap-2 text-[10px] sm:hidden">
+                  <span className={isAvailable ? "text-positive" : "text-warning"}>{statusLabel}</span>
+                  <span className="truncate text-muted-foreground">{updatedLabel}</span>
+                </div>
               </div>
               <div className="text-right font-mono tabular-nums">
                 {item ? formatValuationIndicatorValue(item, locale, unavailableLabel) : unavailableLabel}
               </div>
-              <div className={`text-right text-[11px] ${isAvailable ? "text-positive" : "text-warning"}`}>
-                {isAvailable ? t("available") : t("no_data")}
+              <div className={`hidden text-right text-[11px] sm:block ${isAvailable ? "text-positive" : "text-warning"}`}>
+                {statusLabel}
               </div>
-              <div className="text-right text-[10px] text-muted-foreground">
-                {item ? formatDashboardDate(item.as_of, locale, unavailableLabel) : unavailableLabel}
+              <div className="hidden text-right text-[10px] text-muted-foreground sm:block">
+                {updatedLabel}
               </div>
             </div>
           );
@@ -1677,7 +1705,7 @@ export default async function HomePage({
           t={t}
         />
 
-        <div className="grid gap-2 xl:grid-cols-3">
+        <div id="home-terminal-grid" className="grid gap-2 xl:grid-cols-2">
           <MacroIndicatorsPanel
             rows={favoriteMacroIndicatorRows}
             locale={locale}

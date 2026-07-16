@@ -131,6 +131,30 @@ metadata. Missing or invalid values use the existing unavailable label.
 
 **Fixed panel layout contract**: Fixed-height homepage panels should keep the card as `flex flex-col`, the content area as `min-h-0 flex-1`, and the table/list body as `min-h-0 flex-1 overflow-y-auto`. Headers should be `shrink-0`; rows should truncate or line-clamp rather than resizing the panel. This keeps the dashboard stable at desktop and tall mobile visual-check sizes.
 
+The six homepage terminal modules use two columns and three natural rows at the
+`xl` breakpoint, and one column below it. Do not stretch fixed-height chart
+cards to fill a viewport gap; that only moves unused space inside the charts.
+At narrow widths, prioritize the indicator name and value, then place secondary
+status/date metadata below the name. Keep the bounded body as a named,
+focusable scroll region.
+
+**Homepage read budget contract**: Server-rendered homepage reads remain GET
+only and use named timeout budgets based on observed latency. Lightweight
+optional reads keep the five-second budget. The cold
+`/dashboard/market-overview` aggregation has a dedicated twenty-second budget.
+Do not reuse the lightweight timeout for that aggregation, and do not turn a
+longer read budget into a refresh, ingestion, backfill, or observation write.
+Abort and non-2xx responses retain the explicit unavailable state, and timeout
+handles must be cleared in `finally`.
+
+**Macro label boundary**: Backend macro `code` and `name` fields are canonical
+evidence metadata and remain unchanged. The curated homepage resolves every
+known built-in code through symmetric `Dashboard` translation keys; an unknown
+code falls back to its stored name, then the code. Do not render raw technical
+code subtitles on the homepage. Test both loaded and failed overview
+projections because the failed projection has only configured codes and no
+stored names to fall back to.
+
 When a fixed panel body can overflow, make the scroll owner a focusable named
 region: reuse the panel heading through `aria-labelledby`, set `tabIndex={0}`,
 and retain a visible `focus-visible` ring. Render every row already inside the

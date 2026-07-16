@@ -165,6 +165,34 @@ Correct:
 - Route proxy tests should call exported route handlers directly and assert upstream URL, method, status, content type, and payload propagation.
 - Server Action tests should mock `backendFetch`, `redirect`, and `revalidatePath`, following `apps/web/app/[locale]/actions.test.ts`.
 
+### Homepage Cold-Read And Locale Regressions
+
+- A homepage timeout test must mock an AbortSignal-aware response at the real
+  server-component fetch boundary. Wait until the target request is registered
+  before advancing fake timers; otherwise the test can advance before the
+  timeout exists.
+- Prove that a market-overview response after six seconds still renders stored
+  data and issues no POST. Separately prove that it is not aborted before
+  twenty seconds and that the bounded abort retains the explicit failure state.
+- Restore real timers in cleanup. Do not use `runAllTimersAsync()` for the
+  success case because it also advances the terminal timeout and hides the
+  ordering under test.
+- For structured macro labels, render Chinese success and failure projections,
+  English success, all built-in codes, and an unknown stored-name fallback.
+  Assert raw codes are absent from visible homepage text and keep both locale
+  catalogs symmetric.
+
+```tsx
+const pagePromise = HomePage({ params, searchParams });
+await overviewRequestStarted;
+await vi.advanceTimersByTimeAsync(6_000);
+render(await pagePromise);
+```
+
+Browser acceptance for homepage layout changes covers `1440x1000` and
+`1920x1080` two-column/three-row geometry, `1280x720` internal wheel scrolling,
+and `390x844` single-column flow with no page-level horizontal overflow.
+
 ---
 
 ## Code Review Checklist

@@ -1,9 +1,12 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { StoredNewsItem } from "@/lib/news-payload";
+import enMessages from "../../messages/en.json";
+import zhMessages from "../../messages/zh.json";
 
-const { getPlatformSettingsMock } = vi.hoisted(() => ({
+const { getPlatformSettingsMock, getTranslationsMock } = vi.hoisted(() => ({
   getPlatformSettingsMock: vi.fn(),
+  getTranslationsMock: vi.fn(),
 }));
 
 vi.mock("@/lib/platform-settings-store", async () => {
@@ -15,6 +18,10 @@ vi.mock("@/lib/platform-settings-store", async () => {
     getPlatformSettings: getPlatformSettingsMock,
   };
 });
+
+vi.mock("next-intl/server", () => ({
+  getTranslations: getTranslationsMock,
+}));
 
 import HomePage from "./page";
 
@@ -53,6 +60,35 @@ const defaultHotSectors = [
     leader_symbol: "AAPL",
   },
 ];
+
+const builtInMacroLabels = [
+  ["buffett_indicator_us", "Buffett Indicator - United States", "美国巴菲特指标"],
+  ["buffett_indicator_cn", "Buffett Indicator - China", "中国巴菲特指标"],
+  ["buffett_indicator_hk", "Buffett Indicator - Hong Kong", "香港巴菲特指标"],
+  ["us_10y_yield", "US 10Y Treasury Yield", "美国10年期国债收益率"],
+  ["us_2y_yield", "US 2Y Treasury Yield", "美国2年期国债收益率"],
+  ["us_10y_2y_spread", "US 10Y-2Y Yield Spread", "美国10年期与2年期国债收益率利差"],
+  ["us_cpi_yoy", "US CPI YoY", "美国CPI同比"],
+  ["us_m2_yoy", "US M2 Money Supply YoY", "美国M2货币供应量同比"],
+  ["cn_m2_yoy", "China M2 Money Supply YoY", "中国M2货币供应量同比"],
+] as const;
+
+const macroFavoriteGroups = [
+  {
+    name: "default favorites",
+    codes: [
+      "buffett_indicator_us",
+      "buffett_indicator_cn",
+      "buffett_indicator_hk",
+      "us_10y_yield",
+      "us_10y_2y_spread",
+      "us_cpi_yoy",
+      "us_m2_yoy",
+      "cn_m2_yoy",
+    ],
+  },
+  { name: "US two-year yield", codes: ["us_2y_yield"] },
+] as const;
 
 function buildPlatformSettings(overrides: Record<string, unknown> = {}) {
   return {
@@ -136,10 +172,23 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   getPlatformSettingsMock.mockReset();
+  getTranslationsMock.mockReset();
 });
+
+function createDashboardTranslator(locale: string) {
+  const messages = (locale === "zh" ? zhMessages : enMessages).Dashboard as Record<string, string>;
+  return (key: string, values?: Record<string, string | number>) => {
+    let message = messages[key] ?? key;
+    for (const [name, value] of Object.entries(values ?? {})) {
+      message = message.split(`{${name}}`).join(String(value));
+    }
+    return message;
+  };
+}
 
 function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", market = "US", latestClose = 102) {
   const dailyBars = [
@@ -163,10 +212,11 @@ function createMarketOverviewPayload(symbol = "AAPL", name = "Apple Inc.", marke
     ["cn_csi_500", "CSI 500", "CN"],
   ];
   const macroIndicators = [
-    ["buffett_indicator_us", "Buffett Indicator - US", "US", "valuation", "no_data", null],
-    ["buffett_indicator_cn", "Buffett Indicator - CN", "CN", "valuation", "no_data", null],
-    ["buffett_indicator_hk", "Buffett Indicator - HK", "HK", "valuation", "no_data", null],
+    ["buffett_indicator_us", "Buffett Indicator - United States", "US", "valuation", "no_data", null],
+    ["buffett_indicator_cn", "Buffett Indicator - China", "CN", "valuation", "no_data", null],
+    ["buffett_indicator_hk", "Buffett Indicator - Hong Kong", "HK", "valuation", "no_data", null],
     ["us_10y_yield", "US 10Y Treasury Yield", "US", "rates", "ok", 4.25],
+    ["us_2y_yield", "US 2Y Treasury Yield", "US", "rates", "no_data", null],
     ["us_10y_2y_spread", "US 10Y-2Y Yield Spread", "US", "rates", "no_data", null],
     ["us_cpi_yoy", "US CPI YoY", "US", "inflation", "no_data", null],
     ["us_m2_yoy", "US M2 Money Supply YoY", "US", "liquidity", "no_data", null],
@@ -270,6 +320,10 @@ function mockHomepageFetch({
   newsPayload,
   sectors = defaultHotSectors,
   latestBarStatus = 200,
+  marketOverviewResponseStatus = 200,
+  marketOverviewDelayMs = 0,
+  onMarketOverviewRequest,
+  onMarketOverviewAbort,
 }: {
   symbol?: string;
   instrumentName?: string;
@@ -281,8 +335,12 @@ function mockHomepageFetch({
   newsPayload?: unknown;
   sectors?: typeof defaultHotSectors;
   latestBarStatus?: number;
+  marketOverviewResponseStatus?: number;
+  marketOverviewDelayMs?: number;
+  onMarketOverviewRequest?: () => void;
+  onMarketOverviewAbort?: () => void;
 } = {}) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input);
     if (url.endsWith("/instruments")) {
       return Promise.resolve(
@@ -347,7 +405,35 @@ function mockHomepageFetch({
       );
     }
     if (url.includes("/dashboard/market-overview")) {
-      return Promise.resolve(new Response(JSON.stringify(marketOverviewPayload)));
+      onMarketOverviewRequest?.();
+      const buildResponse = () => new Response(JSON.stringify(marketOverviewPayload), {
+        status: marketOverviewResponseStatus,
+      });
+      if (marketOverviewDelayMs <= 0) {
+        return Promise.resolve(buildResponse());
+      }
+
+      return new Promise<Response>((resolve, reject) => {
+        const signal = init?.signal;
+        const rejectAsAborted = () => {
+          onMarketOverviewAbort?.();
+          reject(new DOMException("Aborted", "AbortError"));
+        };
+        if (signal?.aborted) {
+          rejectAsAborted();
+          return;
+        }
+
+        const delayId = setTimeout(() => {
+          signal?.removeEventListener("abort", handleAbort);
+          resolve(buildResponse());
+        }, marketOverviewDelayMs);
+        const handleAbort = () => {
+          clearTimeout(delayId);
+          rejectAsAborted();
+        };
+        signal?.addEventListener("abort", handleAbort, { once: true });
+      });
     }
     if (url.includes("/market-indicators/official-sources/status")) {
       return Promise.resolve(new Response(JSON.stringify(createOfficialMacroSourceStatusPayload())));
@@ -357,6 +443,7 @@ function mockHomepageFetch({
 }
 
 async function renderHomepage(locale = "en") {
+  getTranslationsMock.mockResolvedValueOnce(createDashboardTranslator(locale));
   render(
     await HomePage({
       params: Promise.resolve({ locale }),
@@ -374,6 +461,9 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.getByText("Selected indices")).toBeInTheDocument();
   expect(screen.getAllByText("A-share market").length).toBeGreaterThan(1);
   expect(screen.getByText("Macro indicators")).toBeInTheDocument();
+  const macroRegion = screen.getByRole("region", { name: "Macro indicators" });
+  expect(macroRegion).toHaveAttribute("tabindex", "0");
+  expect(macroRegion).toHaveClass("overflow-y-auto", "focus-visible:ring-2");
   expect(screen.getByText("Hot sectors")).toBeInTheDocument();
   expect(screen.getByText("Latest news sentiment")).toBeInTheDocument();
   expect(screen.getAllByText("Market overview").length).toBeGreaterThan(1);
@@ -422,6 +512,137 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.queryByRole("button", { name: "Refresh Analysis" })).not.toBeInTheDocument();
 });
 
+it("renders a cold market overview that arrives after the optional-read budget", async () => {
+  vi.useFakeTimers();
+  let markOverviewStarted!: () => void;
+  const overviewStarted = new Promise<void>((resolve) => {
+    markOverviewStarted = resolve;
+  });
+  const fetchMock = mockHomepageFetch({
+    marketOverviewDelayMs: 6_000,
+    onMarketOverviewRequest: markOverviewStarted,
+  });
+  getTranslationsMock.mockResolvedValueOnce(createDashboardTranslator("en"));
+
+  const pagePromise = HomePage({
+    params: Promise.resolve({ locale: "en" }),
+    searchParams: Promise.resolve({}),
+  });
+  await overviewStarted;
+  await vi.advanceTimersByTimeAsync(6_000);
+  render(await pagePromise);
+
+  expect(screen.getByText("4.25%")).toBeInTheDocument();
+  expect(screen.queryByText("Market dashboard is unavailable")).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+});
+
+it("keeps the market overview read bounded at twenty seconds", async () => {
+  vi.useFakeTimers();
+  let markOverviewStarted!: () => void;
+  const overviewStarted = new Promise<void>((resolve) => {
+    markOverviewStarted = resolve;
+  });
+  const onMarketOverviewAbort = vi.fn();
+  mockHomepageFetch({
+    marketOverviewDelayMs: 20_001,
+    onMarketOverviewRequest: markOverviewStarted,
+    onMarketOverviewAbort,
+  });
+  getTranslationsMock.mockResolvedValueOnce(createDashboardTranslator("en"));
+
+  const pagePromise = HomePage({
+    params: Promise.resolve({ locale: "en" }),
+    searchParams: Promise.resolve({}),
+  });
+  await overviewStarted;
+  await vi.advanceTimersByTimeAsync(19_999);
+  expect(onMarketOverviewAbort).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  render(await pagePromise);
+
+  expect(onMarketOverviewAbort).toHaveBeenCalledTimes(1);
+  expect(screen.getByText("Market dashboard is unavailable")).toBeInTheDocument();
+  expect(screen.queryByText("4.25%")).not.toBeInTheDocument();
+});
+
+it.each(macroFavoriteGroups)(
+  "localizes built-in macro labels in the Chinese success projection: $name",
+  async ({ codes }) => {
+    getPlatformSettingsMock.mockResolvedValueOnce(buildPlatformSettings({
+      favorite_macro_indicator_codes: [...codes],
+    }));
+    mockHomepageFetch();
+
+    await renderHomepage("zh");
+
+    const expectedLabels = builtInMacroLabels.filter(([code]) => codes.some((candidate) => candidate === code));
+    for (const [code, englishLabel, chineseLabel] of expectedLabels) {
+      expect(screen.getByText(chineseLabel)).toBeInTheDocument();
+      expect(screen.queryByText(englishLabel)).not.toBeInTheDocument();
+      expect(screen.queryByText(code)).not.toBeInTheDocument();
+    }
+  },
+);
+
+it.each(macroFavoriteGroups)(
+  "localizes built-in macro labels in the Chinese failure projection: $name",
+  async ({ codes }) => {
+    getPlatformSettingsMock.mockResolvedValueOnce(buildPlatformSettings({
+      favorite_macro_indicator_codes: [...codes],
+    }));
+    mockHomepageFetch({ marketOverviewResponseStatus: 503 });
+
+    await renderHomepage("zh");
+
+    expect(screen.getByText("市场看板不可用")).toBeInTheDocument();
+    const expectedLabels = builtInMacroLabels.filter(([code]) => codes.some((candidate) => candidate === code));
+    for (const [code, englishLabel, chineseLabel] of expectedLabels) {
+      expect(screen.getByText(chineseLabel)).toBeInTheDocument();
+      expect(screen.queryByText(englishLabel)).not.toBeInTheDocument();
+      expect(screen.queryByText(code)).not.toBeInTheDocument();
+    }
+  },
+);
+
+it.each(macroFavoriteGroups)(
+  "uses localized English macro labels without raw code subtitles: $name",
+  async ({ codes }) => {
+    getPlatformSettingsMock.mockResolvedValueOnce(buildPlatformSettings({
+      favorite_macro_indicator_codes: [...codes],
+    }));
+    mockHomepageFetch();
+
+    await renderHomepage("en");
+
+    const expectedLabels = builtInMacroLabels.filter(([code]) => codes.some((candidate) => candidate === code));
+    for (const [code, englishLabel] of expectedLabels) {
+      expect(screen.getByText(englishLabel)).toBeInTheDocument();
+      expect(screen.queryByText(code)).not.toBeInTheDocument();
+    }
+  },
+);
+
+it("falls back to the stored name for an unknown custom macro indicator", async () => {
+  const marketOverviewPayload = createMarketOverviewPayload();
+  const customIndicator = {
+    ...marketOverviewPayload.macro_indicators.items[0],
+    code: "custom_liquidity_pulse",
+    name: "Custom liquidity pulse",
+  };
+  marketOverviewPayload.macro_indicators.items = [customIndicator];
+  marketOverviewPayload.valuation_indicators.items = [customIndicator];
+  getPlatformSettingsMock.mockResolvedValueOnce(buildPlatformSettings({
+    favorite_macro_indicator_codes: [customIndicator.code],
+  }));
+  mockHomepageFetch({ marketOverviewPayload });
+
+  await renderHomepage("en");
+
+  expect(screen.getByText("Custom liquidity pulse")).toBeInTheDocument();
+  expect(screen.queryByText("custom_liquidity_pulse")).not.toBeInTheDocument();
+});
+
 it("shows the stored publication date and time using the active locale", async () => {
   const publishedAt = "2026-07-15T16:30:00Z";
   vi.stubEnv("TZ", "UTC");
@@ -437,7 +658,7 @@ it("shows the stored publication date and time using the active locale", async (
   await renderHomepage("zh");
 
   const newsRegion = screen.getByRole("region", {
-    name: "Latest news sentiment",
+    name: "最新新闻舆情",
   });
   const expectedPublicationTime = new Intl.DateTimeFormat("zh", {
     dateStyle: "medium",

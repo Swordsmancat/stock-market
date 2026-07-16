@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check desktop two-column module layout and mobile natural flow."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check full frontend, TypeScript, locale catalogs, and visual acceptance."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check no payload shape or unsafe cast regression."}
+{"file":".trellis/spec/backend/market-indicator-seed-import-contract.md","reason":"Check homepage remains read-only and renders only stored macro evidence."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check timeout behavior and data flow across web/API/cache/service."}

@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Preserve terminal homepage composition, fixed first-row panels, responsive layout, and localization ownership."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Add page behavior, translation, timeout, and browser-layout regressions."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Keep the existing market overview and macro item payload contracts."}
+{"file":".trellis/spec/backend/market-indicator-seed-import-contract.md","reason":"Preserve stored audited observations, GET-only homepage behavior, and no-fabrication boundaries."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify cold GET through cache/service/payload/UI without adding writes."}
