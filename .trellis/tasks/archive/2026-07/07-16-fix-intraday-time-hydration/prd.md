@@ -21,5 +21,4 @@ with explicit locale and market time-zone inputs on both server and client.
       and time zone rather than the host environment.
 - [x] TypeScript, focused/full Web tests, and Trellis validation pass.
 - [x] A rebuilt local Web page no longer logs the intraday time hydration mismatch.
-- [ ] The task is committed, archived, journaled, and pushed.
-
+- [x] The task is committed, archived, journaled, and pushed.
