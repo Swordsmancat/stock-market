@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 82
+- **Total Sessions**: 83
 - **Last Active**: 2026-07-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~767 | Active |
+| `journal-2.md` | ~800 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 83 | 2026-07-17 | Simplify AI research evidence context | `69ab110` | `master` |
 | 82 | 2026-07-17 | Localize candlestick pattern labels | `0933f7f` | `master` |
 | 81 | 2026-07-17 | Localize instrument technical indicators | `252d31b` | `master` |
 | 80 | 2026-07-17 | Rebalance instrument detail research layout | `80719bb` | `master` |

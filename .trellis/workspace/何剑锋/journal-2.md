@@ -765,3 +765,36 @@ Localized the five candlestick_patterns_v1 codes for Chinese and English instrum
 ### Next Steps
 
 - None - task complete
+
+
+## Session 83: Simplify AI research evidence context
+
+**Date**: 2026-07-17
+**Task**: Simplify AI research evidence context
+**Branch**: `master`
+
+### Summary
+
+Localized AI Research macro evidence with a shared code map, limited the default assistant question to citable stored observations, moved source readiness and raw diagnostics into a closed maintenance disclosure, added component/page regressions, verified responsive Chinese and English runtime behavior without a model call, and deployed the Web container.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `69ab110` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
