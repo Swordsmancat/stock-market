@@ -1001,6 +1001,7 @@
     "fundamentalCompanyContext": "Company context",
     "fundamentalCompanyName": "Company",
     "fundamentalCompanyIndustry": "Industry",
+    "fundamentalCompanyDetails": "Company details",
     "fundamentalBusinessScope": "Business scope",
     "fundamentalCompanyProfile": "Company profile",
     "fundamentalAsOf": "Fundamentals as of {date}",

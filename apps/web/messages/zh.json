@@ -1008,6 +1008,7 @@
     "fundamentalCompanyContext": "公司概况",
     "fundamentalCompanyName": "公司名称",
     "fundamentalCompanyIndustry": "所属行业",
+    "fundamentalCompanyDetails": "查看公司详细资料",
     "fundamentalBusinessScope": "经营范围",
     "fundamentalCompanyProfile": "公司简介",
     "fundamentalAsOf": "基本面日期：{date}",

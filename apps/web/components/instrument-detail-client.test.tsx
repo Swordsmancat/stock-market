@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
 
@@ -129,10 +129,22 @@ it("renders nullable public fundamentals with bounded company context", async ()
 
   renderDetail(payload);
 
-  expect(await screen.findByText("Kweichow Moutai")).toBeInTheDocument();
-  expect(screen.getByText("Beverage manufacturing")).toBeInTheDocument();
-  expect(screen.getByText("Production and sale of spirits.")).toBeInTheDocument();
-  expect(screen.getByText("Premium spirits producer.")).toBeInTheDocument();
+  const companyName = await screen.findByText("Kweichow Moutai");
+  const industry = screen.getByText("Beverage manufacturing");
+  const companyDetails = screen.getByText("Company details").closest("details");
+
+  expect(companyName).toBeInTheDocument();
+  expect(companyName.closest("details")).toBeNull();
+  expect(industry).toBeInTheDocument();
+  expect(industry.closest("details")).toBeNull();
+  expect(companyDetails).not.toBeNull();
+  expect(companyDetails).not.toHaveAttribute("open");
+  expect(
+    within(companyDetails as HTMLElement).getByText("Production and sale of spirits."),
+  ).toBeInTheDocument();
+  expect(
+    within(companyDetails as HTMLElement).getByText("Premium spirits producer."),
+  ).toBeInTheDocument();
   expect(screen.getByText("12.50%")).toBeInTheDocument();
   expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
 });

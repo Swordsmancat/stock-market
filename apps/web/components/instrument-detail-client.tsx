@@ -1300,25 +1300,35 @@ export function InstrumentDetailClient({
                           />
                         ) : null}
                       </div>
-                      {fundamentalsCompany.business_scope ? (
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">
-                            {t("fundamentalBusinessScope")}
-                          </p>
-                          <p className="text-sm leading-6">
-                            {fundamentalsCompany.business_scope}
-                          </p>
-                        </div>
-                      ) : null}
-                      {fundamentalsCompany.profile ? (
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">
-                            {t("fundamentalCompanyProfile")}
-                          </p>
-                          <p className="text-sm leading-6 text-muted-foreground">
-                            {fundamentalsCompany.profile}
-                          </p>
-                        </div>
+                      {fundamentalsCompany.business_scope ||
+                      fundamentalsCompany.profile ? (
+                        <details className="rounded-sm border bg-muted/20">
+                          <summary className="min-h-11 cursor-pointer touch-manipulation rounded-sm px-3 py-3 text-sm font-medium text-primary hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                            {t("fundamentalCompanyDetails")}
+                          </summary>
+                          <div className="space-y-3 border-t px-3 py-3">
+                            {fundamentalsCompany.business_scope ? (
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">
+                                  {t("fundamentalBusinessScope")}
+                                </p>
+                                <p className="text-sm leading-6">
+                                  {fundamentalsCompany.business_scope}
+                                </p>
+                              </div>
+                            ) : null}
+                            {fundamentalsCompany.profile ? (
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">
+                                  {t("fundamentalCompanyProfile")}
+                                </p>
+                                <p className="text-sm leading-6 text-muted-foreground">
+                                  {fundamentalsCompany.profile}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </details>
                       ) : null}
                     </section>
                   ) : null}
