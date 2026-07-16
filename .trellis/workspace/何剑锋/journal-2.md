@@ -368,3 +368,37 @@ Recovered sparse A-share daily bars through validated sources and replaced legac
 ### Next Steps
 
 - None - task complete
+
+
+## Session 71: Stabilize homepage and Docker startup
+
+**Date**: 2026-07-16
+**Task**: Stabilize homepage and Docker startup
+**Branch**: `master`
+
+### Summary
+
+Filtered non-finite market bars, added bounded AkShare Sina fallback for missing CN indices, kept cold news requests responsive, and made the default Docker Desktop stack serve a health-gated frontend on port 3000.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9370acb` | (see git log) |
+| `f3c0beb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

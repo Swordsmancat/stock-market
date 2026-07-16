@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 70
+- **Total Sessions**: 71
 - **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~370 | Active |
+| `journal-2.md` | ~404 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 71 | 2026-07-16 | Stabilize homepage and Docker startup | `9370acb`, `f3c0beb` | `master` |
 | 70 | 2026-07-16 | Harden public research fallbacks | `4b0c7d0` | `master` |
 | 69 | 2026-07-16 | Stabilize homepage initial data and localization | `b50f588` | `master` |
 | 68 | 2026-07-16 | Improve homepage news and macro availability | `624dcf9` | `master` |
