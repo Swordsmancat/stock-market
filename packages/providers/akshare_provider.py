@@ -16,6 +16,7 @@ from packages.providers.base import ProviderOrderBookLevel
 from packages.providers.base import ProviderRecentTrade
 
 DailyBarsDownloader = Callable[[str, date, date], pd.DataFrame]
+IndexDailyBarsDownloader = Callable[[str, date, date], pd.DataFrame]
 IntradayBarsDownloader = Callable[[str, date, str], pd.DataFrame]
 MarketDepthDownloader = Callable[[str, int], dict[str, object]]
 InstrumentUniverseDownloader = Callable[[], pd.DataFrame]
@@ -29,6 +30,7 @@ class AkShareProvider:
     def __init__(
         self,
         downloader: DailyBarsDownloader | None = None,
+        index_daily_downloader: IndexDailyBarsDownloader | None = None,
         intraday_downloader: IntradayBarsDownloader | None = None,
         market_depth_downloader: MarketDepthDownloader | None = None,
         instrument_universe_downloader: InstrumentUniverseDownloader | None = None,
@@ -36,6 +38,9 @@ class AkShareProvider:
         rights_allotment_downloader: RightsAllotmentDownloader | None = None,
     ) -> None:
         self._downloader = downloader or self._download
+        self._index_daily_downloader = (
+            index_daily_downloader or self.download_sina_index_daily_bars
+        )
         self._intraday_downloader = intraday_downloader or self._download_intraday
         self._market_depth_downloader = market_depth_downloader or self._download_market_depth
         self._instrument_universe_downloader = (
@@ -177,6 +182,57 @@ class AkShareProvider:
                 )
             )
         return bars
+
+    def fetch_index_bars(
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+    ) -> list[ProviderBar]:
+        frame = self._index_daily_downloader(symbol, start, end)
+        if frame is None or frame.empty:
+            return []
+
+        bars: list[ProviderBar] = []
+        for _, row in frame.iterrows():
+            timestamp = pd.to_datetime(row.get("timestamp"), errors="coerce")
+            if pd.isna(timestamp):
+                continue
+            trade_date = timestamp.date()
+            open_value = _decimal_or_none(row.get("open"))
+            high_value = _decimal_or_none(row.get("high"))
+            low_value = _decimal_or_none(row.get("low"))
+            close_value = _decimal_or_none(row.get("close"))
+            volume = _decimal_or_none(row.get("volume"))
+            if (
+                open_value is None
+                or high_value is None
+                or low_value is None
+                or close_value is None
+                or volume is None
+            ):
+                continue
+            if (
+                trade_date < start
+                or trade_date > end
+                or min(open_value, high_value, low_value, close_value, volume) < 0
+                or high_value < max(open_value, low_value, close_value)
+                or low_value > min(open_value, high_value, close_value)
+            ):
+                continue
+            bars.append(
+                ProviderBar(
+                    symbol=symbol,
+                    timestamp=trade_date,
+                    open=open_value,
+                    high=high_value,
+                    low=low_value,
+                    close=close_value,
+                    volume=volume,
+                    amount=_decimal_or_none(row.get("amount")),
+                )
+            )
+        return sorted(bars, key=lambda item: item.timestamp)
 
     def fetch_intraday_bars(
         self,
@@ -332,6 +388,37 @@ class AkShareProvider:
             return frame.dropna(subset=numeric_cols)
         except ImportError as exc:
             raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+    @staticmethod
+    def download_sina_index_daily_bars(
+        symbol: str,
+        start: date,
+        end: date,
+    ) -> pd.DataFrame:
+        try:
+            import akshare as ak
+        except ImportError as exc:
+            raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+        prefixed_symbol = f"sz{symbol}" if symbol.startswith("399") else f"sh{symbol}"
+        frame = ak.stock_zh_index_daily(symbol=prefixed_symbol)
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        if "timestamp" not in frame.columns and "date" not in frame.columns:
+            frame = frame.reset_index()
+        frame = frame.rename(columns={"date": "timestamp", "index": "timestamp"})
+        required_columns = {"timestamp", "open", "high", "low", "close", "volume"}
+        if not required_columns.issubset(frame.columns):
+            raise TypeError("AkShare Sina index daily schema is malformed.")
+        frame["timestamp"] = pd.to_datetime(frame["timestamp"], errors="coerce")
+        for column in ("open", "high", "low", "close", "volume"):
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+        if "amount" in frame.columns:
+            frame["amount"] = pd.to_numeric(frame["amount"], errors="coerce")
+        bounded = frame.loc[
+            frame["timestamp"].between(pd.Timestamp(start), pd.Timestamp(end), inclusive="both")
+        ]
+        return bounded.dropna(subset=list(required_columns))
 
     @staticmethod
     def _download_intraday(symbol: str, trade_date: date, timeframe: str) -> pd.DataFrame:

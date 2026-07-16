@@ -1,5 +1,6 @@
 """Redis cache utilities for market data."""
 import json
+import math
 from datetime import date
 from functools import wraps
 from typing import Any, Callable
@@ -9,6 +10,33 @@ import redis
 from packages.shared.config import settings
 
 redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+
+
+def _is_cacheable_market_overview(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+
+    for section_name in ("followed", "indices"):
+        section = payload.get(section_name)
+        if not isinstance(section, dict):
+            return False
+        items = section.get("items")
+        if not isinstance(items, list):
+            return False
+        for item in items:
+            if not isinstance(item, dict):
+                return False
+            if item.get("status") != "ok":
+                continue
+            latest = item.get("latest")
+            close = latest.get("close") if isinstance(latest, dict) else None
+            if (
+                isinstance(close, bool)
+                or not isinstance(close, int | float)
+                or not math.isfinite(close)
+            ):
+                return False
+    return True
 
 
 def cache_market_overview(ttl: int = 300):
@@ -42,6 +70,9 @@ def cache_market_overview(ttl: int = 300):
             
             # Call the actual function
             result = func(*args, **kwargs)
+
+            if not _is_cacheable_market_overview(result):
+                return result
             
             # Store in cache (async, don't block on failure)
             try:

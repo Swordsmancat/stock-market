@@ -1,4 +1,5 @@
 import re
+import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -6,12 +7,14 @@ from sqlalchemy.orm import Session
 
 from packages.ai.llm_factory import get_llm_provider
 from packages.domain.models import GeneratedReport, NewsArticle
+from packages.providers.akshare_provider import AkShareProvider
 from packages.services.information_sources import get_information_source_readiness_payload
 from packages.services.instruments import list_instruments_payload
 from packages.services.market_data import (
     MarketDataProviderError,
     get_bars_payload,
     resolve_market_data_provider_name,
+    serialize_bar,
 )
 from packages.services.market_indices import DEFAULT_MARKET_INDICES, MarketIndexDefinition, resolve_provider_symbol
 from packages.services.market_indicators import get_macro_indicator_payloads
@@ -141,6 +144,50 @@ def _build_unavailable_bars_item(
     }
 
 
+def _has_complete_finite_bars(payload: dict[str, object]) -> bool:
+    items = payload.get("items")
+    if payload.get("status") != "ok" or not isinstance(items, list) or not items:
+        return False
+    for item in items:
+        if not isinstance(item, dict):
+            return False
+        for field in ("open", "high", "low", "close", "volume"):
+            value = item.get(field)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return False
+            if not math.isfinite(float(value)):
+                return False
+    return True
+
+
+def _is_sina_index_fallback_eligible(
+    index: MarketIndexDefinition,
+    provider_name: str,
+) -> bool:
+    return index.market == "CN" and provider_name.strip().lower() == "yfinance"
+
+
+def _fetch_sina_index_payload(
+    index: MarketIndexDefinition,
+    start: date,
+    end: date,
+) -> dict[str, object]:
+    symbol = resolve_provider_symbol(index, "akshare")
+    bars = AkShareProvider().fetch_index_bars(symbol, start, end)
+    items = [serialize_bar(bar) for bar in bars]
+    return {
+        "symbol": symbol,
+        "timeframe": "1d",
+        "source": "akshare.stock_zh_index_daily",
+        "provider": "akshare",
+        "requested_provider": "yfinance",
+        "effective_provider": "akshare",
+        "status": "ok" if items else "no_data",
+        "no_data_reason": None if items else "No Sina index daily bars were available.",
+        "items": items,
+    }
+
+
 def _load_followed_instrument_candidates(session: Session) -> tuple[str, list[dict[str, object]]]:
     watchlist_items = get_active_watchlist_item_dicts(session=session)
     if watchlist_items:
@@ -230,6 +277,8 @@ def _serialize_market_index(
         "currency": index.currency,
         "provider_symbol": provider_symbol,
     }
+    primary_error: MarketDataProviderError | ValueError | None = None
+    bars_payload: dict[str, object] | None = None
     try:
         bars_payload = get_bars_payload(
             provider_symbol,
@@ -239,10 +288,63 @@ def _serialize_market_index(
             session=session,
             provider_name=provider_name,
         )
-        return _build_bars_item(identity=identity, bars_payload=bars_payload, today=today), None
+        if _has_complete_finite_bars(bars_payload):
+            return _build_bars_item(identity=identity, bars_payload=bars_payload, today=today), None
     except (MarketDataProviderError, ValueError) as error:
-        diagnostic = {"section": "indices", "code": index.code, "status": "unavailable", "message": str(error)}
-        return _build_unavailable_bars_item(identity=identity, provider_name=provider_name, message=str(error)), diagnostic
+        primary_error = error
+
+    if not _is_sina_index_fallback_eligible(index, provider_name):
+        if primary_error is not None:
+            message = str(primary_error)
+            diagnostic = {
+                "section": "indices",
+                "code": index.code,
+                "status": "unavailable",
+                "message": message,
+            }
+            return (
+                _build_unavailable_bars_item(
+                    identity=identity,
+                    provider_name=provider_name,
+                    message=message,
+                ),
+                diagnostic,
+            )
+        assert bars_payload is not None
+        return _build_bars_item(identity=identity, bars_payload=bars_payload, today=today), None
+
+    try:
+        fallback_payload = _fetch_sina_index_payload(index, start, end)
+    except Exception as error:
+        message = "AkShare Sina index fallback failed."
+        unavailable_payload: dict[str, object] = {
+            "source": "akshare.stock_zh_index_daily",
+            "provider": "akshare",
+            "requested_provider": "yfinance",
+            "effective_provider": "akshare",
+            "status": "unavailable",
+            "no_data_reason": message,
+            "items": [],
+        }
+        diagnostic = {
+            "section": "indices",
+            "code": index.code,
+            "status": "unavailable",
+            "message": message,
+            "details": {
+                "provider": "akshare",
+                "exception_type": type(error).__name__,
+            },
+        }
+        return (
+            _build_bars_item(
+                identity=identity,
+                bars_payload=unavailable_payload,
+                today=today,
+            ),
+            diagnostic,
+        )
+    return _build_bars_item(identity=identity, bars_payload=fallback_payload, today=today), None
 
 
 def _serialize_indices(

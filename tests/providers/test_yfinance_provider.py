@@ -37,6 +37,37 @@ def test_yfinance_provider_returns_provider_bars_from_downloaded_dataframe():
     assert bars[0].volume == Decimal("1000")
 
 
+def test_yfinance_provider_skips_non_finite_daily_rows():
+    def fake_download(ticker: str, start: date, end: date) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "Open": 100.0,
+                    "High": 103.0,
+                    "Low": 99.0,
+                    "Close": 102.0,
+                    "Volume": 1000,
+                },
+                {
+                    "Open": float("nan"),
+                    "High": float("nan"),
+                    "Low": float("nan"),
+                    "Close": float("nan"),
+                    "Volume": 2_000,
+                },
+            ],
+            index=pd.to_datetime(["2026-07-14", "2026-07-15"]),
+        )
+
+    provider = YFinanceProvider(downloader=fake_download)
+
+    bars = provider.fetch_bars("000300.SS", "1d", date(2026, 7, 14), date(2026, 7, 16))
+
+    assert len(bars) == 1
+    assert bars[0].timestamp == date(2026, 7, 14)
+    assert bars[0].close == Decimal("102.0")
+
+
 def test_yfinance_provider_accepts_multi_index_downloaded_dataframe():
     def fake_download(ticker: str, start: date, end: date) -> pd.DataFrame:
         assert ticker == "AAPL"

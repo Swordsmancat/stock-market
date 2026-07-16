@@ -1,4 +1,8 @@
+import asyncio
+import time
+
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -90,3 +94,51 @@ def test_dashboard_market_overview_api_returns_aggregated_payload(monkeypatch):
         for item in follow_up_queue["items"]
         if item["kind"] in {"source_gap", "seed_prep"}
     } == {None}
+
+
+def test_slow_market_overview_does_not_block_latest_news(monkeypatch):
+    def slow_market_overview(*, session, provider_name=None):
+        time.sleep(0.5)
+        return {"provider": provider_name or "mock"}
+
+    monkeypatch.setattr(
+        "apps.api.routers.dashboard.get_market_overview_payload",
+        slow_market_overview,
+    )
+    monkeypatch.setattr(
+        "apps.api.routers.news.get_latest_news_payload",
+        lambda *, session, limit: {
+            "source": "database",
+            "count": 0,
+            "items": [],
+        },
+    )
+
+    def override_session():
+        yield object()
+
+    async def run_concurrent_requests():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            started_at = time.perf_counter()
+            overview_task = asyncio.create_task(
+                client.get("/dashboard/market-overview", params={"provider": "mock"})
+            )
+            await asyncio.sleep(0)
+            news_response = await client.get("/news/latest", params={"limit": 6})
+            news_elapsed = time.perf_counter() - started_at
+            overview_response = await overview_task
+        return overview_response, news_response, news_elapsed
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        overview_response, news_response, news_elapsed = asyncio.run(
+            run_concurrent_requests()
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert overview_response.status_code == 200
+    assert news_response.status_code == 200
+    assert news_response.json()["source"] == "database"
+    assert news_elapsed < 0.25

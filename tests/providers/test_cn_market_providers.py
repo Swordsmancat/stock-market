@@ -247,6 +247,52 @@ def test_akshare_sina_daily_downloader_prefixes_symbol_and_normalizes_frame(monk
     ]
 
 
+@pytest.mark.parametrize(
+    ("symbol", "expected_provider_symbol"),
+    [("399006", "sz399006"), ("000905", "sh000905")],
+)
+def test_akshare_sina_index_daily_downloader_maps_exchange_and_bounds_rows(
+    monkeypatch,
+    symbol,
+    expected_provider_symbol,
+):
+    captured: dict[str, object] = {}
+
+    def stock_zh_index_daily(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame(
+            {
+                "date": ["2026-06-30", "2026-07-09", "2026-07-10"],
+                "open": [90, 100, float("nan")],
+                "high": [92, 102, float("nan")],
+                "low": [89, 99, float("nan")],
+                "close": [91, 101, float("nan")],
+                "volume": [900, 1000, 1100],
+            }
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "akshare",
+        SimpleNamespace(stock_zh_index_daily=stock_zh_index_daily),
+    )
+
+    provider = AkShareProvider(
+        index_daily_downloader=AkShareProvider.download_sina_index_daily_bars
+    )
+    bars = provider.fetch_index_bars(
+        symbol,
+        date(2026, 7, 1),
+        date(2026, 7, 10),
+    )
+
+    assert captured == {"symbol": expected_provider_symbol}
+    assert len(bars) == 1
+    assert bars[0].symbol == symbol
+    assert bars[0].timestamp == date(2026, 7, 9)
+    assert bars[0].close == Decimal("101")
+
+
 def test_akshare_provider_fetches_market_depth_from_injected_payload():
     def fake_market_depth_downloader(symbol: str, depth_levels: int) -> dict[str, object]:
         assert symbol == "600519"

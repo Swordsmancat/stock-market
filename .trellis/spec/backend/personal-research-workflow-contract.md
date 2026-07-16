@@ -407,3 +407,79 @@ result = coordinator.fetch(
 )
 return serialize(result.bars) if result.bars else degraded_database_payload
 ```
+
+---
+
+## Scenario: Bounded CN Homepage Index Fallback
+
+### 1. Scope / Trigger
+
+- Trigger: the homepage requests a configured CN market index through
+  yfinance and the complete primary daily-bar result is empty or invalid.
+- Scope: homepage market-index serialization and AkShare's public Sina index
+  daily adapter.
+- Non-goals: followed stocks, HK/US indices, database writes, row stitching,
+  Cookie/login access, generic crawling, or research-threshold changes.
+
+### 2. Signatures
+
+- Provider: `AkShareProvider.fetch_index_bars(symbol, start, end) -> list[ProviderBar]`.
+- Downloader: `AkShareProvider.download_sina_index_daily_bars(symbol, start, end) -> DataFrame`.
+- Service boundary: `_serialize_market_index(index, session, provider_name, start, end, today)`.
+
+### 3. Contracts
+
+- Yfinance remains primary. Only `index.market == "CN"` and requested provider
+  `yfinance` are eligible for one Sina fallback call.
+- Sina symbols use `sz` for `399*` index codes and `sh` otherwise. Returned
+  rows are bounded to the requested dates and require finite OHLCV plus valid
+  OHLC ordering and non-negative volume.
+- One complete source wins; primary and fallback rows are never merged.
+- Fallback success reports provider/effective provider `akshare`, source
+  `akshare.stock_zh_index_daily`, and requested provider `yfinance`.
+- Empty fallback is `no_data`. Failure is sanitized `unavailable` with only the
+  provider and exception type in diagnostics. There is no retry or persistence.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Valid finite yfinance payload | Return unchanged; zero Sina calls |
+| Empty or non-finite CN yfinance payload | Make exactly one Sina call |
+| Valid Sina rows | Return only Sina rows with truthful attribution |
+| Empty Sina frame | Explicit `no_data`; no retry |
+| Sina schema/network failure | Sanitized `unavailable`; no raw message |
+| Non-CN index or non-yfinance request | Never call Sina |
+
+### 5. Good / Base / Bad Cases
+
+- Good: ChiNext yfinance returns no rows, Sina returns one coherent requested
+  range, and the homepage displays it as AkShare/Sina evidence.
+- Base: both sources are empty, so the card remains explicit no-data.
+- Bad: combine stale yfinance rows with fresh Sina rows, expose an upstream URL
+  in diagnostics, or use the stock fallback coordinator for an index.
+
+### 6. Tests Required
+
+- Provider tests assert `sz399006`/`sh000905` mapping, date bounding, invalid
+  row rejection, and normalized `ProviderBar` identity.
+- Service tests assert zero-call primary success, exactly-one-call empty and
+  invalid fallback, coherent-source attribution, empty fallback, sanitized
+  failure, and non-CN exclusion.
+- Market overview cache and API concurrency regressions remain green.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+bars = yfinance_bars + akshare_bars
+```
+
+#### Correct
+
+```python
+if primary_is_complete_and_finite(primary):
+    return primary
+return fetch_sina_index_once(index)
+```

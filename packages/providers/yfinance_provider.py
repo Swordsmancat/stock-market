@@ -42,15 +42,29 @@ class YFinanceProvider:
 
         for timestamp, row in frame.iterrows():
             trade_date = timestamp.date() if hasattr(timestamp, "date") else timestamp
+            open_value = _decimal_or_none(row["Open"])
+            high_value = _decimal_or_none(row["High"])
+            low_value = _decimal_or_none(row["Low"])
+            close_value = _decimal_or_none(row["Close"])
+            volume_value = _decimal_or_none(row["Volume"])
+            if (
+                open_value is None
+                or high_value is None
+                or low_value is None
+                or close_value is None
+                or volume_value is None
+            ):
+                continue
+
             bars.append(
                 ProviderBar(
                     symbol=symbol,
                     timestamp=trade_date,
-                    open=_decimal(row["Open"]),
-                    high=_decimal(row["High"]),
-                    low=_decimal(row["Low"]),
-                    close=_decimal(row["Close"]),
-                    volume=_decimal(row["Volume"]),
+                    open=open_value,
+                    high=high_value,
+                    low=low_value,
+                    close=close_value,
+                    volume=volume_value,
                     amount=None,
                 )
             )
@@ -81,7 +95,13 @@ class YFinanceProvider:
             low_value = _decimal_or_none(row["Low"])
             close_value = _decimal_or_none(row["Close"])
             volume_value = _decimal_or_none(row["Volume"])
-            if None in {open_value, high_value, low_value, close_value, volume_value}:
+            if (
+                open_value is None
+                or high_value is None
+                or low_value is None
+                or close_value is None
+                or volume_value is None
+            ):
                 continue
 
             intraday_bars.append(
@@ -112,10 +132,6 @@ class YFinanceProvider:
             download_options["interval"] = interval
 
         return yf.download(ticker, **download_options)
-
-
-def _decimal(value: object) -> Decimal:
-    return Decimal(str(value))
 
 
 def _decimal_or_none(value: object) -> Decimal | None:

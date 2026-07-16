@@ -1,5 +1,6 @@
 import re
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import create_engine
@@ -8,7 +9,9 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from packages.domain.models import GeneratedReport, MarketDailyEvidenceEvent, NewsArticle
-from packages.services.market_dashboard import get_market_overview_payload
+from packages.providers.base import ProviderBar
+from packages.services.market_dashboard import _serialize_market_index, get_market_overview_payload
+from packages.services.market_indices import DEFAULT_MARKET_INDICES
 from packages.services.market_data import MarketDataProviderUnavailableError
 from packages.services.research_source_notes import ResearchSourceNoteInput, create_research_source_note
 from packages.shared.cache import clear_market_overview_cache
@@ -27,6 +30,30 @@ class FakeRedis:
         self.store[key] = value
         if ex is not None:
             self.expirations[key] = ex
+
+
+def _bars_payload(symbol: str, *, status: str = "ok", close: float = 101.0):
+    items = [] if status == "no_data" else [
+        {
+            "timestamp": "2026-07-09",
+            "open": close - 1,
+            "high": close + 1,
+            "low": close - 2,
+            "close": close,
+            "volume": 1000,
+        }
+    ]
+    return {
+        "symbol": symbol,
+        "timeframe": "1d",
+        "source": "yfinance",
+        "provider": "yfinance",
+        "requested_provider": "yfinance",
+        "effective_provider": "yfinance",
+        "status": status,
+        "no_data_reason": "No daily bars were available." if status == "no_data" else None,
+        "items": items,
+    }
 
 
 class FailingRedis:
@@ -59,6 +86,210 @@ def make_session():
     )
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)()
+
+
+def test_cn_index_keeps_valid_yfinance_result_without_sina_call(monkeypatch):
+    session = make_session()
+    index = DEFAULT_MARKET_INDICES[0]
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_bars_payload",
+        lambda symbol, *_args, **_kwargs: _bars_payload(symbol),
+    )
+
+    class UnexpectedAkShareProvider:
+        def __init__(self):
+            raise AssertionError("valid yfinance index data must not call Sina")
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.AkShareProvider",
+        UnexpectedAkShareProvider,
+    )
+
+    item, diagnostic = _serialize_market_index(
+        index=index,
+        session=session,
+        provider_name="yfinance",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        today=date(2026, 7, 10),
+    )
+
+    assert diagnostic is None
+    assert item["provider"] == "yfinance"
+    assert item["latest"]["close"] == 101.0
+
+
+@pytest.mark.parametrize(
+    "primary_payload",
+    [
+        _bars_payload("000001.SS", status="no_data"),
+        _bars_payload("000001.SS", close=float("nan")),
+    ],
+)
+def test_cn_index_uses_one_coherent_sina_fallback_for_empty_or_invalid_yfinance(
+    monkeypatch,
+    primary_payload,
+):
+    session = make_session()
+    index = DEFAULT_MARKET_INDICES[0]
+    calls: list[tuple[str, date, date]] = []
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_bars_payload",
+        lambda *_args, **_kwargs: primary_payload,
+    )
+
+    class FakeAkShareProvider:
+        def fetch_index_bars(self, symbol, start, end):
+            calls.append((symbol, start, end))
+            return [
+                ProviderBar(
+                    symbol=symbol,
+                    timestamp=date(2026, 7, 9),
+                    open=Decimal("100"),
+                    high=Decimal("102"),
+                    low=Decimal("99"),
+                    close=Decimal("101"),
+                    volume=Decimal("1000"),
+                )
+            ]
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.AkShareProvider",
+        FakeAkShareProvider,
+    )
+
+    item, diagnostic = _serialize_market_index(
+        index=index,
+        session=session,
+        provider_name="yfinance",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        today=date(2026, 7, 10),
+    )
+
+    assert diagnostic is None
+    assert calls == [("000001", date(2026, 7, 1), date(2026, 7, 10))]
+    assert item["bars"] == [
+        {
+            "timestamp": "2026-07-09",
+            "open": 100.0,
+            "high": 102.0,
+            "low": 99.0,
+            "close": 101.0,
+            "volume": 1000.0,
+            "amount": None,
+        }
+    ]
+    assert item["provider"] == "akshare"
+    assert item["source"] == "akshare.stock_zh_index_daily"
+    assert item["requested_provider"] == "yfinance"
+    assert item["effective_provider"] == "akshare"
+
+
+def test_cn_index_sina_failure_is_sanitized_and_not_retried(monkeypatch):
+    session = make_session()
+    index = DEFAULT_MARKET_INDICES[0]
+    calls = 0
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_bars_payload",
+        lambda symbol, *_args, **_kwargs: _bars_payload(symbol, status="no_data"),
+    )
+
+    class FailingAkShareProvider:
+        def fetch_index_bars(self, symbol, start, end):
+            nonlocal calls
+            calls += 1
+            raise ConnectionError("https://secret.example/index?token=do-not-expose")
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.AkShareProvider",
+        FailingAkShareProvider,
+    )
+
+    item, diagnostic = _serialize_market_index(
+        index=index,
+        session=session,
+        provider_name="yfinance",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        today=date(2026, 7, 10),
+    )
+
+    assert calls == 1
+    assert item["status"] == "unavailable"
+    assert item["provider"] == "akshare"
+    assert item["no_data_reason"] == "AkShare Sina index fallback failed."
+    assert diagnostic == {
+        "section": "indices",
+        "code": index.code,
+        "status": "unavailable",
+        "message": "AkShare Sina index fallback failed.",
+        "details": {"provider": "akshare", "exception_type": "ConnectionError"},
+    }
+
+
+def test_cn_index_empty_sina_fallback_remains_explicit_no_data(monkeypatch):
+    session = make_session()
+    index = DEFAULT_MARKET_INDICES[0]
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_bars_payload",
+        lambda symbol, *_args, **_kwargs: _bars_payload(symbol, status="no_data"),
+    )
+
+    class EmptyAkShareProvider:
+        def fetch_index_bars(self, symbol, start, end):
+            return []
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.AkShareProvider",
+        EmptyAkShareProvider,
+    )
+
+    item, diagnostic = _serialize_market_index(
+        index=index,
+        session=session,
+        provider_name="yfinance",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        today=date(2026, 7, 10),
+    )
+
+    assert diagnostic is None
+    assert item["status"] == "no_data"
+    assert item["bars"] == []
+    assert item["provider"] == "akshare"
+    assert item["requested_provider"] == "yfinance"
+
+
+def test_non_cn_index_never_uses_sina_fallback(monkeypatch):
+    session = make_session()
+    index = next(item for item in DEFAULT_MARKET_INDICES if item.code == "us_sp_500")
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_bars_payload",
+        lambda symbol, *_args, **_kwargs: _bars_payload(symbol, status="no_data"),
+    )
+
+    class UnexpectedAkShareProvider:
+        def __init__(self):
+            raise AssertionError("non-CN indices must not call Sina")
+
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.AkShareProvider",
+        UnexpectedAkShareProvider,
+    )
+
+    item, diagnostic = _serialize_market_index(
+        index=index,
+        session=session,
+        provider_name="yfinance",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 10),
+        today=date(2026, 7, 10),
+    )
+
+    assert diagnostic is None
+    assert item["status"] == "no_data"
+    assert item["provider"] == "yfinance"
 
 
 def test_market_overview_payload_contains_followed_indices_and_valuation_sections():
@@ -476,6 +707,104 @@ def test_market_overview_payload_uses_provider_date_cache(monkeypatch):
 
     monkeypatch.setattr("packages.shared.cache.redis_client", fake_redis)
     monkeypatch.setattr("packages.services.market_dashboard.get_bars_payload", fake_get_bars_payload)
+
+    first_payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+    second_payload = get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    assert second_payload == first_payload
+    assert len(calls) == 11
+    assert fake_redis.expirations["dashboard:market-overview:mock:2026-07-03"] == 300
+
+
+def test_market_overview_payload_does_not_cache_contradictory_ok_items(monkeypatch):
+    session = make_session()
+    fake_redis = FakeRedis()
+    calls: list[str] = []
+
+    def fake_get_bars_payload(symbol, timeframe, start, end, session=None, provider_name=None):
+        calls.append(symbol)
+        return {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "status": "ok",
+            "no_data_reason": None,
+            "items": [
+                {
+                    "timestamp": "2026-07-02",
+                    "open": 100,
+                    "high": 103,
+                    "low": 99,
+                    "close": 101,
+                    "volume": 1000,
+                },
+                {
+                    "timestamp": "2026-07-03",
+                    "open": float("nan"),
+                    "high": float("nan"),
+                    "low": float("nan"),
+                    "close": float("nan"),
+                    "volume": 1100,
+                },
+            ],
+        }
+
+    monkeypatch.setattr("packages.shared.cache.redis_client", fake_redis)
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_bars_payload",
+        fake_get_bars_payload,
+    )
+
+    get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+    get_market_overview_payload(
+        session=session,
+        provider_name="mock",
+        today=date(2026, 7, 3),
+    )
+
+    assert len(calls) == 22
+    assert fake_redis.store == {}
+
+
+def test_market_overview_payload_caches_explicit_no_data_items(monkeypatch):
+    session = make_session()
+    fake_redis = FakeRedis()
+    calls: list[str] = []
+
+    def fake_get_bars_payload(symbol, timeframe, start, end, session=None, provider_name=None):
+        calls.append(symbol)
+        return {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "source": "mock",
+            "provider": "mock",
+            "requested_provider": "mock",
+            "effective_provider": "mock",
+            "status": "no_data",
+            "no_data_reason": "No daily bars were available.",
+            "items": [],
+        }
+
+    monkeypatch.setattr("packages.shared.cache.redis_client", fake_redis)
+    monkeypatch.setattr(
+        "packages.services.market_dashboard.get_bars_payload",
+        fake_get_bars_payload,
+    )
 
     first_payload = get_market_overview_payload(
         session=session,
