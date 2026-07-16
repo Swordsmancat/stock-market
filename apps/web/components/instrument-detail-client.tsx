@@ -677,6 +677,7 @@ export function InstrumentDetailClient({
   const latestReportHasContent = Boolean(latestReport?.content_markdown);
   const reportHistoryItems = data.daily_report_history?.items ?? [];
   const fundamentalsItem = data.fundamentals?.item ?? null;
+  const fundamentalsCompany = fundamentalsItem?.company ?? null;
   const newsItems = data.news?.items ?? [];
   const latestNews = newsItems[0] ?? null;
   const newsDiagnosticMessages: Record<string, string> = {
@@ -972,6 +973,48 @@ export function InstrumentDetailClient({
                     <p className="text-sm leading-6 text-muted-foreground">
                       {fundamentalsItem.summary}
                     </p>
+                  ) : null}
+                  {fundamentalsCompany &&
+                  Object.values(fundamentalsCompany).some(Boolean) ? (
+                    <section className="space-y-3 border-t pt-3">
+                      <h3 className="text-sm font-medium">
+                        {t("fundamentalCompanyContext")}
+                      </h3>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {fundamentalsCompany.name ? (
+                          <ContextMetric
+                            label={t("fundamentalCompanyName")}
+                            value={fundamentalsCompany.name}
+                          />
+                        ) : null}
+                        {fundamentalsCompany.industry ? (
+                          <ContextMetric
+                            label={t("fundamentalCompanyIndustry")}
+                            value={fundamentalsCompany.industry}
+                          />
+                        ) : null}
+                      </div>
+                      {fundamentalsCompany.business_scope ? (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            {t("fundamentalBusinessScope")}
+                          </p>
+                          <p className="text-sm leading-6">
+                            {fundamentalsCompany.business_scope}
+                          </p>
+                        </div>
+                      ) : null}
+                      {fundamentalsCompany.profile ? (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            {t("fundamentalCompanyProfile")}
+                          </p>
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            {fundamentalsCompany.profile}
+                          </p>
+                        </div>
+                      ) : null}
+                    </section>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline">

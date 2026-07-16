@@ -1031,6 +1031,27 @@ def _build_fundamental_context(
         for field_name in important_fields
         if field_name in item and item[field_name] is not None
     ]
+    company_metadata: dict[str, str] = {}
+    company = item.get("company")
+    if isinstance(company, dict):
+        for field_name, max_chars in (
+            ("name", 180),
+            ("industry", 180),
+            ("business_scope", 500),
+            ("profile", 500),
+        ):
+            raw_value = company.get(field_name)
+            if not isinstance(raw_value, str):
+                continue
+            normalized_value = " ".join(raw_value.split())[:max_chars]
+            if normalized_value:
+                company_metadata[field_name] = normalized_value
+        for field_name in ("name", "industry", "business_scope", "profile"):
+            if field_name in company_metadata:
+                summary_field = "company_name" if field_name == "name" else field_name
+                formatted_values.append(
+                    f"{summary_field}={company_metadata[field_name]}"
+                )
     if not formatted_values:
         formatted_values = [
             f"{field_name}={_format_context_value(field_value)}"
@@ -1041,6 +1062,25 @@ def _build_fundamental_context(
     citation_id = _stringify_optional(payload.get("citation")) or f"fundamentals:{symbol}:{as_of.isoformat()}"
     citation_as_of = _stringify_optional(payload.get("as_of")) or as_of.isoformat()
     provider_name = _stringify_optional(payload.get("source"))
+    raw_upstream_sources = payload.get("upstream_sources")
+    upstream_sources = (
+        [
+            source[:160]
+            for source in raw_upstream_sources[:8]
+            if isinstance(source, str) and source.strip()
+        ]
+        if isinstance(raw_upstream_sources, list)
+        else []
+    )
+    citation_metadata: dict[str, object] = {
+        "currency": item.get("currency"),
+        "pe_ratio": item.get("pe_ratio"),
+        "revenue_growth": item.get("revenue_growth"),
+        "net_margin": item.get("net_margin"),
+        "debt_to_assets": item.get("debt_to_assets"),
+        "company": company_metadata or None,
+        "upstream_sources": upstream_sources,
+    }
     citation = MarketAssistantCitation(
         id=citation_id,
         label=f"Fundamental metrics for {symbol} as of {citation_as_of}",
@@ -1049,13 +1089,7 @@ def _build_fundamental_context(
         as_of=citation_as_of,
         provider=provider_name,
         excerpt=summary,
-        metadata={
-            "currency": item.get("currency"),
-            "pe_ratio": item.get("pe_ratio"),
-            "revenue_growth": item.get("revenue_growth"),
-            "net_margin": item.get("net_margin"),
-            "debt_to_assets": item.get("debt_to_assets"),
-        },
+        metadata=citation_metadata,
     )
     evidence = [
         MarketAssistantResearchEvidence(

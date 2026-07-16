@@ -1,4 +1,6 @@
-from datetime import date
+import json
+import re
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,8 +19,23 @@ from packages.providers.cn_market_helpers import (
     safe_pct_ratio,
     tushare_ts_code,
 )
+from packages.providers.eastmoney_public_fundamentals import (
+    EastmoneyPublicFundamentalsProviderError,
+    EastmoneyPublicFundamentalsSnapshot,
+    fetch_eastmoney_public_fundamentals,
+)
 from packages.providers.yfinance_helpers import map_symbol_to_ticker
+from packages.services.platform_settings import get_platform_settings
+from packages.shared.cache import redis_client
 from packages.shared.config import settings
+
+
+_EXACT_A_SHARE_PATTERN = re.compile(r"^\d{6}$")
+_EASTMONEY_FUNDAMENTALS_CACHE_TTL_SECONDS = 1800
+_EASTMONEY_FUNDAMENTALS_SOURCES = [
+    "eastmoney.RPT_F10_FINANCE_MAINFINADATA",
+    "eastmoney.PC_HSF10.CompanySurvey.PageAjax",
+]
 
 
 _FUNDAMENTAL_FIXTURES = {
@@ -144,11 +161,158 @@ def get_fundamental_payload(
             if row is not None:
                 return _payload_from_snapshot(_snapshot_from_model(row), source="database")
 
-    snapshot = _FUNDAMENTAL_FIXTURES.get(symbol.upper())
+    normalized_symbol = str(symbol).strip().upper()
+    if _is_eastmoney_public_eligible(normalized_symbol):
+        return _get_eastmoney_public_payload(
+            normalized_symbol,
+            as_of=as_of or date.today(),
+        )
+
+    snapshot = _FUNDAMENTAL_FIXTURES.get(normalized_symbol)
     if snapshot is None:
         return {"symbol": symbol, "source": "mock_fundamentals", "item": None}
 
     return _payload_from_snapshot(snapshot, source="mock_fundamentals", as_of=as_of)
+
+
+def _is_eastmoney_public_eligible(symbol: str) -> bool:
+    if not _EXACT_A_SHARE_PATTERN.fullmatch(symbol):
+        return False
+    try:
+        return bool(get_platform_settings().get("akshare_enabled", False))
+    except Exception:
+        return False
+
+
+def _get_eastmoney_public_payload(symbol: str, *, as_of: date) -> dict[str, object]:
+    cache_key = f"fundamentals:eastmoney-public:{symbol}:{as_of.isoformat()}"
+    cached = _read_eastmoney_public_cache(cache_key, symbol=symbol)
+    if cached is not None:
+        return cached
+
+    try:
+        snapshot = fetch_eastmoney_public_fundamentals(symbol, as_of=as_of)
+    except EastmoneyPublicFundamentalsProviderError as error:
+        return _eastmoney_unavailable_payload(symbol, as_of=as_of, code=error.code)
+    except Exception:
+        return _eastmoney_unavailable_payload(
+            symbol,
+            as_of=as_of,
+            code="EASTMONEY_FUNDAMENTALS_REQUEST_FAILED",
+        )
+
+    if snapshot is None:
+        payload = _eastmoney_no_data_payload(symbol, as_of=as_of)
+    else:
+        payload = _payload_from_eastmoney_snapshot(snapshot)
+    _write_eastmoney_public_cache(cache_key, payload)
+    return payload
+
+
+def _payload_from_eastmoney_snapshot(
+    snapshot: EastmoneyPublicFundamentalsSnapshot,
+) -> dict[str, object]:
+    company = snapshot.company
+    metrics = {
+        "pe_ratio": snapshot.pe_ratio,
+        "revenue_growth": snapshot.revenue_growth,
+        "net_margin": snapshot.net_margin,
+        "debt_to_assets": snapshot.debt_to_assets,
+    }
+    return {
+        "symbol": snapshot.symbol,
+        "source": snapshot.provider,
+        "provider": snapshot.provider,
+        "status": snapshot.status,
+        "as_of": snapshot.as_of.isoformat(),
+        "retrieved_at": snapshot.retrieved_at.isoformat(),
+        "upstream_sources": list(snapshot.upstream_sources),
+        "diagnostics": list(snapshot.diagnostics),
+        "item": {
+            "currency": snapshot.currency,
+            **metrics,
+            "company": (
+                {
+                    "name": company.name,
+                    "industry": company.industry,
+                    "business_scope": company.business_scope,
+                    "profile": company.profile,
+                }
+                if company is not None
+                else None
+            ),
+            "summary": None,
+        },
+        "citation": (
+            f"fundamental_metrics:{snapshot.symbol}:{snapshot.as_of.isoformat()}"
+        ),
+    }
+
+
+def _eastmoney_no_data_payload(symbol: str, *, as_of: date) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "source": "eastmoney_public",
+        "provider": "eastmoney_public",
+        "status": "no_data",
+        "as_of": as_of.isoformat(),
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "upstream_sources": list(_EASTMONEY_FUNDAMENTALS_SOURCES),
+        "diagnostics": ["EASTMONEY_FUNDAMENTALS_NO_DATA"],
+        "item": None,
+    }
+
+
+def _eastmoney_unavailable_payload(
+    symbol: str,
+    *,
+    as_of: date,
+    code: str,
+) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "source": "eastmoney_public",
+        "provider": "eastmoney_public",
+        "status": "unavailable",
+        "as_of": as_of.isoformat(),
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "upstream_sources": list(_EASTMONEY_FUNDAMENTALS_SOURCES),
+        "diagnostics": [code],
+        "item": None,
+    }
+
+
+def _read_eastmoney_public_cache(
+    cache_key: str,
+    *,
+    symbol: str,
+) -> dict[str, object] | None:
+    try:
+        cached = redis_client.get(cache_key)
+        payload = json.loads(cached) if cached else None
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("symbol") != symbol or payload.get("source") != "eastmoney_public":
+        return None
+    if payload.get("status") not in {"ok", "degraded", "no_data"}:
+        return None
+    return payload
+
+
+def _write_eastmoney_public_cache(
+    cache_key: str,
+    payload: dict[str, object],
+) -> None:
+    try:
+        redis_client.set(
+            cache_key,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            ex=_EASTMONEY_FUNDAMENTALS_CACHE_TTL_SECONDS,
+        )
+    except Exception:
+        pass
 
 
 def _safe_float(value: object) -> float | None:

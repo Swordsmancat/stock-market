@@ -184,7 +184,12 @@ export type InstrumentIndicatorsPayload = {
 export type InstrumentFundamentalsPayload = {
   symbol: string;
   source?: string | null;
+  provider?: string | null;
+  status?: string | null;
   as_of?: string | null;
+  retrieved_at?: string | null;
+  upstream_sources?: string[];
+  diagnostics?: string[];
   citation?: string | null;
   item?: {
     currency?: string | null;
@@ -193,6 +198,12 @@ export type InstrumentFundamentalsPayload = {
     net_margin?: number | null;
     debt_to_assets?: number | null;
     summary?: string | null;
+    company?: {
+      name?: string | null;
+      industry?: string | null;
+      business_scope?: string | null;
+      profile?: string | null;
+    } | null;
   } | null;
 };
 

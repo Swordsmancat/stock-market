@@ -102,6 +102,41 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("renders nullable public fundamentals with bounded company context", async () => {
+  const payload = buildDetailPayload([
+    { title: "Stored news keeps the detail projection stable" },
+  ]);
+  payload.fundamentals = {
+    symbol: "600519",
+    source: "eastmoney_public",
+    status: "ok",
+    as_of: "2026-06-30",
+    upstream_sources: ["eastmoney.RPT_F10_FINANCE_MAINFINADATA"],
+    item: {
+      currency: "CNY",
+      pe_ratio: null,
+      revenue_growth: 0.125,
+      net_margin: 0.5125,
+      debt_to_assets: 0.1875,
+      company: {
+        name: "Kweichow Moutai",
+        industry: "Beverage manufacturing",
+        business_scope: "Production and sale of spirits.",
+        profile: "Premium spirits producer.",
+      },
+    },
+  };
+
+  renderDetail(payload);
+
+  expect(await screen.findByText("Kweichow Moutai")).toBeInTheDocument();
+  expect(screen.getByText("Beverage manufacturing")).toBeInTheDocument();
+  expect(screen.getByText("Production and sale of spirits.")).toBeInTheDocument();
+  expect(screen.getByText("Premium spirits producer.")).toBeInTheDocument();
+  expect(screen.getByText("12.50%")).toBeInTheDocument();
+  expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+});
+
 it("does not refresh when stored news is already available", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch");
 

@@ -814,6 +814,58 @@ def test_market_assistant_recognizes_invented_disclosure_section_citation_ids():
     assert shortlist_unknown == ["research_shortlist:not-present"]
 
 
+def test_fundamental_context_includes_bounded_company_metadata(monkeypatch):
+    monkeypatch.setattr(
+        market_assistant_service,
+        "get_fundamental_payload",
+        lambda *_args, **_kwargs: {
+            "symbol": "600519",
+            "source": "eastmoney_public",
+            "provider": "eastmoney_public",
+            "as_of": "2026-06-30",
+            "upstream_sources": [
+                "eastmoney.RPT_F10_FINANCE_MAINFINADATA",
+                "eastmoney.PC_HSF10.CompanySurvey.PageAjax",
+            ],
+            "item": {
+                "currency": "CNY",
+                "pe_ratio": None,
+                "revenue_growth": 0.125,
+                "net_margin": 0.5125,
+                "debt_to_assets": 0.1875,
+                "company": {
+                    "name": "Kweichow Moutai",
+                    "industry": "Beverage manufacturing",
+                    "business_scope": "Production and sale of spirits.",
+                    "profile": "x" * 5000,
+                },
+            },
+            "citation": "fundamental_metrics:600519:2026-06-30",
+        },
+    )
+    diagnostics = []
+
+    summary, evidence = market_assistant_service._build_fundamental_context(
+        "600519",
+        date(2026, 7, 16),
+        None,
+        diagnostics,
+    )
+
+    assert diagnostics == []
+    assert "company_name=Kweichow Moutai" in summary
+    assert "industry=Beverage manufacturing" in summary
+    assert len(evidence) == 1
+    citation = evidence[0].citation
+    assert citation.id == "fundamental_metrics:600519:2026-06-30"
+    assert citation.metadata["company"]["name"] == "Kweichow Moutai"
+    assert len(citation.metadata["company"]["profile"]) == 500
+    assert citation.metadata["upstream_sources"] == [
+        "eastmoney.RPT_F10_FINANCE_MAINFINADATA",
+        "eastmoney.PC_HSF10.CompanySurvey.PageAjax",
+    ]
+
+
 def test_market_assistant_detects_unknown_llm_citation_ids(monkeypatch):
     class HallucinatingProvider:
         def generate(self, prompt: str) -> str:
