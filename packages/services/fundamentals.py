@@ -77,10 +77,10 @@ def _snapshot_from_model(row: FundamentalSnapshotModel) -> FundamentalMetricsSna
         symbol=row.symbol,
         as_of=row.as_of,
         currency=row.currency,
-        pe_ratio=float(row.pe_ratio),
-        revenue_growth=float(row.revenue_growth),
-        net_margin=float(row.net_margin),
-        debt_to_assets=float(row.debt_to_assets),
+        pe_ratio=_optional_float(row.pe_ratio),
+        revenue_growth=_optional_float(row.revenue_growth),
+        net_margin=_optional_float(row.net_margin),
+        debt_to_assets=_optional_float(row.debt_to_assets),
     )
 
 
@@ -133,10 +133,10 @@ def upsert_fundamental_snapshot(
         "symbol": snapshot.symbol.upper(),
         "as_of": snapshot.as_of,
         "currency": snapshot.currency,
-        "pe_ratio": Decimal(str(snapshot.pe_ratio)),
-        "revenue_growth": Decimal(str(snapshot.revenue_growth)),
-        "net_margin": Decimal(str(snapshot.net_margin)),
-        "debt_to_assets": Decimal(str(snapshot.debt_to_assets)),
+        "pe_ratio": _optional_decimal(snapshot.pe_ratio),
+        "revenue_growth": _optional_decimal(snapshot.revenue_growth),
+        "net_margin": _optional_decimal(snapshot.net_margin),
+        "debt_to_assets": _optional_decimal(snapshot.debt_to_assets),
         "source": source,
     }
     if row is None:
@@ -192,9 +192,6 @@ def _payload_from_database_row(
     item = payload.get("item")
     if isinstance(item, dict):
         item["company"] = None
-        if float(row.pe_ratio) == 0.0:
-            item["pe_ratio"] = None
-            item["summary"] = None
     payload.update(
         {
             "status": "ok",
@@ -476,6 +473,14 @@ def _safe_float(value: object) -> float | None:
     return parsed
 
 
+def _optional_float(value: Decimal | float | int | None) -> float | None:
+    return None if value is None else float(value)
+
+
+def _optional_decimal(value: float | None) -> Decimal | None:
+    return None if value is None else Decimal(str(value))
+
+
 def ingest_fundamentals(
     symbol: str,
     session: Session,
@@ -515,10 +520,10 @@ def ingest_yfinance_fundamentals(
         symbol=symbol.upper(),
         as_of=effective_as_of,
         currency=str(info.get("currency") or "USD"),
-        pe_ratio=pe_ratio or 0.0,
-        revenue_growth=revenue_growth or 0.0,
-        net_margin=net_margin or 0.0,
-        debt_to_assets=debt_to_equity or 0.0,
+        pe_ratio=pe_ratio,
+        revenue_growth=revenue_growth,
+        net_margin=net_margin,
+        debt_to_assets=debt_to_equity,
     )
     payload = upsert_fundamental_snapshot(snapshot, session=session, source="yfinance")
     return {"symbol": symbol, "status": "ingested", "source": "yfinance", "item": payload.get("item")}
@@ -570,10 +575,10 @@ def ingest_akshare_fundamentals(
         symbol=code,
         as_of=effective_as_of,
         currency="CNY",
-        pe_ratio=0.0,
-        revenue_growth=revenue_growth or 0.0,
-        net_margin=net_margin or 0.0,
-        debt_to_assets=debt_to_assets or 0.0,
+        pe_ratio=None,
+        revenue_growth=revenue_growth,
+        net_margin=net_margin,
+        debt_to_assets=debt_to_assets,
     )
     payload = upsert_fundamental_snapshot(snapshot, session=session, source="akshare")
     return {"symbol": symbol, "status": "ingested", "source": "akshare", "item": payload.get("item")}
@@ -630,10 +635,10 @@ def ingest_tushare_fundamentals(
         symbol=normalize_cn_symbol(symbol),
         as_of=effective_as_of,
         currency="CNY",
-        pe_ratio=pe_ratio or 0.0,
-        revenue_growth=revenue_growth or 0.0,
-        net_margin=net_margin or 0.0,
-        debt_to_assets=debt_to_assets or 0.0,
+        pe_ratio=pe_ratio,
+        revenue_growth=revenue_growth,
+        net_margin=net_margin,
+        debt_to_assets=debt_to_assets,
     )
     payload = upsert_fundamental_snapshot(snapshot, session=session, source="tushare")
     return {"symbol": symbol, "status": "ingested", "source": "tushare", "item": payload.get("item")}

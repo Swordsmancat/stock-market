@@ -26,6 +26,10 @@
 - Detail query values accept `string | string[] | undefined`; the page uses the
   first value and trims it before calling services or rendering snapshot state.
 - Watchlist page fetch returns a discriminated `loaded | failed` result.
+- `FundamentalSnapshot.pe_ratio`, `revenue_growth`, `net_margin`, and
+  `debt_to_assets` are independently nullable in analytics and ORM types.
+- `GET /fundamentals/{symbol}` serializes each missing metric as JSON `null`;
+  a genuine numeric zero remains `0.0`.
 
 ### 3. Contracts
 
@@ -50,6 +54,11 @@
 - Missing detail latest price, change, or percent change renders the localized
   unavailable label and no movement color. Never synthesize `0.00`, `+0.00`, or
   `+0.00%` for absent values.
+- Provider ingestion preserves missing fundamental metrics as `NULL`; it must
+  not use `value or 0.0`. An additive migration may normalize legacy zero
+  sentinels only for the known `akshare`, `yfinance`, and `tushare` sources.
+  Manual and other source rows are not rewritten. Incomplete snapshots keep
+  available metrics and company context while omitting the aggregate summary.
 
 ### 4. Validation & Error Matrix
 
@@ -66,6 +75,9 @@
 | Watchlist request fails | Error state and reload action; no empty KPI projection |
 | Watchlist request succeeds with `items=[]` | Genuine empty state |
 | Price/change value is absent | Localized unavailable value; no synthetic zero |
+| One fundamental metric is absent | Persist and return `null`; retain sibling metrics |
+| Fundamental metric is genuine `0.0` | Persist and return `0.0`; do not hide it |
+| Legacy known-provider metric equals sentinel zero | Migration converts only that metric to `NULL` |
 
 ### 5. Good / Base / Bad Cases
 
@@ -76,10 +88,16 @@
 - Base: no default watchlist exists; the detail control shows Add while the
   membership read leaves the database untouched.
 - Base: a successful empty list shows the existing personal empty state.
+- Good: PE, growth, and margin are missing while debt-to-assets is available;
+  detail shows three unavailable labels and the real debt ratio.
+- Base: a provider reports a genuine zero growth ratio; storage and API retain
+  `0.0` rather than converting it to `NULL`.
 - Bad: a GET membership check seeds defaults, enriches prices, evaluates alerts,
   commits alert history, or treats a provider failure as an empty watchlist.
 - Bad: a CN value uses USD, an unknown market guesses CNY, or missing detail data
   is displayed as a real zero.
+- Bad: an adapter uses `metric or 0.0`, or a payload projection calls
+  `float(None)` after a nullable migration.
 
 ### 6. Tests Required
 
@@ -93,6 +111,10 @@
 - Component/page tests assert toggle pending/success/error/unavailable states,
   same-page refresh, repeated-query normalization, failed-versus-empty watchlist
   branches, CN/HK/US currencies, and unavailable detail values.
+- Service/API tests assert partial fundamental snapshots round-trip `NULL`, a
+  genuine zero survives, and incomplete summaries do not format missing values.
+- Migration tests assert known-provider sentinels become `NULL`, other sources
+  remain unchanged, and all four metric columns are nullable.
 - Browser acceptance checks desktop and `375x812` layouts for horizontal
   overflow and verifies exact search/detail navigation when browser policy
   permits interaction.
@@ -118,6 +140,21 @@ membership = get_watchlist_item_membership(
     session=session,
 )
 ```
+
+#### Wrong: Missing fundamental coercion
+
+```python
+snapshot = FundamentalSnapshot(net_margin=net_margin or 0.0)
+```
+
+#### Correct: Preserve provider meaning
+
+```python
+snapshot = FundamentalSnapshot(net_margin=net_margin)
+```
+
+The nullable storage and API contract owns missingness; the UI formats `null`
+with its localized unavailable label.
 
 The direct exact query is side-effect free and keeps unavailable/empty/watched
 states distinct.

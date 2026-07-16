@@ -97,7 +97,7 @@ def test_stored_a_share_projects_missing_pe_and_enriches_company_without_writes(
             symbol="600519",
             as_of=date(2026, 7, 13),
             currency="CNY",
-            pe_ratio=0.0,
+            pe_ratio=None,
             revenue_growth=0.0654,
             net_margin=0.5222,
             debt_to_assets=0.1212,

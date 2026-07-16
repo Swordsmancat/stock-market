@@ -85,14 +85,14 @@ def test_fundamentals_api_returns_database_metrics_when_available():
     assert payload["item"]["pe_ratio"] == 30.5
 
 
-def test_fundamentals_api_enriches_stored_a_share_and_hides_zero_pe(monkeypatch):
+def test_fundamentals_api_enriches_stored_a_share_with_missing_pe(monkeypatch):
     session = make_session()
     upsert_fundamental_snapshot(
         FundamentalSnapshot(
             symbol="600519",
             as_of=date(2026, 7, 13),
             currency="CNY",
-            pe_ratio=0.0,
+            pe_ratio=None,
             revenue_growth=0.0654,
             net_margin=0.5222,
             debt_to_assets=0.1212,

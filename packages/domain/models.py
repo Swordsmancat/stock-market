@@ -283,10 +283,10 @@ class FundamentalSnapshot(Base):
     symbol: Mapped[str] = mapped_column(String(64))
     as_of: Mapped[date] = mapped_column(Date)
     currency: Mapped[str] = mapped_column(String(8))
-    pe_ratio: Mapped[Decimal] = mapped_column(Numeric(20, 6))
-    revenue_growth: Mapped[Decimal] = mapped_column(Numeric(12, 6))
-    net_margin: Mapped[Decimal] = mapped_column(Numeric(12, 6))
-    debt_to_assets: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    pe_ratio: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    revenue_growth: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    net_margin: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    debt_to_assets: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     source: Mapped[str] = mapped_column(String(128), default="database")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

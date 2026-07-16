@@ -47,8 +47,8 @@ def test_ingest_akshare_fundamentals_persists_snapshot():
         [
             {
                 "日期": "2026-03-31",
-                "主营业务收入增长(%)": 10.5,
-                "销售净利率(%)": 52.2,
+                "主营业务收入增长(%)": 0.0,
+                "销售净利率(%)": None,
                 "资产负债率(%)": 12.1,
             }
         ]
@@ -60,9 +60,12 @@ def test_ingest_akshare_fundamentals_persists_snapshot():
     assert result["status"] == "ingested"
     assert result["source"] == "akshare"
     assert result["item"]["pe_ratio"] is None
-    assert result["item"]["revenue_growth"] == 0.105
+    assert result["item"]["revenue_growth"] == 0.0
+    assert result["item"]["net_margin"] is None
     stored = session.query(FundamentalSnapshotModel).one()
-    assert float(stored.pe_ratio) == 0.0
+    assert stored.pe_ratio is None
+    assert float(stored.revenue_growth) == 0.0
+    assert stored.net_margin is None
 
 
 def test_ingest_news_keeps_akshare_name_as_eastmoney_public_compatibility_route(

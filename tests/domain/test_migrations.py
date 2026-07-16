@@ -222,6 +222,19 @@ def load_intraday_cache_market_identity_migration():
     return module
 
 
+def load_nullable_fundamental_metrics_migration():
+    migration_path = Path("alembic/versions/0024_nullable_fundamental_metrics.py")
+    spec = importlib.util.spec_from_file_location(
+        "nullable_fundamental_metrics_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_official_disclosures_migration_creates_metadata_table_and_identity_constraint():
     migration = load_official_disclosures_migration()
     engine = create_engine("sqlite:///:memory:")
@@ -653,6 +666,62 @@ def run_migration(migration, connection):
         migration.upgrade()
     finally:
         migration.op = original_op
+
+
+def test_nullable_fundamental_metrics_migration_normalizes_only_provider_sentinels():
+    fundamentals_migration = load_fundamentals_watchlists_migration()
+    nullable_metrics_migration = load_nullable_fundamental_metrics_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(fundamentals_migration, connection)
+        connection.execute(
+            text(
+                """
+                INSERT INTO fundamental_snapshots (
+                    id, symbol, as_of, currency, pe_ratio, revenue_growth,
+                    net_margin, debt_to_assets, source, created_at
+                ) VALUES
+                    (
+                        '11111111-1111-1111-1111-111111111111', '000001',
+                        '2026-07-13', 'CNY', 0, 0, 0, 0.90983, 'akshare',
+                        '2026-07-13 00:00:00'
+                    ),
+                    (
+                        '22222222-2222-2222-2222-222222222222', 'MANUAL',
+                        '2026-07-13', 'CNY', 0, 0, 0, 0, 'manual',
+                        '2026-07-13 00:00:00'
+                    )
+                """
+            )
+        )
+
+        run_migration(nullable_metrics_migration, connection)
+
+        columns = {
+            column["name"]: column
+            for column in inspect(connection).get_columns("fundamental_snapshots")
+        }
+        provider_row = connection.execute(
+            text(
+                """
+                SELECT pe_ratio, revenue_growth, net_margin, debt_to_assets
+                FROM fundamental_snapshots WHERE symbol = '000001'
+                """
+            )
+        ).one()
+        manual_row = connection.execute(
+            text(
+                """
+                SELECT pe_ratio, revenue_growth, net_margin, debt_to_assets
+                FROM fundamental_snapshots WHERE symbol = 'MANUAL'
+                """
+            )
+        ).one()
+
+    assert all(columns[name]["nullable"] for name in nullable_metrics_migration.METRIC_TYPES)
+    assert tuple(provider_row) == (None, None, None, 0.90983)
+    assert tuple(manual_row) == (0, 0, 0, 0)
 
 
 def test_initial_migration_creates_current_core_tables():
