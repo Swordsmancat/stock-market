@@ -85,6 +85,65 @@ def test_fundamentals_api_returns_database_metrics_when_available():
     assert payload["item"]["pe_ratio"] == 30.5
 
 
+def test_fundamentals_api_enriches_stored_a_share_and_hides_zero_pe(monkeypatch):
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 7, 13),
+            currency="CNY",
+            pe_ratio=0.0,
+            revenue_growth=0.0654,
+            net_margin=0.5222,
+            debt_to_assets=0.1212,
+        ),
+        session=session,
+        source="akshare",
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.get",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.set",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        lambda _symbol: EastmoneyPublicCompany(
+            name="Kweichow Moutai",
+            industry="Beverage manufacturing",
+            business_scope="Production and sale of spirits.",
+            profile="Premium spirits producer.",
+        ),
+    )
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        response = TestClient(app).get(
+            "/fundamentals/600519",
+            params={"as_of": "2026-07-16"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "database"
+    assert payload["status"] == "ok"
+    assert payload["item"]["pe_ratio"] is None
+    assert payload["item"]["revenue_growth"] == 0.0654
+    assert payload["item"]["company"]["name"] == "Kweichow Moutai"
+    assert payload["citation"] == "fundamental_metrics:600519:2026-07-13"
+
+
 def test_fundamentals_api_returns_additive_public_company_context(monkeypatch):
     session = make_session()
     snapshot = EastmoneyPublicFundamentalsSnapshot(

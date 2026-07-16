@@ -814,14 +814,14 @@ def test_market_assistant_recognizes_invented_disclosure_section_citation_ids():
     assert shortlist_unknown == ["research_shortlist:not-present"]
 
 
-def test_fundamental_context_includes_bounded_company_metadata(monkeypatch):
+def test_stored_fundamental_context_includes_bounded_company_metadata(monkeypatch):
     monkeypatch.setattr(
         market_assistant_service,
         "get_fundamental_payload",
         lambda *_args, **_kwargs: {
             "symbol": "600519",
-            "source": "eastmoney_public",
-            "provider": "eastmoney_public",
+            "source": "database",
+            "provider": "database",
             "as_of": "2026-06-30",
             "upstream_sources": [
                 "eastmoney.RPT_F10_FINANCE_MAINFINADATA",
@@ -858,6 +858,7 @@ def test_fundamental_context_includes_bounded_company_metadata(monkeypatch):
     assert len(evidence) == 1
     citation = evidence[0].citation
     assert citation.id == "fundamental_metrics:600519:2026-06-30"
+    assert citation.provider == "database"
     assert citation.metadata["company"]["name"] == "Kweichow Moutai"
     assert len(citation.metadata["company"]["profile"]) == 500
     assert citation.metadata["upstream_sources"] == [

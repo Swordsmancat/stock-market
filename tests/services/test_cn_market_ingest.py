@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 import packages.domain.models  # noqa: F401
 from packages.providers.eastmoney_public_news import EastmoneyPublicNewsItem
+from packages.domain.models import FundamentalSnapshot as FundamentalSnapshotModel
 from packages.services.fundamentals import ingest_akshare_fundamentals, ingest_fundamentals
 from packages.services.news import ingest_akshare_news, ingest_news
 from packages.shared.database import Base
@@ -58,8 +59,10 @@ def test_ingest_akshare_fundamentals_persists_snapshot():
 
     assert result["status"] == "ingested"
     assert result["source"] == "akshare"
-    assert result["item"]["pe_ratio"] == 0.0
+    assert result["item"]["pe_ratio"] is None
     assert result["item"]["revenue_growth"] == 0.105
+    stored = session.query(FundamentalSnapshotModel).one()
+    assert float(stored.pe_ratio) == 0.0
 
 
 def test_ingest_news_keeps_akshare_name_as_eastmoney_public_compatibility_route(

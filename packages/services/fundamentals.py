@@ -20,8 +20,10 @@ from packages.providers.cn_market_helpers import (
     tushare_ts_code,
 )
 from packages.providers.eastmoney_public_fundamentals import (
+    EastmoneyPublicCompany,
     EastmoneyPublicFundamentalsProviderError,
     EastmoneyPublicFundamentalsSnapshot,
+    fetch_eastmoney_public_company,
     fetch_eastmoney_public_fundamentals,
 )
 from packages.providers.yfinance_helpers import map_symbol_to_ticker
@@ -36,6 +38,7 @@ _EASTMONEY_FUNDAMENTALS_SOURCES = [
     "eastmoney.RPT_F10_FINANCE_MAINFINADATA",
     "eastmoney.PC_HSF10.CompanySurvey.PageAjax",
 ]
+_EASTMONEY_COMPANY_SOURCE = "eastmoney.PC_HSF10.CompanySurvey.PageAjax"
 
 
 _FUNDAMENTAL_FIXTURES = {
@@ -144,7 +147,7 @@ def upsert_fundamental_snapshot(
             setattr(row, key, value)
     session.commit()
 
-    return _payload_from_snapshot(_snapshot_from_model(row), source="database")
+    return _payload_from_database_row(row)
 
 
 def get_fundamental_payload(
@@ -159,7 +162,14 @@ def get_fundamental_payload(
             session.rollback()
         else:
             if row is not None:
-                return _payload_from_snapshot(_snapshot_from_model(row), source="database")
+                payload = _payload_from_database_row(row)
+                normalized_symbol = str(symbol).strip().upper()
+                if _is_eastmoney_public_eligible(normalized_symbol):
+                    return _enrich_database_payload_with_company(
+                        payload,
+                        symbol=normalized_symbol,
+                    )
+                return payload
 
     normalized_symbol = str(symbol).strip().upper()
     if _is_eastmoney_public_eligible(normalized_symbol):
@@ -173,6 +183,145 @@ def get_fundamental_payload(
         return {"symbol": symbol, "source": "mock_fundamentals", "item": None}
 
     return _payload_from_snapshot(snapshot, source="mock_fundamentals", as_of=as_of)
+
+
+def _payload_from_database_row(
+    row: FundamentalSnapshotModel,
+) -> dict[str, object]:
+    payload = _payload_from_snapshot(_snapshot_from_model(row), source="database")
+    item = payload.get("item")
+    if isinstance(item, dict):
+        item["company"] = None
+        if float(row.pe_ratio) == 0.0:
+            item["pe_ratio"] = None
+            item["summary"] = None
+    payload.update(
+        {
+            "status": "ok",
+            "provider": "database",
+            "upstream_sources": [],
+            "diagnostics": [],
+        }
+    )
+    return payload
+
+
+def _enrich_database_payload_with_company(
+    payload: dict[str, object],
+    *,
+    symbol: str,
+) -> dict[str, object]:
+    cache_key = f"fundamentals:eastmoney-public-company:{symbol}"
+    cached = _read_eastmoney_company_cache(cache_key, symbol=symbol)
+    if cached is not None:
+        return _merge_company_projection(payload, cached)
+
+    try:
+        company = fetch_eastmoney_public_company(symbol)
+    except EastmoneyPublicFundamentalsProviderError as error:
+        return _merge_company_projection(
+            payload,
+            _company_projection(
+                symbol,
+                company=None,
+                status="unavailable",
+                diagnostics=[error.code],
+            ),
+        )
+    except Exception:
+        return _merge_company_projection(
+            payload,
+            _company_projection(
+                symbol,
+                company=None,
+                status="unavailable",
+                diagnostics=["EASTMONEY_FUNDAMENTALS_REQUEST_FAILED"],
+            ),
+        )
+
+    company_payload = _company_projection(
+        symbol,
+        company=company,
+        status="ok" if company is not None else "no_data",
+        diagnostics=([] if company is not None else ["EASTMONEY_COMPANY_NO_DATA"]),
+    )
+    _write_eastmoney_company_cache(cache_key, company_payload)
+    return _merge_company_projection(payload, company_payload)
+
+
+def _company_projection(
+    symbol: str,
+    *,
+    company: EastmoneyPublicCompany | None,
+    status: str,
+    diagnostics: list[str],
+) -> dict[str, object]:
+    return {
+        "symbol": symbol,
+        "status": status,
+        "company": (
+            {
+                "name": company.name,
+                "industry": company.industry,
+                "business_scope": company.business_scope,
+                "profile": company.profile,
+            }
+            if company is not None
+            else None
+        ),
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "upstream_sources": [_EASTMONEY_COMPANY_SOURCE],
+        "diagnostics": diagnostics,
+    }
+
+
+def _merge_company_projection(
+    payload: dict[str, object],
+    company_payload: dict[str, object],
+) -> dict[str, object]:
+    item = payload.get("item")
+    if isinstance(item, dict):
+        item["company"] = company_payload.get("company")
+    company_status = company_payload.get("status")
+    payload["status"] = "ok" if company_status == "ok" else "degraded"
+    payload["retrieved_at"] = company_payload.get("retrieved_at")
+    payload["upstream_sources"] = company_payload.get("upstream_sources", [])
+    payload["diagnostics"] = company_payload.get("diagnostics", [])
+    return payload
+
+
+def _read_eastmoney_company_cache(
+    cache_key: str,
+    *,
+    symbol: str,
+) -> dict[str, object] | None:
+    try:
+        cached = redis_client.get(cache_key)
+        payload = json.loads(cached) if cached else None
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("symbol") != symbol or payload.get("status") not in {"ok", "no_data"}:
+        return None
+    company = payload.get("company")
+    if company is not None and not isinstance(company, dict):
+        return None
+    return payload
+
+
+def _write_eastmoney_company_cache(
+    cache_key: str,
+    payload: dict[str, object],
+) -> None:
+    try:
+        redis_client.set(
+            cache_key,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            ex=_EASTMONEY_FUNDAMENTALS_CACHE_TTL_SECONDS,
+        )
+    except Exception:
+        pass
 
 
 def _is_eastmoney_public_eligible(symbol: str) -> bool:

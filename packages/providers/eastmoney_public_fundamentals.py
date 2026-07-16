@@ -125,22 +125,10 @@ def fetch_eastmoney_public_fundamentals(
     company: EastmoneyPublicCompany | None = None
     diagnostics: tuple[str, ...] = ()
     try:
-        company_response = _request(
-            getter,
-            EASTMONEY_COMPANY_ENDPOINT,
-            params={"code": f"{exchange}{normalized_symbol}"},
+        company = fetch_eastmoney_public_company(
+            normalized_symbol,
             timeout=normalized_timeout,
-            max_bytes=EASTMONEY_COMPANY_MAX_RESPONSE_BYTES,
-        )
-        company_payload = _parse_json_response(
-            company_response,
-            allowed_media_types=_COMPANY_MEDIA_TYPES,
-            max_bytes=EASTMONEY_COMPANY_MAX_RESPONSE_BYTES,
-        )
-        company = _parse_company(
-            company_payload,
-            symbol=normalized_symbol,
-            exchange=exchange,
+            http_get=getter,
         )
     except EastmoneyPublicFundamentalsProviderError as error:
         diagnostics = (error.code,)
@@ -162,6 +150,35 @@ def fetch_eastmoney_public_fundamentals(
         ),
         retrieved_at=datetime.now(timezone.utc),
         diagnostics=diagnostics,
+    )
+
+
+def fetch_eastmoney_public_company(
+    symbol: str,
+    *,
+    timeout: float = EASTMONEY_FUNDAMENTALS_DEFAULT_TIMEOUT_SECONDS,
+    http_get: HttpGetter | None = None,
+) -> EastmoneyPublicCompany | None:
+    normalized_symbol = _normalize_symbol(symbol)
+    normalized_timeout = _normalize_timeout(timeout)
+    exchange = _exchange_for_symbol(normalized_symbol)
+    getter = http_get or _default_http_get
+    company_response = _request(
+        getter,
+        EASTMONEY_COMPANY_ENDPOINT,
+        params={"code": f"{exchange}{normalized_symbol}"},
+        timeout=normalized_timeout,
+        max_bytes=EASTMONEY_COMPANY_MAX_RESPONSE_BYTES,
+    )
+    company_payload = _parse_json_response(
+        company_response,
+        allowed_media_types=_COMPANY_MEDIA_TYPES,
+        max_bytes=EASTMONEY_COMPANY_MAX_RESPONSE_BYTES,
+    )
+    return _parse_company(
+        company_payload,
+        symbol=normalized_symbol,
+        exchange=exchange,
     )
 
 

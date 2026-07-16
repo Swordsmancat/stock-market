@@ -9,6 +9,7 @@ from packages.providers.eastmoney_public_fundamentals import (
     EASTMONEY_FINANCIAL_MAX_RESPONSE_BYTES,
     EastmoneyPublicFundamentalsHttpResponse,
     EastmoneyPublicFundamentalsProviderError,
+    fetch_eastmoney_public_company,
     fetch_eastmoney_public_fundamentals,
 )
 
@@ -130,6 +131,27 @@ def test_fetch_eastmoney_public_fundamentals_uses_fixed_safe_requests_and_normal
         "client": "PC",
     }
     assert calls[1][1]["params"] == {"code": "SH600519"}
+
+
+def test_fetch_eastmoney_public_company_uses_only_fixed_company_request():
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_get(url: str, **kwargs: object):
+        calls.append((url, kwargs))
+        return _response(_company_payload(), media_type="application/json")
+
+    company = fetch_eastmoney_public_company("600519", http_get=fake_get)
+
+    assert company is not None
+    assert company.name == "Kweichow Moutai Co., Ltd."
+    assert company.industry == "Beverage manufacturing"
+    assert [url for url, _kwargs in calls] == [EASTMONEY_COMPANY_ENDPOINT]
+    assert calls[0][1]["params"] == {"code": "SH600519"}
+    assert calls[0][1]["follow_redirects"] is False
+    assert calls[0][1]["trust_env"] is False
+    assert calls[0][1]["timeout"] == 8.0
+    assert "Cookie" not in calls[0][1]["headers"]
+    assert "Authorization" not in calls[0][1]["headers"]
 
 
 def test_company_text_is_bounded_without_invalidating_financial_metrics():

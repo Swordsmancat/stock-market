@@ -88,6 +88,63 @@ def test_get_fundamental_payload_prefers_database_snapshot():
     assert "PE 30.50" in payload["item"]["summary"]
 
 
+def test_stored_a_share_projects_missing_pe_and_enriches_company_without_writes(
+    monkeypatch,
+):
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 7, 13),
+            currency="CNY",
+            pe_ratio=0.0,
+            revenue_growth=0.0654,
+            net_margin=0.5222,
+            debt_to_assets=0.1212,
+        ),
+        session=session,
+        source="akshare",
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.get",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.set",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        lambda _symbol: EastmoneyPublicCompany(
+            name="贵州茅台酒股份有限公司",
+            industry="酒、饮料和精制茶制造业",
+            business_scope="茅台酒系列产品的生产与销售。",
+            profile="主要从事贵州茅台酒及系列酒的生产和销售。",
+        ),
+    )
+
+    payload = get_fundamental_payload(
+        "600519",
+        as_of=date(2026, 7, 16),
+        session=session,
+    )
+
+    assert payload["source"] == "database"
+    assert payload["as_of"] == "2026-07-13"
+    assert payload["item"]["pe_ratio"] is None
+    assert payload["item"]["revenue_growth"] == 0.0654
+    assert payload["item"]["net_margin"] == 0.5222
+    assert payload["item"]["debt_to_assets"] == 0.1212
+    assert payload["item"]["summary"] is None
+    assert payload["item"]["company"]["name"] == "贵州茅台酒股份有限公司"
+    assert payload["citation"] == "fundamental_metrics:600519:2026-07-13"
+    assert session.query(FundamentalSnapshotModel).count() == 1
+
+
 def test_get_fundamental_payload_uses_read_only_eastmoney_for_a_share_gap(
     monkeypatch,
 ):
@@ -126,7 +183,153 @@ def test_get_fundamental_payload_uses_read_only_eastmoney_for_a_share_gap(
     assert session.query(FundamentalSnapshotModel).count() == 0
 
 
-def test_stored_a_share_snapshot_skips_cache_and_provider(monkeypatch):
+def test_stored_a_share_skips_company_enrichment_when_gate_is_disabled(monkeypatch):
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 6, 30),
+            currency="CNY",
+            pe_ratio=25.0,
+            revenue_growth=0.1,
+            net_margin=0.5,
+            debt_to_assets=0.18,
+        ),
+        session=session,
+        source="stored",
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": False},
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.redis_client.get",
+        lambda _key: (_ for _ in ()).throw(AssertionError("cache must not run")),
+    )
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("provider must not run")
+        ),
+    )
+
+    payload = get_fundamental_payload(
+        "600519",
+        as_of=date(2026, 7, 16),
+        session=session,
+    )
+
+    assert payload["source"] == "database"
+    assert payload["as_of"] == "2026-06-30"
+    assert payload["item"]["pe_ratio"] == 25.0
+
+
+def test_stored_a_share_company_enrichment_uses_normalized_cache(monkeypatch):
+    class FakeRedis:
+        def __init__(self):
+            self.value = None
+
+        def get(self, _key):
+            return self.value
+
+        def set(self, _key, value, **_kwargs):
+            self.value = value
+            return True
+
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 6, 30),
+            currency="CNY",
+            pe_ratio=25.0,
+            revenue_growth=0.1,
+            net_margin=0.5,
+            debt_to_assets=0.18,
+        ),
+        session=session,
+        source="stored",
+    )
+    calls = 0
+
+    def fetch(_symbol):
+        nonlocal calls
+        calls += 1
+        return make_eastmoney_snapshot().company
+
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr("packages.services.fundamentals.redis_client", FakeRedis())
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        fetch,
+    )
+
+    first = get_fundamental_payload("600519", session=session)
+    second = get_fundamental_payload("600519", session=session)
+
+    assert calls == 1
+    assert first["item"]["pe_ratio"] == 25.0
+    assert first["item"]["company"]["industry"] == "Beverage manufacturing"
+    assert second == first
+
+
+def test_stored_a_share_company_no_data_is_cached(monkeypatch):
+    class FakeRedis:
+        def __init__(self):
+            self.value = None
+
+        def get(self, _key):
+            return self.value
+
+        def set(self, _key, value, **_kwargs):
+            self.value = value
+            return True
+
+    session = make_session()
+    upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            symbol="600519",
+            as_of=date(2026, 6, 30),
+            currency="CNY",
+            pe_ratio=25.0,
+            revenue_growth=0.1,
+            net_margin=0.5,
+            debt_to_assets=0.18,
+        ),
+        session=session,
+        source="stored",
+    )
+    calls = 0
+
+    def fetch(_symbol):
+        nonlocal calls
+        calls += 1
+        return None
+
+    monkeypatch.setattr(
+        "packages.services.fundamentals.get_platform_settings",
+        lambda: {"akshare_enabled": True},
+    )
+    monkeypatch.setattr("packages.services.fundamentals.redis_client", FakeRedis())
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        fetch,
+    )
+
+    first = get_fundamental_payload("600519", session=session)
+    second = get_fundamental_payload("600519", session=session)
+
+    assert calls == 1
+    assert first["status"] == "degraded"
+    assert first["item"]["company"] is None
+    assert first["diagnostics"] == ["EASTMONEY_COMPANY_NO_DATA"]
+    assert second == first
+
+
+def test_stored_company_failure_keeps_database_metrics(monkeypatch):
     session = make_session()
     upsert_fundamental_snapshot(
         FundamentalSnapshot(
@@ -147,23 +350,27 @@ def test_stored_a_share_snapshot_skips_cache_and_provider(monkeypatch):
     )
     monkeypatch.setattr(
         "packages.services.fundamentals.redis_client.get",
-        lambda _key: (_ for _ in ()).throw(AssertionError("cache must not run")),
-    )
-    monkeypatch.setattr(
-        "packages.services.fundamentals.fetch_eastmoney_public_fundamentals",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("provider must not run")
-        ),
+        lambda _key: None,
     )
 
-    payload = get_fundamental_payload(
-        "600519",
-        as_of=date(2026, 7, 16),
-        session=session,
+    def fail(_symbol):
+        raise EastmoneyPublicFundamentalsProviderError(
+            "EASTMONEY_FUNDAMENTALS_TIMEOUT",
+            "sanitized",
+        )
+
+    monkeypatch.setattr(
+        "packages.services.fundamentals.fetch_eastmoney_public_company",
+        fail,
     )
+
+    payload = get_fundamental_payload("600519", session=session)
 
     assert payload["source"] == "database"
-    assert payload["as_of"] == "2026-06-30"
+    assert payload["status"] == "degraded"
+    assert payload["item"]["pe_ratio"] == 25.0
+    assert payload["item"]["company"] is None
+    assert payload["diagnostics"] == ["EASTMONEY_FUNDAMENTALS_TIMEOUT"]
 
 
 def test_eastmoney_normalized_cache_prevents_second_provider_call(monkeypatch):
