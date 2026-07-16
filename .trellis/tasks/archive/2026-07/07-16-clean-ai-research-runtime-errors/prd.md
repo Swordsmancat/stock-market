@@ -30,4 +30,4 @@ localization runtime errors during normal read-only use.
 - [x] Focused/full Web tests, TypeScript, JSON validation, Trellis validation,
       and diff checks pass.
 - [x] A rebuilt local AI Research page reports no console errors or warnings.
-- [ ] The task is committed, archived, journaled, and pushed.
+- [x] The task is committed, archived, journaled, and pushed.
