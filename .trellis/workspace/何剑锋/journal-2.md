@@ -567,3 +567,36 @@ Removed AI Research missing-message, duplicate-key, and evidence timestamp hydra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 77: Preserve missing fundamental metrics
+
+**Date**: 2026-07-16
+**Task**: Preserve missing fundamental metrics
+**Branch**: `master`
+
+### Summary
+
+Made fundamental metrics independently nullable, migrated legacy provider zero sentinels, preserved genuine zero values, and verified the 000001 detail page shows unavailable metrics without hiding the real debt ratio.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `86180db` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

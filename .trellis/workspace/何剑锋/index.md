@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 76
+- **Total Sessions**: 77
 - **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~569 | Active |
+| `journal-2.md` | ~602 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 77 | 2026-07-16 | Preserve missing fundamental metrics | `86180db` | `master` |
 | 76 | 2026-07-16 | Clean AI research runtime | `1a452be` | `master` |
 | 75 | 2026-07-16 | Stable intraday time hydration | `e27acc5` | `master` |
 | 74 | 2026-07-16 | Readable technical indicators | `7854898` | `master` |
