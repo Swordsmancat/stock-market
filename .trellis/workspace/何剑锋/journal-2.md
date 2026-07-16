@@ -302,3 +302,36 @@ Added Shanghai-localized news timestamps, removed homepage provider status, rest
 ### Next Steps
 
 - None - task complete
+
+
+## Session 69: Stabilize homepage initial data and localization
+
+**Date**: 2026-07-16
+**Task**: Stabilize homepage initial data and localization
+**Branch**: `master`
+
+### Summary
+
+Added a dedicated cold overview timeout, localized nine macro labels, restored a full desktop module grid, improved mobile macro readability, and locked the behavior with tests and browser acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b50f588` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
