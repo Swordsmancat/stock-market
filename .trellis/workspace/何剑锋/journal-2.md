@@ -335,3 +335,36 @@ Added a dedicated cold overview timeout, localized nine macro labels, restored a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 70: Harden public research fallbacks
+
+**Date**: 2026-07-16
+**Task**: Harden public research fallbacks
+**Branch**: `master`
+
+### Summary
+
+Recovered sparse A-share daily bars through validated sources and replaced legacy CN news retrieval with a bounded Cookie-free Eastmoney fallback.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b0c7d0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
