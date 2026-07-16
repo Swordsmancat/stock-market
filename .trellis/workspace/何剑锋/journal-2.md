@@ -402,3 +402,36 @@ Filtered non-finite market bars, added bounded AkShare Sina fallback for missing
 ### Next Steps
 
 - None - task complete
+
+
+## Session 72: Eastmoney public fundamentals fallback
+
+**Date**: 2026-07-16
+**Task**: Eastmoney public fundamentals fallback
+**Branch**: `master`
+
+### Summary
+
+Added a bounded Cookie-free Eastmoney A-share fundamentals and company-profile fallback with database-first reads, normalized Redis caching, detail rendering, AI citation context, executable specs, and full regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8bf9c60` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
