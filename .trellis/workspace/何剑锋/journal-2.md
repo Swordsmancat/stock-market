@@ -534,3 +534,36 @@ Fixed instrument-detail hydration by formatting intraday timestamps with explici
 ### Next Steps
 
 - None - task complete
+
+
+## Session 76: Clean AI research runtime
+
+**Date**: 2026-07-16
+**Task**: Clean AI research runtime
+**Branch**: `master`
+
+### Summary
+
+Removed AI Research missing-message, duplicate-key, and evidence timestamp hydration errors; added Chinese, page-level, and cross-zone regressions; verified a clean rebuilt browser console without changing research behavior.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a452be` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
