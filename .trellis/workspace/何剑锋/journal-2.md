@@ -633,3 +633,36 @@ Selected a strictly more complete coherent Eastmoney public fundamentals snapsho
 ### Next Steps
 
 - None - task complete
+
+
+## Session 79: Collapse long company profile
+
+**Date**: 2026-07-16
+**Task**: Collapse long company profile
+**Branch**: `master`
+
+### Summary
+
+Collapsed long instrument company scope and profile behind an accessible localized disclosure while keeping company identity visible; added regression coverage and completed desktop browser QA.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e32ddb9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
