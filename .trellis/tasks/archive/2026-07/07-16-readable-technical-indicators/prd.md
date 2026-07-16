@@ -26,5 +26,5 @@ their entire nested payload inline.
       indicators render concise summaries rather than raw object walls.
 - [x] Candlestick no-pattern and chip distribution key metrics are truthful.
 - [x] Details controls are accessible and optional content is bounded.
-- [ ] TypeScript, focused/full Web tests, Trellis validation, desktop/mobile
+- [x] TypeScript, focused/full Web tests, Trellis validation, desktop/mobile
       browser acceptance, commit, archive, journal, and push pass.
