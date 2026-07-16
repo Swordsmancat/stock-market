@@ -342,6 +342,19 @@ shell. Tests should assert core/maintenance DOM ownership, the missing `open`
 attribute, mixed-success rendering, five-item responsive navigation, and no
 horizontal page overflow.
 
+The AI Research Desk applies that boundary to assistant context as well. Its
+active macro summary and default question include only indicators with a value,
+`as_of`, and source, because only those rows are citable local observations.
+Known macro codes resolve through the shared
+`apps/web/lib/macro-indicator-labels.ts` map and `Dashboard` catalog; unknown
+codes fall back to stored name, then code. Missing-code lists, provider setup
+actions, refresh instructions, and raw diagnostic prose remain available in a
+closed source-maintenance `<details>` block but never enter the default model
+question. Default macro cards show localized missing-observation copy rather
+than backend English no-data reasons. Component and page tests must assert both
+the prompt exclusion and the closed maintenance ownership without making an
+assistant request.
+
 ---
 
 ## Accessibility

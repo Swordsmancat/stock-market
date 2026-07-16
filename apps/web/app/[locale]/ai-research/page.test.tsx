@@ -667,9 +667,13 @@ it("renders the AI research desk with watchlist, signal, macro, and source-gap c
   expect(screen.getByText(/Deal amount: 11,800,000 CNY/)).toBeInTheDocument();
   expect(screen.getByText("Buyer: Buyer seat; seller: Seller seat")).toBeInTheDocument();
   expect(screen.getByText(/not stored local evidence or assistant citations/)).toBeInTheDocument();
-  expect(screen.getByText("Buffett Indicator - US")).toBeInTheDocument();
-  expect(screen.getByText("Buffett Indicator - CN")).toBeInTheDocument();
+  expect(screen.getAllByText("Buffett Indicator - United States").length).toBeGreaterThan(0);
+  expect(screen.getByText("Buffett Indicator - China")).toBeInTheDocument();
   expect(screen.getByText("Value: 188.5%")).toBeInTheDocument();
+  const sourceMaintenance = screen
+    .getByText("Source maintenance and diagnostics")
+    .closest("details");
+  expect(sourceMaintenance).not.toHaveAttribute("open");
   expect(screen.getByText("Official source readiness")).toBeInTheDocument();
   expect(screen.getByText("World Bank Buffett Indicator")).toBeInTheDocument();
   expect(screen.getByText("Next: Run World Bank dry-run, then write refresh for missing Buffett Indicator regions.")).toBeInTheDocument();
@@ -752,7 +756,15 @@ it("adds a manual symbol and submits the active symbol through the existing mark
       provider: "yfinance",
     });
   });
-  expect(askMarketAssistantMock.mock.calls[0][0].question).toContain("FRED US macro");
+  expect(askMarketAssistantMock.mock.calls[0][0].question).toContain(
+    "Buffett Indicator - United States: 188.5%",
+  );
+  expect(askMarketAssistantMock.mock.calls[0][0].question).not.toContain(
+    "FRED US macro",
+  );
+  expect(askMarketAssistantMock.mock.calls[0][0].question).not.toContain(
+    "FRED_API_KEY",
+  );
   expect(await screen.findByText("Research-only answer with cited local evidence.")).toBeInTheDocument();
   expect(screen.getByText("Daily bars for AAPL as of 2026-01-02")).toBeInTheDocument();
   expect(screen.getByText("Research only. Not investment advice.")).toBeInTheDocument();

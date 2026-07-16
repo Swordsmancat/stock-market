@@ -17,6 +17,10 @@ import { Button } from "@/components/ui/button";
 import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  getBuiltInMacroLabelKey,
+  type BuiltInMacroLabelKey,
+} from "@/lib/macro-indicator-labels";
 import { Link } from "@/src/i18n/routing";
 
 export type AiResearchWatchlistItem = {
@@ -255,6 +259,7 @@ export function AiResearchDesk({
   overviewDiagnostics,
 }: AiResearchDeskProps) {
   const t = useTranslations("AiResearchDesk");
+  const dashboardT = useTranslations("Dashboard");
   const candidates = useMemo(
     () => buildCandidateSymbols(watchlistItems, followedItems, recommendations),
     [watchlistItems, followedItems, recommendations],
@@ -337,6 +342,8 @@ export function AiResearchDesk({
     (recommendation) =>
       normalizeSymbol(recommendation.symbol) === activeSelectedSymbol,
   );
+  const getMacroDisplayName = (indicator: AiResearchMacroIndicator) =>
+    resolveMacroDisplayName(indicator, (key) => dashboardT(key));
   const assistantInitialQuestion = activeSelectedSymbol
     ? t("assistantQuestion", {
         symbol: activeSelectedSymbol,
@@ -344,12 +351,8 @@ export function AiResearchDesk({
         macro: buildMacroQuestionContext(
           prioritizedMacroIndicators,
           t("macroUnavailable"),
-        ),
-        sources: buildOfficialSourceQuestionContext(
-          officialSourceProviders,
-          t("sourceStatusNoAction"),
-          t("sourceStatusQuestionNoMissing"),
-          t("sourceStatusQuestionReview"),
+          getMacroDisplayName,
+          locale,
         ),
       })
     : "";
@@ -571,6 +574,8 @@ export function AiResearchDesk({
                         value={buildMacroQuestionContext(
                           prioritizedMacroIndicators,
                           t("macroUnavailable"),
+                          getMacroDisplayName,
+                          locale,
                         )}
                       />
                     </div>
@@ -609,18 +614,29 @@ export function AiResearchDesk({
                 blockTradesPayload={blockTradesPayload}
               />
               <MacroContextPanel
+                locale={locale}
                 macroIndicators={prioritizedMacroIndicators.slice(
                   0,
                   DISPLAY_MACRO_LIMIT,
                 )}
+                getDisplayName={getMacroDisplayName}
               />
-              <OfficialSourceStatusPanel
-                providers={officialSourceProviders}
-                citationPolicy={officialSourceStatus?.citation_policy ?? null}
-              />
-              <SourceGapPanel
-                sourceGaps={sourceGaps.slice(0, DISPLAY_GAP_LIMIT)}
-              />
+              <details className="border-t border-border/70 pt-2">
+                <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {t("sourceMaintenanceSummary")}
+                </summary>
+                <div className="mt-3 space-y-4">
+                  <OfficialSourceStatusPanel
+                    providers={officialSourceProviders}
+                    citationPolicy={
+                      officialSourceStatus?.citation_policy ?? null
+                    }
+                  />
+                  <SourceGapPanel
+                    sourceGaps={sourceGaps.slice(0, DISPLAY_GAP_LIMIT)}
+                  />
+                </div>
+              </details>
             </div>
           </div>
         </div>
@@ -1063,14 +1079,18 @@ function ResearchSignalPanel({
 }
 
 function MacroContextPanel({
+  locale,
   macroIndicators,
+  getDisplayName,
 }: {
+  locale: string;
   macroIndicators: AiResearchMacroIndicator[];
+  getDisplayName: (indicator: AiResearchMacroIndicator) => string;
 }) {
   const t = useTranslations("AiResearchDesk");
 
   return (
-    <FinancialTerminalCard>
+    <FinancialTerminalCard data-testid="ai-research-macro-context">
       <FinancialTerminalCardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <FileSearch className="h-4 w-4" />
@@ -1083,14 +1103,19 @@ function MacroContextPanel({
           <div className="space-y-2">
             {macroIndicators.map((indicator) => {
               const citable = isMacroIndicatorCitable(indicator);
+              const builtInLabelKey = getBuiltInMacroLabelKey(indicator.code);
               return (
                 <FinancialTerminalSurface key={indicator.code} className="p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium">{indicator.name}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
-                        {indicator.code}
+                      <div className="font-medium">
+                        {getDisplayName(indicator)}
                       </div>
+                      {!builtInLabelKey && indicator.name !== indicator.code ? (
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {indicator.code}
+                        </div>
+                      ) : null}
                     </div>
                     <Badge variant={citable ? "secondary" : "outline"}>
                       {citable ? t("macroCitable") : t("macroGap")}
@@ -1099,7 +1124,11 @@ function MacroContextPanel({
                   <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                     <div>
                       {t("macroValue", {
-                        value: formatMacroValue(indicator, t("unavailable")),
+                        value: formatMacroValue(
+                          indicator,
+                          t("unavailable"),
+                          locale,
+                        ),
                       })}
                     </div>
                     <div>
@@ -1115,9 +1144,9 @@ function MacroContextPanel({
                     <div>
                       {t("macroSource", {
                         source:
-                          indicator.source ??
-                          indicator.no_data_reason ??
-                          t("unavailable"),
+                          citable && indicator.source
+                            ? indicator.source
+                            : t("macroObservationMissing"),
                       })}
                     </div>
                   </div>
@@ -1372,39 +1401,27 @@ function buildSourceGaps(
 function buildMacroQuestionContext(
   indicators: AiResearchMacroIndicator[],
   fallback: string,
+  getDisplayName: (indicator: AiResearchMacroIndicator) => string,
+  locale: string,
 ): string {
-  const contexts = indicators.slice(0, 3).map((indicator) => {
-    const value = formatMacroValue(indicator, "unavailable");
-    return `${indicator.name}: ${value}`;
-  });
+  const contexts = indicators
+    .filter(isMacroIndicatorCitable)
+    .slice(0, 3)
+    .map((indicator) => {
+      const value = formatMacroValue(indicator, fallback, locale);
+      return `${getDisplayName(indicator)}: ${value}`;
+    });
   return contexts.length > 0 ? contexts.join("; ") : fallback;
 }
 
-function buildOfficialSourceQuestionContext(
-  providers: AiResearchOfficialSourceProvider[],
-  fallback: string,
-  noMissingCodesLabel: string,
-  reviewSourceStatusLabel: string,
+function resolveMacroDisplayName(
+  indicator: AiResearchMacroIndicator,
+  translateBuiltIn: (key: BuiltInMacroLabelKey) => string,
 ): string {
-  const contexts = providers
-    .filter(
-      (provider) =>
-        provider.status !== "ok" ||
-        (provider.missing_indicator_codes?.length ?? 0) > 0,
-    )
-    .slice(0, 2)
-    .map((provider) => {
-      const missingCodes = formatCodeList(
-        provider.missing_indicator_codes,
-        noMissingCodesLabel,
-      );
-      const action =
-        provider.recommended_next_action ??
-        provider.status ??
-        reviewSourceStatusLabel;
-      return `${provider.label}: ${missingCodes}; ${action}`;
-    });
-  return contexts.length > 0 ? contexts.join("; ") : fallback;
+  const labelKey = getBuiltInMacroLabelKey(indicator.code);
+  return labelKey
+    ? translateBuiltIn(labelKey)
+    : indicator.name.trim() || indicator.code;
 }
 
 function isMacroIndicatorCitable(indicator: AiResearchMacroIndicator): boolean {
@@ -1419,11 +1436,12 @@ function isMacroIndicatorCitable(indicator: AiResearchMacroIndicator): boolean {
 function formatMacroValue(
   indicator: AiResearchMacroIndicator,
   unavailableLabel: string,
+  locale: string,
 ): string {
   if (indicator.value === null || indicator.value === undefined) {
     return unavailableLabel;
   }
-  const formattedValue = indicator.value.toLocaleString(undefined, {
+  const formattedValue = indicator.value.toLocaleString(locale, {
     maximumFractionDigits: 2,
   });
   return indicator.unit

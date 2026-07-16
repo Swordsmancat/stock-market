@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { withProviderQuery } from "@/lib/market-data";
+import { getBuiltInMacroLabelKey } from "@/lib/macro-indicator-labels";
 import { getMarketMovementTextClass, type MarketColorScheme } from "@/lib/market-color-classes";
 import {
   DEFAULT_FAVORITE_HOME_INDEX_CODES,
@@ -364,18 +365,6 @@ type DashboardHomeIndexItem = DashboardIndexItem & {
 };
 
 const FAVORITE_MACRO_INDICATOR_LIMIT = 8;
-const BUILT_IN_MACRO_LABEL_KEYS = {
-  buffett_indicator_us: "terminalMacroLabelBuffettUs",
-  buffett_indicator_cn: "terminalMacroLabelBuffettCn",
-  buffett_indicator_hk: "terminalMacroLabelBuffettHk",
-  us_10y_yield: "terminalMacroLabelUs10yYield",
-  us_2y_yield: "terminalMacroLabelUs2yYield",
-  us_10y_2y_spread: "terminalMacroLabelUs10y2ySpread",
-  us_cpi_yoy: "terminalMacroLabelUsCpiYoy",
-  us_m2_yoy: "terminalMacroLabelUsM2Yoy",
-  cn_m2_yoy: "terminalMacroLabelCnM2Yoy",
-} as const satisfies Record<string, string>;
-
 function getSafeDashboardLocale(locale: string): string {
   try {
     const [supportedLocale] = Intl.DateTimeFormat.supportedLocalesOf([locale]);
@@ -1064,7 +1053,7 @@ function MacroIndicatorsPanel({
       >
         {rows.map(({ code, item }) => {
           const isAvailable = item?.status === "ok";
-          const builtInLabelKey = BUILT_IN_MACRO_LABEL_KEYS[code as keyof typeof BUILT_IN_MACRO_LABEL_KEYS];
+          const builtInLabelKey = getBuiltInMacroLabelKey(code);
           const displayName = builtInLabelKey ? t(builtInLabelKey) : (item?.name ?? code);
           const statusLabel = isAvailable ? t("available") : t("no_data");
           const updatedLabel = item ? formatDashboardDate(item.as_of, locale, unavailableLabel) : unavailableLabel;
