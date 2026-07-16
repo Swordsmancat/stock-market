@@ -272,6 +272,64 @@ function formatIndicatorValue(
   return unavailableLabel;
 }
 
+function indicatorRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function indicatorNumber(
+  value: Record<string, unknown> | null,
+  key: string,
+): number | null {
+  const candidate = value?.[key];
+  return typeof candidate === "number" && Number.isFinite(candidate)
+    ? candidate
+    : null;
+}
+
+function indicatorString(
+  value: Record<string, unknown> | null,
+  key: string,
+): string | null {
+  const candidate = value?.[key];
+  return typeof candidate === "string" && candidate.trim()
+    ? candidate.trim()
+    : null;
+}
+
+function IndicatorSummaryMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="border-l-2 border-border bg-muted/20 px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function IndicatorDetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 break-words font-mono text-xs text-foreground">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function ContextMetric({ label, value }: { label: string; value: string }) {
   return (
     <FinancialTerminalSurface className="p-3">
@@ -904,20 +962,260 @@ export function InstrumentDetailClient({
             <FinancialTerminalCardContent>
               {indicatorEntries.length > 0 ? (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {indicatorEntries.map(([code, value]) => (
-                    <FinancialTerminalSurface key={code} className="p-3">
-                      <div className="font-mono text-xs text-muted-foreground">
-                        {code}
-                      </div>
-                      <div className="mt-1 text-sm font-medium">
-                        {formatIndicatorValue(
-                          value,
-                          locale,
-                          t("unavailableShort"),
-                        )}
-                      </div>
-                    </FinancialTerminalSurface>
-                  ))}
+                  {indicatorEntries.map(([code, value]) => {
+                    if (code === "candlestick_patterns") {
+                      const payload = indicatorRecord(value);
+                      const patterns = Array.isArray(payload?.patterns)
+                        ? payload.patterns
+                        : [];
+                      const patternCount =
+                        indicatorNumber(payload, "pattern_count") ??
+                        patterns.length;
+                      const status = indicatorString(payload, "status");
+                      const patternLabels = patterns
+                        .slice(0, 5)
+                        .map((pattern) => {
+                          if (typeof pattern === "string") return pattern;
+                          const patternPayload = indicatorRecord(pattern);
+                          return (
+                            indicatorString(patternPayload, "name") ??
+                            indicatorString(patternPayload, "pattern") ??
+                            indicatorString(patternPayload, "code")
+                          );
+                        })
+                        .filter((pattern): pattern is string => Boolean(pattern));
+
+                      return (
+                        <div
+                          key={code}
+                          className="space-y-3 border bg-muted/10 p-3 sm:col-span-2"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-semibold">
+                              {t("indicatorCandlestickPatterns")}
+                            </div>
+                            <Badge variant="outline">
+                              {status === "evaluated"
+                                ? t("indicatorEvaluated")
+                                : status ?? t("unavailableShort")}
+                            </Badge>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <IndicatorSummaryMetric
+                              label={t("indicatorPatternCount")}
+                              value={formatDetailNumber(
+                                patternCount,
+                                locale,
+                                t("unavailableShort"),
+                              )}
+                            />
+                            <div className="border-l-2 border-border bg-muted/20 px-3 py-2 text-sm">
+                              {patternLabels.length > 0
+                                ? patternLabels.join(", ")
+                                : t("indicatorNoPatterns")}
+                            </div>
+                          </div>
+                          <details className="border-t pt-2">
+                            <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              {t("indicatorMoreDetails")}
+                            </summary>
+                            <dl className="grid gap-3 pb-2 sm:grid-cols-3">
+                              <IndicatorDetailItem
+                                label={t("indicatorRuleSet")}
+                                value={
+                                  indicatorString(payload, "rule_set") ??
+                                  t("unavailableShort")
+                                }
+                              />
+                              <IndicatorDetailItem
+                                label={t("indicatorEvaluatedBars")}
+                                value={formatDetailNumber(
+                                  indicatorNumber(payload, "evaluated_bars"),
+                                  locale,
+                                  t("unavailableShort"),
+                                )}
+                              />
+                              <IndicatorDetailItem
+                                label={t("indicatorSource")}
+                                value={
+                                  indicatorString(payload, "integration_source") ??
+                                  t("unavailableShort")
+                                }
+                              />
+                            </dl>
+                          </details>
+                        </div>
+                      );
+                    }
+
+                    if (code === "chip_distribution") {
+                      const payload = indicatorRecord(value);
+                      const costRanges = indicatorRecord(payload?.cost_ranges);
+                      const range70 = indicatorRecord(costRanges?.["70"]);
+                      const range90 = indicatorRecord(costRanges?.["90"]);
+                      const limitations = Array.isArray(payload?.limitations)
+                        ? payload.limitations
+                            .filter(
+                              (item): item is string => typeof item === "string",
+                            )
+                            .slice(0, 3)
+                        : [];
+                      const topBuckets = Array.isArray(payload?.top_buckets)
+                        ? payload.top_buckets
+                            .map(indicatorRecord)
+                            .filter(
+                              (
+                                item,
+                              ): item is Record<string, unknown> => item !== null,
+                            )
+                            .slice(0, 5)
+                        : [];
+                      const formatCostRange = (
+                        range: Record<string, unknown> | null,
+                      ) => {
+                        const low = indicatorNumber(range, "low");
+                        const high = indicatorNumber(range, "high");
+                        if (low === null || high === null) {
+                          return t("unavailableShort");
+                        }
+                        return `${formatDetailNumber(low, locale, t("unavailableShort"))} - ${formatDetailNumber(high, locale, t("unavailableShort"))}`;
+                      };
+
+                      return (
+                        <div
+                          key={code}
+                          className="space-y-3 border bg-muted/10 p-3 sm:col-span-2"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-semibold">
+                              {t("indicatorChipDistribution")}
+                            </div>
+                            <Badge variant="outline">
+                              {indicatorString(payload, "status") === "evaluated"
+                                ? t("indicatorEvaluated")
+                                : indicatorString(payload, "status") ??
+                                  t("unavailableShort")}
+                            </Badge>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <IndicatorSummaryMetric
+                              label={t("indicatorCurrentPrice")}
+                              value={formatDetailNumber(
+                                indicatorNumber(payload, "current_price"),
+                                locale,
+                                t("unavailableShort"),
+                              )}
+                            />
+                            <IndicatorSummaryMetric
+                              label={t("indicatorWeightedAverageCost")}
+                              value={formatDetailNumber(
+                                indicatorNumber(payload, "weighted_average_cost"),
+                                locale,
+                                t("unavailableShort"),
+                              )}
+                            />
+                            <IndicatorSummaryMetric
+                              label={t("indicatorBenefitRatio")}
+                              value={formatPercentMetric(
+                                indicatorNumber(payload, "benefit_ratio"),
+                                locale,
+                                t("unavailableShort"),
+                              )}
+                            />
+                            <IndicatorSummaryMetric
+                              label={t("indicatorLookbackDays")}
+                              value={formatDetailNumber(
+                                indicatorNumber(payload, "lookback_days"),
+                                locale,
+                                t("unavailableShort"),
+                              )}
+                            />
+                            <IndicatorSummaryMetric
+                              label={t("indicatorCostRange70")}
+                              value={formatCostRange(range70)}
+                            />
+                            <IndicatorSummaryMetric
+                              label={t("indicatorCostRange90")}
+                              value={formatCostRange(range90)}
+                            />
+                          </div>
+                          <details className="border-t pt-2">
+                            <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                              {t("indicatorMoreDetails")}
+                            </summary>
+                            <div className="space-y-3 pb-2">
+                              <dl className="grid gap-3 sm:grid-cols-3">
+                                <IndicatorDetailItem
+                                  label={t("indicatorApproximation")}
+                                  value={
+                                    indicatorString(payload, "approximation") ??
+                                    t("unavailableShort")
+                                  }
+                                />
+                                <IndicatorDetailItem
+                                  label={t("indicatorEvaluatedBars")}
+                                  value={formatDetailNumber(
+                                    indicatorNumber(payload, "evaluated_bars"),
+                                    locale,
+                                    t("unavailableShort"),
+                                  )}
+                                />
+                                <IndicatorDetailItem
+                                  label={t("indicatorTopBuckets")}
+                                  value={
+                                    topBuckets.length > 0
+                                      ? topBuckets
+                                          .map((bucket) => {
+                                            const price = formatDetailNumber(
+                                              indicatorNumber(bucket, "price"),
+                                              locale,
+                                              t("unavailableShort"),
+                                            );
+                                            const share = formatPercentMetric(
+                                              indicatorNumber(bucket, "share"),
+                                              locale,
+                                              t("unavailableShort"),
+                                            );
+                                            return `${price} (${share})`;
+                                          })
+                                          .join(", ")
+                                      : t("unavailableShort")
+                                  }
+                                />
+                              </dl>
+                              {limitations.length > 0 ? (
+                                <div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {t("indicatorLimitations")}
+                                  </div>
+                                  <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-5 text-muted-foreground">
+                                    {limitations.map((limitation) => (
+                                      <li key={limitation}>{limitation}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+                            </div>
+                          </details>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <FinancialTerminalSurface key={code} className="p-3">
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {code}
+                        </div>
+                        <div className="mt-1 text-sm font-medium">
+                          {formatIndicatorValue(
+                            value,
+                            locale,
+                            t("unavailableShort"),
+                          )}
+                        </div>
+                      </FinancialTerminalSurface>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">

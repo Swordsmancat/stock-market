@@ -137,6 +137,62 @@ it("renders nullable public fundamentals with bounded company context", async ()
   expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
 });
 
+it("summarizes complex technical indicators without rendering raw bucket walls", async () => {
+  const payload = buildDetailPayload([
+    { title: "Stored news keeps the detail projection stable" },
+  ]);
+  payload.indicators = {
+    symbol: "600519",
+    source: "database",
+    as_of: "2026-07-13",
+    indicators: {
+      ma: 1198.7,
+      candlestick_patterns: {
+        status: "evaluated",
+        patterns: [],
+        pattern_count: 0,
+        evaluated_bars: 361,
+        rule_set: "candlestick_patterns_v1",
+        integration_source: "instock_inspired_rules",
+      },
+      chip_distribution: {
+        status: "evaluated",
+        buckets: Array.from({ length: 60 }, (_, index) => ({
+          price: 1151.01 + index,
+          share: index / 100,
+          cumulative_share: index / 100,
+        })),
+        current_price: 1210.99,
+        weighted_average_cost: 1363.03,
+        benefit_ratio: 0.09,
+        lookback_days: 210,
+        evaluated_bars: 210,
+        approximation: "volume_weighted_without_float_shares",
+        cost_ranges: {
+          "70": { low: 1263.09, high: 1434.5 },
+          "90": { low: 1197.16, high: 1467.46 },
+        },
+        limitations: [
+          "uses daily OHLCV bars only",
+          "does not know free-float shares or true turnover rate",
+        ],
+        top_buckets: [{ price: 1381.75, share: 0.08 }],
+      },
+    },
+  };
+
+  renderDetail(payload);
+
+  expect(await screen.findByText("1,198.70")).toBeInTheDocument();
+  expect(screen.getByText("No candlestick patterns detected.")).toBeInTheDocument();
+  expect(screen.getByText("1,363.03")).toBeInTheDocument();
+  expect(screen.getByText("9.00%")).toBeInTheDocument();
+  expect(screen.getByText("1,263.09 - 1,434.50")).toBeInTheDocument();
+  expect(screen.getAllByText("More details")).toHaveLength(2);
+  expect(screen.queryByText(/buckets: 0:/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/cumulative_share/)).not.toBeInTheDocument();
+});
+
 it("does not refresh when stored news is already available", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch");
 

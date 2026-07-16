@@ -220,6 +220,40 @@ import {
 
 Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics, or preview blocks. Keep numeric values in `font-mono` where they are scan-first data. If the change only touches visual classes and no visible behavior changes, keep tests focused on existing route actions, headings, forms, empty/error states, and run Chrome visual checks at desktop and tall mobile sizes.
 
+### Convention: Bounded Technical Indicator Summaries
+
+**What**: Scalar technical indicators may use the generic compact formatter. Known
+object-valued indicators must render a field-specific summary and may expose only
+a bounded whitelist of secondary fields through a native `<details>` element.
+Never render raw bucket arrays or stringify the complete object into the default
+instrument-detail view.
+
+**Why**: Stored indicator payloads can contain dozens of nested price buckets.
+Rendering the payload generically hides the decision-relevant values, creates
+unbounded page height, and makes the detail page difficult to scan on mobile.
+
+**Example**:
+
+```tsx
+if (code === "chip_distribution") {
+  return (
+    <>
+      <IndicatorSummaryMetric label={labels.averageCost} value={averageCost} />
+      <details>
+        <summary>{labels.moreDetails}</summary>
+        <BoundedIndicatorMetadata topBuckets={topBuckets.slice(0, 5)} />
+      </details>
+    </>
+  );
+}
+```
+
+Preserve numeric zero as a valid value, render null or invalid numbers with the
+localized unavailable label, keep disclosures closed by default, and give their
+summary a visible keyboard focus state. Component tests must assert key summary
+values, truthful empty states, bounded disclosure controls, and the absence of
+raw payload field names such as `cumulative_share`.
+
 ### Convention: Personal Research Core Before Maintenance
 
 **What**: Keep repeated personal research actions and independently loaded
