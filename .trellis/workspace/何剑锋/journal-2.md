@@ -269,3 +269,36 @@ Added validated daily, exact-market intraday, and sequential stored-news fallbac
 ### Next Steps
 
 - None - task complete
+
+
+## Session 68: Improve homepage news and macro availability
+
+**Date**: 2026-07-16
+**Task**: Improve homepage news and macro availability
+**Branch**: `master`
+
+### Summary
+
+Added Shanghai-localized news timestamps, removed homepage provider status, restored audited World Bank CN/US macro values with bounded recent-window selection, and hardened error redaction.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `624dcf9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

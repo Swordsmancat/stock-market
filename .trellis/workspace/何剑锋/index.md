@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 67
+- **Total Sessions**: 68
 - **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~271 | Active |
+| `journal-2.md` | ~304 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 68 | 2026-07-16 | Improve homepage news and macro availability | `624dcf9` | `master` |
 | 67 | 2026-07-16 | Multi-source research fallback | `1f09127` | `master` |
 | 66 | 2026-07-15 | Resilient CN daily-bar fallback | `e3df27d` | `master` |
 | 65 | 2026-07-15 | Fix homepage fund-flow scrolling | `660f0c1` | `master` |
