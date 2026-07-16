@@ -468,3 +468,36 @@ Corrected legacy zero-PE read projections, added independent cached Eastmoney co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 74: Readable technical indicators
+
+**Date**: 2026-07-16
+**Task**: Readable technical indicators
+**Branch**: `master`
+
+### Summary
+
+Summarized candlestick and chip-distribution indicators into localized, bounded, responsive detail views; added regression coverage and frontend rendering guidance; verified desktop/mobile runtime behavior.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7854898` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
