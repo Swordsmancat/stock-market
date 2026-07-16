@@ -732,3 +732,36 @@ Localized all known instrument-detail technical indicator names and Bollinger/MA
 ### Next Steps
 
 - None - task complete
+
+
+## Session 82: Localize candlestick pattern labels
+
+**Date**: 2026-07-17
+**Task**: Localize candlestick pattern labels
+**Branch**: `master`
+
+### Summary
+
+Localized the five candlestick_patterns_v1 codes for Chinese and English instrument detail pages, preserved bounded unknown-value fallback, added regression coverage and frontend spec guidance, verified in browser, and deployed the Web container.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0933f7f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
