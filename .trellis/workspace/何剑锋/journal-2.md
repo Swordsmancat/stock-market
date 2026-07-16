@@ -600,3 +600,36 @@ Made fundamental metrics independently nullable, migrated legacy provider zero s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 78: Select complete A-share fundamentals fallback
+
+**Date**: 2026-07-16
+**Task**: Select complete A-share fundamentals fallback
+**Branch**: `master`
+
+### Summary
+
+Selected a strictly more complete coherent Eastmoney public fundamentals snapshot for partial stored A-share data, preserved stored ties and failures, and verified 000001 detail provenance and metrics without writes.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0865f5e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
