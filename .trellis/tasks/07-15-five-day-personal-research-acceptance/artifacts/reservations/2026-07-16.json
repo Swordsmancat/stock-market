@@ -1,0 +1,20 @@
+{
+    "schema_version":  1,
+    "trusted_watermark":  "2026-07-16",
+    "scheduled_task_run_id":  "580f2b63-2f6c-427d-8574-96a4ef5416af",
+    "reserved_at":  "2026-07-16T14:29:08.2695770Z",
+    "shortlist":  {
+                      "status":  "ok",
+                      "run_id":  "17401300-6bbb-42e3-8145-4ade85412d29",
+                      "decision_date":  "2026-07-16",
+                      "generation_task_run_id":  "580f2b63-2f6c-427d-8574-96a4ef5416af",
+                      "item_count":  10
+                  },
+    "rank_one":  {
+                     "status":  "present",
+                     "symbol":  "688202",
+                     "market":  "CN",
+                     "rank":  1
+                 },
+    "assistant_call_eligibility":  "eligible"
+}

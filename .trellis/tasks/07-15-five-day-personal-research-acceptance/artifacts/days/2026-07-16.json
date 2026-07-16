@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "result": "degraded",
+  "observation": {
+    "trusted_watermark": "2026-07-16",
+    "reservation_artifact": "artifacts/reservations/2026-07-16.json",
+    "reserved_at": "2026-07-16T14:29:08.2695770Z",
+    "checked_at": "2026-07-16T22:35:06.2041576+08:00",
+    "classification": "new_terminal_scheduled_watermark"
+  },
+  "runtime": {
+    "web": {"status": "ok", "http_status": 200},
+    "api": {"status": "ok", "environment": "local"},
+    "postgresql": {"status": "ok"},
+    "redis": {"status": "ok"},
+    "worker": {"status": "ok", "online_count": 1},
+    "beat": {
+      "status": "ok",
+      "entry_present": true,
+      "task": "research.run_daily_research_loop",
+      "schedule": "21:30 weekdays Asia/Shanghai"
+    }
+  },
+  "daily_loop": {
+    "task_run_id": "580f2b63-2f6c-427d-8574-96a4ef5416af",
+    "trigger": "scheduled",
+    "status": "succeeded",
+    "loop_status": "completed",
+    "scheduled_at": "2026-07-16T21:30:00.023534+08:00",
+    "started_at": "2026-07-16T21:30:00.023534+08:00",
+    "finished_at": "2026-07-16T21:30:14.611059+08:00",
+    "duration_ms": 14587.525,
+    "verified_completed_through": "2026-07-16",
+    "publication_status": "created"
+  },
+  "shortlist": {
+    "status": "ok",
+    "run_id": "17401300-6bbb-42e3-8145-4ade85412d29",
+    "generation_task_run_id": "580f2b63-2f6c-427d-8574-96a4ef5416af",
+    "generation_key_fingerprint": "0b5fa5cafc8025f3",
+    "decision_date": "2026-07-16",
+    "item_count": 10,
+    "rank_one": {"symbol": "688202", "market": "CN", "rank": 1},
+    "coverage": {
+      "daily_bars": {"threshold": 0.95, "ratio": 0.9965635738831615, "passes": true},
+      "technical_indicators": {"threshold": 0.90, "ratio": 0.9976487610779526, "passes": true},
+      "fundamentals": {"threshold": 0.80, "ratio": 1.0, "passes": true}
+    },
+    "generation_model": {
+      "used_llm": true,
+      "provider": "openai",
+      "model": "deepseek-chat",
+      "fallback_code": null
+    }
+  },
+  "assistant": {
+    "reservation_guard": "created_exclusive",
+    "attempted": true,
+    "attempt_count": 1,
+    "retry_performed": false,
+    "http_status": 200,
+    "result_status": "degraded",
+    "elapsed_ms": 7668,
+    "used_llm": true,
+    "provider": "openai",
+    "model": "deepseek-chat",
+    "fallback_code": null,
+    "citation_count": 5,
+    "citation_ids": [
+      "bars_1d:688202:2026-07-16",
+      "technical_indicators:688202:2026-07-13T00:00:00+00:00",
+      "market_indicator:buffett_indicator_us:2025-12-31",
+      "market_indicator:buffett_indicator_cn:2025-12-31",
+      "fundamental_metrics:688202:2026-07-16"
+    ],
+    "unknown_inline_citation_ids": [],
+    "diagnostic_codes": ["MACRO_INDICATOR_NO_DATA", "SOURCE_NO_DATA"],
+    "safety": {
+      "not_investment_advice": true,
+      "no_fabricated_market_data": true
+    }
+  },
+  "outcomes": {
+    "as_of": "2026-07-15",
+    "candidate_count": 10,
+    "summaries": [
+      {"horizon_sessions": 5, "evaluated_count": 0, "pending_count": 10, "blocked_count": 0},
+      {"horizon_sessions": 20, "evaluated_count": 0, "pending_count": 10, "blocked_count": 0},
+      {"horizon_sessions": 60, "evaluated_count": 0, "pending_count": 10, "blocked_count": 0}
+    ],
+    "tracking_latest_run_id": "17401300-6bbb-42e3-8145-4ade85412d29",
+    "tracking_history_run_ids": ["c0f33ccf-4ccf-44e7-88e0-e74d555d327a"],
+    "tracking_has_more": false,
+    "duplicate_generation_key_count": 0,
+    "duplicate_candidate_horizon_count": 0
+  },
+  "assertions": {
+    "runtime_health": "pass",
+    "terminal_scheduled_loop": "pass",
+    "new_trusted_watermark": "pass",
+    "coverage_gates_95_90_80": "pass",
+    "shortlist_identity": "pass",
+    "rank_one_precondition": "pass",
+    "assistant_at_most_once": "pass",
+    "assistant_used_configured_model": "pass",
+    "citation_integrity": "pass",
+    "assistant_source_completeness": "degraded",
+    "cohort_uniqueness": "pass",
+    "research_only_safety": "pass"
+  },
+  "redaction": {
+    "prohibited_fields_absent": true,
+    "question_absent": true,
+    "answer_absent": true,
+    "prompt_absent": true,
+    "credentials_absent": true,
+    "authorization_headers_absent": true,
+    "raw_provider_payload_absent": true,
+    "stack_trace_absent": true
+  }
+}
