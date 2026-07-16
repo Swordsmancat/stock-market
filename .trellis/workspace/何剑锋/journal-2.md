@@ -435,3 +435,36 @@ Added a bounded Cookie-free Eastmoney A-share fundamentals and company-profile f
 ### Next Steps
 
 - None - task complete
+
+
+## Session 73: Truthful stored fundamentals and company context
+
+**Date**: 2026-07-16
+**Task**: Truthful stored fundamentals and company context
+**Branch**: `master`
+
+### Summary
+
+Corrected legacy zero-PE read projections, added independent cached Eastmoney company enrichment for stored A-share fundamentals, verified the real 600519 search/detail workflow, and preserved database financial authority without GET writes.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `463d747` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

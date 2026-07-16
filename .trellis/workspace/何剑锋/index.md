@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 72
+- **Total Sessions**: 73
 - **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~437 | Active |
+| `journal-2.md` | ~470 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 73 | 2026-07-16 | Truthful stored fundamentals and company context | `463d747` | `master` |
 | 72 | 2026-07-16 | Eastmoney public fundamentals fallback | `8bf9c60` | `master` |
 | 71 | 2026-07-16 | Stabilize homepage and Docker startup | `9370acb`, `f3c0beb` | `master` |
 | 70 | 2026-07-16 | Harden public research fallbacks | `4b0c7d0` | `master` |
