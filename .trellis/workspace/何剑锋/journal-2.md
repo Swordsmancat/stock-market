@@ -666,3 +666,36 @@ Collapsed long instrument company scope and profile behind an accessible localiz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 80: Rebalance instrument detail research layout
+
+**Date**: 2026-07-17
+**Task**: Rebalance instrument detail research layout
+**Branch**: `master`
+
+### Summary
+
+Replaced the stretched instrument-detail report grid with independent primary/evidence streams, moved charts and news earlier, added responsive layout coverage and frontend guidance, and deployed the verified Web image to the normal 3000 stack.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80719bb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
