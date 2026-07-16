@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-research-workflow-contract.md","reason":"Verify invalid daily bars never become apparently fresh market evidence."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify explicit no-data and provider error semantics remain truthful."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify provider, cache, ASGI concurrency, and regression coverage."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify the unchanged homepage contract remains covered by page tests."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify data validity and failure semantics survive every layer."}

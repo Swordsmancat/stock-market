@@ -6,6 +6,17 @@
 docker compose up -d db redis
 ```
 
+## Docker Desktop 一键启动完整应用
+
+```bash
+docker compose up -d --build
+```
+
+默认 Compose 会启动 PostgreSQL、Redis、API、Worker、Beat 和 Web。健康检查
+会按依赖顺序启动服务；访问 `http://localhost:3000/zh`，API 位于
+`http://localhost:8000`。首次构建完成后，可以直接在 Docker Desktop 中
+停止或重新启动整个 `stockmarket` 项目，无需另开终端运行 Next.js。
+
 ## 安装后端依赖
 
 ```bash

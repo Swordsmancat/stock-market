@@ -10,12 +10,20 @@ Personal research platform for multi-market information aggregation, macro/valua
 cp .env.example .env
 ```
 
-2. Start infrastructure (PostgreSQL + Redis + optional API/workers):
+2. Start the complete Docker Desktop stack:
+
+```bash
+docker compose up -d --build
+```
+
+This starts PostgreSQL, Redis, API, worker, Beat, and the web app. Open
+[http://localhost:3000/zh](http://localhost:3000/zh). After the first build,
+Docker Desktop can restart the complete project directly.
+
+For host-side frontend/backend development, start only infrastructure:
 
 ```bash
 docker compose up -d db redis
-# full stack with API:
-docker compose up -d db redis api worker beat
 ```
 
 For A-share data providers:

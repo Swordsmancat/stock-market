@@ -1,6 +1,7 @@
 services:
   db:
     image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: stock
       POSTGRES_PASSWORD: stock
@@ -9,14 +10,26 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stock -d stock"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
 
   api:
     image: python:3.13-slim
+    restart: unless-stopped
     working_dir: /app
     volumes:
       - .:/app
@@ -27,15 +40,23 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: >
       sh -c "python -m pip install -e '.[cn-market]' &&
       alembic upgrade head &&
       uvicorn apps.api.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 60
 
   worker:
     image: python:3.13-slim
+    restart: unless-stopped
     working_dir: /app
     volumes:
       - .:/app
@@ -44,14 +65,19 @@ services:
       REDIS_URL: redis://redis:6379/0
       DAILY_REPORT_WATCHLIST: AAPL:US
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     command: >
       sh -c "python -m pip install -e '.[cn-market]' &&
       celery -A apps.worker.celery_app.celery_app worker --loglevel=info"
 
   beat:
     image: python:3.13-slim
+    restart: unless-stopped
     working_dir: /app
     volumes:
       - .:/app
@@ -60,11 +86,36 @@ services:
       REDIS_URL: redis://redis:6379/0
       DAILY_REPORT_WATCHLIST: AAPL:US
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     command: >
       sh -c "python -m pip install -e '.[cn-market]' &&
       celery -A apps.worker.celery_app.celery_app beat --loglevel=info"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web.acceptance
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api:8000
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    command: npm exec next dev -- --hostname 0.0.0.0 --port 3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/zh').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 8s
+      timeout: 6s
+      retries: 30
 
 volumes:
   pgdata:

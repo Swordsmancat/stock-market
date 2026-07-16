@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/personal-research-workflow-contract.md","reason":"Defines finite daily-bar evidence, provider fallback, provenance, and no-fabrication behavior."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Defines provider boundary errors and truthful degraded/no-data responses."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Defines focused provider/service/API regression practices."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Defines homepage server-component load and explicit missing/error presentation."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Covers provider-to-service-to-API-to-homepage consistency."}
