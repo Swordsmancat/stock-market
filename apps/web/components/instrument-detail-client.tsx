@@ -89,6 +89,21 @@ const SUPPORTED_ASSISTANT_MARKET_DATA_PROVIDERS = new Set([
   "tushare",
 ]);
 
+const INDICATOR_LABEL_KEYS = {
+  ma: "indicatorNameMa",
+  rsi: "indicatorNameRsi",
+  bollinger: "bollingerBands",
+  atr: "indicatorNameAtr",
+  macd: "indicatorNameMacd",
+  kdj: "indicatorNameKdj",
+  cci: "indicatorNameCci",
+  obv: "indicatorNameObv",
+  roc: "indicatorNameRoc",
+  bias: "indicatorNameBias",
+  mfi: "indicatorNameMfi",
+  william_r: "indicatorNameWilliamR",
+} as const;
+
 function resolveAssistantProvider(
   ...candidates: Array<string | null | undefined>
 ): string | null {
@@ -269,6 +284,7 @@ function formatIndicatorValue(
   value: unknown,
   locale: string,
   unavailableLabel: string,
+  fieldLabels: Readonly<Record<string, string>> = {},
 ): string {
   if (typeof value === "number") {
     return formatDetailNumber(value, locale, unavailableLabel);
@@ -280,7 +296,12 @@ function formatIndicatorValue(
     return Object.entries(value as Record<string, unknown>)
       .map(
         ([key, nestedValue]) =>
-          `${key}: ${formatIndicatorValue(nestedValue, locale, unavailableLabel)}`,
+          `${fieldLabels[key] ?? key}: ${formatIndicatorValue(
+            nestedValue,
+            locale,
+            unavailableLabel,
+            fieldLabels,
+          )}`,
       )
       .join(" / ");
   }
@@ -415,6 +436,17 @@ export function InstrumentDetailClient({
 }: InstrumentDetailClientProps) {
   const router = useRouter();
   const t = useTranslations("InstrumentDetail");
+  const indicatorFieldLabels: Readonly<Record<string, string>> = {
+    upper: t("upper"),
+    middle: t("middle"),
+    lower: t("lower"),
+    macd: t("indicatorMacdDif"),
+    signal: t("indicatorMacdSignal"),
+    histogram: t("indicatorMacdHistogram"),
+    k: "K",
+    d: "D",
+    j: "J",
+  };
   const { getMovementColor } = useMarketColorsContext();
   const [data, setData] = useState<InstrumentDetailPayload | null>(initialData);
   const [loading, setLoading] = useState(
@@ -1284,16 +1316,26 @@ export function InstrumentDetailClient({
                       );
                     }
 
+                    const indicatorLabelKey = Object.hasOwn(
+                      INDICATOR_LABEL_KEYS,
+                      code,
+                    )
+                      ? INDICATOR_LABEL_KEYS[
+                          code as keyof typeof INDICATOR_LABEL_KEYS
+                        ]
+                      : null;
+
                     return (
                       <FinancialTerminalSurface key={code} className="p-3">
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {code}
+                        <div className="text-xs font-medium text-muted-foreground">
+                          {indicatorLabelKey ? t(indicatorLabelKey) : code}
                         </div>
                         <div className="mt-1 text-sm font-medium">
                           {formatIndicatorValue(
                             value,
                             locale,
                             t("unavailableShort"),
+                            indicatorFieldLabels,
                           )}
                         </div>
                       </FinancialTerminalSurface>

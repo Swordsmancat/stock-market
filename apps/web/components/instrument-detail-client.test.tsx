@@ -11,6 +11,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
 
 import enMessages from "../messages/en.json";
+import zhMessages from "../messages/zh.json";
 import type { InstrumentDetailPayload } from "@/lib/instrument-detail";
 
 vi.mock("@/components/advanced-candlestick-chart", () => ({
@@ -79,17 +80,22 @@ function buildDetailPayload(
 function buildDetailView({
   symbol = "600519",
   market = "CN",
+  locale = "en",
   initialData,
 }: {
   symbol?: string;
   market?: string;
+  locale?: "en" | "zh";
   initialData: InstrumentDetailPayload | null;
 }) {
   return (
-    <NextIntlClientProvider locale="en" messages={enMessages}>
+    <NextIntlClientProvider
+      locale={locale}
+      messages={locale === "zh" ? zhMessages : enMessages}
+    >
       <InstrumentDetailClient
         symbol={symbol}
-        locale="en"
+        locale={locale}
         initialData={initialData}
         detailContext={{
           identity: { symbol, market, name: symbol },
@@ -100,8 +106,11 @@ function buildDetailView({
   );
 }
 
-function renderDetail(initialData: InstrumentDetailPayload | null) {
-  return render(buildDetailView({ initialData }));
+function renderDetail(
+  initialData: InstrumentDetailPayload | null,
+  locale: "en" | "zh" = "en",
+) {
+  return render(buildDetailView({ initialData, locale }));
 }
 
 afterEach(() => {
@@ -222,6 +231,77 @@ it("groups research modules into independent scan-first columns", async () => {
       .compareDocumentPosition(researchGrid as HTMLElement) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
+});
+
+it("localizes known technical indicator and structured field labels", async () => {
+  const payload = buildDetailPayload();
+  payload.indicators = {
+    symbol: "600519",
+    source: "database",
+    as_of: "2026-07-13",
+    indicators: {
+      ma: 10.49,
+      rsi: 44.44,
+      bollinger: { upper: 11, middle: 10.49, lower: 9.99 },
+      atr: 0.22,
+      macd: { macd: -0.05, signal: -0.07, histogram: 0.02 },
+      kdj: { k: 75.82, d: 64.79, j: 97.88 },
+      cci: -3.56,
+      obv: 371335576,
+      roc: 1.15,
+      bias: 0.3,
+      mfi: 46.87,
+      william_r: -30.38,
+      mystery_indicator: { custom_field: 42 },
+    },
+  };
+
+  renderDetail(payload, "zh");
+
+  for (const label of [
+    "移动平均线 (MA)",
+    "相对强弱指标 (RSI)",
+    "布林带 (BOLL)",
+    "平均真实波幅 (ATR)",
+    "指数平滑异同移动平均线 (MACD)",
+    "随机指标 (KDJ)",
+    "顺势指标 (CCI)",
+    "能量潮 (OBV)",
+    "变动率 (ROC)",
+    "乖离率 (BIAS)",
+    "资金流量指标 (MFI)",
+    "威廉指标 (%R)",
+  ]) {
+    expect(await screen.findByText(label)).toBeInTheDocument();
+  }
+  expect(screen.getByText(/上轨: 11\.00/)).toBeInTheDocument();
+  expect(screen.getByText(/DIF: -0\.05/)).toBeInTheDocument();
+  expect(screen.getByText(/K: 75\.82/)).toBeInTheDocument();
+  expect(screen.getByText("mystery_indicator")).toBeInTheDocument();
+  expect(screen.getByText(/custom_field: 42\.00/)).toBeInTheDocument();
+
+  cleanup();
+  renderDetail(payload, "en");
+
+  for (const label of [
+    "Moving average (MA)",
+    "Relative Strength Index (RSI)",
+    "Bollinger Bands (BOLL)",
+    "Average True Range (ATR)",
+    "Moving Average Convergence Divergence (MACD)",
+    "Stochastic oscillator (KDJ)",
+    "Commodity Channel Index (CCI)",
+    "On-Balance Volume (OBV)",
+    "Rate of Change (ROC)",
+    "Bias ratio (BIAS)",
+    "Money Flow Index (MFI)",
+    "Williams %R",
+  ]) {
+    expect(await screen.findByText(label)).toBeInTheDocument();
+  }
+  expect(screen.getByText(/Upper: 11\.00/)).toBeInTheDocument();
+  expect(screen.getByText(/Signal: -0\.07/)).toBeInTheDocument();
+  expect(screen.getByText("mystery_indicator")).toBeInTheDocument();
 });
 
 it("summarizes complex technical indicators without rendering raw bucket walls", async () => {

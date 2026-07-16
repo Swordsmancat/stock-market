@@ -290,6 +290,16 @@ summary a visible keyboard focus state. Component tests must assert key summary
 values, truthful empty states, bounded disclosure controls, and the absence of
 raw payload field names such as `cumulative_share`.
 
+The instrument detail summary also treats indicator and nested-field labels as
+localized UI, not stored evidence text. Keep a bounded map for the API's known
+`ma`, `rsi`, `bollinger`, `atr`, `macd`, `kdj`, `cci`, `obv`, `roc`, `bias`,
+`mfi`, and `william_r` codes in the `InstrumentDetail` catalog. Map known
+Bollinger and MACD object fields to localized labels, retain conventional
+uppercase `K`/`D`/`J`, and fall back to the original code or field for anything
+unknown. Never drop or reinterpret an unknown value merely to avoid showing its
+stored key. Tests render both Chinese and English catalogs and include an
+unknown indicator plus unknown nested field.
+
 ### Convention: Personal Research Core Before Maintenance
 
 **What**: Keep repeated personal research actions and independently loaded

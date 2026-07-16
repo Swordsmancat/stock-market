@@ -542,7 +542,7 @@ it("renders the enhanced client-side instrument detail view", async () => {
   expect(screen.getByText("2 条引用")).toBeInTheDocument();
   expect(screen.getByText("近期报告历史")).toBeInTheDocument();
   expect(screen.getByText("技术指标")).toBeInTheDocument();
-  expect(screen.getByText("ma")).toBeInTheDocument();
+  expect(screen.getByText("移动平均线 (MA)")).toBeInTheDocument();
   expect(screen.getByText("119.00")).toBeInTheDocument();
   expect(screen.getByText("基本面摘要")).toBeInTheDocument();
   expect(screen.getByText("市盈率")).toBeInTheDocument();
