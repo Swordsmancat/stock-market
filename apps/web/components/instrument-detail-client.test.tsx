@@ -304,6 +304,74 @@ it("localizes known technical indicator and structured field labels", async () =
   expect(screen.getByText("mystery_indicator")).toBeInTheDocument();
 });
 
+it("localizes known candlestick pattern codes with truthful unknown fallbacks", async () => {
+  const payload = buildDetailPayload();
+  payload.indicators = {
+    symbol: "600519",
+    source: "database",
+    as_of: "2026-07-13",
+    indicators: {
+      candlestick_patterns: {
+        status: "evaluated",
+        pattern_count: 5,
+        evaluated_bars: 118,
+        rule_set: "candlestick_patterns_v1",
+        integration_source: "instock_inspired_rules",
+        patterns: [
+          { code: "bullish_engulfing", name: "Bullish Engulfing" },
+          "bearish_engulfing",
+          { code: "doji" },
+          { code: "hammer" },
+          { code: "shooting_star" },
+        ],
+      },
+    },
+  };
+
+  renderDetail(payload, "zh");
+
+  for (const label of [
+    "看涨吞没",
+    "看跌吞没",
+    "十字星",
+    "锤头线",
+    "射击之星",
+  ]) {
+    expect(await screen.findByText(new RegExp(label))).toBeInTheDocument();
+  }
+  expect(screen.queryByText(/bullish_engulfing/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/shooting_star/)).not.toBeInTheDocument();
+
+  cleanup();
+  renderDetail(payload, "en");
+
+  for (const label of [
+    "Bullish engulfing",
+    "Bearish engulfing",
+    "Doji",
+    "Hammer",
+    "Shooting star",
+  ]) {
+    expect(await screen.findByText(new RegExp(label))).toBeInTheDocument();
+  }
+
+  const candlestickPatterns = payload.indicators?.indicators
+    ?.candlestick_patterns as { patterns: unknown[]; pattern_count: number };
+  candlestickPatterns.patterns = [
+    { code: "custom_reversal", name: "Stored custom reversal" },
+    "legacy_unknown_pattern",
+  ];
+  candlestickPatterns.pattern_count = 2;
+
+  cleanup();
+  renderDetail(payload, "zh");
+
+  expect(
+    await screen.findByText(/Stored custom reversal/),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/legacy_unknown_pattern/)).toBeInTheDocument();
+});
+
 it("summarizes complex technical indicators without rendering raw bucket walls", async () => {
   const payload = buildDetailPayload([
     { title: "Stored news keeps the detail projection stable" },

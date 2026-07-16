@@ -104,6 +104,14 @@ const INDICATOR_LABEL_KEYS = {
   william_r: "indicatorNameWilliamR",
 } as const;
 
+const CANDLESTICK_PATTERN_LABEL_KEYS = {
+  bullish_engulfing: "patternBullishEngulfing",
+  bearish_engulfing: "patternBearishEngulfing",
+  doji: "patternDoji",
+  hammer: "patternHammer",
+  shooting_star: "patternShootingStar",
+} as const;
+
 function resolveAssistantProvider(
   ...candidates: Array<string | null | undefined>
 ): string | null {
@@ -1082,8 +1090,35 @@ export function InstrumentDetailClient({
                       const patternLabels = patterns
                         .slice(0, 5)
                         .map((pattern) => {
-                          if (typeof pattern === "string") return pattern;
+                          if (typeof pattern === "string") {
+                            return Object.hasOwn(
+                              CANDLESTICK_PATTERN_LABEL_KEYS,
+                              pattern,
+                            )
+                              ? t(
+                                  CANDLESTICK_PATTERN_LABEL_KEYS[
+                                    pattern as keyof typeof CANDLESTICK_PATTERN_LABEL_KEYS
+                                  ],
+                                )
+                              : pattern;
+                          }
                           const patternPayload = indicatorRecord(pattern);
+                          const patternCode =
+                            indicatorString(patternPayload, "code") ??
+                            indicatorString(patternPayload, "pattern");
+                          if (
+                            patternCode &&
+                            Object.hasOwn(
+                              CANDLESTICK_PATTERN_LABEL_KEYS,
+                              patternCode,
+                            )
+                          ) {
+                            return t(
+                              CANDLESTICK_PATTERN_LABEL_KEYS[
+                                patternCode as keyof typeof CANDLESTICK_PATTERN_LABEL_KEYS
+                              ],
+                            );
+                          }
                           return (
                             indicatorString(patternPayload, "name") ??
                             indicatorString(patternPayload, "pattern") ??

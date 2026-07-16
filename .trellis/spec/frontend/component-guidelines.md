@@ -300,6 +300,17 @@ unknown. Never drop or reinterpret an unknown value merely to avoid showing its
 stored key. Tests render both Chinese and English catalogs and include an
 unknown indicator plus unknown nested field.
 
+Candlestick pattern labels follow the same bounded localization contract. Map
+the five `candlestick_patterns_v1` codes (`bullish_engulfing`,
+`bearish_engulfing`, `doji`, `hammer`, and `shooting_star`) through symmetric
+`InstrumentDetail` messages for both structured objects and legacy string
+values. For a known structured pattern, the localized code label takes
+precedence over a stored English `name`. Unknown structured patterns fall back
+to `name`, then `pattern`, then `code`; unknown strings remain unchanged. Keep
+the existing five-item summary bound. Tests that cover all known codes and
+unknown fallbacks must use separate bounded fixtures rather than requiring more
+than five rows in one summary.
+
 ### Convention: Personal Research Core Before Maintenance
 
 **What**: Keep repeated personal research actions and independently loaded
