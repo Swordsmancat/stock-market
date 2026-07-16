@@ -1,4 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, expect, it, vi } from "vitest";
 
@@ -140,13 +148,80 @@ it("renders nullable public fundamentals with bounded company context", async ()
   expect(companyDetails).not.toBeNull();
   expect(companyDetails).not.toHaveAttribute("open");
   expect(
-    within(companyDetails as HTMLElement).getByText("Production and sale of spirits."),
+    within(companyDetails as HTMLElement).getByText(
+      "Production and sale of spirits.",
+    ),
   ).toBeInTheDocument();
   expect(
-    within(companyDetails as HTMLElement).getByText("Premium spirits producer."),
+    within(companyDetails as HTMLElement).getByText(
+      "Premium spirits producer.",
+    ),
   ).toBeInTheDocument();
   expect(screen.getByText("12.50%")).toBeInTheDocument();
   expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+});
+
+it("groups research modules into independent scan-first columns", async () => {
+  const payload = buildDetailPayload([
+    { title: "Stored news keeps the detail projection stable" },
+  ]);
+
+  renderDetail(payload);
+
+  await screen.findByTestId("market-assistant");
+  const researchGrid = document.querySelector(
+    '[data-layout="instrument-research-grid"]',
+  );
+  const marketReviewColumn = document.querySelector(
+    '[data-layout-column="market-review"]',
+  );
+  const evidenceColumn = document.querySelector(
+    '[data-layout-column="research-evidence"]',
+  );
+
+  expect(researchGrid).not.toBeNull();
+  expect(researchGrid).toHaveClass(
+    "xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]",
+  );
+  expect(marketReviewColumn).not.toBeNull();
+  expect(marketReviewColumn).toHaveClass("content-start");
+  expect(evidenceColumn).not.toBeNull();
+  expect(evidenceColumn).toHaveClass("content-start");
+
+  const marketColumn = within(marketReviewColumn as HTMLElement);
+  const evidence = within(evidenceColumn as HTMLElement);
+  const kline = marketColumn.getByText("K-line Chart");
+  const intraday = marketColumn.getByText("Intraday Chart");
+  const news = marketColumn.getByText("Latest News");
+  const savedReport = marketColumn.getByText("AI Stock Report");
+  const technical = evidence.getByText("Technical Indicators");
+  const fundamentals = evidence.getByText("Fundamentals Summary");
+
+  expect(
+    kline.compareDocumentPosition(intraday) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    intraday.compareDocumentPosition(news) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    news.compareDocumentPosition(savedReport) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    technical.compareDocumentPosition(fundamentals) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    (marketReviewColumn as HTMLElement).compareDocumentPosition(
+      evidenceColumn as HTMLElement,
+    ) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    screen
+      .getByTestId("market-assistant")
+      .compareDocumentPosition(researchGrid as HTMLElement) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });
 
 it("summarizes complex technical indicators without rendering raw bucket walls", async () => {
@@ -196,7 +271,9 @@ it("summarizes complex technical indicators without rendering raw bucket walls",
   renderDetail(payload);
 
   expect(await screen.findByText("1,198.70")).toBeInTheDocument();
-  expect(screen.getByText("No candlestick patterns detected.")).toBeInTheDocument();
+  expect(
+    screen.getByText("No candlestick patterns detected."),
+  ).toBeInTheDocument();
   expect(screen.getByText("1,363.03")).toBeInTheDocument();
   expect(screen.getByText("9.00%")).toBeInTheDocument();
   expect(screen.getByText("1,263.09 - 1,434.50")).toBeInTheDocument();
@@ -321,20 +398,22 @@ it("resets locally rendered detail data when exact instrument identity changes",
 it("ignores a stale client detail response after identity changes", async () => {
   let resolveFirstDetail: ((response: Response) => void) | undefined;
   let resolveSecondDetail: ((response: Response) => void) | undefined;
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
-    const url = String(input);
-    if (url === "/api/instruments/600519?market=CN") {
-      return new Promise<Response>((resolve) => {
-        resolveFirstDetail = resolve;
-      });
-    }
-    if (url === "/api/instruments/000001?market=CN") {
-      return new Promise<Response>((resolve) => {
-        resolveSecondDetail = resolve;
-      });
-    }
-    return Promise.reject(new Error(`Unexpected request: ${url}`));
-  });
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation((input) => {
+      const url = String(input);
+      if (url === "/api/instruments/600519?market=CN") {
+        return new Promise<Response>((resolve) => {
+          resolveFirstDetail = resolve;
+        });
+      }
+      if (url === "/api/instruments/000001?market=CN") {
+        return new Promise<Response>((resolve) => {
+          resolveSecondDetail = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
   const view = render(buildDetailView({ initialData: null }));
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -353,7 +432,10 @@ it("ignores a stale client detail response after identity changes", async () => 
             "CN",
           ),
         ),
-        { status: 200, headers: { "content-type": "application/json" } },
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
       ),
     );
   });
@@ -367,7 +449,10 @@ it("ignores a stale client detail response after identity changes", async () => 
         JSON.stringify(
           buildDetailPayload([{ title: "Stale identity detail news" }]),
         ),
-        { status: 200, headers: { "content-type": "application/json" } },
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
       ),
     );
   });
@@ -383,20 +468,22 @@ it("ignores a stale client detail response after identity changes", async () => 
 it("ignores a stale news refresh response after identity changes", async () => {
   let resolveFirstRefresh: ((response: Response) => void) | undefined;
   let resolveSecondRefresh: ((response: Response) => void) | undefined;
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
-    const url = String(input);
-    if (url === "/api/news/600519/refresh?market=CN") {
-      return new Promise<Response>((resolve) => {
-        resolveFirstRefresh = resolve;
-      });
-    }
-    if (url === "/api/news/000001/refresh?market=CN") {
-      return new Promise<Response>((resolve) => {
-        resolveSecondRefresh = resolve;
-      });
-    }
-    return Promise.reject(new Error(`Unexpected request: ${url}`));
-  });
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation((input) => {
+      const url = String(input);
+      if (url === "/api/news/600519/refresh?market=CN") {
+        return new Promise<Response>((resolve) => {
+          resolveFirstRefresh = resolve;
+        });
+      }
+      if (url === "/api/news/000001/refresh?market=CN") {
+        return new Promise<Response>((resolve) => {
+          resolveSecondRefresh = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
   const view = render(buildDetailView({ initialData: buildDetailPayload() }));
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -651,7 +738,10 @@ it("recovers empty news once and replaces only the local news projection", async
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   expect(fetchMock).toHaveBeenCalledWith(
     "/api/news/600519/refresh?market=CN",
-    expect.objectContaining({ method: "POST", signal: expect.any(AbortSignal) }),
+    expect.objectContaining({
+      method: "POST",
+      signal: expect.any(AbortSignal),
+    }),
   );
   expect(
     await screen.findByText(
@@ -829,10 +919,9 @@ it("shows unsupported news recovery as a settings action without retrying", asyn
       "No executable news source is configured for this instrument.",
     ),
   ).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Configure news sources" })).toHaveAttribute(
-    "href",
-    "/settings",
-  );
+  expect(
+    screen.getByRole("link", { name: "Configure news sources" }),
+  ).toHaveAttribute("href", "/settings");
   expect(
     screen.queryByRole("button", { name: "Retry news search" }),
   ).not.toBeInTheDocument();

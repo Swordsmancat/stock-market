@@ -220,6 +220,42 @@ import {
 
 Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics, or preview blocks. Keep numeric values in `font-mono` where they are scan-first data. If the change only touches visual classes and no visible behavior changes, keep tests focused on existing route actions, headings, forms, empty/error states, and run Chrome visual checks at desktop and tall mobile sizes.
 
+### Convention: Independent Instrument Research Streams
+
+**What**: After the live assistant on an instrument detail page, render the
+research modules as two independent, top-aligned streams at `xl`: the wider
+primary stream contains K-line, intraday, news, and the saved AI report; the
+narrower evidence stream contains technical indicators and fundamentals. Below
+`xl`, keep those two streams in the same DOM order as one natural page flow.
+
+**Why**: A single short card next to one nested stack inherits the stack's full
+grid-row height. That stretched the saved report into thousands of pixels of
+empty surface and pushed the charts far below the useful evidence. Independent
+streams keep variable-height cards truthful and let personal research content
+use both columns without CSS-only reordering.
+
+**Example**:
+
+```tsx
+<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+  <div className="grid min-w-0 content-start gap-4">
+    {kline}
+    {intraday}
+    {news}
+    {savedReport}
+  </div>
+  <div className="grid min-w-0 content-start gap-4">
+    {technicalIndicators}
+    {fundamentals}
+  </div>
+</div>
+```
+
+Do not use one card as the first grid item and a nested multi-card stack as the
+second item. Component tests should assert column ownership and DOM order.
+Browser acceptance covers `1280x720` column geometry and `390x844` single-column
+order, with no horizontal overflow at either viewport.
+
 ### Convention: Bounded Technical Indicator Summaries
 
 **What**: Scalar technical indicators may use the generic compact formatter. Known
