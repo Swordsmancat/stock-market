@@ -501,3 +501,36 @@ Summarized candlestick and chip-distribution indicators into localized, bounded,
 ### Next Steps
 
 - None - task complete
+
+
+## Session 75: Stable intraday time hydration
+
+**Date**: 2026-07-16
+**Task**: Stable intraday time hydration
+**Branch**: `master`
+
+### Summary
+
+Fixed instrument-detail hydration by formatting intraday timestamps with explicit locale and market time zones; added cross-zone regression coverage and verified a clean browser console on the rebuilt Web stack.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e27acc5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
