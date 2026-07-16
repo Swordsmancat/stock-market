@@ -114,6 +114,14 @@ function getLocalDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function resolveMarketTimeZone(market: string | null | undefined): string {
+  const normalizedMarket = market?.trim().toUpperCase() ?? "";
+  if (normalizedMarket === "CN") return "Asia/Shanghai";
+  if (normalizedMarket === "HK") return "Asia/Hong_Kong";
+  if (normalizedMarket === "US") return "America/New_York";
+  return "UTC";
+}
+
 function getNewsRecoverySessionKey(identity: {
   market: string;
   symbol: string;
@@ -1480,6 +1488,8 @@ export function InstrumentDetailClient({
         <FinancialTerminalCardContent>
           <IntradayPriceChart
             points={data.intraday?.items ?? []}
+            locale={locale}
+            timeZone={resolveMarketTimeZone(data.market)}
             previousClose={data.intraday?.previous_close ?? null}
             status={data.intraday?.status ?? "degraded"}
             reason={data.intraday?.availability?.reason ?? null}

@@ -43,6 +43,8 @@ type IntradayTrustSession = {
 
 type IntradayPriceChartProps = {
   points: IntradayPricePoint[];
+  locale: string;
+  timeZone: string;
   previousClose?: number | null;
   status?: IntradayChartStatus;
   reason?: string | null;
@@ -109,15 +111,22 @@ function formatVolume(value: number | null | undefined): string {
   return Math.round(value).toLocaleString();
 }
 
-function formatIntradayTime(timestamp: string): string {
-  return new Date(timestamp).toLocaleTimeString([], {
+function formatIntradayTime(
+  timestamp: string,
+  locale: string,
+  timeZone: string,
+): string {
+  return new Date(timestamp).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone,
   });
 }
 
 export function IntradayPriceChart({
   points,
+  locale,
+  timeZone,
   previousClose = null,
   status = "degraded",
   reason = null,
@@ -307,7 +316,11 @@ export function IntradayPriceChart({
       <div className="grid gap-2 rounded border bg-muted/20 p-3 text-xs text-muted-foreground sm:grid-cols-5">
         <div>
           <div className="font-medium text-foreground">{t("timeLabel")}</div>
-          <div>{activePoint ? formatIntradayTime(activePoint.timestamp) : "--"}</div>
+          <div>
+            {activePoint
+              ? formatIntradayTime(activePoint.timestamp, locale, timeZone)
+              : "--"}
+          </div>
         </div>
         <div>
           <div className="font-medium text-foreground">{t("priceLabel")}</div>

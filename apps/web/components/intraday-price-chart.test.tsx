@@ -100,6 +100,8 @@ describe("IntradayPriceChart", () => {
     render(
       <IntradayPriceChart
         points={[]}
+        locale="en"
+        timeZone="Asia/Shanghai"
         status="degraded"
         reason="The selected provider does not support verified minute bars in this backend."
       />,
@@ -113,7 +115,15 @@ describe("IntradayPriceChart", () => {
   });
 
   it("renders price average previous-close and volume data for available intraday points", async () => {
-    render(<IntradayPriceChart points={createIntradayPoints()} previousClose={99.5} status="ok" />);
+    render(
+      <IntradayPriceChart
+        points={createIntradayPoints()}
+        locale="en"
+        timeZone="Asia/Shanghai"
+        previousClose={99.5}
+        status="ok"
+      />,
+    );
 
     await waitFor(() => {
       expect(chartMockState.createChartMock).toHaveBeenCalled();
@@ -139,9 +149,29 @@ describe("IntradayPriceChart", () => {
     expect(screen.getByText("1,200")).toBeInTheDocument();
   });
 
+  it("formats the active time with the supplied locale and market time zone", () => {
+    render(
+      <IntradayPriceChart
+        locale="en"
+        timeZone="America/New_York"
+        status="ok"
+        points={[
+          {
+            timestamp: "2026-07-03T13:31:00Z",
+            close: 101,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("09:31 AM")).toBeInTheDocument();
+  });
+
   it("filters invalid points before setting chart data", async () => {
     render(
       <IntradayPriceChart
+        locale="en"
+        timeZone="Asia/Shanghai"
         status="ok"
         points={[
           { timestamp: "not-a-date", close: 100, volume: 1_000 },

@@ -59,6 +59,10 @@ Frontend quality is enforced mainly through Vitest, Testing Library, and focused
   `allowedDevOrigins`; add other required development hosts explicitly.
 - HTTP 200 for the document is insufficient evidence that the UI is usable.
   At least one client chunk and one real client interaction must also pass.
+- Text rendered by both the server and a client component must not inherit the
+  host locale or time zone. Date/time formatters receive the active page locale
+  plus an explicit market or product time zone so container UTC and browser
+  local settings cannot produce different hydration text.
 - A page whose document renders but whose client chunks return HTTP 403 is a
   failed state: server HTML may look complete while buttons have no handlers.
 - Keep the allowlist limited to known local development hosts. Do not use a
@@ -72,6 +76,7 @@ Frontend quality is enforced mainly through Vitest, Testing Library, and focused
 | Document and chunk both 200, interaction still fails | Diagnose component hydration/runtime behavior; do not blame CORS without evidence |
 | New local hostname is required | Add one explicit hostname plus a config regression |
 | Production build | Must remain independent of the development-origin allowlist |
+| Server/client time text differs | Pass explicit locale and time zone to the formatter and add a cross-zone component regression |
 
 ### 5. Good / Base / Bad Cases
 
@@ -83,6 +88,8 @@ Frontend quality is enforced mainly through Vitest, Testing Library, and focused
   healthy while every client chunk is rejected with 403.
 - Bad: allow every development origin instead of listing the hosts actually
   used by this personal installation.
+- Bad: call `toLocaleTimeString([])` during SSR and rely on the server and
+  browser having identical defaults.
 
 ### 6. Tests Required
 
@@ -90,6 +97,8 @@ Frontend quality is enforced mainly through Vitest, Testing Library, and focused
   `localhost`.
 - Browser acceptance clicks global search, exercises `Ctrl/Meta+K` and Escape,
   and verifies a result preserves `market` in the detail URL.
+- SSR client components that render dates or times include a regression with a
+  timestamp whose expected output differs from the test host's local zone.
 - Environment recovery reruns the Origin-bearing client-chunk request and
   records the transition from 403 to 200.
 - Run the full frontend suite, TypeScript, and a production Next build after a
