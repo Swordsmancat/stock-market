@@ -574,6 +574,16 @@ Stored FRED observations must include:
   - `HKG` + `CM.MKT.LCAP.GD.ZS` -> `buffett_indicator_hk`.
 - Optional same-year GDP context:
   - `NY.GDP.MKTP.CD` is fetched for component metadata only; it is not a separate macro indicator in this slice.
+- `most_recent_values` must be sent to World Bank as the documented `mrv`
+  query parameter. With no explicit year range, both default and `latest_only`
+  refreshes request the existing bounded five-value window; `latest_only`
+  selects the maximum valid observation locally after null rows are skipped.
+- World Bank also documents `MRNEV` for recent non-empty values, but this refresh
+  deliberately avoids that path because live probes reproduced latency beyond
+  45 seconds. Do not reduce the `mrv` window to one row, which can lose a lagged
+  annual series when its newest row is null.
+- The default World Bank request timeout is a bounded 30 seconds so normal
+  official-API latency above ten seconds does not cause a premature failure.
 - World Bank year strings are stored as annual observation dates on December 31 of that year.
 - Missing/null/invalid World Bank values are skipped, never stored as zero.
 - Persistence must reuse `MarketIndicatorObservationSeed` and `upsert_market_indicator_observation(...)`.
@@ -585,7 +595,8 @@ Stored FRED observations must include:
 | Condition | Behavior |
 |---|---|
 | World Bank response is not the expected `[metadata, rows]` list | Raise `WorldBankProviderError`; no writes. |
-| HTTP/network/provider exception | Raise sanitized `WorldBankProviderError`; do not expose raw tokens, full payload dumps, or stack traces. |
+| HTTP/network/provider exception | Raise sanitized `WorldBankProviderError` with the raw cause suppressed; neither the message nor formatted exception chain may expose raw tokens, full payload dumps, or stack traces. |
+| World Bank exceeds the bounded 30-second request timeout | Raise sanitized `WorldBankProviderError`; do not retry implicitly or write partial/fabricated observations. |
 | Row date is not a valid year | Skip row and count a diagnostic. |
 | Row value is null, blank, non-decimal, or non-finite | Skip row and count a diagnostic. |
 | No valid rows for a target | Return zero observations for that target with diagnostics; do not fabricate a value. |
@@ -606,7 +617,13 @@ Stored FRED observations must include:
 
 ### 6. Tests Required
 
-- Provider tests assert successful parse, missing/null skip behavior, pagination, unexpected shape failure, and sanitized provider errors.
+- Provider tests assert successful parse, the `mrv` query key (and absence of
+  `mrnev`), the bounded 30-second default timeout, missing/null skip behavior,
+  pagination, unexpected shape failure, and sanitized provider errors whose
+  formatted exception chain cannot recover the raw cause text.
+- Service tests assert `latest_only` requests the bounded five-value window and
+  persists only the maximum valid observation with matching same-year GDP
+  context.
 - Service tests assert World Bank targets map to existing Buffett codes, dry-run writes nothing, skipped rows produce diagnostics, stored components satisfy source/method metadata, GDP context is included when available, and invalid target codes roll back.
 - Script tests assert dry-run output, `--no-latest-only`, bad year parsing, and provider failures.
 - Source-readiness tests assert the World Bank adapter item appears, remains guidance-only without observations, and becomes configured only from local observations.

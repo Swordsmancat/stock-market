@@ -792,7 +792,6 @@ def refresh_world_bank_macro_indicators(
     most_recent_values = _world_bank_most_recent_values(
         start_year=start_year,
         end_year=end_year,
-        latest_only=latest_only,
     )
 
     ratio_payloads: dict[str, WorldBankIndicatorObservations] = {}
@@ -918,12 +917,11 @@ def _world_bank_most_recent_values(
     *,
     start_year: int | None,
     end_year: int | None,
-    latest_only: bool,
 ) -> int | None:
     if start_year is not None or end_year is not None:
         return None
-    if latest_only:
-        return 1
+    # A small MRV window avoids the slow MRNEV path while preserving local
+    # latest-valid selection after missing provider rows are skipped.
     return WORLD_BANK_DEFAULT_RECENT_VALUES
 
 

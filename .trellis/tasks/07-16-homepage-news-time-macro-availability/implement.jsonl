@@ -1,0 +1,8 @@
+{"file":".trellis/spec/backend/market-indicator-seed-import-contract.md","reason":"Preserve audited official refresh, no-fabrication, dry-run, and sanitized provider boundaries."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Keep World Bank failures bounded and secret-safe."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply focused provider tests and proportional backend validation."}
+{"file":".trellis/spec/backend/news-search-provider-contract.md","reason":"Preserve stored-news-only homepage behavior and news metadata boundaries."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Keep server-rendered homepage composition, fixed panels, and explicit empty/error states."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Require localized page behavior tests and browser verification."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Reuse the shared stored-news payload type and format dates at the rendering boundary."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify source-to-storage-to-payload-to-display data flow across backend and frontend."}

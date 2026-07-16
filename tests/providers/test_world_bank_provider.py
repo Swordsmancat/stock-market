@@ -1,3 +1,4 @@
+import traceback
 from datetime import date
 from decimal import Decimal
 
@@ -25,9 +26,10 @@ def test_world_bank_provider_parses_country_indicator_observations():
         )
         assert params["format"] == "json"
         assert params["date"] == "2020:2024"
-        assert params["mrnev"] == 3
+        assert params["mrv"] == 3
+        assert "mrnev" not in params
         assert params["page"] == 1
-        assert timeout == 10.0
+        assert timeout == 30.0
         return FakeResponse(
             [
                 {"page": 1, "pages": 1},
@@ -129,3 +131,5 @@ def test_world_bank_provider_sanitizes_http_errors():
 
     assert "secret" not in str(raised_error.value)
     assert "RuntimeError" in str(raised_error.value)
+    assert raised_error.value.__cause__ is None
+    assert "secret" not in "".join(traceback.format_exception(raised_error.value))

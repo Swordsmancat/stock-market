@@ -1,5 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { StoredNewsItem } from "@/lib/news-payload";
 
 const { getPlatformSettingsMock } = vi.hoisted(() => ({
   getPlatformSettingsMock: vi.fn(),
@@ -17,10 +18,10 @@ vi.mock("@/lib/platform-settings-store", async () => {
 
 import HomePage from "./page";
 
-const defaultNewsItems = [
-  { symbol: "NVDA", source: "Reuters", title: "US chip stocks rally as AI demand improves", sentiment: "positive", confidence: 0.82 },
-  { symbol: "AAPL", source: "Company filing", title: "Apple expands AI features for enterprise devices", sentiment: "positive", confidence: 0.68 },
-  { symbol: "US10Y", source: "Market desk", title: "Yield volatility keeps rate-sensitive sectors cautious", sentiment: "negative", confidence: 0.57 },
+const defaultNewsItems: StoredNewsItem[] = [
+  { symbol: "NVDA", source: "Reuters", title: "US chip stocks rally as AI demand improves", sentiment: "positive", confidence: 0.82, published_at: "2026-07-16T09:35:00+08:00" },
+  { symbol: "AAPL", source: "Company filing", title: "Apple expands AI features for enterprise devices", sentiment: "positive", confidence: 0.68, published_at: "2026-07-16T08:20:00+08:00" },
+  { symbol: "US10Y", source: "Market desk", title: "Yield volatility keeps rate-sensitive sectors cautious", sentiment: "negative", confidence: 0.57, published_at: "2026-07-15T22:45:00+08:00" },
 ];
 
 const defaultHotSectors = [
@@ -136,6 +137,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   getPlatformSettingsMock.mockReset();
 });
 
@@ -377,7 +379,7 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.getAllByText("Market overview").length).toBeGreaterThan(1);
   expect(screen.getByText("Fund flow")).toBeInTheDocument();
   expect(screen.getByText("AI market sentiment")).toBeInTheDocument();
-  expect(screen.getByText("News source status")).toBeInTheDocument();
+  expect(screen.queryByText("News source status")).not.toBeInTheDocument();
   expect(screen.getAllByText("Semiconductors").length).toBeGreaterThan(1);
   expect(screen.getAllByText("AI compute").length).toBeGreaterThan(1);
   expect(screen.getByText("US chip stocks rally as AI demand improves")).toBeInTheDocument();
@@ -388,19 +390,16 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.getByRole("img", { name: "Fund flow" })).toBeInTheDocument();
   expect(screen.getByRole("img", { name: "AI market sentiment" })).toBeInTheDocument();
   expect(screen.getByText("Research-only status. No trading instruction, target price, position sizing, or execution guidance.")).toBeInTheDocument();
-  expect(screen.getByText("Anspire AI Search")).toBeInTheDocument();
-  expect(screen.getByText("SerpAPI Baidu")).toBeInTheDocument();
-  expect(screen.getByText("Ready")).toBeInTheDocument();
-  expect(screen.getByText("Needs key")).toBeInTheDocument();
+  expect(screen.queryByText("Anspire AI Search")).not.toBeInTheDocument();
+  expect(screen.queryByText("SerpAPI Baidu")).not.toBeInTheDocument();
 
   const moreLinks = screen.getAllByRole("link", { name: "More" });
-  expect(moreLinks).toHaveLength(8);
+  expect(moreLinks).toHaveLength(7);
   expect(moreLinks.map((link) => link.getAttribute("href"))).toEqual(
     expect.arrayContaining([
       "/instruments",
       "/evidence",
       "/ai-research",
-      "/settings",
     ]),
   );
   expect(
@@ -422,6 +421,82 @@ it("renders the strict terminal-style homepage cockpit", async () => {
   expect(screen.queryByRole("button", { name: "Ingest daily bars" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Refresh Analysis" })).not.toBeInTheDocument();
 });
+
+it("shows the stored publication date and time using the active locale", async () => {
+  const publishedAt = "2026-07-15T16:30:00Z";
+  vi.stubEnv("TZ", "UTC");
+  mockHomepageFetch({
+    newsItems: [
+      {
+        ...defaultNewsItems[0],
+        published_at: publishedAt,
+      },
+    ],
+  });
+
+  await renderHomepage("zh");
+
+  const newsRegion = screen.getByRole("region", {
+    name: "Latest news sentiment",
+  });
+  const expectedPublicationTime = new Intl.DateTimeFormat("zh", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Shanghai",
+  }).format(new Date(publishedAt));
+  const timeElement = within(newsRegion).getByText(expectedPublicationTime);
+  expect(timeElement.tagName).toBe("TIME");
+  expect(timeElement.nextElementSibling).toHaveTextContent(/NVDA.*Reuters/);
+});
+
+it.each([undefined, null, "not-a-date"])(
+  "uses the existing unavailable label for a missing or invalid stored publication time: %s",
+  async (publishedAt) => {
+    mockHomepageFetch({
+      newsItems: [
+        {
+          ...defaultNewsItems[0],
+          published_at: publishedAt,
+        },
+      ],
+    });
+
+    await renderHomepage();
+
+    const newsRegion = screen.getByRole("region", {
+      name: "Latest news sentiment",
+    });
+    expect(within(newsRegion).getByText("N/A")).toBeInTheDocument();
+  },
+);
+
+it.each([
+  { credentialConfigured: true, expectedReadiness: "100" },
+  { credentialConfigured: false, expectedReadiness: "0" },
+])(
+  "keeps provider capabilities in aggregate readiness without rendering provider details: $expectedReadiness",
+  async ({ credentialConfigured, expectedReadiness }) => {
+    const platformSettings = buildPlatformSettings();
+    getPlatformSettingsMock.mockResolvedValue({
+      ...platformSettings,
+      news_search_provider_capabilities:
+        platformSettings.news_search_provider_capabilities.map((provider) => ({
+          ...provider,
+          enabled: true,
+          credential_configured: credentialConfigured,
+        })),
+    });
+    mockHomepageFetch();
+
+    await renderHomepage();
+
+    expect(
+      screen.getByText("Provider readiness").parentElement,
+    ).toHaveTextContent(expectedReadiness);
+    expect(screen.queryByText("Anspire AI Search")).not.toBeInTheDocument();
+    expect(screen.queryByText("SerpAPI Baidu")).not.toBeInTheDocument();
+  },
+);
 
 it("loads bounded cross-symbol stored news without provider-search fan-out", async () => {
   const fetchMock = mockHomepageFetch();
@@ -514,9 +589,9 @@ it("keeps every bounded news row in a named focusable scroll region", async () =
   mockHomepageFetch({
     newsItems: [
       ...defaultNewsItems,
-      { symbol: "MSFT", source: "Reuters", title: "Fourth bounded news row", sentiment: "neutral", confidence: 0.5 },
-      { symbol: "GOOG", source: "Filing", title: "Fifth bounded news row", sentiment: "positive", confidence: 0.6 },
-      { symbol: "META", source: "Exchange", title: "Sixth bounded news row", sentiment: "negative", confidence: 0.4 },
+      { symbol: "MSFT", source: "Reuters", title: "Fourth bounded news row", sentiment: "neutral", confidence: 0.5, published_at: "2026-07-16T07:40:00+08:00" },
+      { symbol: "GOOG", source: "Filing", title: "Fifth bounded news row", sentiment: "positive", confidence: 0.6, published_at: "2026-07-15T19:15:00+08:00" },
+      { symbol: "META", source: "Exchange", title: "Sixth bounded news row", sentiment: "negative", confidence: 0.4, published_at: "2026-07-15T18:05:00+08:00" },
     ],
   });
 
@@ -597,7 +672,9 @@ it("keeps the terminal dashboard useful when optional market signals have no dat
   expect(screen.getByText("No live hot-sector data available.")).toBeInTheDocument();
   expect(screen.getByText("No news sentiment available.")).toBeInTheDocument();
   expect(screen.getByText("No fund-flow data available.")).toBeInTheDocument();
-  expect(screen.getByText("Anspire AI Search")).toBeInTheDocument();
+  expect(screen.queryByText("News source status")).not.toBeInTheDocument();
+  expect(screen.queryByText("Anspire AI Search")).not.toBeInTheDocument();
+  expect(screen.queryByText("SerpAPI Baidu")).not.toBeInTheDocument();
   expect(screen.queryByText("AI research brief")).not.toBeInTheDocument();
   expect(screen.queryByText("Narrative synthesis")).not.toBeInTheDocument();
   expect(screen.queryByText("Followed K-line charts")).not.toBeInTheDocument();

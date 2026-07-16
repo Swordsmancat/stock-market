@@ -1,0 +1,8 @@
+{"file":".trellis/spec/backend/market-indicator-seed-import-contract.md","reason":"Check that only audited stored observations reach the homepage and AI evidence."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check timeout failures remain sanitized and bounded."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check focused and proportional backend coverage."}
+{"file":".trellis/spec/backend/news-search-provider-contract.md","reason":"Check latest-news remains stored-only and no provider fan-out is introduced."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check the fixed-height homepage panel and removed provider strip behavior."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check localization, page tests, and visual acceptance."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check news timestamp handling uses the shared payload contract."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check the complete macro and news data paths after implementation."}

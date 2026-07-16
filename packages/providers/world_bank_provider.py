@@ -8,6 +8,7 @@ from typing import Any
 
 
 DEFAULT_WORLD_BANK_API_BASE_URL = "https://api.worldbank.org/v2"
+DEFAULT_WORLD_BANK_REQUEST_TIMEOUT_SECONDS = 30.0
 WORLD_BANK_INDICATOR_PAGE_URL_TEMPLATE = (
     "https://data.worldbank.org/indicator/{indicator_id}?locations={country_code}"
 )
@@ -54,7 +55,7 @@ class WorldBankProvider:
         *,
         api_base_url: str = DEFAULT_WORLD_BANK_API_BASE_URL,
         http_getter: HttpGetter | None = None,
-        timeout: float = 10.0,
+        timeout: float = DEFAULT_WORLD_BANK_REQUEST_TIMEOUT_SECONDS,
     ) -> None:
         self._api_base_url = api_base_url.rstrip("/")
         self._http_getter = http_getter or _default_http_getter
@@ -86,7 +87,7 @@ class WorldBankProvider:
             end = end_year if end_year is not None else start_year
             params["date"] = f"{start}:{end}"
         if most_recent_values is not None:
-            params["mrnev"] = most_recent_values
+            params["mrv"] = most_recent_values
 
         observations: list[WorldBankObservation] = []
         skipped: list[WorldBankSkippedObservation] = []
@@ -147,7 +148,7 @@ class WorldBankProvider:
                     "World Bank request failed for "
                     f"{country_code}/{indicator_id}: {type(error).__name__}."
                 )
-            ) from error
+            ) from None
 
         return payload
 

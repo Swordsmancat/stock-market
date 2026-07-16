@@ -1,11 +1,18 @@
 import { Link } from "@/src/i18n/routing";
 import type { ReactNode } from "react";
-import { Activity, ArrowRight, Newspaper, Search, Settings2, ShieldCheck, CircleAlert, Plus, BarChart3, Gauge, LineChart } from "lucide-react";
+import {
+  Activity,
+  ArrowRight,
+  BarChart3,
+  Gauge,
+  LineChart,
+  Newspaper,
+  Plus,
+} from "lucide-react";
 
 import { FlashBanner } from "@/components/flash-banner";
 import { FinancialDashboardHero } from "@/components/financial-dashboard-hero";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { withProviderQuery } from "@/lib/market-data";
@@ -329,6 +336,7 @@ type NewsLoadResult =
 const DASHBOARD_HEALTH_SAMPLE_LIMIT = 25;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const FALLBACK_DASHBOARD_LOCALE = "en-US";
+const DASHBOARD_TIME_ZONE = "Asia/Shanghai";
 const OPTIONAL_DASHBOARD_FETCH_TIMEOUT_MS = 5000;
 const HOMEPAGE_NEWS_LIMIT = 6;
 type FreshnessStatus = "fresh" | "stale" | "no_data" | "unavailable";
@@ -606,6 +614,25 @@ function formatDashboardDate(value: string | null | undefined, locale: string, u
   return Number.isNaN(parsedDate.getTime())
     ? unavailableLabel
     : parsedDate.toLocaleDateString(getSafeDashboardLocale(locale));
+}
+
+function formatDashboardDateTime(
+  value: string | null | undefined,
+  locale: string,
+  unavailableLabel: string,
+): string {
+  if (!value) {
+    return unavailableLabel;
+  }
+
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime())
+    ? unavailableLabel
+    : new Intl.DateTimeFormat(getSafeDashboardLocale(locale), {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: DASHBOARD_TIME_ZONE,
+      }).format(parsedDate);
 }
 
 function formatValuationIndicatorValue(
@@ -1121,12 +1148,14 @@ function LatestNewsSentimentPanel({
   items,
   loadFailed,
   moreHref,
+  locale,
   unavailableLabel,
   t,
 }: {
   items: NewsPayload["items"];
   loadFailed: boolean;
   moreHref: string;
+  locale: string;
   unavailableLabel: string;
   t: (key: any, values?: Record<string, string | number>) => string;
 }) {
@@ -1162,6 +1191,13 @@ function LatestNewsSentimentPanel({
             const confidence = typeof item.confidence === "number"
               ? t("confidence", { score: Math.round(item.confidence * 100) })
               : unavailableLabel;
+            const publishedAt = formatDashboardDateTime(
+              item.published_at,
+              locale,
+              unavailableLabel,
+            );
+            const hasValidPublishedAt =
+              Boolean(item.published_at) && publishedAt !== unavailableLabel;
             const sentimentClassName =
               item.sentiment === "positive"
                 ? "border-positive/35 bg-positive/10 text-positive"
@@ -1173,8 +1209,17 @@ function LatestNewsSentimentPanel({
                 <div className="font-mono text-[11px] font-semibold text-primary">{index + 1}</div>
                 <div className="min-w-0">
                   <div className="line-clamp-1 font-medium text-foreground">{item.title}</div>
-                  <div className="mt-1 truncate text-[10px] text-muted-foreground">
-                    {identity ? `${identity} · ${confidence}` : confidence}
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+                    {hasValidPublishedAt ? (
+                      <time dateTime={item.published_at ?? undefined} className="shrink-0">
+                        {publishedAt}
+                      </time>
+                    ) : (
+                      <span className="shrink-0">{unavailableLabel}</span>
+                    )}
+                    <span className="truncate border-l border-border/70 pl-1.5">
+                      {identity ? `${identity} | ${confidence}` : confidence}
+                    </span>
                   </div>
                 </div>
                 <div className={`rounded-sm border px-1.5 py-1 text-center text-[10px] ${sentimentClassName}`}>
@@ -1457,95 +1502,6 @@ function SentimentMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function NewsProviderStatusStrip({
-  providers,
-  t,
-}: {
-  providers: NewsSearchProviderCapability[];
-  t: (key: any, values?: Record<string, string | number>) => string;
-}) {
-  return (
-    <TerminalPanel
-      title={t("newsProviderStripTitle")}
-      description={t("newsProviderStripDesc")}
-      titleId="terminal-news-provider-heading"
-      icon={<Search className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
-      action={<TerminalActionLink href="/settings" label={t("terminalActionMore")} icon={<Settings2 className="h-3.5 w-3.5" aria-hidden="true" />} />}
-      contentClassName="p-2"
-    >
-      {providers.length > 0 ? (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
-          {providers.map((capability) => {
-            const statusKey = getNewsProviderStatusKey(capability);
-            const statusClassName = getNewsProviderStatusClassName(capability);
-            return (
-              <div
-                key={capability.provider}
-                className={`min-h-[4.75rem] rounded-sm border bg-background/55 p-2 ${statusClassName}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold text-foreground">{capability.display_name}</div>
-                    <div className="mt-1 font-mono text-[10px] text-muted-foreground">
-                      {t("newsProviderPriority", { priority: capability.priority })}
-                    </div>
-                  </div>
-                  {capability.configured ? (
-                    <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  ) : (
-                    <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  )}
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  <Badge variant="outline" className="px-1 py-0 text-[10px]">
-                    {t(statusKey as any)}
-                  </Badge>
-                  {capability.enabled ? (
-                    <Badge variant="outline" className="px-1 py-0 text-[10px]">
-                      {t("newsProviderEnabled")}
-                    </Badge>
-                  ) : null}
-                </div>
-                <div className="mt-1 truncate text-[10px] text-muted-foreground">
-                  {capability.implementation_status}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">{t("newsProviderStripEmpty")}</p>
-      )}
-    </TerminalPanel>
-  );
-}
-
-function getNewsProviderStatusKey(capability: NewsSearchProviderCapability): string {
-  if (!capability.enabled) {
-    return "newsProviderStatusDisabled";
-  }
-  if (capability.credential_required && !capability.credential_configured) {
-    return "newsProviderStatusNeedsSetup";
-  }
-  if (["implemented", "existing", "mock"].includes(capability.implementation_status)) {
-    return "newsProviderStatusReady";
-  }
-  return "newsProviderStatusRegistered";
-}
-
-function getNewsProviderStatusClassName(capability: NewsSearchProviderCapability): string {
-  if (!capability.enabled) {
-    return "border-muted text-muted-foreground";
-  }
-  if (capability.credential_required && !capability.credential_configured) {
-    return "border-warning/40 bg-warning/10 text-warning";
-  }
-  if (["implemented", "existing", "mock"].includes(capability.implementation_status)) {
-    return "border-positive/40 bg-positive/10 text-positive";
-  }
-  return "border-primary/35 bg-primary/10 text-primary";
-}
-
 export default async function HomePage({
   params,
   searchParams = Promise.resolve({}),
@@ -1739,6 +1695,7 @@ export default async function HomePage({
             items={newsItemsForHome}
             loadFailed={latestNewsResult.status === "failed"}
             moreHref="/instruments"
+            locale={locale}
             unavailableLabel={t("unavailableShort")}
             t={t}
           />
@@ -1758,8 +1715,6 @@ export default async function HomePage({
           />
           <AiSentimentPanel summary={aiSentimentSummary} t={t} />
         </div>
-
-        <NewsProviderStatusStrip providers={newsSearchProviderCapabilities} t={t} />
       </div>
     </div>
   );

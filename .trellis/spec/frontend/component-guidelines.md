@@ -108,9 +108,24 @@ Use page tests to assert both sides of the contract: the curated market sections
 
 **Why**: The homepage should match the product's market-terminal direction without turning into a marketing page or duplicating deep research workflows.
 
-**Provider strip contract**: The homepage news/provider status strip reads from `getPlatformSettings().news_search_provider_capabilities`. It may display `display_name`, `enabled`, `configured`, `credential_required`, `credential_configured`, `implementation_status`, and `priority`. It must not expose `news_search_provider_keys`; public settings already redact key values.
+**Provider status ownership contract**: Provider names, priorities,
+configuration state, credential readiness, and implementation status belong to
+Settings. The homepage may read
+`getPlatformSettings().news_search_provider_capabilities` only as an input to
+the aggregate AI sentiment/data-health summary; it must not render a separate
+provider status panel or provider-level operational details. Public settings
+must continue to redact `news_search_provider_keys`.
 
-**Citation boundary**: News search providers on the homepage are readiness/status signals only. Search results become citable evidence only after they are stored locally as `NewsArticle` rows or another approved local evidence record.
+**Citation boundary**: Provider capability data used by the homepage is an
+aggregate readiness input only. Search results become citable evidence only
+after they are stored locally as `NewsArticle` rows or another approved local
+evidence record.
+
+**Stored-news time contract**: Format homepage `published_at` values with the
+active locale and explicit `timeZone: "Asia/Shanghai"`; server or container
+defaults must not change the displayed date. Render the valid value in a
+semantic `<time dateTime={published_at}>` before truncatable source/confidence
+metadata. Missing or invalid values use the existing unavailable label.
 
 **Module action contract**: Every visible homepage terminal module should expose a localized "More" link to the owning routed module. Use real `Link` navigation, not click handlers, and keep action text in `apps/web/messages/en.json` and `apps/web/messages/zh.json`. If a module has a second setup action, such as adding a macro indicator, render it next to "More" inside the existing panel action area.
 
@@ -130,13 +145,25 @@ changes `scrollTop` at the constrained desktop breakpoint.
 **Example**:
 
 ```tsx
-const newsSearchProviderCapabilities =
-  platformSettings.news_search_provider_capabilities ?? [];
+const providers = platformSettings.news_search_provider_capabilities ?? [];
+const summary = buildAiSentimentSummary({
+  newsItems,
+  healthCounts,
+  checkedInstrumentCount,
+  sectors,
+  providers,
+});
 
-<NewsProviderStrip providers={newsSearchProviderCapabilities} />
+<AiSentimentPanel summary={summary} t={t} />
 ```
 
-Tests should assert that the provider strip renders at least one configured provider and one setup/degraded state when the fixture includes both. Homepage tests should also assert the "More" hrefs and any setup action hrefs for modules that add them.
+Homepage tests should assert that provider names and the provider status heading
+remain absent even when capability fixtures contain configured and degraded
+providers. Settings page tests own provider-level configuration/status
+coverage. They should also prove capability data still changes aggregate
+provider readiness, and use a cross-midnight UTC news timestamp to lock the
+Shanghai display date and metadata order. Homepage tests should also assert the
+"More" hrefs and any setup action hrefs for modules that add them.
 
 ### Convention: Terminal Entry Page Sections
 

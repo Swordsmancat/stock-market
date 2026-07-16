@@ -77,6 +77,12 @@ def test_refresh_world_bank_macro_indicators_writes_latest_buffett_observation()
                 "CM.MKT.LCAP.GD.ZS",
                 [
                     (
+                        date(2023, 12, 31),
+                        "180.500000",
+                        "United States",
+                        "Market capitalization of listed domestic companies (% of GDP)",
+                    ),
+                    (
                         date(2024, 12, 31),
                         "194.250000",
                         "United States",
@@ -88,6 +94,12 @@ def test_refresh_world_bank_macro_indicators_writes_latest_buffett_observation()
                 "USA",
                 "NY.GDP.MKTP.CD",
                 [
+                    (
+                        date(2023, 12, 31),
+                        "27720700000000",
+                        "United States",
+                        "GDP (current US$)",
+                    ),
                     (
                         date(2024, 12, 31),
                         "29184800000000",
@@ -109,13 +121,13 @@ def test_refresh_world_bank_macro_indicators_writes_latest_buffett_observation()
     payload = get_latest_market_indicator_payload("buffett_indicator_us", session=session)
 
     assert result.observations == 1
-    assert result.fetched == 2
+    assert result.fetched == 4
     assert result.skipped == 0
     assert result.codes == ("buffett_indicator_us",)
     assert result.latest_as_of == "2024-12-31"
     assert provider.calls == [
-        ("USA", "CM.MKT.LCAP.GD.ZS", None, None, 1),
-        ("USA", "NY.GDP.MKTP.CD", None, None, 1),
+        ("USA", "CM.MKT.LCAP.GD.ZS", None, None, 5),
+        ("USA", "NY.GDP.MKTP.CD", None, None, 5),
     ]
     assert payload["status"] == "ok"
     assert payload["value"] == 194.25
