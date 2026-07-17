@@ -963,3 +963,37 @@ Added a database-first A-share gainers/losers module with coherent two-date prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 89: Stored stock comparison workflow
+
+**Date**: 2026-07-18
+**Task**: Stored stock comparison workflow
+**Branch**: `master`
+
+### Summary
+
+Added database-only A-share comparison with coherent stored daily-bar cohorts, exact shared-date alignment, localized routed UI, responsive acceptance, and complete cross-layer tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e036e0` | (see git log) |
+| `85d21a3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
