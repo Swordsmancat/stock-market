@@ -997,3 +997,36 @@ Added database-only A-share comparison with coherent stored daily-bar cohorts, e
 ### Next Steps
 
 - None - task complete
+
+
+## Session 90: Unified stored K-line workspace
+
+**Date**: 2026-07-18
+**Task**: Unified stored K-line workspace
+**Branch**: `master`
+
+### Summary
+
+Added one database-only stock, ETF, and index K-line catalog and workspace, removed provider-capable list fan-out, unified global search, verified desktop/mobile runtime rendering, and completed focused plus full regression checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7320117` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
