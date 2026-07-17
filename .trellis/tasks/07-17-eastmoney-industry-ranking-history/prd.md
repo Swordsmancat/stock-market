@@ -29,6 +29,11 @@ days, backed by stored observations rather than page-load scraping.
 - Provider failure preserves stored history and returns a sanitized diagnostic.
 - Add a compact localized ranking matrix to the macro research page, with
   configurable top count and day count within bounded limits.
+- Provide gain-ladder and latest-day list views, ascending/descending order,
+  top 10/20 and 5/10/12/20 trading-day controls, compact full-width layout,
+  internal scrolling and distinct top-three rank badges.
+- Keep unsupported taxonomy/level selectors visibly fixed rather than
+  implying unavailable data, and do not invent hotspot or persistence icons.
 - Attempt direct Eastmoney access first, then make at most one fallback attempt
   through an optional user-supplied HTTP(S) proxy.
 - Accept an optional manually supplied Eastmoney Cookie. Treat both the proxy
@@ -44,6 +49,8 @@ days, backed by stored observations rather than page-load scraping.
 - [x] Persistence/query tests cover idempotency, revisions and latest 12 trading days.
 - [x] GET performs no network request and returns at most 20 x 20 stored cells.
 - [x] Chinese and English ranking matrices render loaded, empty and failed states.
+- [x] Ranking views, sorting, bounded count/day controls and responsive internal
+  scrolling work without additional GET requests or page-level overflow.
 - [ ] A permitted runtime access method completes a real refresh without
   exposing credentials or lowering data-integrity checks.
 - [x] Full backend/Web/type/migration checks pass and 3000/8000 remain healthy.

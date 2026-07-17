@@ -225,7 +225,7 @@ async function fetchEconomicCalendar(): Promise<EconomicCalendarLoadResult> {
 
 async function fetchIndustryRankings(): Promise<IndustryRankingLoadResult> {
   try {
-    const response = await backendFetch("/sectors/industry-rankings?days=12&limit=20", { cache: "no-store" });
+    const response = await backendFetch("/sectors/industry-rankings?days=20&limit=20", { cache: "no-store" });
     if (!response.ok) return { status: "failed", payload: null };
     return { status: "loaded", payload: await response.json() as IndustryRankingPayload };
   } catch { return { status: "failed", payload: null }; }
@@ -1858,7 +1858,7 @@ export default async function EvidenceCenterPage({
         />
       ) : <ErrorState title={economicCalendarT("loadFailedTitle")} description={economicCalendarT("loadFailedDescription")} />}
 
-      {industryRankingResult.status === "loaded" ? <IndustryRankingHistoryPanel payload={industryRankingResult.payload} labels={{ title: industryRankingT("title"), description: industryRankingT("description"), refresh: industryRankingT("refresh"), refreshing: industryRankingT("refreshing"), empty: industryRankingT("empty"), rank: industryRankingT("rank"), failed: industryRankingT("failed") }} /> : <ErrorState title={industryRankingT("loadFailedTitle")} description={industryRankingT("loadFailedDescription")} />}
+      {industryRankingResult.status === "loaded" ? <IndustryRankingHistoryPanel payload={industryRankingResult.payload} labels={{ title: industryRankingT("title"), description: industryRankingT("description"), refresh: industryRankingT("refresh"), refreshing: industryRankingT("refreshing"), empty: industryRankingT("empty"), rank: industryRankingT("rank"), failed: industryRankingT("failed"), ladderView: industryRankingT("ladderView"), listView: industryRankingT("listView"), type: industryRankingT("type"), industry: industryRankingT("industry"), level: industryRankingT("level"), firstLevel: industryRankingT("firstLevel"), sort: industryRankingT("sort"), gainDesc: industryRankingT("gainDesc"), gainAsc: industryRankingT("gainAsc"), count: industryRankingT("count"), topCount: industryRankingT("topCount", { count: "{count}" }), days: industryRankingT("days"), tradingDays: industryRankingT("tradingDays", { count: "{count}" }), sector: industryRankingT("sector"), change: industryRankingT("change"), code: industryRankingT("code") }} /> : <ErrorState title={industryRankingT("loadFailedTitle")} description={industryRankingT("loadFailedDescription")} />}
 
       <details className="rounded-md border border-border/80 bg-card/70 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
