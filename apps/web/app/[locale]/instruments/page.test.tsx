@@ -32,7 +32,7 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-01-22T00:00:00Z"));
 
-  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
     if (url === "/instruments?limit=25&offset=0") {
       return Promise.resolve(
@@ -157,9 +157,11 @@ it("renders instruments with latest daily-bar source and freshness", async () =>
   expect(screen.getByText("No latest daily bar.")).toBeInTheDocument();
   expect(screen.getAllByText("No data").length).toBeGreaterThan(0);
   expect(screen.getAllByRole("link", { name: /Reports/ })[0]).toHaveAttribute("href", "/reports?symbol=AAPL");
-  expect(screen.getByText("Comparison analysis")).toBeInTheDocument();
-  expect(screen.getByText("Return comparison")).toBeInTheDocument();
-  expect(screen.getByText("Pearson correlation")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Compare stocks" })).toHaveAttribute(
+    "href",
+    "/instruments/compare",
+  );
+  expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/bars"))).toBe(false);
   expect(screen.getByText("Page 1 · showing 2 of 2")).toBeInTheDocument();
 });
 

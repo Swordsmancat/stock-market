@@ -231,6 +231,30 @@ function formatCorrelationValue(value: number | null | undefined): string {
   return value === null || value === undefined ? "--" : value.toFixed(3);
 }
 
+export function alignComparisonInstrumentsToSharedDates(
+  instruments: ComparisonInstrument[],
+): ComparisonInstrument[] {
+  if (instruments.length === 0) {
+    return [];
+  }
+
+  const comparableBars = instruments.map(getComparableBars);
+  const sharedTimestamps = comparableBars
+    .slice(1)
+    .reduce(
+      (shared, bars) => {
+        const timestamps = new Set(bars.map((bar) => bar.timestamp));
+        return new Set([...shared].filter((timestamp) => timestamps.has(timestamp)));
+      },
+      new Set(comparableBars[0].map((bar) => bar.timestamp)),
+    );
+
+  return instruments.map((instrument, index) => ({
+    ...instrument,
+    bars: comparableBars[index].filter((bar) => sharedTimestamps.has(bar.timestamp)),
+  }));
+}
+
 export type ComparisonReportLabels = {
   title: string;
   generatedAt: string;

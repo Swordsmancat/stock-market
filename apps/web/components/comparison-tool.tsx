@@ -20,6 +20,7 @@ import {
 import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  alignComparisonInstrumentsToSharedDates,
   buildComparisonReportText,
   buildCorrelationMatrix,
   buildNormalizedComparisonChartData,
@@ -51,6 +52,7 @@ type ComparisonToolProps = {
   labels: ComparisonToolLabels;
   locale: string;
   className?: string;
+  showInstrumentSelection?: boolean;
 };
 
 const COMPARISON_COLORS = ["#2563eb", "#16a34a", "#dc2626", "#9333ea"];
@@ -93,6 +95,7 @@ export function ComparisonTool({
   labels,
   locale,
   className = "",
+  showInstrumentSelection = true,
 }: ComparisonToolProps) {
   const availableInstruments = React.useMemo(
     () =>
@@ -133,17 +136,21 @@ export function ComparisonTool({
       ),
     [availableInstruments, selectedInstrumentIds],
   );
-  const chartData = React.useMemo(
-    () => buildNormalizedComparisonChartData(selectedInstruments),
+  const alignedSelectedInstruments = React.useMemo(
+    () => alignComparisonInstrumentsToSharedDates(selectedInstruments),
     [selectedInstruments],
+  );
+  const chartData = React.useMemo(
+    () => buildNormalizedComparisonChartData(alignedSelectedInstruments),
+    [alignedSelectedInstruments],
   );
   const summaries = React.useMemo(
-    () => calculateComparisonSummaries(selectedInstruments),
-    [selectedInstruments],
+    () => calculateComparisonSummaries(alignedSelectedInstruments),
+    [alignedSelectedInstruments],
   );
   const correlationMatrix = React.useMemo(
-    () => buildCorrelationMatrix(selectedInstruments),
-    [selectedInstruments],
+    () => buildCorrelationMatrix(alignedSelectedInstruments),
+    [alignedSelectedInstruments],
   );
 
   function toggleInstrument(instrumentId: string) {
@@ -166,7 +173,7 @@ export function ComparisonTool({
     }
 
     const reportText = buildComparisonReportText({
-      selectedInstruments,
+      selectedInstruments: alignedSelectedInstruments,
       summaries,
       correlationMatrix,
       labels: labels.report,
@@ -222,34 +229,36 @@ export function ComparisonTool({
         </div>
       </FinancialTerminalCardHeader>
       <FinancialTerminalCardContent className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {availableInstruments.map((instrument) => {
-            const isSelected = selectedInstrumentIds.includes(instrument.id);
-            const isDisabled =
-              !isSelected &&
-              selectedInstrumentIds.length >= MAX_SELECTED_INSTRUMENTS;
+        {showInstrumentSelection ? (
+          <div className="flex flex-wrap gap-2">
+            {availableInstruments.map((instrument) => {
+              const isSelected = selectedInstrumentIds.includes(instrument.id);
+              const isDisabled =
+                !isSelected &&
+                selectedInstrumentIds.length >= MAX_SELECTED_INSTRUMENTS;
 
-            return (
-              <label
-                key={instrument.id}
-                className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors ${
-                  isSelected
-                    ? "border-primary bg-primary/5"
-                    : "hover:bg-muted/50"
-                } ${isDisabled ? "cursor-not-allowed opacity-50" : ""}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  disabled={isDisabled}
-                  onChange={() => toggleInstrument(instrument.id)}
-                />
-                <span className="font-medium">{instrument.symbol}</span>
-                <span className="text-muted-foreground">{instrument.name}</span>
-              </label>
-            );
-          })}
-        </div>
+              return (
+                <label
+                  key={instrument.id}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors ${
+                    isSelected
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted/50"
+                  } ${isDisabled ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    disabled={isDisabled}
+                    onChange={() => toggleInstrument(instrument.id)}
+                  />
+                  <span className="font-medium">{instrument.symbol}</span>
+                  <span className="text-muted-foreground">{instrument.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        ) : null}
 
         {selectedInstruments.length < MIN_SELECTED_INSTRUMENTS ? (
           <FinancialTerminalSurface className="bg-muted/20 p-4 text-sm text-muted-foreground">
@@ -273,7 +282,7 @@ export function ComparisonTool({
                       )
                     }
                   />
-                  {selectedInstruments.map((instrument, instrumentIndex) => (
+                  {alignedSelectedInstruments.map((instrument, instrumentIndex) => (
                     <Line
                       key={instrument.id}
                       type="monotone"
@@ -365,7 +374,7 @@ export function ComparisonTool({
                         <th className="px-3 py-2 text-left">
                           {labels.instrument}
                         </th>
-                        {selectedInstruments.map((instrument) => (
+                        {alignedSelectedInstruments.map((instrument) => (
                           <th
                             key={instrument.id}
                             className="px-3 py-2 text-right"
@@ -376,12 +385,12 @@ export function ComparisonTool({
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedInstruments.map((leftInstrument) => (
+                      {alignedSelectedInstruments.map((leftInstrument) => (
                         <tr key={leftInstrument.id} className="border-t">
                           <td className="px-3 py-2 font-medium">
                             {leftInstrument.symbol}
                           </td>
-                          {selectedInstruments.map((rightInstrument) => {
+                          {alignedSelectedInstruments.map((rightInstrument) => {
                             const cell = correlationMatrix.find(
                               (matrixCell) =>
                                 matrixCell.leftInstrumentId ===

@@ -50,6 +50,9 @@ export function Breadcrumbs() {
     }
 
     if (segments[0] === "instruments" && index === 1) {
+      if (segment === "compare") {
+        return navigationTranslations("stockComparison")
+      }
       return getInstrumentDisplayName(segment, locale)
     }
 

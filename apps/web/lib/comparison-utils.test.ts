@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  alignComparisonInstrumentsToSharedDates,
   buildComparisonReportText,
   buildCorrelationMatrix,
   buildNormalizedComparisonChartData,
@@ -47,6 +48,38 @@ describe("comparison-utils", () => {
       { timestamp: "2026-01-02", left: 110, right: 110 },
       { timestamp: "2026-01-03", left: 120, right: 120 },
     ]);
+  });
+
+  it("aligns every series to the same first and last shared dates", () => {
+    const shiftedRight = {
+      ...rightInstrument,
+      bars: [
+        { timestamp: "2026-01-02", close: 55 },
+        { timestamp: "2026-01-03", close: 60 },
+        { timestamp: "2026-01-04", close: 65 },
+      ],
+    };
+
+    const aligned = alignComparisonInstrumentsToSharedDates([
+      leftInstrument,
+      shiftedRight,
+    ]);
+
+    expect(aligned.map((instrument) => instrument.bars)).toEqual([
+      [
+        { timestamp: "2026-01-02", close: 110 },
+        { timestamp: "2026-01-03", close: 120 },
+      ],
+      [
+        { timestamp: "2026-01-02", close: 55 },
+        { timestamp: "2026-01-03", close: 60 },
+      ],
+    ]);
+    expect(buildNormalizedComparisonChartData(aligned)[0]).toEqual({
+      timestamp: "2026-01-02",
+      left: 100,
+      right: 100,
+    });
   });
 
   it("calculates percentage summaries and Pearson correlation", () => {
