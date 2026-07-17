@@ -4,6 +4,7 @@
     "instruments": "行情标的",
     "aiResearch": "AI 研究",
     "evidence": "宏观研究",
+    "marketResearch": "市场研究",
     "watchlist": "关注列表",
     "portfolios": "模拟组合",
     "reports": "报告中心",
@@ -395,6 +396,17 @@
     "loadFailedTitle": "经济日历暂不可用",
     "loadFailedDescription": "暂时无法读取已入库的经济日历，页面没有临时请求上游数据。"
   },
+  "MarketResearch": {
+    "title": "市场研究",
+    "description": "集中查看市场事件时间与已入库行业表现，并与宏观经济证据保持清晰分工。",
+    "badge": "市场结构",
+    "openMacroResearch": "宏观研究",
+    "calendarMetric": "本月日历事件",
+    "calendarMetricDescription": "上海时区本月已存储的经济发布事件。",
+    "rankingMetric": "行业排名日期",
+    "rankingMetricDescription": "可用于对比的已存储行业交易日。",
+    "unavailable": "暂无"
+  },
   "EvidenceCenter": {
     "title": "宏观研究",
     "description": "面向在线/API 宏观与估值证据、来源缺口和 AI 摘要的个人研究工作台。",
@@ -403,6 +415,7 @@
     "generatedAt": "生成时间：{date}",
     "openSettings": "数据源设置",
     "openReports": "报告",
+    "openMarketResearch": "市场研究",
     "openTaskRuns": "任务监控",
     "loadFailedTitle": "宏观研究不可用",
     "loadFailedDescription": "无法加载市场概览研究 payload。请检查 API 服务和数据源设置。",
@@ -1998,7 +2011,7 @@
     "source": "东方财富行情中心 · 一级行业",
     "updatedAt": "入库于 {time}",
     "loadFailedTitle": "无法加载行业排名",
-    "loadFailedDescription": "其他已存储的宏观证据仍可继续使用。"
+    "loadFailedDescription": "其他已存储的市场研究内容仍可继续使用。"
   },
   "System": {
     "backendOffline": "无法连接 API。请运行：uvicorn apps.api.main:app --reload --port 8000（或在 apps/web/.env.local 中设置 API_BASE_URL）",

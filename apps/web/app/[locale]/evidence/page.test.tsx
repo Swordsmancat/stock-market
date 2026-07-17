@@ -568,6 +568,12 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   );
 
   expect(screen.getByRole("heading", { name: "Macro Research" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Market Research" })).toHaveAttribute("href", "/market-research");
+  expect(screen.queryByText("Economic release calendar")).not.toBeInTheDocument();
+  expect(screen.queryByText("Industry gain ranking history")).not.toBeInTheDocument();
+  const requestedUrls = vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input));
+  expect(requestedUrls.some((url) => url.includes("/economic-calendar/events?"))).toBe(false);
+  expect(requestedUrls.some((url) => url.includes("/sectors/industry-rankings?"))).toBe(false);
   expect(screen.getByText("Macroeconomic dashboard")).toBeInTheDocument();
   expect(screen.getByText("China CPI YoY")).toBeInTheDocument();
   expect(screen.getByText("1%")).toBeInTheDocument();

@@ -13,8 +13,6 @@ import {
 } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
-import { EconomicCalendarPanel, type EconomicCalendarPayload } from "@/components/economic-calendar-panel";
-import { IndustryRankingHistoryPanel, type IndustryRankingPayload } from "@/components/industry-ranking-history-panel";
 import {
   EvidenceSeedImportReview,
   type EvidenceSeedImportReviewLabels,
@@ -98,11 +96,6 @@ type MarketOverviewLoadResult =
 type MacroDashboardLoadResult =
   | { status: "loaded"; payload: MacroDashboardPayload }
   | { status: "failed"; payload: null };
-
-type EconomicCalendarLoadResult =
-  | { status: "loaded"; payload: EconomicCalendarPayload }
-  | { status: "failed"; payload: null };
-type IndustryRankingLoadResult = { status: "loaded"; payload: IndustryRankingPayload } | { status: "failed"; payload: null };
 
 type ResearchSourceNotesLoadResult =
   | { status: "loaded"; items: ResearchSourceNote[] }
@@ -203,32 +196,6 @@ async function fetchMacroDashboard(): Promise<MacroDashboardLoadResult> {
   } catch {
     return { status: "failed", payload: null };
   }
-}
-
-function currentShanghaiMonth(): { start: string; end: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit" }).formatToParts(new Date());
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  const start = `${year}-${String(month).padStart(2, "0")}-01`;
-  const end = `${year}-${String(month).padStart(2, "0")}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
-  return { start, end };
-}
-
-async function fetchEconomicCalendar(): Promise<EconomicCalendarLoadResult> {
-  const { start, end } = currentShanghaiMonth();
-  try {
-    const response = await backendFetch(`/economic-calendar/events?start=${start}&end=${end}&limit=200`, { cache: "no-store" });
-    if (!response.ok) return { status: "failed", payload: null };
-    return { status: "loaded", payload: await response.json() as EconomicCalendarPayload };
-  } catch { return { status: "failed", payload: null }; }
-}
-
-async function fetchIndustryRankings(): Promise<IndustryRankingLoadResult> {
-  try {
-    const response = await backendFetch("/sectors/industry-rankings?days=20&limit=20", { cache: "no-store" });
-    if (!response.ok) return { status: "failed", payload: null };
-    return { status: "loaded", payload: await response.json() as IndustryRankingPayload };
-  } catch { return { status: "failed", payload: null }; }
 }
 
 async function fetchOfficialMacroSourceStatus(): Promise<OfficialMacroSourceStatusLoadResult> {
@@ -1676,8 +1643,6 @@ export default async function EvidenceCenterPage({
     marketDailyEvidenceT,
     officialDisclosureEvidenceT,
     macroDashboardT,
-    economicCalendarT,
-    industryRankingT,
     dashboardT,
   ] = await Promise.all([
     params,
@@ -1690,8 +1655,6 @@ export default async function EvidenceCenterPage({
     getTranslations("MarketDailyEvidence"),
     getTranslations("OfficialDisclosureEvidence"),
     getTranslations("MacroDashboard"),
-    getTranslations("EconomicCalendar"),
-    getTranslations("IndustryRankingHistory"),
     getTranslations("Dashboard"),
   ]);
   const locale = getSafeLocale(requestedLocale);
@@ -1705,8 +1668,6 @@ export default async function EvidenceCenterPage({
     marketDailyEvidenceResult,
     officialDisclosureEvidenceResult,
     macroDashboardResult,
-    economicCalendarResult,
-    industryRankingResult,
   ] = await Promise.all([
     fetchMarketOverview(provider),
     fetchOfficialMacroSourceStatus(),
@@ -1715,8 +1676,6 @@ export default async function EvidenceCenterPage({
     fetchMarketDailyEvidence(),
     fetchOfficialDisclosureEvidence(),
     fetchMacroDashboard(),
-    fetchEconomicCalendar(),
-    fetchIndustryRankings(),
   ]);
 
   const marketOverviewUnavailable = marketOverviewResult.status === "failed";
@@ -1815,6 +1774,9 @@ export default async function EvidenceCenterPage({
               <Link href="/reports">{t("openReports")}</Link>
             </Button>
             <Button size="sm" variant="outline" asChild>
+              <Link href="/market-research">{t("openMarketResearch")}</Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
               <Link href="/task-runs">{t("openTaskRuns")}</Link>
             </Button>
           </>
@@ -1844,21 +1806,6 @@ export default async function EvidenceCenterPage({
           description={macroDashboardT("loadFailedDescription")}
         />
       )}
-
-      {economicCalendarResult.status === "loaded" ? (
-        <EconomicCalendarPanel
-          payload={economicCalendarResult.payload}
-          locale={locale}
-          labels={{
-            title: economicCalendarT("title"), description: economicCalendarT("description"), refresh: economicCalendarT("refresh"), refreshing: economicCalendarT("refreshing"),
-            refreshSuccess: economicCalendarT("refreshSuccess", { count: "{count}" }), refreshFailed: economicCalendarT("refreshFailed"), allCountries: economicCalendarT("allCountries"),
-            allImportance: economicCalendarT("allImportance"), importance: economicCalendarT("importance"), time: economicCalendarT("time"), country: economicCalendarT("country"), event: economicCalendarT("event"),
-            previous: economicCalendarT("previous"), forecast: economicCalendarT("forecast"), actual: economicCalendarT("actual"), empty: economicCalendarT("empty"), unavailable: t("unavailableShort"),
-          }}
-        />
-      ) : <ErrorState title={economicCalendarT("loadFailedTitle")} description={economicCalendarT("loadFailedDescription")} />}
-
-      {industryRankingResult.status === "loaded" ? <IndustryRankingHistoryPanel locale={locale} payload={industryRankingResult.payload} labels={{ title: industryRankingT("title"), description: industryRankingT("description"), refresh: industryRankingT("refresh"), refreshing: industryRankingT("refreshing"), empty: industryRankingT("empty"), rank: industryRankingT("rank"), failed: industryRankingT("failed"), ladderView: industryRankingT("ladderView"), listView: industryRankingT("listView"), type: industryRankingT("type"), industry: industryRankingT("industry"), level: industryRankingT("level"), firstLevel: industryRankingT("firstLevel"), sort: industryRankingT("sort"), gainDesc: industryRankingT("gainDesc"), gainAsc: industryRankingT("gainAsc"), count: industryRankingT("count"), topCount: industryRankingT("topCount", { count: "{count}" }), days: industryRankingT("days"), tradingDays: industryRankingT("tradingDays", { count: "{count}" }), sector: industryRankingT("sector"), change: industryRankingT("change"), code: industryRankingT("code"), source: industryRankingT("source"), updatedAt: industryRankingT("updatedAt", { time: "{time}" }) }} /> : <ErrorState title={industryRankingT("loadFailedTitle")} description={industryRankingT("loadFailedDescription")} />}
 
       <details className="rounded-md border border-border/80 bg-card/70 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

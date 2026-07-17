@@ -220,6 +220,39 @@ import {
 
 Use `FinancialTerminalSurface` for nested metric tiles, source rows, diagnostics, or preview blocks. Keep numeric values in `font-mono` where they are scan-first data. If the change only touches visual classes and no visible behavior changes, keep tests focused on existing route actions, headings, forms, empty/error states, and run Chrome visual checks at desktop and tall mobile sizes.
 
+### Convention: Macro Evidence vs Market Structure Ownership
+
+**What**: `/evidence` owns macroeconomic and valuation evidence. Economic
+release timing and stored industry performance belong to `/market-research`,
+which owns the database-only calendar and industry-ranking GET requests and
+reuses their existing explicit-refresh panels.
+
+**Why**: An economic release calendar is an event-planning tool and an industry
+gain history is market-structure evidence. Rendering or fetching them from
+Macro Research blurs module ownership and makes an already dense personal
+research page harder to scan.
+
+**Example**:
+
+```tsx
+// /market-research
+const [calendar, rankings] = await Promise.all([
+  fetchEconomicCalendar(),
+  fetchIndustryRankings(),
+]);
+
+// /evidence keeps a localized link, but performs neither request.
+<Link href="/market-research">{t("openMarketResearch")}</Link>
+```
+
+Keep the five-item personal mobile navigation stable; secondary research pages
+remain reachable through explicit page-header links and localized breadcrumbs.
+When a full monthly calendar contains many rows, retain every row inside a
+focusable named internal scroll region with a sticky header so the following
+industry panel remains reachable. Page tests must assert both sides of route
+ownership: Market Research issues the two GETs, while Macro Research neither
+renders the panels nor issues those requests.
+
 ### Convention: Independent Instrument Research Streams
 
 **What**: After the live assistant on an instrument detail page, render the

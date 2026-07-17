@@ -4,6 +4,7 @@
     "instruments": "Instruments",
     "aiResearch": "AI Research",
     "evidence": "Macro Research",
+    "marketResearch": "Market Research",
     "watchlist": "Watchlist",
     "portfolios": "Portfolios",
     "reports": "Reports",
@@ -388,6 +389,17 @@
     "loadFailedTitle": "Economic calendar is unavailable",
     "loadFailedDescription": "Stored calendar events could not be loaded. No upstream request was made by this page."
   },
+  "MarketResearch": {
+    "title": "Market Research",
+    "description": "Event timing and stored industry performance for personal market review, kept separate from macroeconomic evidence.",
+    "badge": "Market structure",
+    "openMacroResearch": "Macro Research",
+    "calendarMetric": "Calendar events",
+    "calendarMetricDescription": "Stored events in the current Shanghai month.",
+    "rankingMetric": "Ranking dates",
+    "rankingMetricDescription": "Stored industry trading dates available for comparison.",
+    "unavailable": "N/A"
+  },
   "EvidenceCenter": {
     "title": "Macro Research",
     "description": "Personal macro and valuation workspace for online/API-backed evidence, source gaps, and AI summaries.",
@@ -396,6 +408,7 @@
     "generatedAt": "Generated: {date}",
     "openSettings": "Provider settings",
     "openReports": "Reports",
+    "openMarketResearch": "Market Research",
     "openTaskRuns": "Task runs",
     "loadFailedTitle": "Macro Research is unavailable",
     "loadFailedDescription": "Could not load the market overview research payload. Check the API service and provider settings.",
@@ -1988,7 +2001,7 @@
     "source": "Eastmoney Quote Center · Level 1 industries",
     "updatedAt": "Stored {time}",
     "loadFailedTitle": "Industry rankings could not be loaded",
-    "loadFailedDescription": "Other stored macro evidence remains available."
+    "loadFailedDescription": "Other stored market research remains available."
   },
   "System": {
     "backendOffline": "Cannot reach the API. Start it with: uvicorn apps.api.main:app --reload --port 8000 (or set API_BASE_URL in apps/web/.env.local)",

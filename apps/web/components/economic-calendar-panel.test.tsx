@@ -15,6 +15,7 @@ it("renders localized stored events and truthful null values", () => {
   expect(screen.getByText("居民消费价格指数")).toBeInTheDocument();
   expect(screen.getByText("1.2%")).toBeInTheDocument();
   expect(screen.getByText("暂无")).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: labels.title })).toHaveClass("overflow-auto", "max-h-[40rem]");
 });
 
 it("renders an empty state and preserves it on refresh failure", async () => {
