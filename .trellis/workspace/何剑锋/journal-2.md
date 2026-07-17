@@ -1030,3 +1030,36 @@ Added one database-only stock, ETF, and index K-line catalog and workspace, remo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 91: Focused topic research workspace
+
+**Date**: 2026-07-18
+**Task**: Focused topic research workspace
+**Branch**: `master`
+
+### Summary
+
+Added a database-only four-topic personal research workspace with conservative evidence matching, Shanghai date anchoring, non-empty company snapshot fallback, localized desktop/mobile UI, and full browser/test acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e46402e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
