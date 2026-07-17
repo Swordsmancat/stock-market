@@ -11,12 +11,14 @@
 
 | 数据 | Provider | 上游接口 | 关键字段 |
 |---|---|---|---|
-| 行业板块清单 | Eastmoney push2 | `/api/qt/clist/get`, `fs=m:90 t:2 f:!50` | `f12` 板块代码、`f14` 名称 |
+| 一级行业板块清单 | Eastmoney push2 | `/api/qt/clist/get`, `fs=m:90 s:4` | `f12` 板块代码、`f14` 名称、`f3` 最新涨跌幅 |
 | 行业日线历史 | Eastmoney push2his | `/api/qt/stock/kline/get`, `secid=90.BK...`, `klt=101` | `f51` 日期、`f59` 涨跌幅 |
 
-实现入口为 `packages/providers/eastmoney_industry_rankings.py`。来源页面标识
-固定为东方财富行情中心，不把带 Cookie、代理凭据或临时参数的请求地址
-写入数据库。
+实现入口为 `packages/providers/eastmoney_industry_rankings.py`。规范来源页固定为
+`https://quote.eastmoney.com/center/gridlist.html#industry_board_1`，代表东方财富
+行情中心一级行业口径。`industry_board_2` 和 `industry_board_3` 属于不同层级，
+不得混入一级行业历史。系统也不会把带 Cookie、代理凭据或临时参数的请求
+地址写入数据库。
 
 ## 访问降级顺序
 
@@ -40,6 +42,7 @@
 ## 后续更换来源
 
 替换上游时保留 provider 适配器输出契约：板块代码、名称、交易日、有限
-日涨跌幅、抓取时间。新来源不得直接写表或让 GET 触网；应由 service 统一
-计算排名、写审计字段和执行事务。来源切换必须用新的 provider 名称，避免
-把不同分类口径伪装成东方财富历史。
+日涨跌幅、抓取时间。只有能够保留东方财富一级行业精确代码和名称口径的
+来源，才可作为该数据集的降级来源；其他行业分类必须使用独立 provider /
+taxonomy 和界面选项，不得混排。新来源不得直接写表或让 GET 触网；应由
+service 统一计算排名、写审计字段和执行事务。

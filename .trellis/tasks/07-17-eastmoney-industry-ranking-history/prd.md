@@ -13,6 +13,10 @@ days, backed by stored observations rather than page-load scraping.
   history.
 - Eastmoney publishes the industry universe through `push2` and daily sector
   K-lines through `push2his`; AkShare wraps the same endpoints.
+- Eastmoney Quote Center level-one industries are the canonical latest-market
+  source: `gridlist.html#industry_board_1`, using universe filter `m:90 s:4`.
+  Level-two/three or unrelated provider taxonomies must not be mixed into this
+  stored history.
 - On 2026-07-17, both the host and Docker runtime receive an immediate remote
   disconnect from `push2`, including browser-like TLS impersonation. AkShare
   fails at the same boundary. The public quote HTML itself remains reachable.
@@ -55,7 +59,9 @@ days, backed by stored observations rather than page-load scraping.
   exposing credentials or lowering data-integrity checks.
 - [x] Full backend/Web/type/migration checks pass and 3000/8000 remain healthy.
 
-Runtime note: the 2026-07-17 direct probe is still rejected by Eastmoney and
-no proxy or Cookie is configured. The deployed refresh returns a sanitized 502
-and preserves the empty/stored projection. The final live-refresh criterion
-remains open until the user supplies a working access path.
+Runtime note: the 2026-07-17 post-alignment direct probe is still rejected by
+Eastmoney with sanitized code `EASTMONEY_INDUSTRY_REQUEST_FAILED`; no proxy or
+Cookie is configured. The deployed API returns the canonical source/taxonomy
+metadata from its database-only GET and preserves the empty/stored projection.
+The final live-refresh criterion remains open until a permitted working access
+path is available.

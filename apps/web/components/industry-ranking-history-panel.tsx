@@ -15,6 +15,10 @@ export type IndustryRankingItem = {
 };
 export type IndustryRankingPayload = {
   status: string;
+  provider?: string;
+  taxonomy?: string;
+  source_url?: string;
+  retrieved_at?: string | null;
   dates: string[];
   limit: number;
   items: IndustryRankingItem[];
@@ -43,6 +47,8 @@ export type IndustryRankingLabels = {
   sector: string;
   change: string;
   code: string;
+  source: string;
+  updatedAt: string;
 };
 
 type ViewMode = "ladder" | "list";
@@ -62,12 +68,23 @@ function formatChange(raw: string): string {
   return `${value > 0 ? "+" : ""}${raw}%`;
 }
 
+function formatRetrievedAt(value: string | null | undefined, locale: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "Asia/Shanghai",
+  }).format(date);
+}
+
 function rankBadge(rank: number) {
   const tone = rank === 1 ? "bg-red-500 text-white" : rank === 2 ? "bg-orange-500 text-white" : rank === 3 ? "bg-amber-400 text-amber-950" : "text-muted-foreground";
   return <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded px-1.5 text-xs font-semibold ${tone}`}>{rank}</span>;
 }
 
-export function IndustryRankingHistoryPanel({ payload, labels }: { payload: IndustryRankingPayload; labels: IndustryRankingLabels }) {
+export function IndustryRankingHistoryPanel({ payload, labels, locale }: { payload: IndustryRankingPayload; labels: IndustryRankingLabels; locale: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -75,6 +92,7 @@ export function IndustryRankingHistoryPanel({ payload, labels }: { payload: Indu
   const [sort, setSort] = useState<SortMode>("desc");
   const [count, setCount] = useState(Math.min(payload.limit, 20));
   const [dayCount, setDayCount] = useState(12);
+  const retrievedAt = formatRetrievedAt(payload.retrieved_at, locale);
 
   const dates = payload.dates.slice(0, dayCount);
   const byDate = useMemo(() => {
@@ -113,6 +131,7 @@ export function IndustryRankingHistoryPanel({ payload, labels }: { payload: Indu
           <div>
             <h2 className="text-base font-semibold">{labels.title}</h2>
             <p className="text-xs text-muted-foreground">{labels.description}</p>
+            {payload.source_url ? <p className="mt-1 text-xs text-muted-foreground"><a className="underline underline-offset-2 hover:text-foreground" href={payload.source_url} target="_blank" rel="noreferrer">{labels.source}</a>{retrievedAt ? ` · ${labels.updatedAt.replace("{time}", retrievedAt)}` : null}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant={view === "ladder" ? "default" : "outline"} onClick={() => setView("ladder")}>{labels.ladderView}</Button>

@@ -26,4 +26,7 @@ def test_refresh_ranks_upserts_and_get_is_database_only(monkeypatch):
         assert second["updated"] == 2
         assert session.query(IndustryDailyRanking).count() == 2
         payload = get_industry_ranking_payload(session=session, days=12, limit=20)
+        assert payload["taxonomy"] == "eastmoney_industry_level_1"
+        assert payload["source_url"].endswith("#industry_board_1")
+        assert payload["retrieved_at"] == now.isoformat()
         assert [(item["name"], item["rank"]) for item in payload["items"]] == [("银行", 1), ("保险", 2)]

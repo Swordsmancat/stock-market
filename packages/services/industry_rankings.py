@@ -11,6 +11,14 @@ from packages.providers.eastmoney_industry_rankings import SOURCE_URL, fetch_eas
 from packages.services.platform_settings import get_platform_settings
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
 def refresh_industry_rankings(*, session: Session, days: int = 12, fetcher=fetch_eastmoney_industry_history) -> dict[str, object]:
     configured = get_platform_settings()
     records = fetcher(days=days, proxy_url=configured.get("eastmoney_proxy_url", ""), cookie=configured.get("eastmoney_cookie", ""))
@@ -54,4 +62,5 @@ def get_industry_ranking_payload(*, session: Session, days: int = 12, limit: int
     rows = []
     if dates:
         rows = list(session.scalars(select(IndustryDailyRanking).where(IndustryDailyRanking.provider == "eastmoney", IndustryDailyRanking.taxonomy == "industry", IndustryDailyRanking.trade_date.in_(dates), IndustryDailyRanking.rank <= limit).order_by(IndustryDailyRanking.trade_date.desc(), IndustryDailyRanking.rank)))
-    return {"status": "ok", "provider": "eastmoney", "taxonomy": "industry", "dates": [day.isoformat() for day in dates], "limit": limit, "items": [{"date": item.trade_date.isoformat(), "rank": item.rank, "code": item.industry_code, "name": item.industry_name, "change_percent": str(item.change_percent.normalize())} for item in rows]}
+    latest_retrieved_at = max((item.retrieved_at for item in rows), default=None)
+    return {"status": "ok", "provider": "eastmoney", "taxonomy": "eastmoney_industry_level_1", "source_url": SOURCE_URL, "retrieved_at": _utc_iso(latest_retrieved_at), "dates": [day.isoformat() for day in dates], "limit": limit, "items": [{"date": item.trade_date.isoformat(), "rank": item.rank, "code": item.industry_code, "name": item.industry_name, "change_percent": str(item.change_percent.normalize())} for item in rows]}

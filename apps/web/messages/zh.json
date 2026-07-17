@@ -1995,6 +1995,8 @@
     "sector": "板块",
     "change": "涨跌幅",
     "code": "代码",
+    "source": "东方财富行情中心 · 一级行业",
+    "updatedAt": "入库于 {time}",
     "loadFailedTitle": "无法加载行业排名",
     "loadFailedDescription": "其他已存储的宏观证据仍可继续使用。"
   },

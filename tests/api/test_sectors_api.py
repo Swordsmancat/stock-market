@@ -124,3 +124,36 @@ def test_hot_sectors_limit_validation_is_preserved():
     response = client.get("/sectors/hot", params={"limit": 11})
 
     assert response.status_code == 422
+
+
+def test_industry_rankings_exposes_quote_center_provenance(monkeypatch):
+    captured = {}
+
+    def get_payload(*, session, days, limit):
+        captured.update(session=session, days=days, limit=limit)
+        return {
+            "status": "ok",
+            "provider": "eastmoney",
+            "taxonomy": "eastmoney_industry_level_1",
+            "source_url": "https://quote.eastmoney.com/center/gridlist.html#industry_board_1",
+            "retrieved_at": "2026-07-17T10:22:00+00:00",
+            "dates": [],
+            "limit": limit,
+            "items": [],
+        }
+
+    monkeypatch.setattr(sectors_router, "get_industry_ranking_payload", get_payload)
+    session = object()
+    app.dependency_overrides[sectors_router.get_session] = lambda: session
+    try:
+        response = TestClient(app).get("/sectors/industry-rankings", params={"days": 20, "limit": 10})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert captured == {"session": session, "days": 20, "limit": 10}
+    assert payload["provider"] == "eastmoney"
+    assert payload["taxonomy"] == "eastmoney_industry_level_1"
+    assert payload["source_url"].endswith("#industry_board_1")
+    assert payload["retrieved_at"].endswith("+00:00")

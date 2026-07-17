@@ -7,9 +7,11 @@ from decimal import Decimal, InvalidOperation
 
 import httpx
 
-UNIVERSE_URL = "https://17.push2.eastmoney.com/api/qt/clist/get"
-HISTORY_URL = "https://7.push2his.eastmoney.com/api/qt/stock/kline/get"
-SOURCE_URL = "https://quote.eastmoney.com/center/boardlist.html#industry_board"
+UNIVERSE_URL = "https://push2.eastmoney.com/api/qt/clist/get"
+HISTORY_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+SOURCE_URL = "https://quote.eastmoney.com/center/gridlist.html#industry_board_1"
+INDUSTRY_UNIVERSE_FILTER = "m:90 s:4"
+QUOTE_CENTER_UT = "8dec03ba335b81bf4ebdf7b29ec27d15"
 MAX_INDUSTRIES = 200
 MAX_DAYS = 20
 
@@ -48,7 +50,7 @@ def fetch_eastmoney_industry_history(
     universe = _get_json(
         request,
         UNIVERSE_URL,
-        params={"pn": "1", "pz": str(MAX_INDUSTRIES), "po": "1", "np": "1", "fltt": "2", "invt": "2", "fid": "f3", "fs": "m:90 t:2 f:!50", "fields": "f12,f14"},
+        params={"pn": "1", "pz": str(MAX_INDUSTRIES), "po": "1", "np": "1", "fltt": "2", "invt": "2", "fid": "f3", "fs": INDUSTRY_UNIVERSE_FILTER, "fields": "f12,f14,f3", "ut": QUOTE_CENTER_UT},
         headers=headers,
         proxy_url=proxy_url,
     )

@@ -1985,6 +1985,8 @@
     "sector": "Sector",
     "change": "Change",
     "code": "Code",
+    "source": "Eastmoney Quote Center · Level 1 industries",
+    "updatedAt": "Stored {time}",
     "loadFailedTitle": "Industry rankings could not be loaded",
     "loadFailedDescription": "Other stored macro evidence remains available."
   },
