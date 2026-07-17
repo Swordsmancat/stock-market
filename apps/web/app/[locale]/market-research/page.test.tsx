@@ -77,6 +77,7 @@ it("owns the calendar and industry ranking reads outside macro research", async 
   expect(screen.getByText("China GDP")).toBeInTheDocument();
   expect(screen.getByText("Banking")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Macro Research" })).toHaveAttribute("href", "/evidence");
+  expect(screen.getByRole("link", { name: "Topic Research" })).toHaveAttribute("href", "/topic-research");
   expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/economic-calendar/events?"))).toBe(true);
   expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/sectors/industry-rankings?"))).toBe(true);
 });

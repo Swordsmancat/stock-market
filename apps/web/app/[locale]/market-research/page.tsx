@@ -106,9 +106,14 @@ export default async function MarketResearchPage({
           },
         ]}
         actions={
-          <Button size="sm" variant="outline" asChild>
-            <Link href="/evidence">{t("openMacroResearch")}</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/topic-research">{t("openTopicResearch")}</Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/evidence">{t("openMacroResearch")}</Link>
+            </Button>
+          </div>
         }
       />
 

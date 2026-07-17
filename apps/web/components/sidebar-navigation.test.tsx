@@ -14,6 +14,7 @@ it("includes market research, movers, and storage in the desktop sidebar", () =>
     "/ai-research",
     "/instruments",
     "/market-research",
+    "/topic-research",
     "/market-movers",
     "/storage",
     "/watchlist",
@@ -22,6 +23,10 @@ it("includes market research, movers, and storage in the desktop sidebar", () =>
   expect(within(navigation).getByRole("link", { name: "Market Research" })).toHaveAttribute(
     "href",
     "/market-research",
+  );
+  expect(within(navigation).getByRole("link", { name: "Topic Research" })).toHaveAttribute(
+    "href",
+    "/topic-research",
   );
   expect(within(navigation).getByRole("link", { name: "Market Movers" })).toHaveAttribute(
     "href",
