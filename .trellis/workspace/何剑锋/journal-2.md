@@ -831,3 +831,36 @@ Added a 23-item grouped macroeconomic dashboard, audited explicit AkShare refres
 ### Next Steps
 
 - None - task complete
+
+
+## Session 85: ChinaMoney repo fixing rates
+
+**Date**: 2026-07-17
+**Task**: ChinaMoney repo fixing rates
+**Branch**: `master`
+
+### Summary
+
+Qualified the direct NBS candidate without guessing identifiers, added audited FR007/FDR007 observations with localized dashboard labels, passed 1078 backend and 382 web tests, deployed API/Web, and verified a live 48-observation refresh.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b1480dc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
