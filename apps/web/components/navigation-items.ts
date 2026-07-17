@@ -1,4 +1,4 @@
-import { BrainCircuit, ChartNoAxesCombined, Home, List, Settings, TrendingUp, type LucideIcon } from "lucide-react";
+import { BrainCircuit, ChartNoAxesCombined, Database, Home, List, Settings, TrendingUp, type LucideIcon } from "lucide-react";
 
 export type NavigationItem = {
   titleKey: string;
@@ -27,6 +27,12 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
     titleKey: "marketResearch",
     href: "/market-research",
     icon: ChartNoAxesCombined,
+    mobile: false,
+  },
+  {
+    titleKey: "storage",
+    href: "/storage",
+    icon: Database,
     mobile: false,
   },
   {

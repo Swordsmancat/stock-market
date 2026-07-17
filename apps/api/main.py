@@ -26,6 +26,7 @@ from apps.api.routers.sectors import router as sectors_router
 from apps.api.routers.settings import router as settings_router
 from apps.api.routers.source_ingestion import router as source_ingestion_router
 from apps.api.routers.stock_selection import router as stock_selection_router
+from apps.api.routers.storage import router as storage_router
 from apps.api.routers.strategy_screening import router as strategy_screening_router
 from apps.api.routers.task_runs import router as task_runs_router
 from apps.api.routers.watchlists import router as watchlists_router
@@ -57,6 +58,7 @@ app.include_router(sectors_router)
 app.include_router(settings_router)
 app.include_router(source_ingestion_router)
 app.include_router(stock_selection_router)
+app.include_router(storage_router)
 app.include_router(strategy_screening_router)
 app.include_router(task_runs_router)
 app.include_router(watchlists_router)

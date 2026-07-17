@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 
 import { NAVIGATION_ITEMS } from "./navigation-items";
 
-it("keeps one ordered navigation source with a desktop-only market research route", () => {
+it("keeps one ordered navigation source with desktop-only research utility routes", () => {
   const navigationHrefs = NAVIGATION_ITEMS.map((item) => item.href);
   const navigationTitleKeys = NAVIGATION_ITEMS.map((item) => item.titleKey);
 
@@ -11,6 +11,7 @@ it("keeps one ordered navigation source with a desktop-only market research rout
     "/ai-research",
     "/instruments",
     "/market-research",
+    "/storage",
     "/watchlist",
     "/settings",
   ]);
@@ -19,9 +20,11 @@ it("keeps one ordered navigation source with a desktop-only market research rout
     "aiResearch",
     "instruments",
     "marketResearch",
+    "storage",
     "watchlist",
     "settings",
   ]);
   expect(NAVIGATION_ITEMS.find((item) => item.href === "/market-research")?.mobile).toBe(false);
+  expect(NAVIGATION_ITEMS.find((item) => item.href === "/storage")?.mobile).toBe(false);
   expect(new Set(navigationHrefs).size).toBe(navigationHrefs.length);
 });
