@@ -897,3 +897,36 @@ Added a bounded Cookie-free Eastmoney economic calendar provider, transactional 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 87: Database storage overview
+
+**Date**: 2026-07-17
+**Task**: Database storage overview
+**Branch**: `master`
+
+### Summary
+
+Added a secret-safe PostgreSQL storage inventory API and localized read-only storage dashboard with desktop navigation, responsive table inventory, full tests, and live Docker/browser acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f8d5c7c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
