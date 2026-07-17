@@ -199,7 +199,7 @@ python scripts/validate_china_macro_sources.py --live-network --timeout 8
 
 The default command performs no live network requests and writes no database rows. `--live-network` runs shallow reachability/schema probes only after explicit opt-in. On 2026-07-07, the local live probe returned: NBS 403, PBOC page OK, World Bank API OK, IMF 403, Trading Economics skipped for license/credential review, and AkShare/Tushare skipped for dependency/upstream validation.
 
-The current recommendation is to use World Bank as the next low-risk China macro follow-up for annual GDP/context data, while keeping monthly China CPI/PPI/PMI/M2 in validation or manual seed mode. Capability rows, source links, and probe diagnostics are not AI evidence; AI may cite China macro values only after audited local observations are stored.
+The macro dashboard now has an explicit AkShare refresh adapter for the verified China monthly/quarterly mappings documented in [`docs/runbooks/macro-data-sources.md`](docs/runbooks/macro-data-sources.md), while World Bank remains the annual Buffett-indicator source. Capability rows, source links, and probe diagnostics are not AI evidence; AI may cite macro values only after audited local observations are stored.
 
 ## Source collection guidance
 

@@ -2,11 +2,18 @@
 
 This runbook is for manual, opt-in refreshes of official macro observations used by the homepage macro favorites, Macro Research, saved research briefs, and AI summaries.
 
+The complete indicator-to-source/field registry and provider replacement procedure is documented in [Macro data sources](./macro-data-sources.md).
+
 The refresh scripts store audited local `MarketIndicatorObservation` rows. Source-readiness links, seed templates, probe URLs, and script diagnostics are guidance only; AI summaries may cite macro values only after observations are stored locally with source and method metadata.
 
 ## Scope
 
 Covered in the current refresh path:
+
+- AkShare public China macro adapter backed by identified Eastmoney/Jin10 pages:
+  - LPR 1Y/5Y, SHIBOR overnight, China/US 10Y yields;
+  - China CPI/PPI, retail sales, manufacturing PMI, GDP;
+  - exports/imports, M2/M1/M0, and national tax revenue.
 
 - FRED US rates and liquidity context:
   - `DGS10` -> `us_10y_yield`
@@ -21,9 +28,9 @@ Covered in the current refresh path:
 
 Not covered in this runbook:
 
-- China monthly macro adapters such as NBS CPI/PPI/PMI or PBOC M2.
+- Direct NBS/PBOC production adapters; the current China monthly adapter uses AkShare with the upstream page recorded per observation.
 - Scheduled background refresh jobs.
-- Browser-triggered refresh buttons or mutation endpoints.
+- Automatic refresh on page GET. The browser refresh button is an explicit mutation and uses the API below.
 - Scraping public websites or storing raw licensed documents.
 - Trading recommendations, buy/sell/hold calls, target prices, sizing, or execution instructions.
 
@@ -55,6 +62,23 @@ $env:WORLD_BANK_API_BASE_URL="https://api.worldbank.org/v2"
 ```
 
 World Bank refresh does not require a secret.
+
+## AkShare China Macro Refresh
+
+The browser button calls this explicit endpoint:
+
+```text
+POST /market-indicators/official-refresh/akshare-cn
+{"dry_run": false, "history_limit": 12}
+```
+
+Expected behavior:
+
+- Each provider family is isolated; one schema/provider failure does not discard successful families.
+- Successful observations are audited and upserted into `MarketIndicatorObservation`.
+- The response includes bounded family statuses and sanitized diagnostics.
+- `dry_run=true` validates and rolls back all writes.
+- Opening or reloading `/evidence` never calls AkShare.
 
 ## FRED Refresh
 
@@ -148,4 +172,3 @@ After writing observations, verify the UI:
 | World Bank latest year is older than expected | Annual public data is lagged. | Treat it as as-of annual context, not realtime market data. |
 | Homepage still shows a gap after refresh | No local observation exists for that indicator, or the API cache/page needs refresh. | Recheck script output, restart or refresh the API/web app, then open `/evidence`. |
 | AI summary does not cite a source-readiness link | Correct behavior. | Only stored local observations are citable macro evidence. |
-
