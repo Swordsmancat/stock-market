@@ -13,7 +13,7 @@ export function MobileNavigation() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/80 bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_0_hsl(var(--primary)/0.12)] backdrop-blur md:hidden">
       <ul className="grid grid-cols-5 px-1 py-1">
-        {NAVIGATION_ITEMS.map((item) => {
+        {NAVIGATION_ITEMS.filter((item) => item.mobile !== false).map((item) => {
           const isActive =
             pathname === item.href ||
             (pathname.startsWith(item.href) && item.href !== "/");

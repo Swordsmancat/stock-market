@@ -1,6 +1,13 @@
-import { BrainCircuit, Home, List, Settings, TrendingUp } from "lucide-react";
+import { BrainCircuit, ChartNoAxesCombined, Home, List, Settings, TrendingUp, type LucideIcon } from "lucide-react";
 
-export const NAVIGATION_ITEMS = [
+export type NavigationItem = {
+  titleKey: string;
+  href: string;
+  icon: LucideIcon;
+  mobile?: boolean;
+};
+
+export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   {
     titleKey: "dashboard",
     href: "/",
@@ -17,6 +24,12 @@ export const NAVIGATION_ITEMS = [
     icon: TrendingUp,
   },
   {
+    titleKey: "marketResearch",
+    href: "/market-research",
+    icon: ChartNoAxesCombined,
+    mobile: false,
+  },
+  {
     titleKey: "watchlist",
     href: "/watchlist",
     icon: List,
@@ -26,6 +39,4 @@ export const NAVIGATION_ITEMS = [
     href: "/settings",
     icon: Settings,
   },
-] as const;
-
-export type NavigationItem = (typeof NAVIGATION_ITEMS)[number];
+];

@@ -15,9 +15,11 @@
 
 ## Navigation decision
 
-The primary mobile navigation already has five personal high-frequency items.
-The new page is a secondary research surface reached from Macro Research and
-localized breadcrumbs, avoiding a cramped sixth bottom-navigation item.
+The desktop sidebar can accommodate Market Research as a sixth route and makes
+the secondary surface directly discoverable. The primary mobile navigation
+already has five personal high-frequency items, so the shared navigation item
+is explicitly desktop-only there, avoiding a cramped sixth bottom-navigation
+item. Macro Research cross-links and localized breadcrumbs remain available.
 
 ## Rollback
 

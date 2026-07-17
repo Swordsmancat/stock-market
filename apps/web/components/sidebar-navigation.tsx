@@ -20,6 +20,7 @@ export function SidebarNavigation() {
               <li key={item.href}>
                 <Link
                   href={item.href as any}
+                  aria-current={isActive ? "page" : undefined}
                   className={cn(
                     "group relative flex min-h-9 items-center gap-3 rounded-sm border border-transparent px-3 py-2 text-sm transition-colors duration-200 hover:border-primary/20 hover:bg-accent hover:text-foreground",
                     isActive ? "border-primary/30 bg-primary/15 text-primary font-medium shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.08)]" : "text-muted-foreground"

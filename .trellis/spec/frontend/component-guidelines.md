@@ -245,8 +245,10 @@ const [calendar, rankings] = await Promise.all([
 <Link href="/market-research">{t("openMarketResearch")}</Link>
 ```
 
-Keep the five-item personal mobile navigation stable; secondary research pages
-remain reachable through explicit page-header links and localized breadcrumbs.
+Expose Market Research in the desktop sidebar, but keep the five-item personal
+mobile navigation stable by marking that shared navigation item desktop-only.
+The page also remains reachable through explicit page-header links and
+localized breadcrumbs.
 When a full monthly calendar contains many rows, retain every row inside a
 focusable named internal scroll region with a sticky header so the following
 industry panel remains reachable. Page tests must assert both sides of route

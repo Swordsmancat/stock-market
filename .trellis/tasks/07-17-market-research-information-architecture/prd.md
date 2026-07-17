@@ -15,6 +15,8 @@ industry performance live on a separate market-research surface.
   refresh, filtering, or failure behavior.
 - Provide a clear localized link between Macro Research and Market Research.
 - Add breadcrumb labels for the new route.
+- Add Market Research to the desktop left sidebar between Instruments and
+  Watchlist.
 - Keep the primary five-item mobile navigation unchanged; do not make the
   personal-use navigation denser for two secondary research tools.
 - Preserve all unrelated working-tree files and active acceptance tasks.
@@ -27,5 +29,7 @@ industry performance live on a separate market-research surface.
 - [x] Macro Research exposes a visible Market Research link, and the new page
       exposes a return link.
 - [x] Breadcrumbs use localized route labels.
+- [x] The desktop sidebar exposes Market Research while mobile navigation
+      remains limited to its existing five destinations.
 - [x] Focused page tests, full Web tests, type checking, catalogs, and diff checks pass.
 - [x] Ports 3000/8000 remain healthy after deployment.
