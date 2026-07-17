@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 83
+- **Total Sessions**: 84
 - **Last Active**: 2026-07-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~800 | Active |
+| `journal-2.md` | ~833 | Active |
 | `journal-1.md` | ~1979 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 84 | 2026-07-17 | Expand macroeconomic dashboard | `a12dc6e` | `master` |
 | 83 | 2026-07-17 | Simplify AI research evidence context | `69ab110` | `master` |
 | 82 | 2026-07-17 | Localize candlestick pattern labels | `0933f7f` | `master` |
 | 81 | 2026-07-17 | Localize instrument technical indicators | `252d31b` | `master` |

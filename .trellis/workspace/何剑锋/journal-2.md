@@ -798,3 +798,36 @@ Localized AI Research macro evidence with a shared code map, limited the default
 ### Next Steps
 
 - None - task complete
+
+
+## Session 84: Expand macroeconomic dashboard
+
+**Date**: 2026-07-17
+**Task**: Expand macroeconomic dashboard
+**Branch**: `master`
+
+### Summary
+
+Added a 23-item grouped macroeconomic dashboard, audited explicit AkShare refresh with partial-failure handling, localized responsive cards and sparklines, retained read-only GET and collapsed maintenance tools; verified live 18/23 availability, full tests, Docker deployment, and browser smoke checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a12dc6e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
