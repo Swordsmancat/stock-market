@@ -1,0 +1,20 @@
+{
+    "schema_version":  1,
+    "trusted_watermark":  "2026-07-17",
+    "scheduled_task_run_id":  "4629e335-a206-4ed0-bba1-077d9d9882d2",
+    "reserved_at":  "2026-07-17T14:37:00.4910434+00:00",
+    "shortlist":  {
+                      "status":  "missing_for_trusted_date",
+                      "run_id":  null,
+                      "decision_date":  "2026-07-17",
+                      "generation_task_run_id":  null,
+                      "item_count":  0
+                  },
+    "rank_one":  {
+                     "status":  "absent",
+                     "symbol":  null,
+                     "market":  null,
+                     "rank":  null
+                 },
+    "assistant_call_eligibility":  "not_eligible_missing_shortlist"
+}

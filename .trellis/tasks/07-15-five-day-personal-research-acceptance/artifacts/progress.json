@@ -12,19 +12,21 @@
     "counts_toward_observation": false
   },
   "required_observed_date_count": 5,
-  "observed_date_count": 1,
+  "observed_date_count": 2,
   "observed_dates": [
-    "2026-07-16"
+    "2026-07-16",
+    "2026-07-17"
   ],
   "reservation_directory": "artifacts/reservations",
   "day_artifacts": {
-    "2026-07-16": "artifacts/days/2026-07-16.json"
+    "2026-07-16": "artifacts/days/2026-07-16.json",
+    "2026-07-17": "artifacts/days/2026-07-17.json"
   },
   "last_check": {
-    "checked_at": "2026-07-16T22:35:06.2041576+08:00",
+    "checked_at": "2026-07-17T22:42:19.8567853+08:00",
     "kind": "scheduled_monitor",
-    "result": "observed_degraded",
-    "latest_verified_completed_through": "2026-07-16",
+    "result": "observed_failed_precondition",
+    "latest_verified_completed_through": "2026-07-17",
     "latest_shortlist_decision_date": "2026-07-16"
   },
   "skipped_check_count": 1,
