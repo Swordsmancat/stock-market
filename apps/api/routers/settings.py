@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field, field_validator
+from urllib.parse import urlsplit
 from starlette.responses import JSONResponse
 
 from packages.services.llm_connection import (
@@ -33,6 +34,8 @@ class SecretSafeSettingsRoute(APIRoute):
                     "akshare_enabled",
                     "tushare_token",
                     "tushare_http_url",
+                    "eastmoney_proxy_url",
+                    "eastmoney_cookie",
                     "color_scheme",
                     "favorite_macro_indicator_codes",
                     "news_search_provider_order",
@@ -86,6 +89,8 @@ class PlatformSettingsUpdate(BaseModel):
     akshare_enabled: bool | None = None
     tushare_token: str | None = None
     tushare_http_url: str | None = None
+    eastmoney_proxy_url: str | None = None
+    eastmoney_cookie: str | None = None
     color_scheme: str | None = None
     favorite_macro_indicator_codes: list[str] | str | None = None
     news_search_provider_order: list[str] | str | None = None
@@ -126,6 +131,17 @@ class PlatformSettingsUpdate(BaseModel):
             raise ValueError(
                 "llm_api_base must be an absolute HTTP(S) URL without credentials, query, or fragment"
             )
+        return normalized
+
+    @field_validator("eastmoney_proxy_url")
+    @classmethod
+    def validate_eastmoney_proxy_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return value
+        normalized = value.strip()
+        parsed = urlsplit(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.query or parsed.fragment:
+            raise ValueError("eastmoney_proxy_url must be an absolute HTTP(S) proxy URL")
         return normalized
 
 

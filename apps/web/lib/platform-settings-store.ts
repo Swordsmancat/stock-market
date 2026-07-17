@@ -87,6 +87,8 @@ export type PlatformSettings = {
   akshare_enabled: boolean;
   tushare_token: string;
   tushare_http_url: string;
+  eastmoney_proxy_url: string;
+  eastmoney_cookie: string;
   color_scheme: ColorScheme;
   favorite_home_index_codes: string[];
   home_index_display_fields: HomeIndexDisplayField[];
@@ -98,6 +100,8 @@ export type PlatformSettings = {
   news_search_timeout_seconds: number;
   llm_api_key_configured: boolean;
   tushare_token_configured: boolean;
+  eastmoney_proxy_url_configured: boolean;
+  eastmoney_cookie_configured: boolean;
   news_search_provider_keys_configured: Record<string, boolean>;
   market_data_provider_capabilities: MarketDataProviderCapability[];
   news_search_provider_capabilities: NewsSearchProviderCapability[];
@@ -136,6 +140,8 @@ type StoredPlatformSettings = Omit<
   PlatformSettings,
   | "llm_api_key_configured"
   | "tushare_token_configured"
+  | "eastmoney_proxy_url_configured"
+  | "eastmoney_cookie_configured"
   | "news_search_provider_keys_configured"
   | "market_data_provider_capabilities"
   | "news_search_provider_capabilities"
@@ -172,6 +178,8 @@ const DEFAULTS: StoredPlatformSettings = {
   akshare_enabled: false,
   tushare_token: "",
   tushare_http_url: "",
+  eastmoney_proxy_url: "",
+  eastmoney_cookie: "",
   color_scheme: "china",
   favorite_home_index_codes: [...DEFAULT_FAVORITE_HOME_INDEX_CODES],
   home_index_display_fields: [...DEFAULT_HOME_INDEX_DISPLAY_FIELDS],
@@ -575,6 +583,8 @@ function buildStoredPlatformSettings(
       typeof stored.tushare_http_url === "string"
         ? stored.tushare_http_url
         : DEFAULTS.tushare_http_url,
+    eastmoney_proxy_url: typeof stored.eastmoney_proxy_url === "string" ? stored.eastmoney_proxy_url : DEFAULTS.eastmoney_proxy_url,
+    eastmoney_cookie: typeof stored.eastmoney_cookie === "string" ? stored.eastmoney_cookie : DEFAULTS.eastmoney_cookie,
     color_scheme: normalizeColorScheme(
       stored.color_scheme ?? DEFAULTS.color_scheme,
     ),
@@ -710,6 +720,10 @@ function toPublicPlatformSettings(
     news_search_provider_keys: {},
     llm_api_key_configured: Boolean(settings.llm_api_key.trim()),
     tushare_token_configured: Boolean(settings.tushare_token.trim()),
+    eastmoney_proxy_url: "",
+    eastmoney_proxy_url_configured: Boolean(settings.eastmoney_proxy_url.trim()),
+    eastmoney_cookie: "",
+    eastmoney_cookie_configured: Boolean(settings.eastmoney_cookie.trim()),
     news_search_provider_keys_configured:
       buildNewsSearchProviderKeyConfiguredFlags(settings),
     market_data_provider_capabilities:
@@ -884,6 +898,8 @@ export async function savePlatformSettings(
         ? updates.tushare_token
         : current.tushare_token,
     tushare_http_url: updates.tushare_http_url ?? current.tushare_http_url,
+    eastmoney_proxy_url: updates.eastmoney_proxy_url?.trim() ? updates.eastmoney_proxy_url.trim() : current.eastmoney_proxy_url,
+    eastmoney_cookie: updates.eastmoney_cookie?.trim() ? updates.eastmoney_cookie.trim() : current.eastmoney_cookie,
     color_scheme: normalizeColorScheme(
       updates.color_scheme ?? current.color_scheme,
     ),

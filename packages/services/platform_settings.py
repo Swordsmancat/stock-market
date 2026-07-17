@@ -43,6 +43,8 @@ DEFAULTS: dict[str, Any] = {
     "akshare_enabled": False,
     "tushare_token": "",
     "tushare_http_url": "",
+    "eastmoney_proxy_url": "",
+    "eastmoney_cookie": "",
     "color_scheme": "china",
     "favorite_macro_indicator_codes": DEFAULT_FAVORITE_MACRO_INDICATOR_CODES,
     "news_search_provider_order": DEFAULT_NEWS_SEARCH_PROVIDER_ORDER,
@@ -205,6 +207,8 @@ def get_platform_settings() -> dict[str, Any]:
         "akshare_enabled": bool(payload.get("akshare_enabled", False)),
         "tushare_token": str(payload.get("tushare_token", "") or ""),
         "tushare_http_url": str(payload.get("tushare_http_url", "") or ""),
+        "eastmoney_proxy_url": str(payload.get("eastmoney_proxy_url", "") or ""),
+        "eastmoney_cookie": str(payload.get("eastmoney_cookie", "") or ""),
         "color_scheme": str(payload.get("color_scheme", "china")),
         "favorite_macro_indicator_codes": normalize_favorite_macro_indicator_codes(
             payload.get("favorite_macro_indicator_codes", DEFAULT_FAVORITE_MACRO_INDICATOR_CODES)
@@ -232,6 +236,8 @@ def get_platform_settings_public() -> dict[str, Any]:
     api_key = current["llm_api_key"]
     tushare_token = current["tushare_token"]
     tushare_http_url = current["tushare_http_url"]
+    eastmoney_proxy_url = current["eastmoney_proxy_url"]
+    eastmoney_cookie = current["eastmoney_cookie"]
     color_scheme = current["color_scheme"]
     news_search_provider_keys = current["news_search_provider_keys"]
     news_search_provider_keys_configured = {
@@ -245,6 +251,10 @@ def get_platform_settings_public() -> dict[str, Any]:
         "tushare_token": "",
         "tushare_token_configured": bool(tushare_token.strip()),
         "tushare_http_url": tushare_http_url,
+        "eastmoney_proxy_url": "",
+        "eastmoney_proxy_url_configured": bool(eastmoney_proxy_url.strip()),
+        "eastmoney_cookie": "",
+        "eastmoney_cookie_configured": bool(eastmoney_cookie.strip()),
         "color_scheme": color_scheme,
         "news_search_provider_keys": {},
         "news_search_provider_keys_configured": news_search_provider_keys_configured,
@@ -303,6 +313,8 @@ def update_platform_settings(updates: dict[str, Any]) -> dict[str, Any]:
             continue
         if key == "llm_api_key" and not str(updates[key]).strip():
             continue
+        if key in {"eastmoney_proxy_url", "eastmoney_cookie"} and not str(updates[key]).strip():
+            continue
         if key == "news_search_provider_keys":
             current[key] = merge_news_search_provider_keys(current[key], updates[key])
             continue
@@ -327,6 +339,8 @@ def update_platform_settings(updates: dict[str, Any]) -> dict[str, Any]:
     current["akshare_enabled"] = bool(current.get("akshare_enabled", False))
     current["tushare_token"] = str(current.get("tushare_token", "") or "")
     current["tushare_http_url"] = str(current.get("tushare_http_url", "") or "")
+    current["eastmoney_proxy_url"] = str(current.get("eastmoney_proxy_url", "") or "")
+    current["eastmoney_cookie"] = str(current.get("eastmoney_cookie", "") or "")
     current["color_scheme"] = str(current.get("color_scheme", "china"))
     current["favorite_macro_indicator_codes"] = normalize_favorite_macro_indicator_codes(
         current.get("favorite_macro_indicator_codes", DEFAULT_FAVORITE_MACRO_INDICATOR_CODES)

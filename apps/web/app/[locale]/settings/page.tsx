@@ -372,6 +372,18 @@ export default async function SettingsPage({
             </FinancialTerminalCardContent>
           </FinancialTerminalCard>
 
+          <FinancialTerminalCard>
+            <FinancialTerminalCardHeader>
+              <CardTitle>{t("eastmoneyAccessTitle")}</CardTitle>
+              <CardDescription>{t("eastmoneyAccessDesc")}</CardDescription>
+            </FinancialTerminalCardHeader>
+            <FinancialTerminalCardContent className="space-y-4">
+              <div className="space-y-2"><label className="text-sm font-medium" htmlFor="eastmoney_proxy_url">{t("eastmoneyProxy")}</label><Input id="eastmoney_proxy_url" name="eastmoney_proxy_url" type="password" defaultValue="" placeholder={settings.eastmoney_proxy_url_configured ? t("secretConfigured") : "http://proxy:port"} /></div>
+              <div className="space-y-2"><label className="text-sm font-medium" htmlFor="eastmoney_cookie">{t("eastmoneyCookie")}</label><Input id="eastmoney_cookie" name="eastmoney_cookie" type="password" defaultValue="" placeholder={settings.eastmoney_cookie_configured ? t("secretConfigured") : t("eastmoneyCookiePlaceholder")} /></div>
+              <p className="text-xs text-muted-foreground">{t("eastmoneyAccessHint")}</p>
+            </FinancialTerminalCardContent>
+          </FinancialTerminalCard>
+
           <FinancialTerminalCard className="xl:col-span-2">
             <FinancialTerminalCardHeader>
               <CardTitle>{t("newsSourcesTitle")}</CardTitle>

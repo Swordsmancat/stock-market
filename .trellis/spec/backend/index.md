@@ -54,6 +54,7 @@ Primary examples:
 | [Official Macro Refresh Contract](./official-macro-refresh-contract.md) | Explicit database-first macro provider refresh, audited observations, and FR007/FDR007 semantics | Filled |
 | [Economic Calendar Contract](./economic-calendar-contract.md) | Explicit public economic calendar refresh, stable stored events, database-only reads, and localized display | Filled |
 | [Hot Sector Contract](./hot-sector-contract.md) | `/sectors/hot` provider-backed payload fields, degraded states, and cross-layer tests | Filled |
+| [Eastmoney Industry Ranking History Contract](./eastmoney-industry-ranking-history-contract.md) | Stored direct-first/proxy-fallback Eastmoney industry ranking history and secret-safe access | Filled |
 | [Intraday Minute Cache Contract](./intraday-cache-contract.md) | `/market-data/{symbol}/intraday` verified minute cache, session policy, freshness metadata, and no-fabrication rules | Filled |
 | [Market Depth Contract](./market-depth-contract.md) | `/market-data/{symbol}/depth` explicit provider boundary, section-level degraded states, large-order derivation, and no-fabrication rules | Filled |
 | [Comprehensive A-share Research Coverage Contract](./a-share-research-coverage-contract.md) | Full A-share universe sync, bulk screening, transparent profiles, validated AI shortlist explanation, and corporate-action evidence batches | Filled |

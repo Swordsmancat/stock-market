@@ -14,6 +14,8 @@ type PlatformSettingsRoutePayload = {
   akshare_enabled?: boolean;
   tushare_token?: string;
   tushare_http_url?: string;
+  eastmoney_proxy_url?: string;
+  eastmoney_cookie?: string;
   color_scheme?: "china" | "international";
   favorite_home_index_codes?: string[];
   home_index_display_fields?: string[];
@@ -25,6 +27,8 @@ type PlatformSettingsRoutePayload = {
   news_search_timeout_seconds?: number;
   llm_api_key_configured?: boolean;
   tushare_token_configured?: boolean;
+  eastmoney_proxy_url_configured?: boolean;
+  eastmoney_cookie_configured?: boolean;
   news_search_provider_keys_configured?: Record<string, boolean>;
   market_data_provider_capabilities?: unknown;
   news_search_provider_capabilities?: unknown;
@@ -37,6 +41,8 @@ function buildPublicSettingsPayload(
     typeof settings.llm_api_key === "string" ? settings.llm_api_key : "";
   const tushareToken =
     typeof settings.tushare_token === "string" ? settings.tushare_token : "";
+  const eastmoneyProxy = typeof settings.eastmoney_proxy_url === "string" ? settings.eastmoney_proxy_url : "";
+  const eastmoneyCookie = typeof settings.eastmoney_cookie === "string" ? settings.eastmoney_cookie : "";
   const newsSearchProviderKeys =
     settings.news_search_provider_keys &&
     typeof settings.news_search_provider_keys === "object"
@@ -51,6 +57,8 @@ function buildPublicSettingsPayload(
     tushare_token: "",
     tushare_token_configured:
       settings.tushare_token_configured ?? Boolean(tushareToken.trim()),
+    ...(("eastmoney_proxy_url" in settings || "eastmoney_proxy_url_configured" in settings) ? { eastmoney_proxy_url: "", eastmoney_proxy_url_configured: settings.eastmoney_proxy_url_configured ?? Boolean(eastmoneyProxy.trim()) } : {}),
+    ...(("eastmoney_cookie" in settings || "eastmoney_cookie_configured" in settings) ? { eastmoney_cookie: "", eastmoney_cookie_configured: settings.eastmoney_cookie_configured ?? Boolean(eastmoneyCookie.trim()) } : {}),
     news_search_provider_keys: {},
     news_search_provider_keys_configured:
       settings.news_search_provider_keys_configured ??

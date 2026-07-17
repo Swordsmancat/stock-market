@@ -1730,6 +1730,13 @@
     "akshareEnableLabel": "启用 AkShare 数据源",
     "akshareHint": "选择 akshare 作为数据源时，将对 A 股标的生效。",
     "tushareTitle": "Tushare（A 股行情）",
+    "eastmoneyAccessTitle": "东方财富采集访问",
+    "eastmoneyAccessDesc": "直连公共接口受限时使用的可选降级配置。",
+    "eastmoneyProxy": "HTTP(S) 代理地址",
+    "eastmoneyCookie": "手工提供的 Cookie",
+    "eastmoneyCookiePlaceholder": "可选：由你自行复制 Cookie",
+    "secretConfigured": "已配置（留空则保留）",
+    "eastmoneyAccessHint": "系统始终先尝试直连；公开设置与诊断不会显示密钥内容。",
     "tushareDesc": "通过 Tushare Pro 获取 A 股数据。需在 tushare.pro 注册。",
     "tushareToken": "Tushare Token",
     "tushareHttpUrl": "Tushare HTTP URL",
@@ -1963,6 +1970,17 @@
     "emptyDescription": "发布每日研究候选清单后即可开始跟踪结果。",
     "safetyBoundary": "仅作研究辅助。这些观察结果不提供买入、卖出、持有、目标价、仓位、订单、券商或自动交易指令。",
     "unavailable": "暂无"
+  },
+  "IndustryRankingHistory": {
+    "title": "行业涨幅历史榜",
+    "description": "已入库的东方财富行业涨幅排名，默认展示最近 12 个交易日。",
+    "refresh": "刷新排名",
+    "refreshing": "正在刷新...",
+    "empty": "暂无已存储的行业排名历史，可点击刷新开始采集。",
+    "rank": "排名",
+    "failed": "刷新失败，已有历史数据已保留。",
+    "loadFailedTitle": "无法加载行业排名",
+    "loadFailedDescription": "其他已存储的宏观证据仍可继续使用。"
   },
   "System": {
     "backendOffline": "无法连接 API。请运行：uvicorn apps.api.main:app --reload --port 8000（或在 apps/web/.env.local 中设置 API_BASE_URL）",

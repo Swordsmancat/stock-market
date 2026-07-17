@@ -14,6 +14,7 @@ import {
 
 import { EmptyState } from "@/components/empty-state";
 import { EconomicCalendarPanel, type EconomicCalendarPayload } from "@/components/economic-calendar-panel";
+import { IndustryRankingHistoryPanel, type IndustryRankingPayload } from "@/components/industry-ranking-history-panel";
 import {
   EvidenceSeedImportReview,
   type EvidenceSeedImportReviewLabels,
@@ -101,6 +102,7 @@ type MacroDashboardLoadResult =
 type EconomicCalendarLoadResult =
   | { status: "loaded"; payload: EconomicCalendarPayload }
   | { status: "failed"; payload: null };
+type IndustryRankingLoadResult = { status: "loaded"; payload: IndustryRankingPayload } | { status: "failed"; payload: null };
 
 type ResearchSourceNotesLoadResult =
   | { status: "loaded"; items: ResearchSourceNote[] }
@@ -218,6 +220,14 @@ async function fetchEconomicCalendar(): Promise<EconomicCalendarLoadResult> {
     const response = await backendFetch(`/economic-calendar/events?start=${start}&end=${end}&limit=200`, { cache: "no-store" });
     if (!response.ok) return { status: "failed", payload: null };
     return { status: "loaded", payload: await response.json() as EconomicCalendarPayload };
+  } catch { return { status: "failed", payload: null }; }
+}
+
+async function fetchIndustryRankings(): Promise<IndustryRankingLoadResult> {
+  try {
+    const response = await backendFetch("/sectors/industry-rankings?days=12&limit=20", { cache: "no-store" });
+    if (!response.ok) return { status: "failed", payload: null };
+    return { status: "loaded", payload: await response.json() as IndustryRankingPayload };
   } catch { return { status: "failed", payload: null }; }
 }
 
@@ -1667,6 +1677,7 @@ export default async function EvidenceCenterPage({
     officialDisclosureEvidenceT,
     macroDashboardT,
     economicCalendarT,
+    industryRankingT,
     dashboardT,
   ] = await Promise.all([
     params,
@@ -1680,6 +1691,7 @@ export default async function EvidenceCenterPage({
     getTranslations("OfficialDisclosureEvidence"),
     getTranslations("MacroDashboard"),
     getTranslations("EconomicCalendar"),
+    getTranslations("IndustryRankingHistory"),
     getTranslations("Dashboard"),
   ]);
   const locale = getSafeLocale(requestedLocale);
@@ -1694,6 +1706,7 @@ export default async function EvidenceCenterPage({
     officialDisclosureEvidenceResult,
     macroDashboardResult,
     economicCalendarResult,
+    industryRankingResult,
   ] = await Promise.all([
     fetchMarketOverview(provider),
     fetchOfficialMacroSourceStatus(),
@@ -1703,6 +1716,7 @@ export default async function EvidenceCenterPage({
     fetchOfficialDisclosureEvidence(),
     fetchMacroDashboard(),
     fetchEconomicCalendar(),
+    fetchIndustryRankings(),
   ]);
 
   const marketOverviewUnavailable = marketOverviewResult.status === "failed";
@@ -1843,6 +1857,8 @@ export default async function EvidenceCenterPage({
           }}
         />
       ) : <ErrorState title={economicCalendarT("loadFailedTitle")} description={economicCalendarT("loadFailedDescription")} />}
+
+      {industryRankingResult.status === "loaded" ? <IndustryRankingHistoryPanel payload={industryRankingResult.payload} labels={{ title: industryRankingT("title"), description: industryRankingT("description"), refresh: industryRankingT("refresh"), refreshing: industryRankingT("refreshing"), empty: industryRankingT("empty"), rank: industryRankingT("rank"), failed: industryRankingT("failed") }} /> : <ErrorState title={industryRankingT("loadFailedTitle")} description={industryRankingT("loadFailedDescription")} />}
 
       <details className="rounded-md border border-border/80 bg-card/70 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

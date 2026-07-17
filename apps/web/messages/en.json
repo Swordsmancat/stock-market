@@ -1720,6 +1720,13 @@
     "akshareEnableLabel": "Enable AkShare as data source",
     "akshareHint": "When enabled, AkShare will be used for CN-market instruments when selected as the provider.",
     "tushareTitle": "Tushare (CN Market)",
+    "eastmoneyAccessTitle": "Eastmoney collection access",
+    "eastmoneyAccessDesc": "Optional fallback access when direct public endpoints are blocked.",
+    "eastmoneyProxy": "HTTP(S) proxy URL",
+    "eastmoneyCookie": "Manually supplied Cookie",
+    "eastmoneyCookiePlaceholder": "Optional Cookie copied by you",
+    "secretConfigured": "Configured (leave blank to keep)",
+    "eastmoneyAccessHint": "Direct access is tried first. Secrets are never displayed in public settings or diagnostics.",
     "tushareDesc": "Chinese market data via Tushare Pro. Requires registration at tushare.pro.",
     "tushareToken": "Tushare Token",
     "tushareHttpUrl": "Tushare HTTP URL",
@@ -1953,6 +1960,17 @@
     "emptyDescription": "Outcome tracking begins when a daily research shortlist has been published.",
     "safetyBoundary": "Research support only. This outcome panel does not provide buy, sell, hold, target-price, position-sizing, order, broker, or automated-trading instructions.",
     "unavailable": "N/A"
+  },
+  "IndustryRankingHistory": {
+    "title": "Industry gain ranking history",
+    "description": "Stored Eastmoney industry rankings for the latest 12 trading days.",
+    "refresh": "Refresh rankings",
+    "refreshing": "Refreshing...",
+    "empty": "No stored industry ranking history yet. Refresh to collect it.",
+    "rank": "Rank",
+    "failed": "Refresh failed. Existing stored history was preserved.",
+    "loadFailedTitle": "Industry rankings could not be loaded",
+    "loadFailedDescription": "Other stored macro evidence remains available."
   },
   "System": {
     "backendOffline": "Cannot reach the API. Start it with: uvicorn apps.api.main:app --reload --port 8000 (or set API_BASE_URL in apps/web/.env.local)",

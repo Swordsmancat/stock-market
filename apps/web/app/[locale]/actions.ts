@@ -339,6 +339,8 @@ export async function savePlatformSettingsAction(formData: FormData) {
       akshare_enabled: formData.get("akshare_enabled") === "on",
       tushare_token: String(formData.get("tushare_token") ?? ""),
       tushare_http_url: String(formData.get("tushare_http_url") ?? ""),
+      eastmoney_proxy_url: String(formData.get("eastmoney_proxy_url") ?? ""),
+      eastmoney_cookie: String(formData.get("eastmoney_cookie") ?? ""),
       color_scheme:
         String(formData.get("color_scheme") ?? "china") === "international"
           ? "international"

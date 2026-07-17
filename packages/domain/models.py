@@ -384,6 +384,28 @@ class EconomicCalendarEvent(Base):
     )
 
 
+class IndustryDailyRanking(Base):
+    __tablename__ = "industry_daily_rankings"
+    __table_args__ = (
+        UniqueConstraint("provider", "taxonomy", "industry_code", "trade_date", name="uq_industry_daily_rankings_identity"),
+        Index("ix_industry_daily_rankings_date_rank", "trade_date", "rank"),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    provider: Mapped[str] = mapped_column(String(32))
+    taxonomy: Mapped[str] = mapped_column(String(32))
+    industry_code: Mapped[str] = mapped_column(String(32))
+    industry_name: Mapped[str] = mapped_column(String(128))
+    trade_date: Mapped[date] = mapped_column(Date)
+    change_percent: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    rank: Mapped[int] = mapped_column(Integer)
+    source_url: Mapped[str] = mapped_column(String(512))
+    metadata_json: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class Watchlist(Base):
     __tablename__ = "watchlists"
 
