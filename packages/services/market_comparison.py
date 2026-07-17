@@ -9,6 +9,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from packages.domain.models import DailyBar, Exchange, Instrument, Market
+from packages.services.stored_daily_bars import choose_daily_bar_cohort_key
 
 
 SUPPORTED_MARKET = "CN"
@@ -123,13 +124,15 @@ def _choose_coherent_series(rows: list[DailyBar]) -> tuple[list[DailyBar], str, 
     cohorts: dict[tuple[str, str], list[DailyBar]] = defaultdict(list)
     for row in rows:
         cohorts[(row.provider or "", row.adjustment or "")].append(row)
-    if not cohorts:
+    cohort_key = choose_daily_bar_cohort_key(
+        (provider, adjustment, len(cohort_rows))
+        for (provider, adjustment), cohort_rows in cohorts.items()
+    )
+    if cohort_key is None:
         return None
 
-    (provider, adjustment), chosen_rows = sorted(
-        cohorts.items(),
-        key=lambda item: (-len(item[1]), item[0][0], item[0][1]),
-    )[0]
+    provider, adjustment = cohort_key
+    chosen_rows = cohorts[cohort_key]
     finite_rows = [
         row
         for row in chosen_rows

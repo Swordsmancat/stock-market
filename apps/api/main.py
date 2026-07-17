@@ -9,6 +9,7 @@ from apps.api.routers.fundamentals import router as fundamentals_router
 from apps.api.routers.health import router as health_router
 from apps.api.routers.indicators import router as indicators_router
 from apps.api.routers.ingestion import router as ingestion_router
+from apps.api.routers.instrument_kline import router as instrument_kline_router
 from apps.api.routers.instruments import router as instruments_router
 from apps.api.routers.market_data import router as market_data_router
 from apps.api.routers.market_daily_data import router as market_daily_data_router
@@ -43,6 +44,7 @@ app.include_router(fundamentals_router)
 app.include_router(health_router)
 app.include_router(indicators_router)
 app.include_router(ingestion_router)
+app.include_router(instrument_kline_router)
 app.include_router(instruments_router)
 app.include_router(market_data_router)
 app.include_router(market_daily_data_router)

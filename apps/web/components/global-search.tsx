@@ -17,6 +17,7 @@ type Instrument = {
   symbol: string;
   name: string;
   market: string;
+  asset_type: "stock" | "etf" | "index";
 };
 
 type GlobalSearchProps = {
@@ -28,6 +29,7 @@ type GlobalSearchProps = {
     loading: string;
     loadFailed: string;
     noResults: string;
+    assetTypes: Record<Instrument["asset_type"], string>;
   };
 };
 
@@ -44,13 +46,13 @@ function buildInstrumentSearchParams(query: string): URLSearchParams {
 
 async function fetchMatchingInstruments(query: string): Promise<Instrument[]> {
   const response = await fetch(
-    `/api/instruments?${buildInstrumentSearchParams(query).toString()}`,
+    `/api/instrument-kline?${buildInstrumentSearchParams(query).toString()}`,
   );
   if (!response.ok) {
     throw new Error("load failed");
   }
-  const data = (await response.json()) as { items?: Instrument[] };
-  return data.items ?? [];
+  const data = (await response.json()) as { catalog?: Instrument[] };
+  return data.catalog ?? [];
 }
 
 function resolveExactMarket(query: string, instruments: Instrument[]): string {
@@ -210,6 +212,9 @@ export function GlobalSearch({ locale, labels }: GlobalSearchProps) {
                     >
                       <span className="font-medium">{instrument.symbol}</span>
                       <span className="ml-2 text-muted-foreground">{instrument.name}</span>
+                      <span className="ml-2 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        {labels.assetTypes[instrument.asset_type]}
+                      </span>
                       <span className="ml-auto text-xs text-muted-foreground">{instrument.market}</span>
                     </button>
                   </li>

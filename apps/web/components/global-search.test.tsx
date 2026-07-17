@@ -29,6 +29,7 @@ const labels = {
   loading: "Searching...",
   loadFailed: "Could not load instruments. Check that the API is running.",
   noResults: "No matching instruments",
+  assetTypes: { stock: "Stock", etf: "ETF", index: "Index" },
 };
 
 function renderGlobalSearch() {
@@ -48,8 +49,8 @@ it("waits for nonblank input and requests only a bounded result set", async () =
     new Response(
       JSON.stringify({
         source: "database",
-        items: [
-          { symbol: "600519", name: "Kweichow Moutai", market: "CN" },
+        catalog: [
+          { symbol: "600519", name: "Kweichow Moutai", market: "CN", asset_type: "stock" },
         ],
         total: 1,
         limit: 10,
@@ -76,9 +77,10 @@ it("waits for nonblank input and requests only a bounded result set", async () =
 
   expect(fetchMock).toHaveBeenCalledOnce();
   expect(fetchMock).toHaveBeenCalledWith(
-    "/api/instruments?q=600519&limit=10&offset=0",
+    "/api/instrument-kline?q=600519&limit=10&offset=0",
   );
   expect(screen.getByText("Kweichow Moutai")).toBeInTheDocument();
+  expect(screen.getByText("Stock")).toBeInTheDocument();
   expect(document.querySelector('input[name="market"]')).toHaveValue("CN");
 
   fireEvent.click(screen.getByRole("button", { name: /600519/ }));
@@ -90,8 +92,8 @@ it("resolves an exact market before an immediate form submission", async () => {
     new Response(
       JSON.stringify({
         source: "database",
-        items: [
-          { symbol: "600519", name: "Kweichow Moutai", market: "CN" },
+        catalog: [
+          { symbol: "600519", name: "Kweichow Moutai", market: "CN", asset_type: "stock" },
         ],
         total: 1,
         limit: 10,
@@ -113,7 +115,7 @@ it("resolves an exact market before an immediate form submission", async () => {
     expect(pushMock).toHaveBeenCalledWith("/instruments/600519?market=CN");
   });
   expect(fetchMock).toHaveBeenCalledWith(
-    "/api/instruments?q=600519&limit=10&offset=0",
+    "/api/instrument-kline?q=600519&limit=10&offset=0",
   );
 });
 
