@@ -34,6 +34,7 @@ export function Breadcrumbs() {
         "ai-research": "aiResearch",
         evidence: "evidence",
         "market-research": "marketResearch",
+        "market-movers": "marketMovers",
         storage: "storage",
         watchlist: "watchlist",
         portfolios: "portfolios",
