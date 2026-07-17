@@ -497,6 +497,42 @@ function createOfficialDisclosureEvidencePayload() {
   };
 }
 
+function createMacroDashboardPayload() {
+  return {
+    status: "ok",
+    generated_at: "2026-07-17T01:00:00+00:00",
+    latest_as_of: "2026-06-30",
+    summary: { total: 23, available: 1, missing: 22, stale: 0 },
+    groups: [
+      {
+        id: "fundamentals",
+        items: [
+          {
+            code: "cn_cpi_yoy",
+            name: "China CPI YoY",
+            region: "CN",
+            category: "inflation",
+            unit: "percent",
+            status: "ok",
+            freshness: "fresh",
+            value: 1,
+            as_of: "2026-06-30",
+            source: "AkShare macro_china_cpi",
+            previous_value: 1.2,
+            change: -0.2,
+            direction: "down",
+            history: [
+              { as_of: "2026-05-31", value: 1.2 },
+              { as_of: "2026-06-30", value: 1 },
+            ],
+            no_data_reason: null,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 it("renders macro evidence first, keeps advanced source tools reachable, and resolves template labels", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
@@ -518,6 +554,9 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
     if (url.endsWith("/official-disclosures/evidence-status?limit=50")) {
       return Promise.resolve(new Response(JSON.stringify(createOfficialDisclosureEvidencePayload())));
     }
+    if (url.endsWith("/market-indicators/dashboard?history_limit=12")) {
+      return Promise.resolve(new Response(JSON.stringify(createMacroDashboardPayload())));
+    }
     return Promise.reject(new Error(`Unexpected URL: ${url}`));
   });
 
@@ -529,6 +568,16 @@ it("renders macro evidence first, keeps advanced source tools reachable, and res
   );
 
   expect(screen.getByRole("heading", { name: "Macro Research" })).toBeInTheDocument();
+  expect(screen.getByText("Macroeconomic dashboard")).toBeInTheDocument();
+  expect(screen.getByText("China CPI YoY")).toBeInTheDocument();
+  expect(screen.getByText("1%")).toBeInTheDocument();
+  expect(screen.getByText("Configured indicators").parentElement).toHaveTextContent("23");
+  expect(screen.getByText("AI-citable observations").parentElement).toHaveTextContent("1");
+  const outerMaintenance = screen
+    .getByText("Evidence maintenance and advanced tools")
+    .closest("details");
+  expect(outerMaintenance).not.toBeNull();
+  expect(outerMaintenance).not.toHaveAttribute("open");
   expect(screen.getByText("Active provider: yfinance")).toBeInTheDocument();
   expect(screen.getAllByText(/US 10Y remains the cited macro datapoint/).length).toBeGreaterThan(0);
   expect(screen.getAllByText("Deterministic fallback").length).toBeGreaterThan(0);

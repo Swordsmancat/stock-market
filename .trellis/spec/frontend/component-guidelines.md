@@ -359,6 +359,24 @@ assistant request.
 
 ## Accessibility
 
+### Convention: Stored-Evidence Macroeconomic Dashboard
+
+**What**: The Evidence Center begins with a scan-first macroeconomic dashboard grouped into rates, economic fundamentals, valuation, external economy, money supply, and fiscal revenue. Cards show localized names, latest stored value, as-of date, source, change/direction text, and bounded history sparklines. Provider operations and the legacy evidence workspace remain inside a closed maintenance disclosure.
+
+**Why**: Personal research needs broad macro context without making normal page loads slow, mutable, or dependent on provider availability.
+
+**Example**:
+
+```tsx
+<MacroEconomicDashboard payload={storedDashboard} labels={localizedLabels} />
+<details>
+  <summary>{labels.maintenanceSummary}</summary>
+  <EvidenceMaintenanceWorkspace />
+</details>
+```
+
+The component may POST only after the user activates its refresh button. A failed refresh keeps the previously rendered payload visible and adds a localized error. Known indicator codes resolve through `macro-indicator-labels.ts`; missing observations use localized no-data copy rather than raw backend diagnostics. Use text or arrows together with color, keep SVG sparklines accessible, and retain a responsive two/three/four-column grid without horizontal overflow. Component tests cover populated, missing, degraded, and failed-refresh states in both locale catalogs.
+
 - Use real buttons for actions and links for navigation.
 - Keep visible button text translated and assertable in tests, for example the retry button in `task-run-actions.tsx`.
 - Table empty/error rows should set `colSpan` to cover all visible columns.

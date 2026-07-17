@@ -660,3 +660,73 @@ refresh_world_bank_macro_indicators(
 ```
 
 The refresh path fetches official World Bank rows, skips missing values, preserves source and methodology metadata, validates indicator codes, and writes only audited observations.
+
+## Scenario: AkShare China Macro Dashboard Refresh
+
+### 1. Scope / Trigger
+
+- Trigger: a user explicitly refreshes the macroeconomic dashboard through the Evidence Center.
+- Applies to `packages/providers/akshare_macro_provider.py`, `packages/services/market_indicators.py`, `apps/api/routers/market_indicators.py`, and the Web macro dashboard.
+- The dashboard read path is stored-evidence only. It must never fetch providers, seed definitions, or mutate rows during GET.
+
+### 2. Signatures
+
+- `GET /market-indicators/dashboard?history_limit=12`
+- `POST /market-indicators/official-refresh/akshare-cn` with `{ "dry_run": false, "history_limit": 12 }`
+- `get_macro_dashboard_payload(session, history_limit=12)`
+- `refresh_akshare_cn_macro_indicators(session, dry_run=False, provider=None, retrieved_at=None)`
+
+### 3. Contracts
+
+- The first batch contains 23 configured dashboard items: 14 verified China additions plus the 9 existing US, valuation, and money indicators.
+- AkShare families are declarative and may share one fetched table across several target codes.
+- Every stored observation uses the audited market-indicator upsert path and includes provider, source URL, retrieval time, methodology, source field, and source date metadata.
+- A family failure does not erase successful families. The response reports bounded family status and sanitized diagnostic codes.
+- Missing or invalid provider values remain absent; the dashboard projects an explicit no-data state instead of zero or synthetic history.
+
+### 4. Validation & Error Matrix
+
+| Condition | Behavior |
+|---|---|
+| Unknown or missing source column | Mark that family `schema_mismatch`; write no rows for it. |
+| Invalid/non-finite value or invalid date | Skip the row and emit a bounded diagnostic. |
+| One provider family raises | Continue other families; expose only the exception class, never raw response text. |
+| No stored observation for a configured code | Return the item with `latest=null`, empty history, and a no-data code. |
+| `history_limit` outside 2..36 | API validation returns 422. |
+| `dry_run=true` | Parse and validate all families, then roll back all definition/observation writes. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: one explicit refresh stores valid CPI, LPR, yield, money, trade, and fiscal observations, then a later GET reads them without network access.
+- Base: the unemployment family is not configured until its schema is verified; the UI does not invent it.
+- Base: one family is degraded while other families and their stored history remain usable.
+- Bad: opening or reloading `/evidence` implicitly calls AkShare.
+- Bad: a missing CPI value is rendered or persisted as `0`.
+
+### 6. Tests Required
+
+- Provider tests cover source-order independence, exact column mapping, date normalization, schema mismatch, partial failure, and sanitized errors.
+- Service tests cover audited persistence, partial success, dry-run rollback, grouped projection, and a read-only dashboard session.
+- API tests cover bounded query validation, GET non-mutation, POST partial status, and stable response shape.
+- Web tests cover localized labels, explicit missing states, refresh degradation, preserved prior data on refresh failure, and closed maintenance tools.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+def get_dashboard(session):
+    refresh_akshare_cn_macro_indicators(session=session)
+    return build_payload(session)
+```
+
+This turns a page read into an external mutation and makes reload behavior unpredictable.
+
+#### Correct
+
+```python
+def get_dashboard(session, history_limit=12):
+    return get_macro_dashboard_payload(session=session, history_limit=history_limit)
+```
+
+Provider work is reserved for the explicit POST refresh; GET is deterministic over stored evidence.

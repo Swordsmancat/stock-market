@@ -2,7 +2,7 @@ import re
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -10,13 +10,16 @@ from packages.providers.fred_provider import FredProviderConfigurationError, Fre
 from packages.providers.world_bank_provider import WorldBankProviderError
 from packages.services.market_indicators import (
     FredMacroRefreshResult,
+    AkShareCnMacroRefreshResult,
     MarketIndicatorSeedImportError,
     MarketIndicatorSeedOverwriteRequiredError,
     WorldBankMacroRefreshResult,
     get_official_macro_source_status_payload,
+    get_macro_dashboard_payload,
     import_market_indicator_observation_seed_content,
     preview_market_indicator_observation_seed_content,
     refresh_fred_macro_indicators,
+    refresh_akshare_cn_macro_indicators,
     refresh_world_bank_macro_indicators,
 )
 from packages.shared.cache import clear_market_overview_cache
@@ -49,6 +52,12 @@ class WorldBankOfficialRefreshInput(BaseModel):
     dry_run: bool = True
 
 
+class AkShareCnMacroRefreshInput(BaseModel):
+    family: str = Field(default="all", min_length=1)
+    history_limit: int = Field(default=24, ge=2, le=24)
+    dry_run: bool = False
+
+
 def _cache_payload(*, should_clear: bool) -> dict[str, int]:
     if not should_clear:
         return {"market_overview_cleared": 0}
@@ -70,6 +79,26 @@ def _macro_refresh_response(
         "skipped": result.skipped,
         "codes": list(result.codes),
         "latest_as_of": result.latest_as_of,
+        "diagnostics": list(result.diagnostics),
+        "cache": cache,
+    }
+
+
+def _akshare_macro_refresh_response(
+    result: AkShareCnMacroRefreshResult,
+    cache: dict[str, int],
+) -> dict[str, object]:
+    degraded = any(item["status"] != "ok" for item in result.families)
+    return {
+        "status": "degraded" if degraded else "ok",
+        "provider": "akshare",
+        "dry_run": result.dry_run,
+        "observations": result.observations,
+        "fetched": result.fetched,
+        "skipped": result.skipped,
+        "codes": list(result.codes),
+        "latest_as_of": result.latest_as_of,
+        "families": list(result.families),
         "diagnostics": list(result.diagnostics),
         "cache": cache,
     }
@@ -179,6 +208,40 @@ def get_official_macro_source_status(
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return get_official_macro_source_status_payload(session=session)
+
+
+@router.get("/dashboard")
+def get_macro_dashboard(
+    history_limit: int = Query(default=12, ge=2, le=24),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return get_macro_dashboard_payload(
+        session=session,
+        history_limit=history_limit,
+    )
+
+
+@router.post("/official-refresh/akshare-cn")
+def refresh_akshare_cn_macro(
+    payload: AkShareCnMacroRefreshInput,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        result = refresh_akshare_cn_macro_indicators(
+            session=session,
+            family=payload.family,
+            history_limit=payload.history_limit,
+            dry_run=payload.dry_run,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return _akshare_macro_refresh_response(
+        result,
+        cache=_cache_payload(
+            should_clear=not result.dry_run and result.observations > 0,
+        ),
+    )
 
 
 @router.post("/official-refresh/world-bank")

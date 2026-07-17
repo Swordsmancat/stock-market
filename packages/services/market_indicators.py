@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from packages.domain.models import MarketIndicator, MarketIndicatorObservation
+from packages.providers.akshare_macro_provider import AkShareMacroProvider
 from packages.providers.fred_provider import FRED_SERIES_URL_TEMPLATE, FredProvider
 from packages.providers.fred_provider import FredSeriesObservations
 from packages.providers.world_bank_provider import WORLD_BANK_INDICATOR_PAGE_URL_TEMPLATE
@@ -31,6 +32,42 @@ MACRO_INDICATOR_CODES = (
     "us_cpi_yoy",
     "us_m2_yoy",
     "cn_m2_yoy",
+)
+
+MACRO_DASHBOARD_GROUP_CODES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "rates",
+        (
+            "cn_lpr_1y",
+            "cn_lpr_5y",
+            "cn_shibor_overnight",
+            "cn_10y_yield",
+            "us_10y_yield",
+            "us_2y_yield",
+            "us_10y_2y_spread",
+        ),
+    ),
+    (
+        "fundamentals",
+        (
+            "cn_cpi_yoy",
+            "cn_ppi_yoy",
+            "cn_retail_sales_yoy",
+            "cn_manufacturing_pmi",
+            "cn_gdp_yoy",
+            "us_cpi_yoy",
+        ),
+    ),
+    (
+        "valuation",
+        ("buffett_indicator_cn", "buffett_indicator_hk", "buffett_indicator_us"),
+    ),
+    ("external", ("cn_exports_yoy", "cn_imports_yoy")),
+    ("money", ("cn_m2_yoy", "cn_m1_yoy", "cn_m0_yoy", "us_m2_yoy")),
+    ("fiscal", ("cn_tax_revenue_yoy",)),
+)
+MACRO_DASHBOARD_INDICATOR_CODES = tuple(
+    code for _group_id, codes in MACRO_DASHBOARD_GROUP_CODES for code in codes
 )
 
 
@@ -101,6 +138,18 @@ class WorldBankMacroRefreshResult:
     codes: tuple[str, ...]
     latest_as_of: str | None
     diagnostics: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AkShareCnMacroRefreshResult:
+    observations: int
+    fetched: int
+    skipped: int
+    dry_run: bool
+    codes: tuple[str, ...]
+    latest_as_of: str | None
+    diagnostics: tuple[str, ...]
+    families: tuple[dict[str, object], ...]
 
 
 @dataclass(frozen=True)
@@ -223,6 +272,132 @@ DEFAULT_MARKET_INDICATOR_DEFINITIONS: tuple[MarketIndicatorDefinition, ...] = (
         unit="percent",
         description="Year-over-year change in China M2 money supply.",
         display_order=90,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_lpr_1y",
+        name="China LPR 1Y",
+        category="rates",
+        region="CN",
+        unit="percent",
+        description="China one-year loan prime rate.",
+        display_order=100,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_lpr_5y",
+        name="China LPR 5Y",
+        category="rates",
+        region="CN",
+        unit="percent",
+        description="China five-year loan prime rate.",
+        display_order=110,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_shibor_overnight",
+        name="China SHIBOR Overnight",
+        category="rates",
+        region="CN",
+        unit="percent",
+        description="Shanghai interbank offered overnight rate.",
+        display_order=120,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_10y_yield",
+        name="China 10Y Government Bond Yield",
+        category="rates",
+        region="CN",
+        unit="percent",
+        description="China 10-year government bond yield.",
+        display_order=130,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_cpi_yoy",
+        name="China CPI YoY",
+        category="inflation",
+        region="CN",
+        unit="percent",
+        description="Year-over-year change in China's national CPI.",
+        display_order=140,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_ppi_yoy",
+        name="China PPI YoY",
+        category="inflation",
+        region="CN",
+        unit="percent",
+        description="Year-over-year change in China's producer price index.",
+        display_order=150,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_retail_sales_yoy",
+        name="China Retail Sales YoY",
+        category="growth",
+        region="CN",
+        unit="percent",
+        description="Year-over-year change in retail sales of consumer goods.",
+        display_order=160,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_manufacturing_pmi",
+        name="China Manufacturing PMI",
+        category="growth",
+        region="CN",
+        unit="index",
+        description="Official China manufacturing purchasing managers index.",
+        display_order=170,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_gdp_yoy",
+        name="China GDP YoY",
+        category="growth",
+        region="CN",
+        unit="percent",
+        description="China cumulative GDP year-over-year growth.",
+        display_order=180,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_exports_yoy",
+        name="China Exports YoY",
+        category="external",
+        region="CN",
+        unit="percent",
+        description="China monthly exports year-over-year growth.",
+        display_order=190,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_imports_yoy",
+        name="China Imports YoY",
+        category="external",
+        region="CN",
+        unit="percent",
+        description="China monthly imports year-over-year growth.",
+        display_order=200,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_m1_yoy",
+        name="China M1 Money Supply YoY",
+        category="liquidity",
+        region="CN",
+        unit="percent",
+        description="Year-over-year change in China M1 money supply.",
+        display_order=210,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_m0_yoy",
+        name="China M0 Money Supply YoY",
+        category="liquidity",
+        region="CN",
+        unit="percent",
+        description="Year-over-year change in China M0 money supply.",
+        display_order=220,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_tax_revenue_yoy",
+        name="China National Tax Revenue YoY",
+        category="fiscal",
+        region="CN",
+        unit="percent",
+        description="China cumulative national tax revenue year-over-year growth.",
+        display_order=230,
     ),
 )
 
@@ -1867,4 +2042,210 @@ def get_official_macro_source_status_payload(session: Session) -> dict[str, obje
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "providers": providers,
         "citation_policy": OFFICIAL_MACRO_SOURCE_CITATION_POLICY,
+    }
+
+
+def refresh_akshare_cn_macro_indicators(
+    session: Session,
+    *,
+    family: str = "all",
+    history_limit: int = 24,
+    dry_run: bool = False,
+    provider: AkShareMacroProvider | None = None,
+    retrieved_at: datetime | None = None,
+) -> AkShareCnMacroRefreshResult:
+    if not 2 <= history_limit <= 24:
+        raise ValueError("history_limit must be between 2 and 24")
+
+    active_provider = provider or AkShareMacroProvider()
+    family_results = active_provider.fetch(
+        family=family,
+        history_limit=history_limit,
+        retrieved_at=retrieved_at,
+    )
+    seed_market_indicators(session=session, commit=False)
+
+    observations = [
+        observation
+        for family_result in family_results
+        for observation in family_result.observations
+    ]
+    for observation in observations:
+        upsert_market_indicator_observation(
+            MarketIndicatorObservationSeed(
+                code=observation.code,
+                as_of=observation.as_of,
+                value=observation.value,
+                source=observation.source,
+                components=observation.components,
+            ),
+            session=session,
+            commit=False,
+        )
+
+    if dry_run:
+        session.rollback()
+    else:
+        session.commit()
+
+    codes = tuple(dict.fromkeys(observation.code for observation in observations))
+    latest_as_of = max((observation.as_of for observation in observations), default=None)
+    diagnostics = tuple(
+        diagnostic
+        for family_result in family_results
+        for diagnostic in family_result.diagnostics
+    )[:20]
+    family_payloads = tuple(
+        {
+            "family": family_result.family,
+            "status": family_result.status,
+            "fetched": family_result.fetched,
+            "skipped": family_result.skipped,
+            "observations": len(family_result.observations),
+            "codes": list(
+                dict.fromkeys(item.code for item in family_result.observations)
+            ),
+        }
+        for family_result in family_results
+    )
+    return AkShareCnMacroRefreshResult(
+        observations=len(observations),
+        fetched=sum(item.fetched for item in family_results),
+        skipped=sum(item.skipped for item in family_results),
+        dry_run=dry_run,
+        codes=codes,
+        latest_as_of=latest_as_of.isoformat() if latest_as_of else None,
+        diagnostics=diagnostics,
+        families=family_payloads,
+    )
+
+
+_DAILY_MACRO_CODES = {
+    "cn_shibor_overnight",
+    "cn_10y_yield",
+    "us_10y_yield",
+    "us_2y_yield",
+    "us_10y_2y_spread",
+}
+_QUARTERLY_MACRO_CODES = {"cn_gdp_yoy", "cn_tax_revenue_yoy"}
+_ANNUAL_MACRO_CODES = {
+    "buffett_indicator_cn",
+    "buffett_indicator_hk",
+    "buffett_indicator_us",
+}
+
+
+def _macro_freshness(code: str, as_of: date | None, today: date) -> str:
+    if as_of is None:
+        return "no_data"
+    age_days = max((today - as_of).days, 0)
+    if code in _DAILY_MACRO_CODES:
+        return "fresh" if age_days <= 7 else "stale"
+    if code in _QUARTERLY_MACRO_CODES:
+        return "fresh" if age_days <= 150 else "stale"
+    if code in _ANNUAL_MACRO_CODES:
+        return "fresh" if age_days <= 550 else "stale"
+    return "fresh" if age_days <= 75 else "stale"
+
+
+def get_macro_dashboard_payload(
+    session: Session,
+    *,
+    history_limit: int = 12,
+    today: date | None = None,
+) -> dict[str, object]:
+    if not 2 <= history_limit <= 24:
+        raise ValueError("history_limit must be between 2 and 24")
+
+    definitions = {item.code: item for item in DEFAULT_MARKET_INDICATOR_DEFINITIONS}
+    rows = (
+        session.query(MarketIndicator.code, MarketIndicatorObservation)
+        .join(
+            MarketIndicatorObservation,
+            MarketIndicatorObservation.indicator_id == MarketIndicator.id,
+        )
+        .filter(MarketIndicator.code.in_(MACRO_DASHBOARD_INDICATOR_CODES))
+        .order_by(MarketIndicator.code, MarketIndicatorObservation.as_of.desc())
+        .all()
+    )
+    history_by_code: dict[str, list[MarketIndicatorObservation]] = {
+        code: [] for code in MACRO_DASHBOARD_INDICATOR_CODES
+    }
+    for code, observation in rows:
+        history = history_by_code.setdefault(str(code), [])
+        if len(history) < history_limit:
+            history.append(observation)
+
+    reference_date = today or date.today()
+    groups: list[dict[str, object]] = []
+    available = 0
+    stale = 0
+    latest_dates: list[date] = []
+    for group_id, codes in MACRO_DASHBOARD_GROUP_CODES:
+        items: list[dict[str, object]] = []
+        for code in codes:
+            definition = definitions[code]
+            descending = history_by_code.get(code, [])
+            chronological = list(reversed(descending))
+            latest = descending[0] if descending else None
+            previous = descending[1] if len(descending) > 1 else None
+            freshness = _macro_freshness(
+                code,
+                latest.as_of if latest else None,
+                reference_date,
+            )
+            if latest is not None:
+                available += 1
+                latest_dates.append(latest.as_of)
+            if freshness == "stale":
+                stale += 1
+            latest_value = _decimal_to_float(latest.value) if latest else None
+            previous_value = _decimal_to_float(previous.value) if previous else None
+            change = (
+                latest_value - previous_value
+                if latest_value is not None and previous_value is not None
+                else None
+            )
+            items.append(
+                {
+                    "code": code,
+                    "name": definition.name,
+                    "region": definition.region,
+                    "category": definition.category,
+                    "unit": definition.unit,
+                    "status": "ok" if latest else "no_data",
+                    "freshness": freshness,
+                    "value": latest_value,
+                    "as_of": latest.as_of.isoformat() if latest else None,
+                    "source": latest.source if latest else None,
+                    "previous_value": previous_value,
+                    "change": change,
+                    "direction": (
+                        "up" if change is not None and change > 0 else
+                        "down" if change is not None and change < 0 else
+                        "flat" if change is not None else None
+                    ),
+                    "history": [
+                        {
+                            "as_of": observation.as_of.isoformat(),
+                            "value": _decimal_to_float(observation.value),
+                        }
+                        for observation in chronological
+                    ],
+                    "no_data_reason": None if latest else "no_stored_observation",
+                }
+            )
+        groups.append({"id": group_id, "items": items})
+
+    return {
+        "status": "ok" if available else "no_data",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "latest_as_of": max(latest_dates).isoformat() if latest_dates else None,
+        "summary": {
+            "total": len(MACRO_DASHBOARD_INDICATOR_CODES),
+            "available": available,
+            "missing": len(MACRO_DASHBOARD_INDICATOR_CODES) - available,
+            "stale": stale,
+        },
+        "groups": groups,
     }

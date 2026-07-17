@@ -20,6 +20,11 @@ import {
 import { ErrorState } from "@/components/error-state";
 import { FinancialPageHeader } from "@/components/financial-page-header";
 import {
+  MacroEconomicDashboard,
+  type MacroDashboardPayload,
+  type MacroEconomicDashboardLabels,
+} from "@/components/macro-economic-dashboard";
+import {
   FinancialTerminalCard,
   FinancialTerminalCardContent,
   FinancialTerminalCardHeader,
@@ -64,6 +69,9 @@ import {
 import { backendFetch } from "@/lib/backend-api";
 import { withProviderQuery } from "@/lib/market-data";
 import {
+  BUILT_IN_MACRO_LABEL_KEYS,
+} from "@/lib/macro-indicator-labels";
+import {
   type DashboardBriefPayload,
   type InformationSourceItem,
   type InformationSourcesPayload,
@@ -84,6 +92,10 @@ type EvidenceCenterPageProps = {
 
 type MarketOverviewLoadResult =
   { status: "loaded"; payload: MarketOverviewPayload } | { status: "failed" };
+
+type MacroDashboardLoadResult =
+  | { status: "loaded"; payload: MacroDashboardPayload }
+  | { status: "failed"; payload: null };
 
 type ResearchSourceNotesLoadResult =
   | { status: "loaded"; items: ResearchSourceNote[] }
@@ -167,6 +179,22 @@ async function fetchMarketOverview(
     };
   } catch {
     return { status: "failed" };
+  }
+}
+
+async function fetchMacroDashboard(): Promise<MacroDashboardLoadResult> {
+  try {
+    const response = await backendFetch(
+      "/market-indicators/dashboard?history_limit=12",
+      { cache: "no-store" },
+    );
+    if (!response.ok) return { status: "failed", payload: null };
+    return {
+      status: "loaded",
+      payload: (await response.json()) as MacroDashboardPayload,
+    };
+  } catch {
+    return { status: "failed", payload: null };
   }
 }
 
@@ -467,14 +495,6 @@ function getNoteCompletenessStatus(note: ResearchSourceNote): string {
   }
   const status = completeness.status;
   return typeof status === "string" ? status : "missing";
-}
-
-function countCitableIndicators(items: MarketOverviewIndicatorItem[]): number {
-  return items.filter(isIndicatorCitable).length;
-}
-
-function countMissingIndicators(items: MarketOverviewIndicatorItem[]): number {
-  return items.filter((item) => !isIndicatorCitable(item)).length;
 }
 
 function getRefreshCoverage(
@@ -1561,6 +1581,53 @@ function buildOfficialDisclosureEvidenceLabels(
   };
 }
 
+function buildMacroDashboardLabels(
+  macroT: Awaited<ReturnType<typeof getTranslations>>,
+  dashboardT: Awaited<ReturnType<typeof getTranslations>>,
+  unavailable: string,
+): MacroEconomicDashboardLabels {
+  return {
+    title: macroT("title"),
+    description: macroT("description"),
+    available: macroT("available"),
+    missing: macroT("missing"),
+    stale: macroT("stale"),
+    latest: macroT("latest"),
+    groupLabels: {
+      rates: macroT("groupRates"),
+      fundamentals: macroT("groupFundamentals"),
+      valuation: macroT("groupValuation"),
+      external: macroT("groupExternal"),
+      money: macroT("groupMoney"),
+      fiscal: macroT("groupFiscal"),
+    },
+    indicatorLabels: Object.fromEntries(
+      Object.entries(BUILT_IN_MACRO_LABEL_KEYS).map(([code, key]) => [
+        code,
+        dashboardT(key),
+      ]),
+    ),
+    fresh: macroT("fresh"),
+    staleState: macroT("staleState"),
+    noData: macroT("noData"),
+    asOf: macroT("asOf", { date: "{date}" }),
+    source: macroT("source", { source: "{source}" }),
+    changeUp: macroT("changeUp", { value: "{value}" }),
+    changeDown: macroT("changeDown", { value: "{value}" }),
+    changeFlat: macroT("changeFlat"),
+    trendSummary: macroT("trendSummary", {
+      name: "{name}",
+      count: "{count}",
+    }),
+    refresh: macroT("refresh"),
+    refreshing: macroT("refreshing"),
+    refreshSuccess: macroT("refreshSuccess", { count: "{count}" }),
+    refreshDegraded: macroT("refreshDegraded", { count: "{count}" }),
+    refreshFailed: macroT("refreshFailed"),
+    unavailable,
+  };
+}
+
 export default async function EvidenceCenterPage({
   params = Promise.resolve({ locale: "en" }),
   searchParams = Promise.resolve({}),
@@ -1575,6 +1642,8 @@ export default async function EvidenceCenterPage({
     researchBriefT,
     marketDailyEvidenceT,
     officialDisclosureEvidenceT,
+    macroDashboardT,
+    dashboardT,
   ] = await Promise.all([
     params,
     searchParams,
@@ -1585,6 +1654,8 @@ export default async function EvidenceCenterPage({
     getTranslations("ResearchBriefInbox"),
     getTranslations("MarketDailyEvidence"),
     getTranslations("OfficialDisclosureEvidence"),
+    getTranslations("MacroDashboard"),
+    getTranslations("Dashboard"),
   ]);
   const locale = getSafeLocale(requestedLocale);
   const provider =
@@ -1596,6 +1667,7 @@ export default async function EvidenceCenterPage({
     researchBriefsResult,
     marketDailyEvidenceResult,
     officialDisclosureEvidenceResult,
+    macroDashboardResult,
   ] = await Promise.all([
     fetchMarketOverview(provider),
     fetchOfficialMacroSourceStatus(),
@@ -1603,6 +1675,7 @@ export default async function EvidenceCenterPage({
     fetchResearchBriefs(),
     fetchMarketDailyEvidence(),
     fetchOfficialDisclosureEvidence(),
+    fetchMacroDashboard(),
   ]);
 
   const marketOverviewUnavailable = marketOverviewResult.status === "failed";
@@ -1624,8 +1697,10 @@ export default async function EvidenceCenterPage({
       : null;
   const sourceGroups = getSourceGroups(informationSources);
   const sourceTargetOptions = buildNotebookSourceTargets(informationSources);
-  const citableIndicatorCount = countCitableIndicators(indicators);
-  const missingIndicatorCount = countMissingIndicators(indicators);
+  const macroDashboardSummary =
+    macroDashboardResult.status === "loaded"
+      ? macroDashboardResult.payload.summary
+      : null;
   const sourceStatusLabels: Record<string, string> = {
     configured: t("sourceStatusConfigured"),
     needs_adapter: t("sourceStatusNeedsAdapter"),
@@ -1667,17 +1742,17 @@ export default async function EvidenceCenterPage({
         metrics={[
           {
             label: t("metricIndicators"),
-            value: marketOverviewUnavailable ? t("unavailableShort") : indicators.length,
+            value: macroDashboardSummary?.total ?? t("unavailableShort"),
             description: t("metricIndicatorsDesc"),
           },
           {
             label: t("metricCitable"),
-            value: marketOverviewUnavailable ? t("unavailableShort") : citableIndicatorCount,
+            value: macroDashboardSummary?.available ?? t("unavailableShort"),
             description: t("metricCitableDesc"),
           },
           {
             label: t("metricMissing"),
-            value: marketOverviewUnavailable ? t("unavailableShort") : missingIndicatorCount,
+            value: macroDashboardSummary?.missing ?? t("unavailableShort"),
             description: t("metricMissingDesc"),
           },
           {
@@ -1711,6 +1786,29 @@ export default async function EvidenceCenterPage({
           description={t("partialLoadDescription")}
         />
       ) : null}
+
+      {macroDashboardResult.status === "loaded" ? (
+        <MacroEconomicDashboard
+          payload={macroDashboardResult.payload}
+          locale={locale}
+          labels={buildMacroDashboardLabels(
+            macroDashboardT,
+            dashboardT,
+            t("unavailableShort"),
+          )}
+        />
+      ) : (
+        <ErrorState
+          title={macroDashboardT("loadFailedTitle")}
+          description={macroDashboardT("loadFailedDescription")}
+        />
+      )}
+
+      <details className="rounded-md border border-border/80 bg-card/70 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {macroDashboardT("maintenanceSummary")}
+        </summary>
+        <div className="mt-4 space-y-6">
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <FinancialTerminalCard>
@@ -2405,6 +2503,8 @@ export default async function EvidenceCenterPage({
           </ul>
         </FinancialTerminalCardContent>
       </FinancialTerminalCard>
+        </div>
+      </details>
     </div>
   );
 }

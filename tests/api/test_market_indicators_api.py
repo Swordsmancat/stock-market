@@ -13,6 +13,7 @@ from packages.domain.models import MarketIndicatorObservation
 from packages.providers.fred_provider import FredProviderConfigurationError, FredProviderError
 from packages.providers.world_bank_provider import WorldBankProviderError
 from packages.services.market_indicators import (
+    AkShareCnMacroRefreshResult,
     FredMacroRefreshResult,
     MarketIndicatorObservationSeed,
     WorldBankMacroRefreshResult,
@@ -448,3 +449,108 @@ def test_world_bank_official_refresh_api_maps_validation_and_provider_errors(mon
     assert provider_response.status_code == 502
     assert provider_response.json()["detail"]["provider"] == "world_bank"
     assert "metadata/data list" in provider_response.json()["detail"]["message"]
+
+
+def test_macro_dashboard_api_returns_grouped_stored_history_without_writing():
+    session = make_session()
+    seed_market_indicators(session=session)
+    upsert_market_indicator_observation(
+        MarketIndicatorObservationSeed(
+            code="cn_cpi_yoy",
+            as_of=date(2026, 6, 30),
+            value=Decimal("1.000000"),
+            source="AkShare macro_china_cpi",
+            components={
+                "source_url": "https://data.eastmoney.com/cjsj/cpi.html",
+                "methodology": "China national CPI YoY.",
+            },
+        ),
+        session=session,
+    )
+    before = session.query(MarketIndicatorObservation).count()
+
+    client = with_test_client(session)
+    try:
+        response = client.get("/market-indicators/dashboard?history_limit=6")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["total"] == 23
+    assert [group["id"] for group in payload["groups"]] == [
+        "rates",
+        "fundamentals",
+        "valuation",
+        "external",
+        "money",
+        "fiscal",
+    ]
+    assert session.query(MarketIndicatorObservation).count() == before
+
+
+def test_akshare_macro_refresh_api_reports_partial_success_and_clears_cache(monkeypatch):
+    session = make_session()
+    calls = {}
+
+    def fake_refresh(**kwargs):
+        calls.update(kwargs)
+        return AkShareCnMacroRefreshResult(
+            observations=4,
+            fetched=20,
+            skipped=1,
+            dry_run=False,
+            codes=("cn_cpi_yoy", "cn_ppi_yoy"),
+            latest_as_of="2026-06-30",
+            diagnostics=("pmi: provider_error:ConnectionError",),
+            families=(
+                {
+                    "family": "cpi",
+                    "status": "ok",
+                    "fetched": 20,
+                    "skipped": 1,
+                    "observations": 4,
+                    "codes": ["cn_cpi_yoy", "cn_ppi_yoy"],
+                },
+                {
+                    "family": "pmi",
+                    "status": "error",
+                    "fetched": 0,
+                    "skipped": 0,
+                    "observations": 0,
+                    "codes": [],
+                },
+            ),
+        )
+
+    monkeypatch.setattr(
+        "apps.api.routers.market_indicators.refresh_akshare_cn_macro_indicators",
+        fake_refresh,
+    )
+    monkeypatch.setattr(
+        "apps.api.routers.market_indicators.clear_market_overview_cache",
+        lambda provider_name=None: 5,
+    )
+
+    client = with_test_client(session)
+    try:
+        response = client.post(
+            "/market-indicators/official-refresh/akshare-cn",
+            json={"family": "all", "history_limit": 12, "dry_run": False},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "degraded"
+    assert payload["provider"] == "akshare"
+    assert payload["observations"] == 4
+    assert payload["cache"] == {"market_overview_cleared": 5}
+    assert payload["diagnostics"] == ["pmi: provider_error:ConnectionError"]
+    assert calls == {
+        "session": session,
+        "family": "all",
+        "history_limit": 12,
+        "dry_run": False,
+    }
