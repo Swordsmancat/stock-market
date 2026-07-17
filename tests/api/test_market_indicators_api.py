@@ -477,7 +477,7 @@ def test_macro_dashboard_api_returns_grouped_stored_history_without_writing():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["summary"]["total"] == 23
+    assert payload["summary"]["total"] == 25
     assert [group["id"] for group in payload["groups"]] == [
         "rates",
         "fundamentals",

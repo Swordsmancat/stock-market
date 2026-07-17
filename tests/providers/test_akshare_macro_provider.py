@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pandas as pd
@@ -91,3 +91,58 @@ def test_akshare_macro_provider_keeps_other_families_when_one_provider_fails():
     assert "secret" not in str(lpr)
     assert cpi.status == "ok"
     assert cpi.observations[0].code == "cn_cpi_yoy"
+
+
+def test_akshare_macro_provider_normalizes_distinct_repo_fixing_rates():
+    frame = pd.DataFrame(
+        [
+            {"date": "2026-07-02", "FR007": 1.51, "FDR007": 1.49},
+            {"date": "2026-07-01", "FR007": 1.50, "FDR007": None},
+        ]
+    )
+
+    result = AkShareMacroProvider(fetchers={"repo_rates": lambda: frame}).fetch(
+        family="repo_rates",
+        history_limit=24,
+        retrieved_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+    )[0]
+
+    assert result.status == "ok"
+    assert [(item.code, item.as_of.isoformat(), str(item.value)) for item in result.observations] == [
+        ("cn_fr007", "2026-07-01", "1.5"),
+        ("cn_fr007", "2026-07-02", "1.51"),
+        ("cn_fdr007", "2026-07-02", "1.49"),
+    ]
+    assert result.skipped == 1
+    assert {item.components["source_value_field"] for item in result.observations} == {
+        "FR007",
+        "FDR007",
+    }
+    assert all("chinamoney.com.cn" in item.components["source_url"] for item in result.observations)
+
+
+def test_akshare_macro_provider_fetches_repo_rates_in_separate_month_windows(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    class FakeAkShare:
+        @staticmethod
+        def repo_rate_hist(*, start_date: str, end_date: str):
+            calls.append((start_date, end_date))
+            return pd.DataFrame([{"date": start_date, "FR007": 1.5, "FDR007": 1.4}])
+
+    monkeypatch.setitem(__import__("sys").modules, "akshare", FakeAkShare())
+    today = date.today()
+    previous_month_end = today.replace(day=1) - timedelta(days=1)
+    previous_month_start = previous_month_end.replace(day=1)
+
+    result = AkShareMacroProvider().fetch(family="repo_rates")[0]
+
+    assert result.status == "ok"
+    assert calls == [
+        (
+            previous_month_start.strftime("%Y%m%d"),
+            previous_month_end.strftime("%Y%m%d"),
+        ),
+        (today.replace(day=1).strftime("%Y%m%d"), today.strftime("%Y%m%d")),
+    ]
+    assert all(start[:6] == end[:6] for start, end in calls)

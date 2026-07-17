@@ -13,6 +13,7 @@ from typing import Any
 AKSHARE_MACRO_SOURCE_URLS = {
     "lpr": "https://data.eastmoney.com/cjsj/globalRateLPR.html",
     "shibor": "https://datacenter.jin10.com/reportType/dc_shibor",
+    "repo_rates": "https://www.chinamoney.com.cn/chinese/bkfrr/",
     "bond_yields": "https://data.eastmoney.com/cjsj/zmgzsyl.html",
     "cpi": "https://data.eastmoney.com/cjsj/cpi.html",
     "ppi": "https://data.eastmoney.com/cjsj/ppi.html",
@@ -78,6 +79,23 @@ AKSHARE_MACRO_FAMILIES: tuple[AkShareMacroFamily, ...] = (
                 "cn_shibor_overnight",
                 "O/N-定价",
                 "Shanghai interbank offered rate, overnight fixing.",
+            ),
+        ),
+    ),
+    AkShareMacroFamily(
+        id="repo_rates",
+        provider_function="repo_rate_hist",
+        date_column="date",
+        targets=(
+            AkShareMacroTarget(
+                "cn_fr007",
+                "FR007",
+                "Seven-day repo fixing rate published by ChinaMoney.",
+            ),
+            AkShareMacroTarget(
+                "cn_fdr007",
+                "FDR007",
+                "Seven-day depository-institutions repo fixing rate published by ChinaMoney.",
             ),
         ),
     ),
@@ -263,6 +281,27 @@ class AkShareMacroProvider:
         if family.id == "bond_yields":
             start_date = (date.today() - timedelta(days=180)).strftime("%Y%m%d")
             return lambda: provider_function(start_date=start_date)
+        if family.id == "repo_rates":
+            import pandas as pd
+
+            today = date.today()
+            previous_month_end = today.replace(day=1) - timedelta(days=1)
+            previous_month_start = previous_month_end.replace(day=1)
+
+            def fetch_repo_rates() -> Any:
+                frames = (
+                    provider_function(
+                        start_date=previous_month_start.strftime("%Y%m%d"),
+                        end_date=previous_month_end.strftime("%Y%m%d"),
+                    ),
+                    provider_function(
+                        start_date=today.replace(day=1).strftime("%Y%m%d"),
+                        end_date=today.strftime("%Y%m%d"),
+                    ),
+                )
+                return pd.concat(frames, ignore_index=True)
+
+            return fetch_repo_rates
         return provider_function
 
     def fetch_family(

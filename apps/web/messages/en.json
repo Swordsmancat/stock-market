@@ -60,6 +60,8 @@
     "terminalMacroLabelCnLpr1y": "China LPR 1Y",
     "terminalMacroLabelCnLpr5y": "China LPR 5Y",
     "terminalMacroLabelCnShiborOvernight": "China SHIBOR Overnight",
+    "terminalMacroLabelCnFr007": "China FR007 Repo Fixing Rate",
+    "terminalMacroLabelCnFdr007": "China FDR007 Repo Fixing Rate",
     "terminalMacroLabelCn10yYield": "China 10Y Government Bond Yield",
     "terminalMacroLabelCnCpiYoy": "China CPI YoY",
     "terminalMacroLabelCnPpiYoy": "China PPI YoY",

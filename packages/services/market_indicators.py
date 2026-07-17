@@ -41,6 +41,8 @@ MACRO_DASHBOARD_GROUP_CODES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "cn_lpr_1y",
             "cn_lpr_5y",
             "cn_shibor_overnight",
+            "cn_fr007",
+            "cn_fdr007",
             "cn_10y_yield",
             "us_10y_yield",
             "us_2y_yield",
@@ -299,6 +301,24 @@ DEFAULT_MARKET_INDICATOR_DEFINITIONS: tuple[MarketIndicatorDefinition, ...] = (
         unit="percent",
         description="Shanghai interbank offered overnight rate.",
         display_order=120,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_fr007",
+        name="China FR007 Repo Fixing Rate",
+        category="rates",
+        region="CN",
+        unit="percent",
+        description="Seven-day repo fixing rate published by ChinaMoney.",
+        display_order=121,
+    ),
+    MarketIndicatorDefinition(
+        code="cn_fdr007",
+        name="China FDR007 Repo Fixing Rate",
+        category="rates",
+        region="CN",
+        unit="percent",
+        description="Seven-day depository-institutions repo fixing rate published by ChinaMoney.",
+        display_order=122,
     ),
     MarketIndicatorDefinition(
         code="cn_10y_yield",
@@ -2122,6 +2142,8 @@ def refresh_akshare_cn_macro_indicators(
 
 _DAILY_MACRO_CODES = {
     "cn_shibor_overnight",
+    "cn_fr007",
+    "cn_fdr007",
     "cn_10y_yield",
     "us_10y_yield",
     "us_2y_yield",

@@ -11,7 +11,7 @@ The refresh scripts store audited local `MarketIndicatorObservation` rows. Sourc
 Covered in the current refresh path:
 
 - AkShare public China macro adapter backed by identified Eastmoney/Jin10 pages:
-  - LPR 1Y/5Y, SHIBOR overnight, China/US 10Y yields;
+  - LPR 1Y/5Y, SHIBOR overnight, FR007/FDR007 repo fixing rates, China/US 10Y yields;
   - China CPI/PPI, retail sales, manufacturing PMI, GDP;
   - exports/imports, M2/M1/M0, and national tax revenue.
 
@@ -75,6 +75,10 @@ POST /market-indicators/official-refresh/akshare-cn
 Expected behavior:
 
 - Each provider family is isolated; one schema/provider failure does not discard successful families.
+- `family=repo_rates` requests the previous and current calendar month separately
+  because `repo_rate_hist` requires both dates to remain in one month.
+- `FR007` and `FDR007` are stored as distinct direct-percent observations; the
+  refresh does not relabel `FDR007` as generic `DR007`.
 - Successful observations are audited and upserted into `MarketIndicatorObservation`.
 - The response includes bounded family statuses and sanitized diagnostics.
 - `dry_run=true` validates and rolls back all writes.

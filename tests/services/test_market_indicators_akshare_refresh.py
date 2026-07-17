@@ -152,7 +152,7 @@ def test_macro_dashboard_projection_is_read_only_grouped_and_chronological():
         for item in group["items"]
     }
     assert before == after == 3
-    assert payload["summary"]["total"] == 23
+    assert payload["summary"]["total"] == 25
     assert [group["id"] for group in payload["groups"]] == [
         "rates",
         "fundamentals",
@@ -169,3 +169,39 @@ def test_macro_dashboard_projection_is_read_only_grouped_and_chronological():
         {"as_of": "2026-06-30", "value": 1.0},
     ]
     assert items["cn_ppi_yoy"]["no_data_reason"] == "no_stored_observation"
+
+
+def test_akshare_macro_refresh_persists_repo_rates_as_separate_indicators():
+    session = make_session()
+    provider = FakeProvider(
+        (
+            AkShareMacroFamilyResult(
+                family="repo_rates",
+                status="ok",
+                fetched=1,
+                skipped=0,
+                observations=(
+                    observation("cn_fr007", date(2026, 7, 16), "1.52"),
+                    observation("cn_fdr007", date(2026, 7, 16), "1.48"),
+                ),
+                diagnostics=(),
+            ),
+        )
+    )
+
+    result = refresh_akshare_cn_macro_indicators(
+        session=session,
+        family="repo_rates",
+        provider=provider,
+    )
+    payload = get_macro_dashboard_payload(session=session, today=date(2026, 7, 17))
+    items = {
+        item["code"]: item
+        for group in payload["groups"]
+        for item in group["items"]
+    }
+
+    assert result.codes == ("cn_fr007", "cn_fdr007")
+    assert items["cn_fr007"]["value"] == 1.52
+    assert items["cn_fdr007"]["value"] == 1.48
+    assert items["cn_fr007"]["freshness"] == "fresh"

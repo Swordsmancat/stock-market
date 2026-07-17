@@ -60,6 +60,8 @@
     "terminalMacroLabelCnLpr1y": "贷款市场报价利率（LPR）1年期",
     "terminalMacroLabelCnLpr5y": "贷款市场报价利率（LPR）5年期",
     "terminalMacroLabelCnShiborOvernight": "上海银行间同业拆放利率（隔夜）",
+    "terminalMacroLabelCnFr007": "FR007 银行间质押式回购定盘利率",
+    "terminalMacroLabelCnFdr007": "FDR007 存款类机构质押式回购定盘利率",
     "terminalMacroLabelCn10yYield": "中国10年期国债收益率",
     "terminalMacroLabelCnCpiYoy": "居民消费价格（CPI）同比",
     "terminalMacroLabelCnPpiYoy": "工业生产者出厂价格（PPI）同比",

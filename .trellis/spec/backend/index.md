@@ -51,6 +51,7 @@ Primary examples:
 | [Recommendation Signal Evaluation Contract](./recommendation-signal-evaluation-contract.md) | Public historical signal evaluation API, metrics payload, diagnostics, and no-trading boundary | Filled |
 | [InStock-Inspired Strategy Screening Contract](./instock-strategy-screening-contract.md) | Research-only strategy screening/evaluation API, InStock attribution boundary, and no-trading rules | Filled |
 | [Market Indicator Seed Import Contract](./market-indicator-seed-import-contract.md) | Offline audited JSON/CSV macro observation import contract, validation rules, and CLI boundary | Filled |
+| [Official Macro Refresh Contract](./official-macro-refresh-contract.md) | Explicit database-first macro provider refresh, audited observations, and FR007/FDR007 semantics | Filled |
 | [Hot Sector Contract](./hot-sector-contract.md) | `/sectors/hot` provider-backed payload fields, degraded states, and cross-layer tests | Filled |
 | [Intraday Minute Cache Contract](./intraday-cache-contract.md) | `/market-data/{symbol}/intraday` verified minute cache, session policy, freshness metadata, and no-fabrication rules | Filled |
 | [Market Depth Contract](./market-depth-contract.md) | `/market-data/{symbol}/depth` explicit provider boundary, section-level degraded states, large-order derivation, and no-fabrication rules | Filled |

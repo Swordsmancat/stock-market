@@ -11,6 +11,8 @@ export const BUILT_IN_MACRO_LABEL_KEYS = {
   cn_lpr_1y: "terminalMacroLabelCnLpr1y",
   cn_lpr_5y: "terminalMacroLabelCnLpr5y",
   cn_shibor_overnight: "terminalMacroLabelCnShiborOvernight",
+  cn_fr007: "terminalMacroLabelCnFr007",
+  cn_fdr007: "terminalMacroLabelCnFdr007",
   cn_10y_yield: "terminalMacroLabelCn10yYield",
   cn_cpi_yoy: "terminalMacroLabelCnCpiYoy",
   cn_ppi_yoy: "terminalMacroLabelCnPpiYoy",
