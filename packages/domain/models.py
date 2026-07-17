@@ -347,6 +347,43 @@ class MarketIndicatorObservation(Base):
     )
 
 
+class EconomicCalendarEvent(Base):
+    __tablename__ = "economic_calendar_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "external_event_id",
+            name="uq_economic_calendar_events_provider_external_id",
+        ),
+        Index("ix_economic_calendar_events_scheduled_at", "scheduled_at"),
+    )
+
+    id: Mapped[PythonUUID] = uuid_pk()
+    provider: Mapped[str] = mapped_column(String(32))
+    external_event_id: Mapped[str] = mapped_column(String(128))
+    indicator_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    country: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(512))
+    reference_period: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    importance: Mapped[int] = mapped_column(Integer, default=0)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    previous_value: Mapped[Decimal | None] = mapped_column(Numeric(24, 6), nullable=True)
+    forecast_value: Mapped[Decimal | None] = mapped_column(Numeric(24, 6), nullable=True)
+    actual_value: Mapped[Decimal | None] = mapped_column(Numeric(24, 6), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_url: Mapped[str] = mapped_column(String(512))
+    metadata_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class Watchlist(Base):
     __tablename__ = "watchlists"
 

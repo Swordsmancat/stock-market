@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { EconomicCalendarPanel, type EconomicCalendarPayload } from "@/components/economic-calendar-panel";
 import {
   EvidenceSeedImportReview,
   type EvidenceSeedImportReviewLabels,
@@ -95,6 +96,10 @@ type MarketOverviewLoadResult =
 
 type MacroDashboardLoadResult =
   | { status: "loaded"; payload: MacroDashboardPayload }
+  | { status: "failed"; payload: null };
+
+type EconomicCalendarLoadResult =
+  | { status: "loaded"; payload: EconomicCalendarPayload }
   | { status: "failed"; payload: null };
 
 type ResearchSourceNotesLoadResult =
@@ -196,6 +201,24 @@ async function fetchMacroDashboard(): Promise<MacroDashboardLoadResult> {
   } catch {
     return { status: "failed", payload: null };
   }
+}
+
+function currentShanghaiMonth(): { start: string; end: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const end = `${year}-${String(month).padStart(2, "0")}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+  return { start, end };
+}
+
+async function fetchEconomicCalendar(): Promise<EconomicCalendarLoadResult> {
+  const { start, end } = currentShanghaiMonth();
+  try {
+    const response = await backendFetch(`/economic-calendar/events?start=${start}&end=${end}&limit=200`, { cache: "no-store" });
+    if (!response.ok) return { status: "failed", payload: null };
+    return { status: "loaded", payload: await response.json() as EconomicCalendarPayload };
+  } catch { return { status: "failed", payload: null }; }
 }
 
 async function fetchOfficialMacroSourceStatus(): Promise<OfficialMacroSourceStatusLoadResult> {
@@ -1643,6 +1666,7 @@ export default async function EvidenceCenterPage({
     marketDailyEvidenceT,
     officialDisclosureEvidenceT,
     macroDashboardT,
+    economicCalendarT,
     dashboardT,
   ] = await Promise.all([
     params,
@@ -1655,6 +1679,7 @@ export default async function EvidenceCenterPage({
     getTranslations("MarketDailyEvidence"),
     getTranslations("OfficialDisclosureEvidence"),
     getTranslations("MacroDashboard"),
+    getTranslations("EconomicCalendar"),
     getTranslations("Dashboard"),
   ]);
   const locale = getSafeLocale(requestedLocale);
@@ -1668,6 +1693,7 @@ export default async function EvidenceCenterPage({
     marketDailyEvidenceResult,
     officialDisclosureEvidenceResult,
     macroDashboardResult,
+    economicCalendarResult,
   ] = await Promise.all([
     fetchMarketOverview(provider),
     fetchOfficialMacroSourceStatus(),
@@ -1676,6 +1702,7 @@ export default async function EvidenceCenterPage({
     fetchMarketDailyEvidence(),
     fetchOfficialDisclosureEvidence(),
     fetchMacroDashboard(),
+    fetchEconomicCalendar(),
   ]);
 
   const marketOverviewUnavailable = marketOverviewResult.status === "failed";
@@ -1803,6 +1830,19 @@ export default async function EvidenceCenterPage({
           description={macroDashboardT("loadFailedDescription")}
         />
       )}
+
+      {economicCalendarResult.status === "loaded" ? (
+        <EconomicCalendarPanel
+          payload={economicCalendarResult.payload}
+          locale={locale}
+          labels={{
+            title: economicCalendarT("title"), description: economicCalendarT("description"), refresh: economicCalendarT("refresh"), refreshing: economicCalendarT("refreshing"),
+            refreshSuccess: economicCalendarT("refreshSuccess", { count: "{count}" }), refreshFailed: economicCalendarT("refreshFailed"), allCountries: economicCalendarT("allCountries"),
+            allImportance: economicCalendarT("allImportance"), importance: economicCalendarT("importance"), time: economicCalendarT("time"), country: economicCalendarT("country"), event: economicCalendarT("event"),
+            previous: economicCalendarT("previous"), forecast: economicCalendarT("forecast"), actual: economicCalendarT("actual"), empty: economicCalendarT("empty"), unavailable: t("unavailableShort"),
+          }}
+        />
+      ) : <ErrorState title={economicCalendarT("loadFailedTitle")} description={economicCalendarT("loadFailedDescription")} />}
 
       <details className="rounded-md border border-border/80 bg-card/70 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

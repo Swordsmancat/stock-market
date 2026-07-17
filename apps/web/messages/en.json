@@ -368,6 +368,26 @@
     "loadFailedDescription": "Stored macro observations could not be loaded. Maintenance tools remain available below.",
     "maintenanceSummary": "Evidence maintenance and advanced tools"
   },
+  "EconomicCalendar": {
+    "title": "Economic release calendar",
+    "description": "Stored Eastmoney public releases for the current month. Values are never inferred when the source is missing.",
+    "refresh": "Refresh calendar",
+    "refreshing": "Refreshing...",
+    "refreshSuccess": "Stored or updated {count} calendar events.",
+    "refreshFailed": "Calendar refresh failed. Existing stored events were preserved.",
+    "allCountries": "All countries",
+    "allImportance": "All importance levels",
+    "importance": "Importance",
+    "time": "Time",
+    "country": "Country",
+    "event": "Release",
+    "previous": "Previous",
+    "forecast": "Forecast",
+    "actual": "Actual",
+    "empty": "No stored economic releases match this scope.",
+    "loadFailedTitle": "Economic calendar is unavailable",
+    "loadFailedDescription": "Stored calendar events could not be loaded. No upstream request was made by this page."
+  },
   "EvidenceCenter": {
     "title": "Macro Research",
     "description": "Personal macro and valuation workspace for online/API-backed evidence, source gaps, and AI summaries.",

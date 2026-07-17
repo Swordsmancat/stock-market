@@ -375,6 +375,26 @@
     "loadFailedDescription": "暂时无法读取已存储的宏观观测，下方维护工具仍可使用。",
     "maintenanceSummary": "证据维护与高级工具"
   },
+  "EconomicCalendar": {
+    "title": "经济数据发布日历",
+    "description": "展示已入库的东方财富公开经济日历，本月事件按发布时间排序；来源缺失时不会推测数值。",
+    "refresh": "刷新经济日历",
+    "refreshing": "正在刷新……",
+    "refreshSuccess": "已存储或更新 {count} 条经济日历事件。",
+    "refreshFailed": "经济日历刷新失败，已有入库事件已保留。",
+    "allCountries": "全部国家或地区",
+    "allImportance": "全部重要程度",
+    "importance": "重要程度",
+    "time": "时间",
+    "country": "国家或地区",
+    "event": "经济指标",
+    "previous": "前值",
+    "forecast": "预测值",
+    "actual": "公布值",
+    "empty": "当前范围暂无已入库的经济日历事件。",
+    "loadFailedTitle": "经济日历暂不可用",
+    "loadFailedDescription": "暂时无法读取已入库的经济日历，页面没有临时请求上游数据。"
+  },
   "EvidenceCenter": {
     "title": "宏观研究",
     "description": "面向在线/API 宏观与估值证据、来源缺口和 AI 摘要的个人研究工作台。",
