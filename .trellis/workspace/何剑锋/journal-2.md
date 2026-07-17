@@ -930,3 +930,36 @@ Added a secret-safe PostgreSQL storage inventory API and localized read-only sto
 ### Next Steps
 
 - None - task complete
+
+
+## Session 88: Stored market movers ranking
+
+**Date**: 2026-07-18
+**Task**: Stored market movers ranking
+**Branch**: `master`
+
+### Summary
+
+Added a database-first A-share gainers/losers module with coherent two-date provenance, responsive localized UI, numeric safety, full backend/frontend coverage, and live desktop/mobile acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a83bbad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
