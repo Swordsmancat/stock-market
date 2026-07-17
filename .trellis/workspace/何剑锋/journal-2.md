@@ -864,3 +864,36 @@ Qualified the direct NBS candidate without guessing identifiers, added audited F
 ### Next Steps
 
 - None - task complete
+
+
+## Session 86: Stored Eastmoney economic calendar
+
+**Date**: 2026-07-17
+**Task**: Stored Eastmoney economic calendar
+**Branch**: `master`
+
+### Summary
+
+Added a bounded Cookie-free Eastmoney economic calendar provider, transactional PostgreSQL persistence, database-only API reads, localized Evidence Center panel, source replacement runbook, live July refresh, and cross-layer tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aa2004d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
