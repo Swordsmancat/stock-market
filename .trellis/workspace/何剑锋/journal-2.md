@@ -1329,3 +1329,36 @@ Accepted four database-first research modules against live stored data, classifi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 100: Complete CN ETF and index ingestion
+
+**Date**: 2026-07-19
+**Task**: Complete CN ETF and index ingestion
+**Branch**: `master`
+
+### Summary
+
+Added asset-aware ETF/index catalogs and daily bars, explicit Eastmoney-to-Sina fallbacks with provenance, scheduled observable ingestion, crawler monitoring, migration coverage, documentation, and successful bounded live acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d004409` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
