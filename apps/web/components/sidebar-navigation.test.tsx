@@ -16,8 +16,8 @@ it("includes research, movers, calendar, storage, and crawler monitoring in the 
     "/market-research",
     "/topic-research",
     "/market-movers",
-    "/storage",
     "/investment-calendar",
+    "/storage",
     "/crawler-monitor",
     "/watchlist",
     "/settings",
@@ -36,11 +36,11 @@ it("includes research, movers, calendar, storage, and crawler monitoring in the 
   );
   expect(within(navigation).getByRole("link", { name: "Data Storage" })).toHaveAttribute(
     "href",
+    "/storage",
+  );
   expect(within(navigation).getByRole("link", { name: "Investment Calendar" })).toHaveAttribute(
     "href",
     "/investment-calendar",
-  );
-    "/storage",
   );
   expect(within(navigation).getByRole("link", { name: "Crawler Monitor" })).toHaveAttribute(
     "href",

@@ -39,6 +39,11 @@ export async function TopNavBar() {
                 loading: t("searchLoading"),
                 loadFailed: t("searchLoadFailed"),
                 noResults: t("noResults"),
+                assetTypes: {
+                  stock: t("assetTypeStock"),
+                  etf: t("assetTypeEtf"),
+                  index: t("assetTypeIndex"),
+                },
               }}
             />
           </div>
