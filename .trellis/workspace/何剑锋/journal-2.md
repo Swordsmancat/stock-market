@@ -1129,3 +1129,36 @@ Completed the eleven-pipeline database-only monitor, localized desktop navigatio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 94: Database-first investment calendar
+
+**Date**: 2026-07-18
+**Task**: Database-first investment calendar
+**Branch**: `master`
+
+### Summary
+
+Completed the read-only Shanghai-date investment calendar, verified a full 1,161-event July month without truncation, localized navigation and page state, and passed focused plus full quality gates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4d17caa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
