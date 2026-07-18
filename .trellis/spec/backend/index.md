@@ -49,9 +49,9 @@ Primary examples:
 | [Market Daily Data Contract](./market-daily-data-contract.md) | Provider-backed A-share stock fund-flow, industry/concept flow, and limit-up context with no-citation/no-trading boundary | Filled |
 | [Stored Market Movers Contract](./market-movers-contract.md) | Read-only exact-date A-share gainers/losers over one coherent stored daily-bar cohort | Filled |
 | [Stored Stock Comparison Contract](./market-comparison-contract.md) | Read-only A-share overlay comparison over coherent cohorts and exact shared dates | Filled |
-| [Market Daily Evidence Contract](./market-daily-evidence-contract.md) | Persisted provider-normalized daily market evidence, deterministic citations, dedupe, diagnostics, and Evidence Center refresh | Filled |
 | [Unified Stored Instrument K-Line Contract](./unified-instrument-kline-contract.md) | Database-only stock, ETF, and index catalog plus coherent daily K-line workspace | Filled |
 | [Focused Topic Research Contract](./focused-topic-research-contract.md) | Database-only agriculture, consumption, real-estate, and non-ferrous evidence projection | Filled |
+| [Market Daily Evidence Contract](./market-daily-evidence-contract.md) | Persisted provider-normalized daily market evidence, deterministic citations, dedupe, diagnostics, and Evidence Center refresh | Filled |
 | [Recommendation Signal Evaluation Contract](./recommendation-signal-evaluation-contract.md) | Public historical signal evaluation API, metrics payload, diagnostics, and no-trading boundary | Filled |
 | [InStock-Inspired Strategy Screening Contract](./instock-strategy-screening-contract.md) | Research-only strategy screening/evaluation API, InStock attribution boundary, and no-trading rules | Filled |
 | [Market Indicator Seed Import Contract](./market-indicator-seed-import-contract.md) | Offline audited JSON/CSV macro observation import contract, validation rules, and CLI boundary | Filled |
