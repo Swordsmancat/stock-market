@@ -288,6 +288,9 @@ class FundamentalSnapshot(Base):
     net_margin: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     debt_to_assets: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     source: Mapped[str] = mapped_column(String(128), default="database")
+    company_json: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

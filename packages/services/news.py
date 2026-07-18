@@ -456,9 +456,15 @@ def ingest_akshare_news(symbol: str, session: Session) -> dict[str, object]:
         sentiment_count += 1
 
     session.commit()
+    if article_count > 0:
+        status = "ingested"
+    elif items:
+        status = "skipped"
+    else:
+        status = "empty"
     return {
         "symbol": symbol,
-        "status": "ingested" if article_count > 0 else "empty",
+        "status": status,
         "source": "eastmoney_public",
         "article_count": article_count,
         "sentiment_count": sentiment_count,

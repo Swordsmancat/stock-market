@@ -10,7 +10,7 @@ import packages.domain.models  # noqa: F401
 from apps.worker.tasks.ingestion import ingest_mock_market_data
 from apps.worker.tasks import reports as report_tasks
 from packages.services.reports import get_latest_daily_report_payload
-from packages.services.task_runs import get_latest_task_run_payload
+from packages.services.task_runs import get_latest_task_run_payload, start_task_run
 from packages.services.watchlists import remove_watchlist_item, upsert_watchlist_item
 from packages.shared.database import Base
 
@@ -79,6 +79,60 @@ def test_sync_instrument_universe_task_records_progress_and_success(monkeypatch)
     assert result["progress"]["phase"] == "completed"
     assert latest_run["status"] == "succeeded"
     assert latest_run["result_json"] == result
+
+
+def test_eastmoney_calendar_task_records_progress_and_success(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    def fake_refresh(*, session, progress_callback, **_kwargs):
+        progress_callback("persisted", 1, 1, "Calendar refresh persisted.")
+        return {
+            "status": "ok",
+            "provider": "eastmoney_public",
+            "pipeline": "economic_calendar",
+            "stored_count": 3,
+        }
+
+    monkeypatch.setattr(ingestion_tasks, "refresh_eastmoney_calendar_batch", fake_refresh)
+
+    result = ingestion_tasks.refresh_eastmoney_economic_calendar_task()
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.refresh_eastmoney_economic_calendar",
+    )
+
+    assert result["stored_count"] == 3
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["result_json"] == result
+
+
+def test_eastmoney_task_skips_fresh_overlap_without_provider_call(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    start_task_run(
+        "ingestion.refresh_eastmoney_economic_calendar",
+        {"pipeline": "economic_calendar"},
+        session=session,
+    )
+    called = False
+
+    def fake_refresh(**_kwargs):
+        nonlocal called
+        called = True
+        return {"status": "ok"}
+
+    monkeypatch.setattr(ingestion_tasks, "refresh_eastmoney_calendar_batch", fake_refresh)
+
+    result = ingestion_tasks.refresh_eastmoney_economic_calendar_task()
+
+    assert result["status"] == "skipped"
+    assert result["code"] == "ALREADY_RUNNING"
+    assert called is False
 
 
 def test_sync_instrument_universe_task_marks_provider_failure(monkeypatch):

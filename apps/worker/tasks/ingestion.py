@@ -9,6 +9,17 @@ from packages.services.corporate_actions import (
     sync_corporate_action_evidence,
 )
 from packages.services.daily_bar_sources import STRICT_POLICY
+from packages.services.eastmoney_automation import (
+    EASTMONEY_CALENDAR_TASK_NAME,
+    EASTMONEY_FUNDAMENTALS_TASK_NAME,
+    EASTMONEY_INDUSTRY_TASK_NAME,
+    EASTMONEY_NEWS_TASK_NAME,
+    EastmoneyAutomationError,
+    refresh_eastmoney_calendar_batch,
+    refresh_eastmoney_fundamentals_batch,
+    refresh_eastmoney_industry_batch,
+    refresh_eastmoney_news_batch,
+)
 from packages.services.ingestion import (
     ingest_market_snapshot,
     ingest_symbol_daily_bars,
@@ -39,6 +50,154 @@ from packages.services.task_runs import (
 )
 from packages.shared.config import settings
 from packages.shared.database import SessionLocal
+
+
+def _run_eastmoney_automation_task(
+    *,
+    task_name: str,
+    pipeline: str,
+    trigger: str,
+    task_run_id: str | None,
+    operation,
+) -> dict[str, object]:
+    session = SessionLocal()
+    task_run = None
+    try:
+        if task_run_id:
+            task_run = session.get(TaskRun, UUID(task_run_id))
+            if task_run is None:
+                raise ValueError("Invalid task run identity.")
+        else:
+            cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(
+                minutes=settings.task_run_stale_minutes
+            )
+            active = (
+                session.query(TaskRun)
+                .filter(TaskRun.task_name == task_name)
+                .filter(TaskRun.status == "running")
+                .filter(TaskRun.heartbeat_at >= cutoff)
+                .first()
+            )
+            if active is not None:
+                return {
+                    "status": "skipped",
+                    "provider": "eastmoney_public",
+                    "pipeline": pipeline,
+                    "code": "ALREADY_RUNNING",
+                }
+            task_run = start_task_run(
+                task_name,
+                {
+                    "provider": "eastmoney_public",
+                    "pipeline": pipeline,
+                    "trigger": trigger,
+                },
+                session=session,
+            )
+
+        def report_progress(phase: str, current: int, total: int, message: str) -> None:
+            update_task_run_progress(
+                task_run,
+                phase=phase,
+                current=current,
+                total=total,
+                message=message,
+                session=session,
+            )
+
+        result = operation(session, report_progress)
+        finish_task_run(task_run, result, session=session)
+        return result
+    except Exception as error:
+        session.rollback()
+        if task_run is not None and task_run.status == "running":
+            code = (
+                error.code
+                if isinstance(error, EastmoneyAutomationError)
+                else "EASTMONEY_AUTOMATION_FAILED"
+            )
+            fail_task_run(task_run, code, session=session)
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name=EASTMONEY_CALENDAR_TASK_NAME)
+def refresh_eastmoney_economic_calendar_task(
+    trigger: str = "manual",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    return _run_eastmoney_automation_task(
+        task_name=EASTMONEY_CALENDAR_TASK_NAME,
+        pipeline="economic_calendar",
+        trigger=trigger,
+        task_run_id=task_run_id,
+        operation=lambda session, progress: refresh_eastmoney_calendar_batch(
+            session=session,
+            progress_callback=progress,
+            max_attempts=settings.eastmoney_max_transient_attempts,
+            retry_base_seconds=settings.eastmoney_retry_base_seconds,
+        ),
+    )
+
+
+@celery_app.task(name=EASTMONEY_INDUSTRY_TASK_NAME)
+def refresh_eastmoney_industry_rankings_task(
+    trigger: str = "manual",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    return _run_eastmoney_automation_task(
+        task_name=EASTMONEY_INDUSTRY_TASK_NAME,
+        pipeline="industry_rankings",
+        trigger=trigger,
+        task_run_id=task_run_id,
+        operation=lambda session, progress: refresh_eastmoney_industry_batch(
+            session=session,
+            progress_callback=progress,
+            max_attempts=settings.eastmoney_max_transient_attempts,
+            retry_base_seconds=settings.eastmoney_retry_base_seconds,
+        ),
+    )
+
+
+@celery_app.task(name=EASTMONEY_NEWS_TASK_NAME)
+def refresh_eastmoney_research_news_task(
+    trigger: str = "manual",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    return _run_eastmoney_automation_task(
+        task_name=EASTMONEY_NEWS_TASK_NAME,
+        pipeline="research_news",
+        trigger=trigger,
+        task_run_id=task_run_id,
+        operation=lambda session, progress: refresh_eastmoney_news_batch(
+            session=session,
+            limit=settings.eastmoney_research_batch_size,
+            request_delay_seconds=max(0, settings.eastmoney_request_delay_ms) / 1000,
+            progress_callback=progress,
+        ),
+    )
+
+
+@celery_app.task(name=EASTMONEY_FUNDAMENTALS_TASK_NAME)
+def refresh_eastmoney_research_fundamentals_task(
+    trigger: str = "manual",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    return _run_eastmoney_automation_task(
+        task_name=EASTMONEY_FUNDAMENTALS_TASK_NAME,
+        pipeline="research_fundamentals",
+        trigger=trigger,
+        task_run_id=task_run_id,
+        operation=lambda session, progress: refresh_eastmoney_fundamentals_batch(
+            session=session,
+            limit=settings.eastmoney_research_batch_size,
+            request_delay_seconds=max(0, settings.eastmoney_request_delay_ms) / 1000,
+            progress_callback=progress,
+            max_attempts=settings.eastmoney_max_transient_attempts,
+            retry_base_seconds=settings.eastmoney_retry_base_seconds,
+        ),
+    )
 
 
 def _extract_quality_diagnostics(snapshot: dict[str, object]) -> dict[str, object]:

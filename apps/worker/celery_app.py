@@ -7,6 +7,46 @@ from packages.services.daily_bar_sources import CN_RESILIENT_POLICY
 from packages.shared.config import settings
 
 
+def _eastmoney_automation_schedule() -> dict[str, dict[str, object]]:
+    if not settings.eastmoney_automation_enabled:
+        return {}
+    return {
+        "eastmoney-economic-calendar": {
+            "task": "ingestion.refresh_eastmoney_economic_calendar",
+            "schedule": crontab(
+                hour=settings.eastmoney_calendar_cron_hour,
+                minute=settings.eastmoney_calendar_cron_minute,
+            ),
+            "kwargs": {"trigger": "scheduled"},
+        },
+        "eastmoney-industry-rankings": {
+            "task": "ingestion.refresh_eastmoney_industry_rankings",
+            "schedule": crontab(
+                hour=settings.eastmoney_industry_cron_hour,
+                minute=settings.eastmoney_industry_cron_minute,
+                day_of_week="1-5",
+            ),
+            "kwargs": {"trigger": "scheduled"},
+        },
+        "eastmoney-research-news": {
+            "task": "ingestion.refresh_eastmoney_research_news",
+            "schedule": timedelta(
+                minutes=max(15, settings.eastmoney_news_interval_minutes)
+            ),
+            "kwargs": {"trigger": "scheduled"},
+        },
+        "eastmoney-research-fundamentals": {
+            "task": "ingestion.refresh_eastmoney_research_fundamentals",
+            "schedule": crontab(
+                hour=settings.eastmoney_fundamentals_cron_hour,
+                minute=settings.eastmoney_fundamentals_cron_minute,
+                day_of_week="1-5",
+            ),
+            "kwargs": {"trigger": "scheduled"},
+        },
+    }
+
+
 def _daily_research_loop_schedule() -> dict[str, dict[str, object]]:
     if not settings.daily_research_loop_enabled:
         return {}
@@ -131,6 +171,7 @@ if settings.disclosure_monitor_enabled:
     }
 
 celery_app.conf.beat_schedule.update(_daily_research_loop_schedule())
+celery_app.conf.beat_schedule.update(_eastmoney_automation_schedule())
 celery_app.autodiscover_tasks(["apps.worker.tasks"], force=True)
 
 # Manually import tasks to ensure they are registered

@@ -168,6 +168,31 @@ def _dispatch_alert_evaluation(input_json: dict[str, Any], task_run_id: str) -> 
     return async_result.id
 
 
+def _dispatch_eastmoney_task(input_json: dict[str, Any], task_run_id: str) -> str:
+    from apps.worker.tasks import ingestion
+
+    task_name = str(input_json["task_name"])
+    tasks = {
+        "ingestion.refresh_eastmoney_economic_calendar": (
+            ingestion.refresh_eastmoney_economic_calendar_task
+        ),
+        "ingestion.refresh_eastmoney_industry_rankings": (
+            ingestion.refresh_eastmoney_industry_rankings_task
+        ),
+        "ingestion.refresh_eastmoney_research_news": (
+            ingestion.refresh_eastmoney_research_news_task
+        ),
+        "ingestion.refresh_eastmoney_research_fundamentals": (
+            ingestion.refresh_eastmoney_research_fundamentals_task
+        ),
+    }
+    async_result = tasks[task_name].delay(
+        trigger=input_json.get("trigger", "manual"),
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
 _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "reports.refresh_daily_watchlist_analysis": _dispatch_watchlist_analysis,
     "reports.refresh_daily_stock_analysis": _dispatch_stock_analysis,
@@ -181,6 +206,18 @@ _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "research.run_daily_research_loop": _dispatch_daily_research_loop,
     "alerts.evaluate_watchlist_alerts": _dispatch_alert_evaluation,
 }
+
+for _eastmoney_task_name in (
+    "ingestion.refresh_eastmoney_economic_calendar",
+    "ingestion.refresh_eastmoney_industry_rankings",
+    "ingestion.refresh_eastmoney_research_news",
+    "ingestion.refresh_eastmoney_research_fundamentals",
+):
+    _DISPATCHERS[_eastmoney_task_name] = (
+        lambda input_json, task_run_id, task_name=_eastmoney_task_name: _dispatch_eastmoney_task(
+            {**input_json, "task_name": task_name}, task_run_id
+        )
+    )
 
 
 def dispatch_task_run(task_name: str, input_json: dict[str, Any], task_run_id: str) -> str:

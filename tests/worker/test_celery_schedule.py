@@ -1,4 +1,8 @@
-from apps.worker.celery_app import _daily_research_loop_schedule, celery_app
+from apps.worker.celery_app import (
+    _daily_research_loop_schedule,
+    _eastmoney_automation_schedule,
+    celery_app,
+)
 from packages.shared.config import settings
 
 
@@ -121,3 +125,23 @@ def test_daily_research_loop_task_is_registered():
         celery_app.tasks["research.run_daily_research_loop"].name
         == "research.run_daily_research_loop"
     )
+
+
+def test_celery_beat_schedules_four_eastmoney_pipelines():
+    schedule = _eastmoney_automation_schedule()
+
+    assert {item["task"] for item in schedule.values()} == {
+        "ingestion.refresh_eastmoney_economic_calendar",
+        "ingestion.refresh_eastmoney_industry_rankings",
+        "ingestion.refresh_eastmoney_research_news",
+        "ingestion.refresh_eastmoney_research_fundamentals",
+    }
+    assert schedule["eastmoney-research-news"]["schedule"].total_seconds() == max(
+        15, settings.eastmoney_news_interval_minutes
+    ) * 60
+
+
+def test_eastmoney_automation_schedule_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "eastmoney_automation_enabled", False)
+
+    assert _eastmoney_automation_schedule() == {}

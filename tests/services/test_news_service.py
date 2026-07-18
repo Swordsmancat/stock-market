@@ -1516,6 +1516,69 @@ def test_legacy_akshare_named_ingest_honors_disabled_public_source(monkeypatch):
     assert session.query(NewsArticle).count() == 0
 
 
+def test_legacy_akshare_named_ingest_reports_deduplicated_items_as_skipped(
+    monkeypatch,
+):
+    session = make_session()
+    items = (
+        EastmoneyPublicNewsItem(
+            symbol="600519",
+            title="Existing Eastmoney row",
+            url="https://example.com/existing-eastmoney-row",
+            publisher="Example Finance",
+            summary="Existing stored report.",
+            published_at=datetime(2026, 7, 17, 8, 0, tzinfo=timezone.utc),
+        ),
+    )
+    monkeypatch.setattr(
+        "packages.services.news.fetch_eastmoney_public_news",
+        lambda symbol, **kwargs: items,
+    )
+    monkeypatch.setattr(
+        "packages.services.news.get_platform_settings",
+        lambda: {
+            "akshare_enabled": True,
+            "news_search_timeout_seconds": 3,
+            "news_search_max_results": 10,
+        },
+    )
+
+    first_result = ingest_akshare_news("600519", session=session)
+    duplicate_result = ingest_akshare_news("600519", session=session)
+
+    assert first_result["status"] == "ingested"
+    assert duplicate_result == {
+        "symbol": "600519",
+        "status": "skipped",
+        "source": "eastmoney_public",
+        "article_count": 0,
+        "sentiment_count": 0,
+    }
+    assert session.query(NewsArticle).count() == 1
+
+
+def test_legacy_akshare_named_ingest_reports_empty_provider_response(monkeypatch):
+    session = make_session()
+    monkeypatch.setattr(
+        "packages.services.news.fetch_eastmoney_public_news",
+        lambda symbol, **kwargs: (),
+    )
+    monkeypatch.setattr(
+        "packages.services.news.get_platform_settings",
+        lambda: {
+            "akshare_enabled": True,
+            "news_search_timeout_seconds": 3,
+            "news_search_max_results": 10,
+        },
+    )
+
+    result = ingest_akshare_news("600519", session=session)
+
+    assert result["status"] == "empty"
+    assert result["article_count"] == 0
+    assert session.query(NewsArticle).count() == 0
+
+
 def test_search_ingest_defers_social_candidates_from_stored_news():
     session = make_session()
     retrieved_at = datetime(2026, 7, 8, 10, 0, tzinfo=timezone.utc)

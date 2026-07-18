@@ -199,7 +199,7 @@ def _payload_from_database_row(
     payload = _payload_from_snapshot(_snapshot_from_model(row), source="database")
     item = payload.get("item")
     if isinstance(item, dict):
-        item["company"] = None
+        item["company"] = row.company_json or None
     payload.update(
         {
             "status": "ok",
@@ -239,6 +239,9 @@ def _enrich_database_payload_with_company(
     *,
     symbol: str,
 ) -> dict[str, object]:
+    item = payload.get("item")
+    if isinstance(item, dict) and isinstance(item.get("company"), dict):
+        return payload
     cache_key = f"fundamentals:eastmoney-public-company:{symbol}"
     cached = _read_eastmoney_company_cache(cache_key, symbol=symbol)
     if cached is not None:
