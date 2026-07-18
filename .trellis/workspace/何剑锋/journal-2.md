@@ -1162,3 +1162,36 @@ Completed the read-only Shanghai-date investment calendar, verified a full 1,161
 ### Next Steps
 
 - None - task complete
+
+
+## Session 95: Harden Eastmoney industry history
+
+**Date**: 2026-07-18
+**Task**: Harden Eastmoney industry history
+**Branch**: `master`
+
+### Summary
+
+Added schema-aware public-host fallback, rejected provider-wide empty history, re-ranked partial refreshes across stored cohorts, completed bounded runtime acceptance, and repaired existing derived ranks without changing source evidence.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `267cfd9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
