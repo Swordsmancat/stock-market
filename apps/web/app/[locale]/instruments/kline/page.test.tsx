@@ -50,3 +50,26 @@ it.each([
   render(await InstrumentKlinePage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve(status === "empty" ? {} : { symbol: "510300", market: "CN" }) }));
   expect(screen.getByText(title)).toBeInTheDocument();
 });
+
+it("distinguishes an uncollected asset catalog from a search miss or selection prompt", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    ...readyPayload,
+    status: "empty",
+    total: 0,
+    query: { asset_type: "etf" },
+    catalog: [],
+    selected: null,
+    series: null,
+  })));
+
+  render(await InstrumentKlinePage({
+    params: Promise.resolve({ locale: "en" }),
+    searchParams: Promise.resolve({ asset_type: "etf" }),
+  }));
+
+  expect(screen.getAllByText("No stored ETF instruments").length).toBeGreaterThan(0);
+  expect(screen.getByRole("link", { name: "Data storage" })).toHaveAttribute("href", "/storage");
+  expect(screen.getByRole("link", { name: "Crawler monitor" })).toHaveAttribute("href", "/crawler-monitor");
+  expect(screen.queryByText("Try another symbol, name, or asset type.")).not.toBeInTheDocument();
+  expect(screen.queryByText("Choose an instrument")).not.toBeInTheDocument();
+});

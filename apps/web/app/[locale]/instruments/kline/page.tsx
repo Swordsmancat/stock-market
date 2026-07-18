@@ -1,4 +1,4 @@
-import { ArrowLeft, ChartCandlestick, Database, ExternalLink, Search } from "lucide-react";
+import { Activity, ArrowLeft, ChartCandlestick, Database, ExternalLink, Search } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { AdvancedCandlestickChart } from "@/components/advanced-candlestick-chart";
@@ -101,6 +101,13 @@ export default async function InstrumentKlinePage({
     upstreamParams.set("market", market);
   }
   const payload = await loadPayload(upstreamParams);
+  const catalogUncollected = payload?.status === "empty"
+    && payload.total === 0
+    && Boolean(assetType)
+    && !q
+    && !symbol
+    && !market;
+  const selectedAssetTypeLabel = assetType ? t(`assetType${assetType}`) : t("allAssetTypes");
 
   return (
     <div className="space-y-5">
@@ -157,7 +164,14 @@ export default async function InstrumentKlinePage({
             </FinancialTerminalCardHeader>
             <FinancialTerminalCardContent className="max-h-[38rem] space-y-2 overflow-y-auto">
               {payload.catalog.length === 0 ? (
-                <EmptyState title={q || assetType ? t("noMatches") : t("emptyCatalog")} description={q || assetType ? t("noMatchesDescription") : t("emptyCatalogDescription")} />
+                <EmptyState
+                  title={catalogUncollected
+                    ? t("catalogUncollectedTitle", { assetType: selectedAssetTypeLabel })
+                    : q || assetType ? t("noMatches") : t("emptyCatalog")}
+                  description={catalogUncollected
+                    ? t("catalogUncollectedDescription", { assetType: selectedAssetTypeLabel })
+                    : q || assetType ? t("noMatchesDescription") : t("emptyCatalogDescription")}
+                />
               ) : payload.catalog.map((item) => {
                 const selected = item.symbol === symbol && item.market === market;
                 return (
@@ -191,7 +205,28 @@ export default async function InstrumentKlinePage({
 
           <div className="min-w-0 space-y-4">
             {payload.status === "empty" ? (
-              <FinancialTerminalCard><FinancialTerminalCardContent className="p-4"><EmptyState title={t("chooseTitle")} description={t("chooseDescription")} /></FinancialTerminalCardContent></FinancialTerminalCard>
+              <FinancialTerminalCard>
+                <FinancialTerminalCardContent className="p-4">
+                  {catalogUncollected ? (
+                    <div>
+                      <EmptyState
+                        title={t("catalogUncollectedTitle", { assetType: selectedAssetTypeLabel })}
+                        description={t("catalogUncollectedNext", { assetType: selectedAssetTypeLabel })}
+                      />
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href="/storage"><Database className="mr-2 h-4 w-4" />{t("dataStorage")}</Link>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href="/crawler-monitor"><Activity className="mr-2 h-4 w-4" />{t("crawlerMonitor")}</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyState title={t("chooseTitle")} description={t("chooseDescription")} />
+                  )}
+                </FinancialTerminalCardContent>
+              </FinancialTerminalCard>
             ) : payload.status === "not_found" ? (
               <FinancialTerminalCard><FinancialTerminalCardContent className="p-4"><EmptyState title={t("notFoundTitle")} description={t("notFoundDescription")} /></FinancialTerminalCardContent></FinancialTerminalCard>
             ) : payload.status === "no_data" ? (

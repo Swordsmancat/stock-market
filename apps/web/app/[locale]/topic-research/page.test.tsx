@@ -49,7 +49,10 @@ it("renders independent empty sections without treating them as a failure", asyn
   render(await TopicResearchPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({ topic: "real_estate" }) }));
 
   expect(screen.getByText("No stored topic news")).toBeInTheDocument();
+  expect(screen.getByText("No stored news matched this topic and evidence window.")).toBeInTheDocument();
   expect(screen.getByText("No matching industry history")).toBeInTheDocument();
+  expect(screen.getByText("No stored industry-ranking history matched this topic and evidence window.")).toBeInTheDocument();
   expect(screen.getByText("No related stored companies")).toBeInTheDocument();
+  expect(screen.getByText("No stored company metadata matched this topic taxonomy.")).toBeInTheDocument();
   expect(screen.queryByText("Topic research is unavailable")).not.toBeInTheDocument();
 });

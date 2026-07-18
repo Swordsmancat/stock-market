@@ -155,7 +155,7 @@ export default async function TopicResearchPage({
               </FinancialTerminalCardHeader>
               <FinancialTerminalCardContent className="space-y-2">
                 {payload.sections.news.status === "empty" ? (
-                  <EmptyState title={t("newsEmpty")} description={t("emptyDescription")} />
+                  <EmptyState title={t("newsEmpty")} description={t("newsEmptyDescription")} />
                 ) : payload.sections.news.items.map((item) => (
                   <FinancialTerminalSurface key={item.id} className="p-3">
                     <div className="flex items-start justify-between gap-3">
@@ -185,7 +185,7 @@ export default async function TopicResearchPage({
                 </FinancialTerminalCardHeader>
                 <FinancialTerminalCardContent className="space-y-2">
                   {payload.sections.industryRankings.status === "empty" ? (
-                    <EmptyState title={t("rankingEmpty")} description={t("emptyDescription")} />
+                    <EmptyState title={t("rankingEmpty")} description={t("rankingEmptyDescription")} />
                   ) : payload.sections.industryRankings.items.map((item) => (
                     <a key={`${item.date}-${item.code}`} href={item.sourceUrl} target="_blank" rel="noreferrer" className="block">
                       <FinancialTerminalSurface className="grid grid-cols-[5.5rem_minmax(0,1fr)_4.5rem] items-center gap-2 p-2.5 text-sm hover:bg-accent/40">
@@ -205,7 +205,7 @@ export default async function TopicResearchPage({
                 </FinancialTerminalCardHeader>
                 <FinancialTerminalCardContent className="space-y-2">
                   {payload.sections.companies.status === "empty" ? (
-                    <EmptyState title={t("companiesEmpty")} description={t("emptyDescription")} />
+                    <EmptyState title={t("companiesEmpty")} description={t("companiesEmptyDescription")} />
                   ) : payload.sections.companies.items.map((item) => {
                     const content = (
                       <FinancialTerminalSurface className="p-3 hover:bg-accent/40">
