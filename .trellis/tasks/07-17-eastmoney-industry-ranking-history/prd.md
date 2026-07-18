@@ -55,13 +55,12 @@ days, backed by stored observations rather than page-load scraping.
 - [x] Chinese and English ranking matrices render loaded, empty and failed states.
 - [x] Ranking views, sorting, bounded count/day controls and responsive internal
   scrolling work without additional GET requests or page-level overflow.
-- [ ] A permitted runtime access method completes a real refresh without
+- [x] A permitted runtime access method completes a real refresh without
   exposing credentials or lowering data-integrity checks.
 - [x] Full backend/Web/type/migration checks pass and 3000/8000 remain healthy.
 
-Runtime note: the 2026-07-17 post-alignment direct probe is still rejected by
-Eastmoney with sanitized code `EASTMONEY_INDUSTRY_REQUEST_FAILED`; no proxy or
-Cookie is configured. The deployed API returns the canonical source/taxonomy
-metadata from its database-only GET and preserves the empty/stored projection.
-The final live-refresh criterion remains open until a permitted working access
-path is available.
+Runtime note: the 2026-07-18 bounded public-host run succeeded in 21,220 ms and
+stored 20 rows without a proxy, Cookie, login or browser state. A later run in
+which every history response was empty failed with sanitized code
+`EASTMONEY_INDUSTRY_SCHEMA_REJECTED` and preserved the 180 stored rows. This
+confirms both the permitted fallback path and the zero-row integrity guard.

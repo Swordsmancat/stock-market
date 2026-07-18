@@ -15,11 +15,13 @@
 
 ## Access policy
 
-Each request uses the direct route first. A connection/provider access failure
-may trigger one attempt through the configured HTTP(S) proxy. The optional
-Cookie is attached to both routes when supplied manually. Diagnostics use a
-small allowlist of codes and never contain request URLs with credentials,
-headers, response bodies, or exception text.
+Each request uses the canonical public host first, then the public
+`push2delay` host. Only after the bounded direct host sequence fails may the
+same sequence run through the configured HTTP(S) proxy. Empty or rejected
+schemas advance to the next host, and a provider-wide zero-row result fails
+without modifying stored evidence. The optional Cookie is attached only when
+supplied manually. Diagnostics use a small allowlist of codes and never contain
+request URLs with credentials, headers, response bodies, or exception text.
 
 ## Storage
 

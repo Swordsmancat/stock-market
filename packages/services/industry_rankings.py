@@ -51,6 +51,24 @@ def refresh_industry_rankings(*, session: Session, days: int = 12, fetcher=fetch
         item.metadata_json = {"endpoint_family": "push2/push2his", "access": "direct_or_configured_proxy"}
         item.retrieved_at = record.retrieved_at
         item.updated_at = now
+    session.flush()
+    for trade_date in by_date:
+        stored_rows = list(
+            session.scalars(
+                select(IndustryDailyRanking)
+                .where(
+                    IndustryDailyRanking.provider == "eastmoney",
+                    IndustryDailyRanking.taxonomy == "industry",
+                    IndustryDailyRanking.trade_date == trade_date,
+                )
+                .order_by(
+                    IndustryDailyRanking.change_percent.desc(),
+                    IndustryDailyRanking.industry_code,
+                )
+            )
+        )
+        for rank, item in enumerate(stored_rows, 1):
+            item.rank = rank
     session.commit()
     return {"status": "ok", "fetched": len(records), "dates": len(by_date), "inserted": inserted, "updated": updated}
 

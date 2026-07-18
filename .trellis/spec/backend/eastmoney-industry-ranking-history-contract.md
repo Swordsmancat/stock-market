@@ -7,9 +7,19 @@
   `https://quote.eastmoney.com/center/gridlist.html#industry_board_1`. The
   universe filter is `m:90 s:4`; `industry_board_2` and
   `industry_board_3` are different taxonomic levels and must not be mixed.
-- Requests are direct-first. An optional configured HTTP(S) proxy receives at
-  most one fallback attempt per failed request. A manually supplied Cookie may
-  be attached; browser state is never harvested automatically.
+- Requests try the canonical public host directly, then the public
+  `push2delay` host directly. An optional configured HTTP(S) proxy receives one
+  bounded pass over the same hosts only after direct access fails. A manually
+  supplied Cookie may be attached; browser state is never harvested
+  automatically.
+- A transport-level HTTP 200 is insufficient: an empty or schema-rejected
+  universe/history response advances to the next permitted host. Individual
+  industries may have no history, but a provider-wide zero-row result fails
+  the refresh and preserves the stored projection instead of recording a
+  successful no-op.
+- When the provider returns only a usable subset, each touched trading date is
+  re-ranked across its complete stored industry cohort in the same transaction.
+  Incremental accumulation must never leave duplicate or stale daily ranks.
 - Proxy URLs and Cookies are secrets. Public settings expose only configured
   booleans, and diagnostics never include headers, credential URLs, upstream
   bodies, exception text, or stored secret values.
