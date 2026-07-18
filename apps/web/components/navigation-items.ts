@@ -1,4 +1,4 @@
-import { BookOpenText, BrainCircuit, ChartNoAxesCombined, Database, Home, List, ListOrdered, Settings, TrendingUp, type LucideIcon } from "lucide-react";
+import { Activity, BookOpenText, BrainCircuit, ChartNoAxesCombined, Database, Home, List, ListOrdered, Settings, TrendingUp, type LucideIcon } from "lucide-react";
 
 export type NavigationItem = {
   titleKey: string;
@@ -45,6 +45,12 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
     titleKey: "storage",
     href: "/storage",
     icon: Database,
+    mobile: false,
+  },
+  {
+    titleKey: "crawlerMonitor",
+    href: "/crawler-monitor",
+    icon: Activity,
     mobile: false,
   },
   {

@@ -37,6 +37,7 @@ export function Breadcrumbs() {
         "topic-research": "topicResearch",
         "market-movers": "marketMovers",
         storage: "storage",
+        "crawler-monitor": "crawlerMonitor",
         watchlist: "watchlist",
         portfolios: "portfolios",
         reports: "reports",
