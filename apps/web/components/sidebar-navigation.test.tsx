@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 
 import { SidebarNavigation } from "./sidebar-navigation";
 
-it("includes research, movers, storage, and crawler monitoring in the desktop sidebar", () => {
+it("includes research, movers, calendar, storage, and crawler monitoring in the desktop sidebar", () => {
   render(<SidebarNavigation />);
 
   const navigation = screen.getByRole("navigation");
@@ -17,6 +17,7 @@ it("includes research, movers, storage, and crawler monitoring in the desktop si
     "/topic-research",
     "/market-movers",
     "/storage",
+    "/investment-calendar",
     "/crawler-monitor",
     "/watchlist",
     "/settings",
@@ -35,6 +36,10 @@ it("includes research, movers, storage, and crawler monitoring in the desktop si
   );
   expect(within(navigation).getByRole("link", { name: "Data Storage" })).toHaveAttribute(
     "href",
+  expect(within(navigation).getByRole("link", { name: "Investment Calendar" })).toHaveAttribute(
+    "href",
+    "/investment-calendar",
+  );
     "/storage",
   );
   expect(within(navigation).getByRole("link", { name: "Crawler Monitor" })).toHaveAttribute(

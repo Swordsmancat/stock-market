@@ -1,4 +1,4 @@
-import { Activity, BookOpenText, BrainCircuit, ChartNoAxesCombined, Database, Home, List, ListOrdered, Settings, TrendingUp, type LucideIcon } from "lucide-react";
+import { Activity, BookOpenText, BrainCircuit, CalendarDays, ChartNoAxesCombined, Database, Home, List, ListOrdered, Settings, TrendingUp, type LucideIcon } from "lucide-react";
 
 export type NavigationItem = {
   titleKey: string;
@@ -39,6 +39,12 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
     titleKey: "marketMovers",
     href: "/market-movers",
     icon: ListOrdered,
+    mobile: false,
+  },
+  {
+    titleKey: "investmentCalendar",
+    href: "/investment-calendar",
+    icon: CalendarDays,
     mobile: false,
   },
   {

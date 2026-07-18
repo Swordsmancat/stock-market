@@ -14,6 +14,7 @@ it("keeps one ordered navigation source with desktop-only research utility route
     "/topic-research",
     "/market-movers",
     "/storage",
+    "/investment-calendar",
     "/crawler-monitor",
     "/watchlist",
     "/settings",
@@ -26,6 +27,7 @@ it("keeps one ordered navigation source with desktop-only research utility route
     "topicResearch",
     "marketMovers",
     "storage",
+    "investmentCalendar",
     "crawlerMonitor",
     "watchlist",
     "settings",
@@ -34,6 +36,7 @@ it("keeps one ordered navigation source with desktop-only research utility route
   expect(NAVIGATION_ITEMS.find((item) => item.href === "/topic-research")?.mobile).toBe(false);
   expect(NAVIGATION_ITEMS.find((item) => item.href === "/market-movers")?.mobile).toBe(false);
   expect(NAVIGATION_ITEMS.find((item) => item.href === "/storage")?.mobile).toBe(false);
+  expect(NAVIGATION_ITEMS.find((item) => item.href === "/investment-calendar")?.mobile).toBe(false);
   expect(new Set(navigationHrefs).size).toBe(navigationHrefs.length);
   expect(NAVIGATION_ITEMS.find((item) => item.href === "/crawler-monitor")?.mobile).toBe(false);
 });

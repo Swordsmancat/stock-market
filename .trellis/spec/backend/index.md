@@ -57,6 +57,7 @@ Primary examples:
 | [Market Indicator Seed Import Contract](./market-indicator-seed-import-contract.md) | Offline audited JSON/CSV macro observation import contract, validation rules, and CLI boundary | Filled |
 | [Official Macro Refresh Contract](./official-macro-refresh-contract.md) | Explicit database-first macro provider refresh, audited observations, and FR007/FDR007 semantics | Filled |
 | [Economic Calendar Contract](./economic-calendar-contract.md) | Explicit public economic calendar refresh, stable stored events, database-only reads, and localized display | Filled |
+| [Investment Calendar Contract](./investment-calendar-contract.md) | Complete bounded month projection over stored economic events and active-watchlist official disclosures | Filled |
 | [Hot Sector Contract](./hot-sector-contract.md) | `/sectors/hot` provider-backed payload fields, degraded states, and cross-layer tests | Filled |
 | [Eastmoney Industry Ranking History Contract](./eastmoney-industry-ranking-history-contract.md) | Stored direct-first/proxy-fallback Eastmoney industry ranking history and secret-safe access | Filled |
 | [Eastmoney Automated Collection Pipeline Contract](./eastmoney-automated-pipeline-contract.md) | Scheduled bounded Eastmoney calendar, industry, news, and fundamentals collection with TaskRun observability | Filled |
