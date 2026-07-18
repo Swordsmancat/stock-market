@@ -1,4 +1,3 @@
-from datetime import date
 from unittest.mock import patch
 
 from packages.ai.report_builder import ReportContext, build_stock_report, resolve_combined_summary
