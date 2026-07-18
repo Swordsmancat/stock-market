@@ -1063,3 +1063,36 @@ Added a database-only four-topic personal research workspace with conservative e
 ### Next Steps
 
 - None - task complete
+
+
+## Session 92: Eastmoney automated pipeline acceptance
+
+**Date**: 2026-07-18
+**Task**: Eastmoney automated pipeline acceptance
+**Branch**: `master`
+
+### Summary
+
+Completed and live-validated four bounded Eastmoney collection pipelines, corrected deduplicated news status semantics, passed full backend/frontend/type/Ruff checks, and preserved unrelated monitor/calendar work.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b732805` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
