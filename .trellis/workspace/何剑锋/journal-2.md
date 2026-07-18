@@ -1229,3 +1229,36 @@ Re-verified the macro/market research route split, localized cross-links and bre
 ### Next Steps
 
 - None - task complete
+
+
+## Session 97: Close shared Web integration gaps
+
+**Date**: 2026-07-18
+**Task**: Close shared Web integration gaps
+**Branch**: `master`
+
+### Summary
+
+Completed global-search asset type labels, aligned desktop utility navigation tests, verified locale catalogs are semantically unchanged, passed focused Web tests and TypeScript, and performed a strict read-only five-day acceptance audit with no new trusted watermark or model call.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b29f62d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
