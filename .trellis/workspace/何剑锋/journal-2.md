@@ -1195,3 +1195,37 @@ Added schema-aware public-host fallback, rejected provider-wide empty history, r
 ### Next Steps
 
 - None - task complete
+
+
+## Session 96: Close market research information architecture
+
+**Date**: 2026-07-18
+**Task**: Close market research information architecture
+**Branch**: `master`
+
+### Summary
+
+Re-verified the macro/market research route split, localized cross-links and breadcrumbs, desktop sidebar placement, unchanged five-item mobile navigation, full Web suite, TypeScript, and live route health; added acceptance evidence and archived the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4939bf5` | (see git log) |
+| `6eca306` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
