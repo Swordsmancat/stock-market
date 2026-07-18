@@ -1096,3 +1096,36 @@ Completed and live-validated four bounded Eastmoney collection pipelines, correc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 93: Read-only crawler execution monitor
+
+**Date**: 2026-07-18
+**Task**: Read-only crawler execution monitor
+**Branch**: `master`
+
+### Summary
+
+Completed the eleven-pipeline database-only monitor, localized desktop navigation and status projection, verified read-only refresh, themes, runtime health, and full quality gates while preserving calendar work.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `06e49b9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
