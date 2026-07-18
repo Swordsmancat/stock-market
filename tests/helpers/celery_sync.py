@@ -85,6 +85,20 @@ def dispatch_task_run_sync(
             lambda: sync_instrument_universe_task.run(
                 market=input_json.get("market", "CN"),
                 provider=input_json.get("provider", "akshare"),
+                asset_type=input_json.get("asset_type", "stock"),
+                task_run_id=task_run_id,
+            ),
+        )
+
+    if task_name == "ingestion.sync_cn_fund_index_data":
+        from apps.worker.tasks.ingestion import sync_cn_fund_index_data_task
+
+        return _run_with_session(
+            session,
+            lambda: sync_cn_fund_index_data_task.run(
+                lookback_days=input_json.get("lookback_days"),
+                max_symbols_per_type=input_json.get("max_symbols_per_type"),
+                trigger=input_json.get("trigger", "manual"),
                 task_run_id=task_run_id,
             ),
         )

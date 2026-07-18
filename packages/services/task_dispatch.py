@@ -50,6 +50,19 @@ def _dispatch_instrument_universe_sync(input_json: dict[str, Any], task_run_id: 
     async_result = sync_instrument_universe_task.delay(
         market=input_json.get("market", "CN"),
         provider=input_json.get("provider", "akshare"),
+        asset_type=input_json.get("asset_type", "stock"),
+        task_run_id=task_run_id,
+    )
+    return async_result.id
+
+
+def _dispatch_cn_fund_index_pipeline(input_json: dict[str, Any], task_run_id: str) -> str:
+    from apps.worker.tasks.ingestion import sync_cn_fund_index_data_task
+
+    async_result = sync_cn_fund_index_data_task.delay(
+        lookback_days=input_json.get("lookback_days"),
+        max_symbols_per_type=input_json.get("max_symbols_per_type"),
+        trigger=input_json.get("trigger", "manual"),
         task_run_id=task_run_id,
     )
     return async_result.id
@@ -198,6 +211,7 @@ _DISPATCHERS: dict[str, Callable[[dict[str, Any], str], str]] = {
     "reports.refresh_daily_stock_analysis": _dispatch_stock_analysis,
     "ingestion.ingest_market_data": _dispatch_market_ingestion,
     "ingestion.sync_instrument_universe": _dispatch_instrument_universe_sync,
+    "ingestion.sync_cn_fund_index_data": _dispatch_cn_fund_index_pipeline,
     "ingestion.sync_corporate_actions": _dispatch_corporate_action_sync,
     "ingestion.ingest_symbol_daily_bars": _dispatch_symbol_daily_bars_ingestion,
     "ingestion.ingest_symbol_daily_bars_batch": _dispatch_symbol_daily_bars_batch_ingestion,

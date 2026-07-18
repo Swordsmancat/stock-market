@@ -26,6 +26,7 @@ TASK_NAME = "ingestion.ingest_market_data"
 SYMBOL_DAILY_BARS_TASK_NAME = "ingestion.ingest_symbol_daily_bars"
 SYMBOL_DAILY_BARS_BATCH_TASK_NAME = "ingestion.ingest_symbol_daily_bars_batch"
 INSTRUMENT_UNIVERSE_TASK_NAME = "ingestion.sync_instrument_universe"
+CN_FUND_INDEX_PIPELINE_TASK_NAME = "ingestion.sync_cn_fund_index_data"
 CORPORATE_ACTIONS_TASK_NAME = "ingestion.sync_corporate_actions"
 
 
@@ -96,6 +97,7 @@ def _enqueue_instrument_universe_sync(
     *,
     market: str,
     provider: str,
+    asset_type: str,
     session: Session,
 ) -> dict[str, object]:
     return enqueue_task_run(
@@ -103,6 +105,27 @@ def _enqueue_instrument_universe_sync(
         {
             "market": market.strip().upper(),
             "provider": provider.strip().lower(),
+            "asset_type": asset_type.strip().lower(),
+        },
+        session=session,
+    )
+
+
+def _enqueue_cn_fund_index_pipeline(
+    *,
+    lookback_days: int,
+    max_symbols_per_type: int,
+    session: Session,
+) -> dict[str, object]:
+    return enqueue_task_run(
+        CN_FUND_INDEX_PIPELINE_TASK_NAME,
+        {
+            "provider": "akshare",
+            "pipeline": "cn_fund_index_data",
+            "asset_types": ["etf", "index"],
+            "lookback_days": lookback_days,
+            "max_symbols_per_type": max_symbols_per_type,
+            "trigger": "manual",
         },
         session=session,
     )
@@ -253,11 +276,13 @@ def ingest_market_snapshot(
 def sync_a_share_instrument_universe(
     market: str = Query(default="CN"),
     provider: str = Query(default="akshare"),
+    asset_type: str = Query(default="stock", pattern="^(stock|etf|index)$"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return _enqueue_instrument_universe_sync(
         market=market,
         provider=provider,
+        asset_type=asset_type,
         session=session,
     )
 
@@ -266,6 +291,7 @@ def sync_a_share_instrument_universe(
 def get_a_share_instrument_universe_status(
     market: str = Query(default="CN"),
     provider: str = Query(default="akshare"),
+    asset_type: str = Query(default="stock", pattern="^(stock|etf|index)$"),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     try:
@@ -273,9 +299,23 @@ def get_a_share_instrument_universe_status(
             session=session,
             market=market,
             provider_name=provider,
+            asset_type=asset_type,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/cn-fund-index-pipeline")
+def sync_cn_fund_index_pipeline(
+    lookback_days: int = Query(default=120, ge=7, le=730),
+    max_symbols_per_type: int = Query(default=5000, ge=1, le=5000),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    return _enqueue_cn_fund_index_pipeline(
+        lookback_days=lookback_days,
+        max_symbols_per_type=max_symbols_per_type,
+        session=session,
+    )
 
 
 @router.post("/corporate-actions")
@@ -395,7 +435,7 @@ def ingest_symbol_daily_bars(
     end: date = Query(...),
     exchange: str | None = Query(default=None),
     timeframe: str = Query(default="1d"),
-    asset_type: str = Query(default="stock", description="Instrument asset type: stock or etf."),
+    asset_type: str = Query(default="stock", description="Instrument asset type: stock, etf, or index."),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return _enqueue_symbol_daily_bars_ingestion(
@@ -420,7 +460,7 @@ def ingest_symbol_daily_bars_batch(
     end: date = Query(...),
     exchange: str | None = Query(default=None),
     timeframe: str = Query(default="1d"),
-    asset_type: str = Query(default="stock", description="Instrument asset type: stock or etf."),
+    asset_type: str = Query(default="stock", description="Instrument asset type: stock, etf, or index."),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     return _enqueue_symbol_daily_bars_batch_ingestion(

@@ -161,6 +161,62 @@ def test_sync_instrument_universe_task_marks_provider_failure(monkeypatch):
     assert "last good universe was preserved" in latest_run["error_message"]
 
 
+def test_cn_fund_index_pipeline_task_records_progress_and_success(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+
+    def fake_sync(*, progress_callback, **_kwargs):
+        progress_callback("daily_bars", 2, 2, "Completed.")
+        return {
+            "status": "ok",
+            "provider": "akshare",
+            "pipeline": "cn_fund_index_data",
+            "assets": {
+                "etf": {"catalog_count": 1, "bar_count": 2},
+                "index": {"catalog_count": 1, "bar_count": 2},
+            },
+        }
+
+    monkeypatch.setattr(ingestion_tasks, "sync_cn_fund_index_data", fake_sync)
+
+    result = ingestion_tasks.sync_cn_fund_index_data_task(
+        lookback_days=30,
+        max_symbols_per_type=10,
+    )
+    latest_run = get_latest_task_run_payload(
+        session=session,
+        task_name="ingestion.sync_cn_fund_index_data",
+    )
+
+    assert result["status"] == "ok"
+    assert latest_run["status"] == "succeeded"
+    assert latest_run["input_json"]["asset_types"] == ["etf", "index"]
+
+
+def test_cn_fund_index_pipeline_task_skips_fresh_overlap(monkeypatch):
+    session = make_session()
+    from apps.worker.tasks import ingestion as ingestion_tasks
+
+    monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    start_task_run(
+        "ingestion.sync_cn_fund_index_data",
+        {"pipeline": "cn_fund_index_data"},
+        session=session,
+    )
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "sync_cn_fund_index_data",
+        lambda **_kwargs: pytest.fail("overlap must not call provider pipeline"),
+    )
+
+    result = ingestion_tasks.sync_cn_fund_index_data_task()
+
+    assert result["status"] == "skipped"
+    assert result["code"] == "ALREADY_RUNNING"
+
+
 @pytest.mark.parametrize(
     ("task_kwargs", "expected_policy"),
     [

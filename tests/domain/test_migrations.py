@@ -235,6 +235,19 @@ def load_nullable_fundamental_metrics_migration():
     return module
 
 
+def load_etf_index_universe_identity_migration():
+    migration_path = Path("alembic/versions/0028_etf_index_universe_identity.py")
+    spec = importlib.util.spec_from_file_location(
+        "etf_index_universe_identity_migration",
+        migration_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_official_disclosures_migration_creates_metadata_table_and_identity_constraint():
     migration = load_official_disclosures_migration()
     engine = create_engine("sqlite:///:memory:")
@@ -1168,3 +1181,52 @@ def test_daily_bar_provenance_migration_adds_source_and_policy_fields():
         bar_columns
     )
     assert {"daily_bar_policy", "source_stats_json"}.issubset(backfill_columns)
+
+
+def test_etf_index_universe_identity_migration_adds_asset_aware_constraints():
+    initial_migration = load_initial_migration()
+    universe_migration = load_instrument_universe_migration()
+    migration = load_etf_index_universe_identity_migration()
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.begin() as connection:
+        run_migration(initial_migration, connection)
+        run_migration(universe_migration, connection)
+        connection.execute(
+            text(
+                """
+                INSERT INTO instrument_universe_syncs (
+                    id, market, provider, source, status, total_count,
+                    inserted_count, updated_count, unchanged_count,
+                    reactivated_count, deactivated_count, skipped_count,
+                    availability_json, diagnostics_json, created_at
+                ) VALUES (
+                    'sync-1', 'CN', 'akshare', 'fixture', 'ok', 1,
+                    1, 0, 0, 0, 0, 0, '{}', '[]', '2026-07-19 00:00:00'
+                )
+                """
+            )
+        )
+        run_migration(migration, connection)
+        inspector = inspect(connection)
+        sync_columns = {
+            column["name"]
+            for column in inspector.get_columns("instrument_universe_syncs")
+        }
+        constraints = inspector.get_unique_constraints("instruments")
+        indexes = inspector.get_indexes("instrument_universe_syncs")
+        migrated_asset_type = connection.execute(
+            text("SELECT asset_type FROM instrument_universe_syncs WHERE id = 'sync-1'")
+        ).scalar_one()
+
+    assert "asset_type" in sync_columns
+    assert migrated_asset_type == "stock"
+    assert any(
+        constraint["name"] == "uq_instruments_market_symbol_asset_type"
+        and set(constraint["column_names"]) == {"market_id", "symbol", "asset_type"}
+        for constraint in constraints
+    )
+    assert any(
+        index["name"] == "ix_instrument_universe_syncs_lookup"
+        for index in indexes
+    )

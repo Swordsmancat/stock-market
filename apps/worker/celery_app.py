@@ -72,6 +72,28 @@ def _daily_research_loop_schedule() -> dict[str, dict[str, object]]:
     }
 
 
+def _cn_fund_index_schedule() -> dict[str, dict[str, object]]:
+    if not settings.cn_fund_index_pipeline_enabled:
+        return {}
+    return {
+        "daily-cn-etf-index-ingestion": {
+            "task": "ingestion.sync_cn_fund_index_data",
+            "schedule": crontab(
+                hour=settings.cn_fund_index_pipeline_cron_hour,
+                minute=settings.cn_fund_index_pipeline_cron_minute,
+                day_of_week="1-5",
+            ),
+            "kwargs": {
+                "lookback_days": settings.cn_fund_index_pipeline_lookback_days,
+                "max_symbols_per_type": (
+                    settings.cn_fund_index_pipeline_max_symbols_per_type
+                ),
+                "trigger": "scheduled",
+            },
+        }
+    }
+
+
 celery_app = Celery(
     "stock_analysis_worker",
     broker=settings.redis_url,
@@ -171,6 +193,7 @@ if settings.disclosure_monitor_enabled:
     }
 
 celery_app.conf.beat_schedule.update(_daily_research_loop_schedule())
+celery_app.conf.beat_schedule.update(_cn_fund_index_schedule())
 celery_app.conf.beat_schedule.update(_eastmoney_automation_schedule())
 celery_app.autodiscover_tasks(["apps.worker.tasks"], force=True)
 

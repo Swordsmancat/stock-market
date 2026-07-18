@@ -434,6 +434,98 @@ def test_symbol_daily_bar_ingestion_can_store_etf_asset_type(
     assert instrument.asset_type == "etf"
 
 
+@pytest.mark.parametrize(
+    ("asset_type", "symbol", "expected_source"),
+    [
+        ("etf", "510300", "akshare.fund_etf_hist_em"),
+        ("index", "000001", "akshare.stock_zh_index_daily"),
+    ],
+)
+def test_cn_fund_index_daily_bar_ingestion_uses_asset_specific_akshare_source(
+    monkeypatch,
+    asset_type,
+    symbol,
+    expected_source,
+):
+    bar = ProviderBar(
+        symbol=symbol,
+        timestamp=date(2026, 7, 17),
+        open=Decimal("4"),
+        high=Decimal("4.1"),
+        low=Decimal("3.9"),
+        close=Decimal("4.05"),
+        volume=Decimal("1000"),
+        amount=Decimal("4050"),
+    )
+    monkeypatch.setattr(
+        "packages.providers.akshare_provider.AkShareProvider.fetch_etf_bars",
+        lambda self, _symbol, _timeframe, _start, _end: [bar],
+    )
+    monkeypatch.setattr(
+        "packages.providers.akshare_provider.AkShareProvider.fetch_index_bars",
+        lambda self, _symbol, _start, _end: [bar],
+    )
+
+    result = ingest_symbol_daily_bars(
+        symbol=symbol,
+        market="CN",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 18),
+        provider_name="akshare",
+        asset_type=asset_type,
+    )
+
+    assert result["status"] == "ingested"
+    assert result["source"] == expected_source
+    assert result["instruments"][0]["asset_type"] == asset_type
+
+
+def test_cn_etf_daily_bar_ingestion_uses_sina_fallback_with_raw_provenance(
+    monkeypatch,
+):
+    bar = ProviderBar(
+        symbol="510300",
+        timestamp=date(2026, 7, 17),
+        open=Decimal("4"),
+        high=Decimal("4.1"),
+        low=Decimal("3.9"),
+        close=Decimal("4.05"),
+        volume=Decimal("1000"),
+        amount=Decimal("4050"),
+    )
+
+    def fail_eastmoney(*_args, **_kwargs):
+        raise ConnectionError("primary provider unavailable")
+
+    monkeypatch.setattr(
+        "packages.providers.akshare_provider.AkShareProvider.fetch_etf_bars",
+        fail_eastmoney,
+    )
+    monkeypatch.setattr(
+        "packages.providers.akshare_provider.AkShareProvider.fetch_sina_etf_bars",
+        lambda self, _symbol, _timeframe, _start, _end: [bar],
+    )
+
+    result = ingest_symbol_daily_bars(
+        symbol="510300",
+        market="CN",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 18),
+        provider_name="akshare",
+        asset_type="etf",
+        daily_bar_policy=CN_RESILIENT_POLICY,
+    )
+
+    assert result["status"] == "ingested"
+    assert result["source"] == "akshare.fund_etf_hist_sina"
+    assert result["adjustment"] == "raw"
+    assert result["fallback_used"] is True
+    assert [attempt["source"] for attempt in result["source_attempts"]] == [
+        "akshare.fund_etf_hist_em",
+        "akshare.fund_etf_hist_sina",
+    ]
+
+
 def test_symbol_daily_bar_ingestion_rejects_unknown_asset_type(
     monkeypatch,
     sqlite_session: Session,

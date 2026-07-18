@@ -8,6 +8,11 @@ from packages.services.corporate_actions import (
     CorporateActionSyncInput,
     sync_corporate_action_evidence,
 )
+from packages.services.cn_fund_index_pipeline import (
+    CN_FUND_INDEX_PIPELINE_TASK_NAME,
+    CnFundIndexPipelineError,
+    sync_cn_fund_index_data,
+)
 from packages.services.daily_bar_sources import STRICT_POLICY
 from packages.services.eastmoney_automation import (
     EASTMONEY_CALENDAR_TASK_NAME,
@@ -371,10 +376,12 @@ def ingest_symbol_daily_bars_task(
 def sync_instrument_universe_task(
     market: str = "CN",
     provider: str = "akshare",
+    asset_type: str = "stock",
     task_run_id: str | None = None,
 ) -> dict[str, object]:
     normalized_market = market.strip().upper()
     normalized_provider = provider.strip().lower()
+    normalized_asset_type = asset_type.strip().lower()
     session = SessionLocal()
 
     if task_run_id:
@@ -386,7 +393,11 @@ def sync_instrument_universe_task(
     else:
         task_run = start_task_run(
             "ingestion.sync_instrument_universe",
-            {"market": normalized_market, "provider": normalized_provider},
+            {
+                "market": normalized_market,
+                "provider": normalized_provider,
+                "asset_type": normalized_asset_type,
+            },
             session=session,
         )
 
@@ -403,6 +414,7 @@ def sync_instrument_universe_task(
             session=session,
             market=normalized_market,
             provider_name=normalized_provider,
+            asset_type=normalized_asset_type,
         )
         if result["status"] == "failed":
             msg = "Instrument universe refresh failed; the last good universe was preserved."
@@ -420,6 +432,106 @@ def sync_instrument_universe_task(
         return result_payload
     except Exception as exc:
         fail_task_run(task_run, str(exc), session=session)
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name=CN_FUND_INDEX_PIPELINE_TASK_NAME)
+def sync_cn_fund_index_data_task(
+    lookback_days: int | None = None,
+    max_symbols_per_type: int | None = None,
+    trigger: str = "manual",
+    task_run_id: str | None = None,
+) -> dict[str, object]:
+    effective_lookback = (
+        settings.cn_fund_index_pipeline_lookback_days
+        if lookback_days is None
+        else lookback_days
+    )
+    effective_limit = (
+        settings.cn_fund_index_pipeline_max_symbols_per_type
+        if max_symbols_per_type is None
+        else max_symbols_per_type
+    )
+    if not 7 <= effective_lookback <= 730:
+        raise ValueError("CN fund/index lookback days must be between 7 and 730.")
+    if not 1 <= effective_limit <= 5_000:
+        raise ValueError("CN fund/index symbol limit must be between 1 and 5000.")
+
+    end_date = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    start_date = end_date - timedelta(days=effective_lookback)
+    session = SessionLocal()
+    task_run = None
+    try:
+        if task_run_id:
+            task_run = session.get(TaskRun, UUID(task_run_id))
+            if task_run is None:
+                raise ValueError("Invalid task run identity.")
+        else:
+            cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(
+                minutes=settings.task_run_stale_minutes
+            )
+            active = (
+                session.query(TaskRun)
+                .filter(TaskRun.task_name == CN_FUND_INDEX_PIPELINE_TASK_NAME)
+                .filter(TaskRun.status == "running")
+                .filter(TaskRun.heartbeat_at >= cutoff)
+                .first()
+            )
+            if active is not None:
+                return {
+                    "status": "skipped",
+                    "provider": "akshare",
+                    "pipeline": "cn_fund_index_data",
+                    "code": "ALREADY_RUNNING",
+                }
+            task_run = start_task_run(
+                CN_FUND_INDEX_PIPELINE_TASK_NAME,
+                {
+                    "provider": "akshare",
+                    "pipeline": "cn_fund_index_data",
+                    "asset_types": ["etf", "index"],
+                    "lookback_days": effective_lookback,
+                    "max_symbols_per_type": effective_limit,
+                    "trigger": trigger,
+                },
+                session=session,
+            )
+
+        def report_progress(phase: str, current: int, total: int, message: str) -> None:
+            update_task_run_progress(
+                task_run,
+                phase=phase,
+                current=current,
+                total=total,
+                message=message,
+                session=session,
+            )
+
+        result = sync_cn_fund_index_data(
+            session=session,
+            start=start_date,
+            end=end_date,
+            max_symbols_per_type=effective_limit,
+            request_delay_seconds=max(
+                0,
+                settings.cn_fund_index_pipeline_request_delay_ms,
+            )
+            / 1000,
+            progress_callback=report_progress,
+        )
+        finish_task_run(task_run, result, session=session)
+        return result
+    except Exception as error:
+        session.rollback()
+        if task_run is not None and task_run.status == "running":
+            code = (
+                error.code
+                if isinstance(error, CnFundIndexPipelineError)
+                else "CN_FUND_INDEX_PIPELINE_FAILED"
+            )
+            fail_task_run(task_run, code, session=session)
         raise
     finally:
         session.close()

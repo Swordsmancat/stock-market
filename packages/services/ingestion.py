@@ -53,6 +53,7 @@ def _get_or_create_instrument(
         session.query(Instrument)
         .filter(Instrument.market_id == market.id)
         .filter(Instrument.symbol == symbol)
+        .filter(Instrument.asset_type == asset_type)
         .one_or_none()
     )
     if instrument is not None:
@@ -178,7 +179,7 @@ def _normalize_optional_exchange(exchange: str | None, market_code: str) -> str:
 
 def _normalize_asset_type(asset_type: str | None) -> str:
     normalized = (asset_type or "stock").strip().lower()
-    if normalized in {"stock", "etf"}:
+    if normalized in {"stock", "etf", "index"}:
         return normalized
     msg = f"Unsupported asset_type for symbol daily bars: {asset_type}"
     raise ValueError(msg)
@@ -425,7 +426,10 @@ def ingest_symbol_daily_bars(
     requested_provider_name = _normalize_optional_provider_name(provider_name)
     effective_provider_name = resolve_market_data_provider_name(provider_name)
     normalized_asset_type = _normalize_asset_type(asset_type)
-    coordinator = fetch_coordinator or build_daily_bar_fetch_coordinator(effective_provider_name)
+    coordinator = fetch_coordinator or build_daily_bar_fetch_coordinator(
+        effective_provider_name,
+        normalized_asset_type,
+    )
     fetch_result = coordinator.fetch(
         normalized_symbol,
         normalized_timeframe,
@@ -470,8 +474,54 @@ def ingest_symbol_daily_bars(
     }
 
 
-def build_daily_bar_fetch_coordinator(provider_name: str) -> DailyBarFetchCoordinator:
+def build_daily_bar_fetch_coordinator(
+    provider_name: str,
+    asset_type: str = "stock",
+) -> DailyBarFetchCoordinator:
     normalized_provider = resolve_market_data_provider_name(provider_name)
+    normalized_asset_type = _normalize_asset_type(asset_type)
+    if normalized_asset_type == "index":
+        if normalized_provider != "akshare":
+            raise ValueError("CN index daily-bar ingestion currently requires AkShare.")
+        index_provider = AkShareProvider()
+        return DailyBarFetchCoordinator(
+            [
+                DailyBarSource(
+                    provider="akshare",
+                    source="akshare.stock_zh_index_daily",
+                    adjustment="raw",
+                    priority=0,
+                    fetch=lambda symbol, _timeframe, start, end: index_provider.fetch_index_bars(
+                        symbol,
+                        start,
+                        end,
+                    ),
+                    min_interval_seconds=0.5,
+                )
+            ]
+        )
+    if normalized_asset_type == "etf" and normalized_provider == "akshare":
+        etf_provider = AkShareProvider()
+        return DailyBarFetchCoordinator(
+            [
+                DailyBarSource(
+                    provider="akshare",
+                    source="akshare.fund_etf_hist_em",
+                    adjustment="qfq",
+                    priority=0,
+                    fetch=etf_provider.fetch_etf_bars,
+                    min_interval_seconds=0.5,
+                ),
+                DailyBarSource(
+                    provider="akshare",
+                    source="akshare.fund_etf_hist_sina",
+                    adjustment="raw",
+                    priority=1,
+                    fetch=etf_provider.fetch_sina_etf_bars,
+                    min_interval_seconds=0.5,
+                ),
+            ]
+        )
     primary = get_provider(normalized_provider)
     primary_source = {
         "akshare": "akshare.stock_zh_a_hist",

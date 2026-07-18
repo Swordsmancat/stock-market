@@ -127,6 +127,7 @@ class InstrumentUniverseProvider(Protocol):
     def fetch_instrument_universe(
         self,
         market: str,
+        asset_type: str = "stock",
     ) -> ProviderInstrumentUniverseSnapshot:
         ...
 

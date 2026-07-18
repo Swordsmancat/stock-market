@@ -9,6 +9,7 @@ from packages.providers.base import InstrumentUniverseProvider, ProviderInstrume
 
 SUPPORTED_UNIVERSE_MARKET = "CN"
 SUPPORTED_UNIVERSE_PROVIDER = "akshare"
+SUPPORTED_ASSET_TYPES = frozenset({"stock", "etf", "index"})
 MARKET_NAME = "China"
 MARKET_TIMEZONE = "Asia/Shanghai"
 MARKET_CURRENCY = "CNY"
@@ -24,24 +25,40 @@ def sync_instrument_universe(
     session: Session,
     market: str = SUPPORTED_UNIVERSE_MARKET,
     provider_name: str = SUPPORTED_UNIVERSE_PROVIDER,
+    asset_type: str = "stock",
     provider: InstrumentUniverseProvider | None = None,
 ) -> dict[str, object]:
     normalized_market = market.strip().upper()
     normalized_provider = provider_name.strip().lower()
+    normalized_asset_type = asset_type.strip().lower()
     if normalized_market != SUPPORTED_UNIVERSE_MARKET:
         raise ValueError(f"Unsupported instrument universe market: {market}")
     if normalized_provider != SUPPORTED_UNIVERSE_PROVIDER:
         raise ValueError(f"Unsupported instrument universe provider: {provider_name}")
+    if normalized_asset_type not in SUPPORTED_ASSET_TYPES:
+        raise ValueError(f"Unsupported instrument universe asset type: {asset_type}")
 
     resolved_provider = provider or AkShareProvider()
     try:
-        snapshot = resolved_provider.fetch_instrument_universe(normalized_market)
+        snapshot = (
+            resolved_provider.fetch_instrument_universe(normalized_market)
+            if normalized_asset_type == "stock"
+            else resolved_provider.fetch_instrument_universe(
+                normalized_market,
+                normalized_asset_type,
+            )
+        )
     except Exception as exc:
         return _record_unavailable_sync(
             session=session,
             market=normalized_market,
             provider=normalized_provider,
-            source="akshare.stock_info_a_code_name",
+            source={
+                "stock": "akshare.stock_info_a_code_name",
+                "etf": "akshare.fund_etf_spot_em",
+                "index": "akshare.stock_zh_index_spot_em",
+            }[normalized_asset_type],
+            asset_type=normalized_asset_type,
             status="failed",
             availability={
                 "status": "unavailable",
@@ -62,13 +79,18 @@ def sync_instrument_universe(
             market=normalized_market,
             provider=snapshot.provider or normalized_provider,
             source=snapshot.source,
+            asset_type=normalized_asset_type,
             status=snapshot.status,
             availability=snapshot.availability,
             diagnostics=snapshot.diagnostics,
             as_of=snapshot.as_of,
         )
 
-    return _reconcile_snapshot(session=session, snapshot=snapshot)
+    return _reconcile_snapshot(
+        session=session,
+        snapshot=snapshot,
+        asset_type=normalized_asset_type,
+    )
 
 
 def get_instrument_universe_status(
@@ -76,17 +98,22 @@ def get_instrument_universe_status(
     session: Session,
     market: str = SUPPORTED_UNIVERSE_MARKET,
     provider_name: str = SUPPORTED_UNIVERSE_PROVIDER,
+    asset_type: str = "stock",
 ) -> dict[str, object]:
     normalized_market = market.strip().upper()
     normalized_provider = provider_name.strip().lower()
+    normalized_asset_type = asset_type.strip().lower()
     if normalized_market != SUPPORTED_UNIVERSE_MARKET:
         raise ValueError(f"Unsupported instrument universe market: {market}")
     if normalized_provider != SUPPORTED_UNIVERSE_PROVIDER:
         raise ValueError(f"Unsupported instrument universe provider: {provider_name}")
+    if normalized_asset_type not in SUPPORTED_ASSET_TYPES:
+        raise ValueError(f"Unsupported instrument universe asset type: {asset_type}")
     latest = (
         session.query(InstrumentUniverseSync)
         .filter(InstrumentUniverseSync.market == normalized_market)
         .filter(InstrumentUniverseSync.provider == normalized_provider)
+        .filter(InstrumentUniverseSync.asset_type == normalized_asset_type)
         .order_by(InstrumentUniverseSync.created_at.desc())
         .first()
     )
@@ -97,20 +124,21 @@ def get_instrument_universe_status(
         active_count = (
             session.query(Instrument)
             .filter(Instrument.market_id == market_row.id)
-            .filter(Instrument.asset_type == "stock")
+            .filter(Instrument.asset_type == normalized_asset_type)
             .filter(Instrument.is_active.is_(True))
             .count()
         )
         managed_count = (
             session.query(Instrument)
             .filter(Instrument.market_id == market_row.id)
-            .filter(Instrument.asset_type == "stock")
+            .filter(Instrument.asset_type == normalized_asset_type)
             .filter(Instrument.universe_provider == normalized_provider)
             .count()
         )
     return {
         "market": normalized_market,
         "provider": normalized_provider,
+        "asset_type": normalized_asset_type,
         "status": latest.status if latest is not None else "not_synced",
         "active_instrument_count": active_count,
         "managed_instrument_count": managed_count,
@@ -128,6 +156,7 @@ def serialize_instrument_universe_sync(sync: InstrumentUniverseSync) -> dict[str
         "id": str(sync.id),
         "market": sync.market,
         "provider": sync.provider,
+        "asset_type": sync.asset_type,
         "source": sync.source,
         "as_of": _isoformat(sync.as_of),
         "status": sync.status,
@@ -148,6 +177,7 @@ def _reconcile_snapshot(
     *,
     session: Session,
     snapshot: ProviderInstrumentUniverseSnapshot,
+    asset_type: str,
 ) -> dict[str, object]:
     provider = snapshot.provider.strip().lower()
     synced_at = _as_utc(snapshot.as_of) or datetime.now(timezone.utc)
@@ -165,13 +195,16 @@ def _reconcile_snapshot(
         existing_rows = (
             session.query(Instrument)
             .filter(Instrument.market_id == market.id)
-            .filter(Instrument.asset_type == "stock")
+            .filter(Instrument.asset_type == asset_type)
             .all()
         )
         existing_by_symbol = {row.symbol: row for row in existing_rows}
         seen_symbols: set[str] = set()
 
         for provider_instrument in snapshot.items:
+            if provider_instrument.asset_type != asset_type:
+                counts["skipped_count"] += 1
+                continue
             symbol = provider_instrument.symbol
             seen_symbols.add(symbol)
             exchange = exchanges[provider_instrument.exchange]
@@ -230,6 +263,7 @@ def _reconcile_snapshot(
         sync = InstrumentUniverseSync(
             market=SUPPORTED_UNIVERSE_MARKET,
             provider=provider,
+            asset_type=asset_type,
             source=snapshot.source,
             as_of=synced_at,
             status=snapshot.status,
@@ -250,6 +284,7 @@ def _reconcile_snapshot(
         "status": snapshot.status,
         "market": SUPPORTED_UNIVERSE_MARKET,
         "provider": provider,
+        "asset_type": asset_type,
         "source": snapshot.source,
         "is_complete": snapshot.is_complete,
         "counts": {"total_count": len(snapshot.items), **counts},
@@ -268,6 +303,7 @@ def _record_unavailable_sync(
     market: str,
     provider: str,
     source: str,
+    asset_type: str,
     status: str,
     availability: dict[str, object],
     diagnostics: list[dict[str, object]],
@@ -276,6 +312,7 @@ def _record_unavailable_sync(
     sync = InstrumentUniverseSync(
         market=market,
         provider=provider,
+        asset_type=asset_type,
         source=source,
         as_of=_as_utc(as_of),
         status=status,
@@ -301,6 +338,7 @@ def _record_unavailable_sync(
         "status": status,
         "market": market,
         "provider": provider,
+        "asset_type": asset_type,
         "source": source,
         "is_complete": False,
         "counts": {

@@ -1,4 +1,5 @@
 from apps.worker.celery_app import (
+    _cn_fund_index_schedule,
     _daily_research_loop_schedule,
     _eastmoney_automation_schedule,
     celery_app,
@@ -125,6 +126,27 @@ def test_daily_research_loop_task_is_registered():
         celery_app.tasks["research.run_daily_research_loop"].name
         == "research.run_daily_research_loop"
     )
+
+
+def test_cn_fund_index_pipeline_is_scheduled_and_registered():
+    schedule = celery_app.conf.beat_schedule["daily-cn-etf-index-ingestion"]
+
+    assert schedule["task"] == "ingestion.sync_cn_fund_index_data"
+    assert schedule["schedule"]._orig_hour == settings.cn_fund_index_pipeline_cron_hour
+    assert schedule["schedule"]._orig_minute == settings.cn_fund_index_pipeline_cron_minute
+    assert schedule["schedule"]._orig_day_of_week == "1-5"
+    assert schedule["kwargs"] == {
+        "lookback_days": settings.cn_fund_index_pipeline_lookback_days,
+        "max_symbols_per_type": settings.cn_fund_index_pipeline_max_symbols_per_type,
+        "trigger": "scheduled",
+    }
+    assert "ingestion.sync_cn_fund_index_data" in celery_app.tasks
+
+
+def test_cn_fund_index_pipeline_schedule_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "cn_fund_index_pipeline_enabled", False)
+
+    assert _cn_fund_index_schedule() == {}
 
 
 def test_celery_beat_schedules_four_eastmoney_pipelines():

@@ -26,6 +26,7 @@ it("accepts only the complete curated crawler projection", () => {
     "market_us",
     "market_hk",
     "universe_cn",
+    "fund_index_cn",
     "evidence_incremental",
     "fundamental_shard",
     "official_disclosures",
@@ -37,12 +38,12 @@ it("accepts only the complete curated crawler projection", () => {
   const payload = {
     status: "ok",
     generated_at: "2026-07-17T12:00:00+00:00",
-    summary: { total: 11, running: 0, healthy: 11, attention: 0, recent_failures: 0 },
+    summary: { total: 12, running: 0, healthy: 12, attention: 0, recent_failures: 0 },
     items: ids.map((id) => ({ ...item, id })),
   };
 
   expect(isCrawlerMonitorPayload(payload)).toBe(true);
-  expect(isCrawlerMonitorPayload({ ...payload, items: payload.items.slice(0, 10) })).toBe(false);
+  expect(isCrawlerMonitorPayload({ ...payload, items: payload.items.slice(0, 11) })).toBe(false);
   expect(
     isCrawlerMonitorPayload({
       ...payload,

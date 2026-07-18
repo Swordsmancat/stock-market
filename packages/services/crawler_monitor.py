@@ -77,6 +77,16 @@ PIPELINES: tuple[CrawlerPipeline, ...] = (
         timedelta(hours=2),
     ),
     CrawlerPipeline(
+        "fund_index_cn",
+        "ingestion.sync_cn_fund_index_data",
+        (),
+        "CN ETF and index catalogs and daily bars",
+        "akshare",
+        "weekdays",
+        timedelta(hours=96),
+        timedelta(hours=3),
+    ),
+    CrawlerPipeline(
         "evidence_incremental",
         "ingestion.backfill_a_share_research_evidence",
         (("run_kind", "incremental"),),

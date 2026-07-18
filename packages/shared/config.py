@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     daily_research_loop_cron_hour: int = 21
     daily_research_loop_cron_minute: int = 30
     daily_research_loop_outcome_run_limit: int = 25
+    cn_fund_index_pipeline_enabled: bool = True
+    cn_fund_index_pipeline_cron_hour: int = 19
+    cn_fund_index_pipeline_cron_minute: int = 15
+    cn_fund_index_pipeline_lookback_days: int = 120
+    cn_fund_index_pipeline_max_symbols_per_type: int = 5000
+    cn_fund_index_pipeline_request_delay_ms: int = 500
     disclosure_batch_request_delay_ms: int = 1000
     disclosure_monitor_enabled: bool = True
     disclosure_monitor_interval_minutes: int = 60

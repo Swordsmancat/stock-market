@@ -92,7 +92,7 @@ def test_monitor_separates_shared_tasks_and_classifies_without_mutation():
         payload = get_crawler_monitor(session, now=NOW)
         items = {item["id"]: item for item in payload["items"]}
 
-        assert len(items) == 11
+        assert len(items) == 12
         assert items["market_cn"]["status"] == "healthy"
         assert items["market_us"]["status"] == "failed"
         assert items["market_hk"]["status"] == "not_recorded"
@@ -105,10 +105,10 @@ def test_monitor_separates_shared_tasks_and_classifies_without_mutation():
         assert "password" not in str(payload)
         assert session.get(TaskRun, shard.id).status == "running"
         assert payload["summary"] == {
-            "total": 11,
+                "total": 12,
             "running": 1,
             "healthy": 1,
-            "attention": 9,
+                "attention": 10,
             "recent_failures": 1,
         }
     finally:

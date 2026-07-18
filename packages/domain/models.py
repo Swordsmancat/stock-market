@@ -51,7 +51,14 @@ class Exchange(Base):
 
 class Instrument(Base):
     __tablename__ = "instruments"
-    __table_args__ = (UniqueConstraint("market_id", "symbol", name="uq_instruments_market_symbol"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "market_id",
+            "symbol",
+            "asset_type",
+            name="uq_instruments_market_symbol_asset_type",
+        ),
+    )
 
     id: Mapped[PythonUUID] = uuid_pk()
     symbol: Mapped[str] = mapped_column(String(64))
@@ -87,6 +94,7 @@ class InstrumentUniverseSync(Base):
     id: Mapped[PythonUUID] = uuid_pk()
     market: Mapped[str] = mapped_column(String(32))
     provider: Mapped[str] = mapped_column(String(64))
+    asset_type: Mapped[str] = mapped_column(String(32), default="stock")
     source: Mapped[str] = mapped_column(String(512))
     as_of: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     status: Mapped[str] = mapped_column(String(32))

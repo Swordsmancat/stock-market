@@ -442,6 +442,171 @@ def test_akshare_provider_rejects_unsupported_universe_market_without_download()
     assert snapshot.diagnostics[0]["code"] == "INSTRUMENT_UNIVERSE_MARKET_UNSUPPORTED"
 
 
+def test_akshare_provider_normalizes_etf_and_index_universes():
+    etf_frame = pd.DataFrame(
+        [
+            {"代码": "510300", "名称": "CSI 300 ETF"},
+            {"代码": "159915", "名称": "ChiNext ETF"},
+        ]
+    )
+    index_frame = pd.DataFrame(
+        [
+            {"代码": "000001", "名称": "SSE Composite"},
+            {"代码": "399001", "名称": "SZ Component"},
+            {"代码": "399001", "名称": "SZ Component"},
+        ]
+    )
+    provider = AkShareProvider(
+        etf_universe_downloader=lambda: etf_frame,
+        index_universe_downloader=lambda: index_frame,
+    )
+
+    etfs = provider.fetch_instrument_universe("CN", "etf")
+    indices = provider.fetch_instrument_universe("CN", "index")
+
+    assert [(item.symbol, item.exchange, item.asset_type) for item in etfs.items] == [
+        ("159915", "SZSE", "etf"),
+        ("510300", "SSE", "etf"),
+    ]
+    assert [(item.symbol, item.exchange, item.asset_type) for item in indices.items] == [
+        ("000001", "SSE", "index"),
+        ("399001", "SZSE", "index"),
+    ]
+    assert indices.diagnostics[0]["code"] == "INSTRUMENT_UNIVERSE_DUPLICATES_DEDUPED"
+
+
+def test_akshare_provider_uses_sina_index_catalog_when_eastmoney_fails():
+    def fail_primary() -> pd.DataFrame:
+        raise ConnectionError("provider body must not leak")
+
+    provider = AkShareProvider(
+        index_universe_downloader=fail_primary,
+        index_universe_fallback_downloader=lambda: pd.DataFrame(
+            [
+                {"code": "sh000001", "name": "SSE Composite"},
+                {"code": "sz399001", "name": "SZ Component"},
+            ]
+        ),
+    )
+
+    snapshot = provider.fetch_instrument_universe("CN", "index")
+
+    assert snapshot.source == "akshare.stock_zh_index_spot_sina"
+    assert snapshot.status == "ok"
+    assert [(item.symbol, item.exchange) for item in snapshot.items] == [
+        ("000001", "SSE"),
+        ("399001", "SZSE"),
+    ]
+    assert snapshot.diagnostics[0]["code"] == "INSTRUMENT_UNIVERSE_FALLBACK_USED"
+    assert snapshot.diagnostics[0]["details"]["primary_diagnostic_codes"] == [
+        "INSTRUMENT_UNIVERSE_PRIMARY_FAILED"
+    ]
+    assert "provider body must not leak" not in str(snapshot.diagnostics)
+
+
+def test_akshare_provider_uses_sina_index_catalog_when_eastmoney_is_empty():
+    provider = AkShareProvider(
+        index_universe_downloader=pd.DataFrame,
+        index_universe_fallback_downloader=lambda: pd.DataFrame(
+            [{"code": "sh000001", "name": "SSE Composite"}]
+        ),
+    )
+
+    snapshot = provider.fetch_instrument_universe("CN", "index")
+
+    assert snapshot.source == "akshare.stock_zh_index_spot_sina"
+    assert snapshot.items[0].symbol == "000001"
+    details = snapshot.diagnostics[0]["details"]
+    assert details["primary_diagnostic_codes"] == [
+        "INSTRUMENT_UNIVERSE_PRIMARY_UNAVAILABLE"
+    ]
+
+
+def test_akshare_provider_reports_when_both_index_catalogs_fail():
+    def fail_primary() -> pd.DataFrame:
+        raise ConnectionError("primary secret body")
+
+    def fail_fallback() -> pd.DataFrame:
+        raise TimeoutError("fallback secret body")
+
+    provider = AkShareProvider(
+        index_universe_downloader=fail_primary,
+        index_universe_fallback_downloader=fail_fallback,
+    )
+
+    snapshot = provider.fetch_instrument_universe("CN", "index")
+
+    assert snapshot.source == "akshare.stock_zh_index_spot_sina"
+    assert snapshot.status == "unavailable"
+    assert snapshot.items == []
+    assert [item["code"] for item in snapshot.diagnostics] == [
+        "INSTRUMENT_UNIVERSE_PRIMARY_FAILED",
+        "INSTRUMENT_UNIVERSE_FALLBACK_FAILED",
+    ]
+    assert snapshot.diagnostics[1]["details"] == {"exception_type": "TimeoutError"}
+    assert "secret body" not in str(snapshot.diagnostics)
+
+
+def test_akshare_provider_normalizes_etf_daily_bars_from_injected_frame():
+    provider = AkShareProvider(
+        etf_daily_downloader=lambda _symbol, _start, _end: pd.DataFrame(
+            [
+                {
+                    "timestamp": "2026-07-17",
+                    "open": "4.00",
+                    "high": "4.10",
+                    "low": "3.95",
+                    "close": "4.08",
+                    "volume": "1000",
+                    "amount": "4080",
+                }
+            ]
+        )
+    )
+
+    bars = provider.fetch_etf_bars(
+        "510300",
+        "1d",
+        date(2026, 7, 1),
+        date(2026, 7, 18),
+    )
+
+    assert len(bars) == 1
+    assert bars[0].symbol == "510300"
+    assert bars[0].timestamp == date(2026, 7, 17)
+    assert bars[0].close == Decimal("4.08")
+
+
+def test_akshare_provider_normalizes_sina_etf_daily_bars_from_injected_frame():
+    provider = AkShareProvider(
+        etf_sina_daily_downloader=lambda _symbol, _start, _end: pd.DataFrame(
+            [
+                {
+                    "timestamp": "2026-07-17",
+                    "open": "4.00",
+                    "high": "4.10",
+                    "low": "3.95",
+                    "close": "4.08",
+                    "volume": "1000",
+                    "amount": "4080",
+                }
+            ]
+        )
+    )
+
+    bars = provider.fetch_sina_etf_bars(
+        "510300",
+        "1d",
+        date(2026, 7, 1),
+        date(2026, 7, 18),
+    )
+
+    assert len(bars) == 1
+    assert bars[0].symbol == "510300"
+    assert bars[0].timestamp == date(2026, 7, 17)
+    assert bars[0].close == Decimal("4.08")
+
+
 def test_akshare_provider_normalizes_dividend_bonus_actions_for_requested_symbols():
     frame = pd.DataFrame(
         [

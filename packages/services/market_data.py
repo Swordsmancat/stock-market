@@ -608,17 +608,44 @@ def _fetch_daily_bars_from_database(
     session: Session,
     market: str | None = None,
 ) -> list[DailyBar]:
-    query = (
+    instrument_id = _preferred_instrument_id(
+        session,
+        symbol=symbol,
+        market=market,
+    )
+    if instrument_id is None:
+        return []
+    return (
         session.query(DailyBar)
-        .join(Instrument, DailyBar.instrument_id == Instrument.id)
-        .join(Market, Instrument.market_id == Market.id)
-        .filter(Instrument.symbol == symbol)
+        .filter(DailyBar.instrument_id == instrument_id)
         .filter(DailyBar.trade_date >= start)
         .filter(DailyBar.trade_date <= end)
+        .order_by(DailyBar.trade_date)
+        .all()
+    )
+
+
+def _preferred_instrument_id(
+    session: Session,
+    *,
+    symbol: str,
+    market: str | None,
+):
+    query = (
+        session.query(Instrument.id)
+        .outerjoin(Market, Instrument.market_id == Market.id)
+        .filter(Instrument.symbol == symbol)
     )
     if market is not None:
         query = query.filter(Market.code == market)
-    return query.order_by(DailyBar.trade_date).all()
+    row = query.order_by(
+        case(
+            (Instrument.asset_type == "stock", 0),
+            (Instrument.asset_type == "etf", 1),
+            else_=2,
+        )
+    ).first()
+    return row[0] if row is not None else None
 
 
 def _is_cn_daily_bar_fallback_eligible(
@@ -1748,6 +1775,7 @@ def _get_intraday_cache_lookup(
             .filter(IntradayMinuteCacheEntry.trade_date == trade_date)
             .filter(IntradayMinuteCacheEntry.timeframe == timeframe)
             .filter(Instrument.symbol == normalized_symbol)
+            .filter(Instrument.asset_type == "stock")
             .filter(Market.code == market_code)
             .order_by(
                 IntradayMinuteCacheEntry.cached_at.desc(),
@@ -1926,6 +1954,7 @@ def _get_or_create_intraday_cache_instrument(
         session.query(Instrument)
         .filter(Instrument.market_id == market.id)
         .filter(Instrument.symbol == symbol)
+        .filter(Instrument.asset_type == "stock")
         .one_or_none()
     )
     if instrument is not None:
@@ -2404,18 +2433,28 @@ def get_latest_bar_payload(
     normalized_market = market.strip().upper() if market and market.strip() else None
     if session is not None:
         try:
-            query = (
+            identity_query = (
                 session.query(DailyBar)
                 .join(Instrument, DailyBar.instrument_id == Instrument.id)
                 .join(Market, Instrument.market_id == Market.id)
                 .filter(Instrument.symbol == symbol)
             )
             if normalized_market is not None:
-                query = query.filter(Market.code == normalized_market)
-            db_bar = query.order_by(DailyBar.trade_date.desc()).first()
+                identity_query = identity_query.filter(Market.code == normalized_market)
+            db_bar = identity_query.order_by(
+                case(
+                    (Instrument.asset_type == "stock", 0),
+                    (Instrument.asset_type == "etf", 1),
+                    else_=2,
+                ),
+                DailyBar.trade_date.desc(),
+            ).first()
         except SQLAlchemyError:
             db_bar = None
         if db_bar is not None:
+            query = session.query(DailyBar).filter(
+                DailyBar.instrument_id == db_bar.instrument_id
+            )
             serialized_db_bar = serialize_daily_bar(db_bar)
             database_provenance = _database_daily_bar_provenance(db_bar)
             stored_identity = _database_daily_bar_storage_identity(db_bar)

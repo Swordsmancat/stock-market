@@ -160,6 +160,43 @@ def test_instrument_universe_status_api_rejects_unsupported_market():
     assert response.json()["detail"] == "Unsupported instrument universe market: US"
 
 
+def test_cn_fund_index_pipeline_api_dispatches_bounded_task(monkeypatch):
+    session = make_session()
+    captured = {}
+
+    def fake_dispatch(task_name, input_json, task_run_id):
+        captured.update(
+            task_name=task_name,
+            input_json=input_json,
+            task_run_id=task_run_id,
+        )
+        return "celery-fund-index"
+
+    monkeypatch.setattr(
+        "packages.services.task_dispatch.dispatch_task_run",
+        fake_dispatch,
+    )
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        response = TestClient(app).post(
+            "/ingestion/cn-fund-index-pipeline",
+            params={"lookback_days": 90, "max_symbols_per_type": 2500},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "dispatched"
+    assert captured["task_name"] == "ingestion.sync_cn_fund_index_data"
+    assert captured["input_json"]["asset_types"] == ["etf", "index"]
+    assert captured["input_json"]["lookback_days"] == 90
+    assert captured["input_json"]["max_symbols_per_type"] == 2500
+
+
 def test_corporate_action_api_dispatches_normalized_batch_task(monkeypatch):
     session = make_session()
     monkeypatch.setattr(

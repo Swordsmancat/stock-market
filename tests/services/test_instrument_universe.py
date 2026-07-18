@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
 
+import pandas as pd
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from packages.domain.models import Exchange, Instrument, InstrumentUniverseSync, Market
+from packages.providers.akshare_provider import AkShareProvider
 from packages.providers.base import ProviderInstrument, ProviderInstrumentUniverseSnapshot
 from packages.services.instrument_universe import (
     get_instrument_universe_status,
@@ -36,8 +38,13 @@ class UniverseProvider:
     def __init__(self, snapshot: ProviderInstrumentUniverseSnapshot) -> None:
         self.snapshot = snapshot
 
-    def fetch_instrument_universe(self, market: str) -> ProviderInstrumentUniverseSnapshot:
+    def fetch_instrument_universe(
+        self,
+        market: str,
+        asset_type: str = "stock",
+    ) -> ProviderInstrumentUniverseSnapshot:
         assert market == "CN"
+        assert all(item.asset_type == asset_type for item in self.snapshot.items)
         return self.snapshot
 
 
@@ -54,6 +61,22 @@ def _instrument(symbol: str, name: str, exchange: str) -> ProviderInstrument:
         market="CN",
         exchange=exchange,
         asset_type="stock",
+        currency="CNY",
+    )
+
+
+def _typed_instrument(
+    symbol: str,
+    name: str,
+    exchange: str,
+    asset_type: str,
+) -> ProviderInstrument:
+    return ProviderInstrument(
+        symbol=symbol,
+        name=name,
+        market="CN",
+        exchange=exchange,
+        asset_type=asset_type,
         currency="CNY",
     )
 
@@ -274,3 +297,73 @@ def test_universe_status_reports_current_coverage(sqlite_session: Session):
     assert status["managed_instrument_count"] == 1
     assert status["latest_sync"]["total_count"] == 1
     assert status["safety"]["failed_refresh_preserves_last_good_universe"] is True
+
+
+def test_stock_and_index_with_same_symbol_coexist_and_status_is_isolated(
+    sqlite_session: Session,
+):
+    sync_instrument_universe(
+        session=sqlite_session,
+        provider=UniverseProvider(
+            _snapshot([_instrument("000001", "Ping An Bank", "SZSE")])
+        ),
+    )
+    sync_instrument_universe(
+        session=sqlite_session,
+        asset_type="index",
+        provider=UniverseProvider(
+            _snapshot(
+                [
+                    _typed_instrument(
+                        "000001",
+                        "SSE Composite",
+                        "SSE",
+                        "index",
+                    )
+                ]
+            )
+        ),
+    )
+
+    rows = (
+        sqlite_session.query(Instrument)
+        .filter(Instrument.symbol == "000001")
+        .order_by(Instrument.asset_type)
+        .all()
+    )
+    assert [(row.asset_type, row.name) for row in rows] == [
+        ("index", "SSE Composite"),
+        ("stock", "Ping An Bank"),
+    ]
+    assert get_instrument_universe_status(
+        session=sqlite_session,
+        asset_type="index",
+    )["active_instrument_count"] == 1
+    assert get_instrument_universe_status(
+        session=sqlite_session,
+        asset_type="stock",
+    )["active_instrument_count"] == 1
+
+
+def test_index_sync_persists_effective_fallback_catalog_source(sqlite_session: Session):
+    def fail_primary() -> pd.DataFrame:
+        raise ConnectionError("provider body must not be stored")
+
+    provider = AkShareProvider(
+        index_universe_downloader=fail_primary,
+        index_universe_fallback_downloader=lambda: pd.DataFrame(
+            [{"code": "sh000001", "name": "SSE Composite"}]
+        ),
+    )
+
+    result = sync_instrument_universe(
+        session=sqlite_session,
+        asset_type="index",
+        provider=provider,
+    )
+
+    sync = sqlite_session.query(InstrumentUniverseSync).one()
+    assert result["source"] == "akshare.stock_zh_index_spot_sina"
+    assert sync.source == "akshare.stock_zh_index_spot_sina"
+    assert sync.diagnostics_json[0]["code"] == "INSTRUMENT_UNIVERSE_FALLBACK_USED"
+    assert "provider body must not be stored" not in str(sync.diagnostics_json)

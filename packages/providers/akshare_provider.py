@@ -23,6 +23,9 @@ InstrumentUniverseDownloader = Callable[[], pd.DataFrame]
 DividendBonusDownloader = Callable[[str], pd.DataFrame]
 RightsAllotmentDownloader = Callable[[str, str, str], pd.DataFrame]
 
+INDEX_UNIVERSE_PRIMARY_SOURCE = "akshare.stock_zh_index_spot_em"
+INDEX_UNIVERSE_FALLBACK_SOURCE = "akshare.stock_zh_index_spot_sina"
+
 
 class AkShareProvider:
     """AkShare data provider for Chinese markets (CN stocks, indices, futures)."""
@@ -34,6 +37,11 @@ class AkShareProvider:
         intraday_downloader: IntradayBarsDownloader | None = None,
         market_depth_downloader: MarketDepthDownloader | None = None,
         instrument_universe_downloader: InstrumentUniverseDownloader | None = None,
+        etf_universe_downloader: InstrumentUniverseDownloader | None = None,
+        index_universe_downloader: InstrumentUniverseDownloader | None = None,
+        index_universe_fallback_downloader: InstrumentUniverseDownloader | None = None,
+        etf_daily_downloader: DailyBarsDownloader | None = None,
+        etf_sina_daily_downloader: DailyBarsDownloader | None = None,
         dividend_bonus_downloader: DividendBonusDownloader | None = None,
         rights_allotment_downloader: RightsAllotmentDownloader | None = None,
     ) -> None:
@@ -45,6 +53,17 @@ class AkShareProvider:
         self._market_depth_downloader = market_depth_downloader or self._download_market_depth
         self._instrument_universe_downloader = (
             instrument_universe_downloader or self._download_instrument_universe
+        )
+        self._etf_universe_downloader = etf_universe_downloader or self._download_etf_universe
+        self._index_universe_downloader = (
+            index_universe_downloader or self._download_index_universe
+        )
+        self._index_universe_fallback_downloader = (
+            index_universe_fallback_downloader or self._download_sina_index_universe
+        )
+        self._etf_daily_downloader = etf_daily_downloader or self.download_etf_daily_bars
+        self._etf_sina_daily_downloader = (
+            etf_sina_daily_downloader or self.download_sina_etf_daily_bars
         )
         self._dividend_bonus_downloader = dividend_bonus_downloader or self._download_dividend_bonus
         self._rights_allotment_downloader = (
@@ -68,9 +87,21 @@ class AkShareProvider:
             return instruments
         return [instrument for instrument in instruments if instrument.exchange == exchange]
 
-    def fetch_instrument_universe(self, market: str) -> ProviderInstrumentUniverseSnapshot:
+    def fetch_instrument_universe(
+        self,
+        market: str,
+        asset_type: str = "stock",
+    ) -> ProviderInstrumentUniverseSnapshot:
         normalized_market = market.strip().upper()
-        source = "akshare.stock_info_a_code_name"
+        normalized_asset_type = asset_type.strip().lower()
+        source_by_type = {
+            "stock": "akshare.stock_info_a_code_name",
+            "etf": "akshare.fund_etf_spot_em",
+            "index": INDEX_UNIVERSE_PRIMARY_SOURCE,
+        }
+        source = source_by_type.get(normalized_asset_type, "akshare.unsupported_universe")
+        if normalized_asset_type not in source_by_type:
+            raise ValueError(f"Unsupported AkShare instrument universe asset type: {asset_type}")
         if normalized_market != "CN":
             return ProviderInstrumentUniverseSnapshot(
                 provider="akshare",
@@ -79,18 +110,128 @@ class AkShareProvider:
                 status="unavailable",
                 availability={
                     "status": "unavailable",
-                    "reason": f"AkShare A-share universe does not support market {normalized_market or '<empty>'}.",
+                    "reason": f"AkShare CN universe does not support market {normalized_market or '<empty>'}.",
                 },
                 diagnostics=[
                     {
                         "code": "INSTRUMENT_UNIVERSE_MARKET_UNSUPPORTED",
-                        "message": "Only the CN A-share universe is supported by this provider path.",
+                        "message": "Only CN instrument universes are supported by this provider path.",
                     }
                 ],
             )
 
-        frame = self._instrument_universe_downloader()
-        return _normalize_a_share_universe_frame(frame, source=source)
+        if normalized_asset_type == "index":
+            return self._fetch_index_instrument_universe()
+
+        downloader = {
+            "stock": self._instrument_universe_downloader,
+            "etf": self._etf_universe_downloader,
+        }[normalized_asset_type]
+        return _normalize_cn_universe_frame(
+            downloader(),
+            source=source,
+            asset_type=normalized_asset_type,
+        )
+
+    def _fetch_index_instrument_universe(self) -> ProviderInstrumentUniverseSnapshot:
+        primary_diagnostics: list[dict[str, object]]
+        try:
+            primary = _normalize_cn_universe_frame(
+                self._index_universe_downloader(),
+                source=INDEX_UNIVERSE_PRIMARY_SOURCE,
+                asset_type="index",
+            )
+        except Exception as exc:
+            primary_diagnostics = [
+                {
+                    "code": "INSTRUMENT_UNIVERSE_PRIMARY_FAILED",
+                    "message": "The primary CN index catalog request failed.",
+                    "details": {"exception_type": type(exc).__name__},
+                }
+            ]
+        else:
+            if primary.items:
+                return primary
+            primary_diagnostics = [
+                {
+                    "code": "INSTRUMENT_UNIVERSE_PRIMARY_UNAVAILABLE",
+                    "message": "The primary CN index catalog returned no usable rows.",
+                    "details": {
+                        "diagnostic_codes": _snapshot_diagnostic_codes(primary),
+                    },
+                }
+            ]
+
+        try:
+            fallback = _normalize_cn_universe_frame(
+                self._index_universe_fallback_downloader(),
+                source=INDEX_UNIVERSE_FALLBACK_SOURCE,
+                asset_type="index",
+            )
+        except Exception as exc:
+            return ProviderInstrumentUniverseSnapshot(
+                provider="akshare",
+                source=INDEX_UNIVERSE_FALLBACK_SOURCE,
+                as_of=datetime.now(timezone.utc),
+                status="unavailable",
+                availability={
+                    "status": "unavailable",
+                    "reason": "Both public CN index catalog sources were unavailable.",
+                },
+                diagnostics=primary_diagnostics
+                + [
+                    {
+                        "code": "INSTRUMENT_UNIVERSE_FALLBACK_FAILED",
+                        "message": "The fallback CN index catalog request failed.",
+                        "details": {"exception_type": type(exc).__name__},
+                    }
+                ],
+            )
+
+        if not fallback.items:
+            return ProviderInstrumentUniverseSnapshot(
+                provider=fallback.provider,
+                source=fallback.source,
+                as_of=fallback.as_of,
+                status="unavailable",
+                availability=fallback.availability,
+                diagnostics=primary_diagnostics
+                + [
+                    {
+                        "code": "INSTRUMENT_UNIVERSE_FALLBACK_UNAVAILABLE",
+                        "message": "The fallback CN index catalog returned no usable rows.",
+                        "details": {
+                            "diagnostic_codes": _snapshot_diagnostic_codes(fallback),
+                        },
+                    }
+                ],
+            )
+
+        return ProviderInstrumentUniverseSnapshot(
+            provider=fallback.provider,
+            source=fallback.source,
+            as_of=fallback.as_of,
+            status=fallback.status,
+            items=fallback.items,
+            is_complete=fallback.is_complete,
+            availability=fallback.availability,
+            diagnostics=[
+                {
+                    "code": "INSTRUMENT_UNIVERSE_FALLBACK_USED",
+                    "message": "The fallback CN index catalog supplied this snapshot.",
+                    "details": {
+                        "primary_source": INDEX_UNIVERSE_PRIMARY_SOURCE,
+                        "fallback_source": INDEX_UNIVERSE_FALLBACK_SOURCE,
+                        "primary_diagnostic_codes": [
+                            str(item["code"])
+                            for item in primary_diagnostics
+                            if item.get("code")
+                        ],
+                    },
+                },
+                *fallback.diagnostics,
+            ],
+        )
 
     def fetch_corporate_actions(
         self,
@@ -233,6 +374,30 @@ class AkShareProvider:
                 )
             )
         return sorted(bars, key=lambda item: item.timestamp)
+
+    def fetch_etf_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: date,
+        end: date,
+    ) -> list[ProviderBar]:
+        if timeframe != "1d":
+            raise ValueError(f"Unsupported ETF timeframe for AkShare provider: {timeframe}")
+        frame = self._etf_daily_downloader(symbol, start, end)
+        return _normalize_provider_bars(symbol, frame, start=start, end=end)
+
+    def fetch_sina_etf_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: date,
+        end: date,
+    ) -> list[ProviderBar]:
+        if timeframe != "1d":
+            raise ValueError(f"Unsupported ETF timeframe for AkShare provider: {timeframe}")
+        frame = self._etf_sina_daily_downloader(symbol, start, end)
+        return _normalize_provider_bars(symbol, frame, start=start, end=end)
 
     def fetch_intraday_bars(
         self,
@@ -421,6 +586,56 @@ class AkShareProvider:
         return bounded.dropna(subset=list(required_columns))
 
     @staticmethod
+    def download_etf_daily_bars(symbol: str, start: date, end: date) -> pd.DataFrame:
+        try:
+            import akshare as ak
+        except ImportError as exc:
+            raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+        frame = ak.fund_etf_hist_em(
+            symbol=symbol,
+            period="daily",
+            start_date=start.isoformat().replace("-", ""),
+            end_date=end.isoformat().replace("-", ""),
+            adjust="qfq",
+        )
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        return frame.rename(
+            columns={
+                "日期": "timestamp",
+                "开盘": "open",
+                "收盘": "close",
+                "最高": "high",
+                "最低": "low",
+                "成交量": "volume",
+                "成交额": "amount",
+            }
+        )
+
+    @staticmethod
+    def download_sina_etf_daily_bars(symbol: str, start: date, end: date) -> pd.DataFrame:
+        try:
+            import akshare as ak
+        except ImportError as exc:
+            raise RuntimeError("AkShare dependency is unavailable.") from exc
+
+        if symbol.startswith("5"):
+            provider_symbol = f"sh{symbol}"
+        elif symbol.startswith("1"):
+            provider_symbol = f"sz{symbol}"
+        else:
+            raise ValueError(f"Unsupported CN ETF symbol for Sina history: {symbol}")
+        frame = ak.fund_etf_hist_sina(symbol=provider_symbol)
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        normalized = frame.rename(columns={"date": "timestamp"})
+        timestamps = pd.to_datetime(normalized["timestamp"], errors="coerce")
+        return normalized.loc[
+            timestamps.between(pd.Timestamp(start), pd.Timestamp(end), inclusive="both")
+        ]
+
+    @staticmethod
     def _download_intraday(symbol: str, trade_date: date, timeframe: str) -> pd.DataFrame:
         try:
             import akshare as ak
@@ -507,6 +722,27 @@ class AkShareProvider:
         return frame if isinstance(frame, pd.DataFrame) else pd.DataFrame()
 
     @staticmethod
+    def _download_etf_universe() -> pd.DataFrame:
+        import akshare as ak
+
+        frame = ak.fund_etf_spot_em()
+        return frame if isinstance(frame, pd.DataFrame) else pd.DataFrame()
+
+    @staticmethod
+    def _download_index_universe() -> pd.DataFrame:
+        import akshare as ak
+
+        frame = ak.stock_zh_index_spot_em()
+        return frame if isinstance(frame, pd.DataFrame) else pd.DataFrame()
+
+    @staticmethod
+    def _download_sina_index_universe() -> pd.DataFrame:
+        import akshare as ak
+
+        frame = ak.stock_zh_index_spot_sina()
+        return frame if isinstance(frame, pd.DataFrame) else pd.DataFrame()
+
+    @staticmethod
     def _download_dividend_bonus(report_period: str) -> pd.DataFrame:
         import akshare as ak
 
@@ -523,6 +759,122 @@ class AkShareProvider:
             end_date=end_date,
         )
         return frame if isinstance(frame, pd.DataFrame) else pd.DataFrame()
+
+
+def _normalize_cn_universe_frame(
+    frame: pd.DataFrame | None,
+    *,
+    source: str,
+    asset_type: str,
+) -> ProviderInstrumentUniverseSnapshot:
+    if asset_type == "stock":
+        return _normalize_a_share_universe_frame(frame, source=source)
+
+    now = datetime.now(timezone.utc)
+    if frame is None or frame.empty:
+        return ProviderInstrumentUniverseSnapshot(
+            provider="akshare",
+            source=source,
+            as_of=now,
+            status="unavailable",
+            availability={
+                "status": "unavailable",
+                "reason": f"AkShare returned an empty CN {asset_type} universe payload.",
+            },
+            diagnostics=[
+                {
+                    "code": "INSTRUMENT_UNIVERSE_EMPTY",
+                    "message": f"The provider returned no CN {asset_type} instrument rows.",
+                }
+            ],
+        )
+
+    instruments_by_symbol: dict[str, ProviderInstrument] = {}
+    skipped_count = 0
+    duplicate_count = 0
+    for _, row in frame.iterrows():
+        raw_symbol = _first_row_value(
+            row,
+            ["code", "symbol", "代码", "证券代码", "基金代码", "指数代码"],
+        )
+        raw_name = _first_row_value(
+            row,
+            ["name", "名称", "证券简称", "基金简称", "指数名称"],
+        )
+        raw_symbol_text = str(raw_symbol).strip() if raw_symbol is not None else ""
+        symbol = _normalize_cn_instrument_symbol(raw_symbol_text)
+        name = str(raw_name).strip() if raw_name is not None else ""
+        exchange = _cn_instrument_exchange(
+            symbol,
+            asset_type=asset_type,
+            row=row,
+            raw_symbol=raw_symbol_text,
+        )
+        if len(symbol) != 6 or not symbol.isdigit() or not name or exchange is None:
+            skipped_count += 1
+            continue
+        if symbol in instruments_by_symbol:
+            duplicate_count += 1
+        instruments_by_symbol[symbol] = ProviderInstrument(
+            symbol=symbol,
+            name=name,
+            market="CN",
+            exchange=exchange,
+            asset_type=asset_type,
+            currency="CNY",
+        )
+
+    items = [instruments_by_symbol[symbol] for symbol in sorted(instruments_by_symbol)]
+    if not items:
+        return ProviderInstrumentUniverseSnapshot(
+            provider="akshare",
+            source=source,
+            as_of=now,
+            status="unavailable",
+            availability={
+                "status": "unavailable",
+                "reason": f"AkShare CN {asset_type} rows could not be normalized.",
+            },
+            diagnostics=[
+                {
+                    "code": "INSTRUMENT_UNIVERSE_SCHEMA_UNSUPPORTED",
+                    "message": "No provider rows contained a supported symbol, name, and exchange identity.",
+                }
+            ],
+        )
+
+    diagnostics: list[dict[str, object]] = []
+    if skipped_count:
+        diagnostics.append(
+            {
+                "code": "INSTRUMENT_UNIVERSE_ROWS_SKIPPED",
+                "message": f"Some CN {asset_type} rows had invalid identity fields.",
+                "details": {"skipped_count": skipped_count},
+            }
+        )
+    if duplicate_count:
+        diagnostics.append(
+            {
+                "code": "INSTRUMENT_UNIVERSE_DUPLICATES_DEDUPED",
+                "message": "Duplicate provider symbols were deterministically de-duplicated.",
+                "details": {"duplicate_count": duplicate_count},
+            }
+        )
+    is_complete = skipped_count == 0
+    return ProviderInstrumentUniverseSnapshot(
+        provider="akshare",
+        source=source,
+        as_of=now,
+        status="ok" if is_complete else "degraded",
+        items=items,
+        is_complete=is_complete,
+        availability={
+            "status": "ok" if is_complete else "degraded",
+            "reason": None if is_complete else "Some provider rows were skipped.",
+            "row_count": len(items),
+        },
+        diagnostics=diagnostics,
+    )
 
 
 def _normalize_a_share_universe_frame(
@@ -642,6 +994,114 @@ def _a_share_exchange(symbol: str) -> str | None:
     if symbol.startswith(("4", "8", "92")):
         return "BSE"
     return None
+
+
+def _normalize_cn_instrument_symbol(raw_symbol: str) -> str:
+    normalized = raw_symbol.strip()
+    if len(normalized) == 8 and normalized[:2].lower() in {"sh", "sz", "bj"}:
+        normalized = normalized[2:]
+    return normalized.zfill(6)
+
+
+def _cn_instrument_exchange(
+    symbol: str,
+    *,
+    asset_type: str,
+    row: pd.Series,
+    raw_symbol: str = "",
+) -> str | None:
+    symbol_prefix = raw_symbol.strip()[:2].upper()
+    if symbol_prefix == "SH":
+        return "SSE"
+    if symbol_prefix == "SZ":
+        return "SZSE"
+    if symbol_prefix == "BJ":
+        return "BSE"
+    market_value = str(
+        _first_row_value(row, ["market", "exchange", "市场", "交易所"]) or ""
+    ).strip().upper()
+    if market_value in {"SH", "SSE", "1", "沪市", "上海证券交易所"}:
+        return "SSE"
+    if market_value in {"SZ", "SZSE", "0", "深市", "深圳证券交易所"}:
+        return "SZSE"
+    if market_value in {"BJ", "BSE", "2", "北交所", "北京证券交易所"}:
+        return "BSE"
+    if asset_type == "stock":
+        return _a_share_exchange(symbol)
+    if asset_type == "etf":
+        if symbol.startswith("5"):
+            return "SSE"
+        if symbol.startswith("1"):
+            return "SZSE"
+        return None
+    if asset_type == "index":
+        if symbol.startswith("399"):
+            return "SZSE"
+        if symbol.startswith("899"):
+            return "BSE"
+        return "SSE" if len(symbol) == 6 and symbol.isdigit() else None
+    return None
+
+
+def _snapshot_diagnostic_codes(
+    snapshot: ProviderInstrumentUniverseSnapshot,
+) -> list[str]:
+    return [
+        str(item["code"])
+        for item in snapshot.diagnostics
+        if item.get("code")
+    ][:10]
+
+
+def _normalize_provider_bars(
+    symbol: str,
+    frame: pd.DataFrame | None,
+    *,
+    start: date,
+    end: date,
+) -> list[ProviderBar]:
+    if frame is None or frame.empty:
+        return []
+    bars: list[ProviderBar] = []
+    for _, row in frame.iterrows():
+        timestamp = pd.to_datetime(row.get("timestamp"), errors="coerce")
+        if pd.isna(timestamp):
+            continue
+        trade_date = timestamp.date()
+        open_value = _decimal_or_none(row.get("open"))
+        high_value = _decimal_or_none(row.get("high"))
+        low_value = _decimal_or_none(row.get("low"))
+        close_value = _decimal_or_none(row.get("close"))
+        volume = _decimal_or_none(row.get("volume"))
+        if (
+            open_value is None
+            or high_value is None
+            or low_value is None
+            or close_value is None
+            or volume is None
+        ):
+            continue
+        if (
+            trade_date < start
+            or trade_date > end
+            or min(open_value, high_value, low_value, close_value, volume) < 0
+            or high_value < max(open_value, low_value, close_value)
+            or low_value > min(open_value, high_value, close_value)
+        ):
+            continue
+        bars.append(
+            ProviderBar(
+                symbol=symbol,
+                timestamp=trade_date,
+                open=open_value,
+                high=high_value,
+                low=low_value,
+                close=close_value,
+                volume=volume,
+                amount=_decimal_or_none(row.get("amount")),
+            )
+        )
+    return sorted(bars, key=lambda item: item.timestamp)
 
 
 def _normalize_dividend_bonus_frame(

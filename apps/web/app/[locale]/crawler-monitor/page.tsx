@@ -60,6 +60,7 @@ export default async function CrawlerMonitorPage({
     "market_us",
     "market_hk",
     "universe_cn",
+    "fund_index_cn",
     "evidence_incremental",
     "fundamental_shard",
     "official_disclosures",

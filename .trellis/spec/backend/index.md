@@ -50,6 +50,7 @@ Primary examples:
 | [Stored Market Movers Contract](./market-movers-contract.md) | Read-only exact-date A-share gainers/losers over one coherent stored daily-bar cohort | Filled |
 | [Stored Stock Comparison Contract](./market-comparison-contract.md) | Read-only A-share overlay comparison over coherent cohorts and exact shared dates | Filled |
 | [Unified Stored Instrument K-Line Contract](./unified-instrument-kline-contract.md) | Database-only stock, ETF, and index catalog plus coherent daily K-line workspace | Filled |
+| [CN ETF and Index Ingestion Contract](./cn-fund-index-ingestion-contract.md) | Automatic bounded ETF/index catalogs and daily bars with explicit source fallbacks and provenance | Filled |
 | [Focused Topic Research Contract](./focused-topic-research-contract.md) | Database-only agriculture, consumption, real-estate, and non-ferrous evidence projection | Filled |
 | [Market Daily Evidence Contract](./market-daily-evidence-contract.md) | Persisted provider-normalized daily market evidence, deterministic citations, dedupe, diagnostics, and Evidence Center refresh | Filled |
 | [Recommendation Signal Evaluation Contract](./recommendation-signal-evaluation-contract.md) | Public historical signal evaluation API, metrics payload, diagnostics, and no-trading boundary | Filled |

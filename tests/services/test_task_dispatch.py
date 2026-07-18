@@ -131,9 +131,34 @@ def test_dispatch_task_run_enqueues_instrument_universe_sync(mock_task):
     mock_task.delay.assert_called_once_with(
         market="CN",
         provider="akshare",
+        asset_type="stock",
         task_run_id="task-run-id",
     )
 
+
+@patch("apps.worker.tasks.ingestion.sync_cn_fund_index_data_task")
+def test_dispatch_task_run_enqueues_cn_fund_index_pipeline(mock_task):
+    mock_result = MagicMock()
+    mock_result.id = "celery-id-fund-index"
+    mock_task.delay.return_value = mock_result
+
+    celery_id = dispatch_task_run(
+        "ingestion.sync_cn_fund_index_data",
+        {
+            "lookback_days": 120,
+            "max_symbols_per_type": 5000,
+            "trigger": "manual",
+        },
+        "task-run-id",
+    )
+
+    assert celery_id == "celery-id-fund-index"
+    mock_task.delay.assert_called_once_with(
+        lookback_days=120,
+        max_symbols_per_type=5000,
+        trigger="manual",
+        task_run_id="task-run-id",
+    )
 
 @patch("apps.worker.tasks.ingestion.sync_corporate_actions_task")
 def test_dispatch_task_run_enqueues_corporate_action_sync(mock_task):

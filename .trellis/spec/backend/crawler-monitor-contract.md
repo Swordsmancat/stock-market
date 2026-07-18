@@ -15,14 +15,14 @@ must not change the state it is observing.
 - Service: `get_crawler_monitor(session: Session, *, now: datetime | None = None) -> dict[str, object]`.
 - API: `GET /crawler-monitor`.
 - Storage: one bounded, newest-first SQLAlchemy query over curated task names in `task_runs`.
-- No environment keys, database migration, provider adapter, or worker schedule are added.
+- The monitor itself remains read-only even when a separately owned collection task is added to its curated list.
 
 ## 3. Contracts
 
-The API returns exactly eleven stable pipeline IDs: `market_cn`, `market_us`,
+The API returns exactly twelve stable pipeline IDs: `market_cn`, `market_us`,
 `market_hk`, `universe_cn`, `evidence_incremental`, `fundamental_shard`, and
 `official_disclosures`, plus `eastmoney_calendar`, `eastmoney_industry`,
-`eastmoney_news`, and `eastmoney_fundamentals`. Shared task names are separated by equality selectors
+`eastmoney_news`, `eastmoney_fundamentals`, and `fund_index_cn`. Shared task names are separated by equality selectors
 over allowlisted `input_json` fields such as `market` and `run_kind`.
 
 Each item exposes only its stable ID/status, task name, scope/provider,
@@ -33,7 +33,7 @@ cookies, proxies, and environment values are forbidden.
 
 Statuses are `running`, `healthy`, `overdue`, `stalled`, `failed`, and
 `not_recorded`. Stale running heartbeats project as `stalled` without updating
-the TaskRun. The frontend validates the complete eleven-item contract, refreshes
+the TaskRun. The frontend validates the complete twelve-item contract, refreshes
 the server route every 30 seconds, and localizes pipeline/scope/status/cadence
 labels while leaving provider identifiers as evidence metadata.
 
@@ -50,18 +50,18 @@ labels while leaving provider identifiers as evidence metadata.
 | Unknown TaskRun status | `failed` plus `unsupported_task_run_status` |
 | Invalid/unbounded progress | Omit progress rather than coercing raw JSON |
 | Unsafe provider string | Use the curated provider fallback |
-| API or decoder failure | Render an explicit unavailable state, not eleven `not_recorded` rows |
+| API or decoder failure | Render an explicit unavailable state, not twelve `not_recorded` rows |
 
 ## 5. Good / Base / Bad Cases
 
 - Good: a fundamental shard has a fresh heartbeat and `675/1105` progress; the monitor displays it as running and leaves the row unchanged.
-- Base: a fresh database returns all eleven definitions as `not_recorded`, preserving the shape expected by navigation and translations.
+- Base: a fresh database returns all twelve definitions as `not_recorded`, preserving the shape expected by navigation and translations.
 - Bad: reuse `get_recent_task_runs_payload()` from `packages/services/task_runs.py`; its stale-expiry side effect turns an observational GET into a write.
 
 ## 6. Tests Required
 
 - Service tests use SQLite and assert selector separation, every status class,
-  bounded progress, unsafe provider fallback, eleven-item summary counts, and
+  bounded progress, unsafe provider fallback, twelve-item summary counts, and
   that stalled rows remain `running` in storage.
 - API tests override `get_session` and assert the additive GET route.
 - Frontend decoder tests reject missing, duplicate, and unsupported pipeline

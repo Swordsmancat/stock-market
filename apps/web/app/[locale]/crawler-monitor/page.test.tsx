@@ -13,6 +13,7 @@ const ids = [
   "market_us",
   "market_hk",
   "universe_cn",
+  "fund_index_cn",
   "evidence_incremental",
   "fundamental_shard",
   "official_disclosures",
@@ -25,7 +26,7 @@ const ids = [
 const payload = {
   status: "ok",
   generated_at: "2026-07-17T12:00:00+00:00",
-  summary: { total: 11, running: 1, healthy: 9, attention: 1, recent_failures: 0 },
+  summary: { total: 12, running: 1, healthy: 10, attention: 1, recent_failures: 0 },
   items: ids.map((id, index) => ({
     id,
     status: index === 5 ? "running" : index === 6 ? "overdue" : "healthy",

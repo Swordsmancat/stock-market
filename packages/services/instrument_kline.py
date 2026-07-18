@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from packages.domain.models import DailyBar, Exchange, Instrument, Market
@@ -165,8 +165,9 @@ def _selected_identity(
     session: Session,
     symbol: str,
     market: str,
+    asset_type: str | None,
 ) -> tuple[Instrument, str, str | None] | None:
-    return (
+    query = (
         session.query(Instrument, Market.code, Exchange.code)
         .join(Market, Instrument.market_id == Market.id)
         .outerjoin(Exchange, Instrument.exchange_id == Exchange.id)
@@ -174,8 +175,16 @@ def _selected_identity(
         .filter(Instrument.asset_type.in_(SUPPORTED_ASSET_TYPES))
         .filter(Instrument.symbol == symbol)
         .filter(Market.code == market)
-        .one_or_none()
     )
+    if asset_type is not None:
+        return query.filter(Instrument.asset_type == asset_type).one_or_none()
+    return query.order_by(
+        case(
+            (Instrument.asset_type == "stock", 0),
+            (Instrument.asset_type == "etf", 1),
+            else_=2,
+        )
+    ).first()
 
 
 def _serialize_identity(
@@ -377,6 +386,7 @@ def get_instrument_kline_payload(
         session=session,
         symbol=symbol,
         market=market,
+        asset_type=asset_type,
     )
     if selected_row is None:
         return {
