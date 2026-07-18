@@ -61,14 +61,14 @@ separate from the reference feature map.
 
 ## Acceptance Criteria
 
-- [ ] Every reference module has an explicit reuse, merge, add, or defer
+- [x] Every reference module has an explicit reuse, merge, add, or defer
       decision in this PRD.
-- [ ] Child tasks are delivered in the stated order and can be verified and
+- [x] Child tasks are delivered in the stated order and can be verified and
       rolled back independently.
-- [ ] Added pages are database-first and do not initiate provider or trading
+- [x] Added pages are database-first and do not initiate provider or trading
       mutations on load.
-- [ ] Existing routes remain the authority for already integrated modules.
-- [ ] The final navigation remains compact and suitable for one person.
+- [x] Existing routes remain the authority for already integrated modules.
+- [x] The final navigation remains compact and suitable for one person.
 
 ## Out of Scope
 
