@@ -161,13 +161,23 @@ def test_sync_instrument_universe_task_marks_provider_failure(monkeypatch):
     assert "last good universe was preserved" in latest_run["error_message"]
 
 
-def test_cn_fund_index_pipeline_task_records_progress_and_success(monkeypatch):
+@pytest.mark.parametrize(
+    ("trigger", "expected_incremental"),
+    [("manual", False), ("scheduled", True)],
+)
+def test_cn_fund_index_pipeline_task_records_progress_and_success(
+    monkeypatch,
+    trigger,
+    expected_incremental,
+):
     session = make_session()
     from apps.worker.tasks import ingestion as ingestion_tasks
 
     monkeypatch.setattr(ingestion_tasks, "SessionLocal", lambda: session)
+    captured: dict[str, object] = {}
 
-    def fake_sync(*, progress_callback, **_kwargs):
+    def fake_sync(*, progress_callback, **kwargs):
+        captured.update(kwargs)
         progress_callback("daily_bars", 2, 2, "Completed.")
         return {
             "status": "ok",
@@ -184,6 +194,7 @@ def test_cn_fund_index_pipeline_task_records_progress_and_success(monkeypatch):
     result = ingestion_tasks.sync_cn_fund_index_data_task(
         lookback_days=30,
         max_symbols_per_type=10,
+        trigger=trigger,
     )
     latest_run = get_latest_task_run_payload(
         session=session,
@@ -193,6 +204,7 @@ def test_cn_fund_index_pipeline_task_records_progress_and_success(monkeypatch):
     assert result["status"] == "ok"
     assert latest_run["status"] == "succeeded"
     assert latest_run["input_json"]["asset_types"] == ["etf", "index"]
+    assert captured["incremental"] is expected_incremental
 
 
 def test_cn_fund_index_pipeline_task_skips_fresh_overlap(monkeypatch):

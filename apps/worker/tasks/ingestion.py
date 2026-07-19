@@ -514,6 +514,7 @@ def sync_cn_fund_index_data_task(
             start=start_date,
             end=end_date,
             max_symbols_per_type=effective_limit,
+            incremental=trigger.strip().lower() == "scheduled",
             request_delay_seconds=max(
                 0,
                 settings.cn_fund_index_pipeline_request_delay_ms,

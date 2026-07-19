@@ -24,6 +24,10 @@ MARKET_META = {
     "US": {"name": "US Stock", "timezone": "America/New_York", "currency": "USD"},
 }
 
+AKSHARE_ETF_HIST_EM_SOURCE = "akshare.fund_etf_hist_em"
+AKSHARE_ETF_HIST_SINA_SOURCE = "akshare.fund_etf_hist_sina"
+AKSHARE_INDEX_DAILY_SOURCE = "akshare.stock_zh_index_daily"
+
 
 def _get_or_create_market(session: Session, code: str) -> Market:
     market = session.query(Market).filter(Market.code == code).one_or_none()
@@ -477,6 +481,7 @@ def ingest_symbol_daily_bars(
 def build_daily_bar_fetch_coordinator(
     provider_name: str,
     asset_type: str = "stock",
+    exact_source: str | None = None,
 ) -> DailyBarFetchCoordinator:
     normalized_provider = resolve_market_data_provider_name(provider_name)
     normalized_asset_type = _normalize_asset_type(asset_type)
@@ -484,44 +489,56 @@ def build_daily_bar_fetch_coordinator(
         if normalized_provider != "akshare":
             raise ValueError("CN index daily-bar ingestion currently requires AkShare.")
         index_provider = AkShareProvider()
+        sources = [
+            DailyBarSource(
+                provider="akshare",
+                source=AKSHARE_INDEX_DAILY_SOURCE,
+                adjustment="raw",
+                priority=0,
+                fetch=lambda symbol, _timeframe, start, end: index_provider.fetch_index_bars(
+                    symbol,
+                    start,
+                    end,
+                ),
+                min_interval_seconds=0.5,
+            )
+        ]
         return DailyBarFetchCoordinator(
-            [
-                DailyBarSource(
-                    provider="akshare",
-                    source="akshare.stock_zh_index_daily",
-                    adjustment="raw",
-                    priority=0,
-                    fetch=lambda symbol, _timeframe, start, end: index_provider.fetch_index_bars(
-                        symbol,
-                        start,
-                        end,
-                    ),
-                    min_interval_seconds=0.5,
-                )
-            ]
+            _select_exact_daily_bar_source(
+                sources,
+                exact_source=exact_source,
+                asset_type=normalized_asset_type,
+            )
         )
     if normalized_asset_type == "etf" and normalized_provider == "akshare":
         etf_provider = AkShareProvider()
+        sources = [
+            DailyBarSource(
+                provider="akshare",
+                source=AKSHARE_ETF_HIST_EM_SOURCE,
+                adjustment="qfq",
+                priority=0,
+                fetch=etf_provider.fetch_etf_bars,
+                min_interval_seconds=0.5,
+            ),
+            DailyBarSource(
+                provider="akshare",
+                source=AKSHARE_ETF_HIST_SINA_SOURCE,
+                adjustment="raw",
+                priority=1,
+                fetch=etf_provider.fetch_sina_etf_bars,
+                min_interval_seconds=0.5,
+            ),
+        ]
         return DailyBarFetchCoordinator(
-            [
-                DailyBarSource(
-                    provider="akshare",
-                    source="akshare.fund_etf_hist_em",
-                    adjustment="qfq",
-                    priority=0,
-                    fetch=etf_provider.fetch_etf_bars,
-                    min_interval_seconds=0.5,
-                ),
-                DailyBarSource(
-                    provider="akshare",
-                    source="akshare.fund_etf_hist_sina",
-                    adjustment="raw",
-                    priority=1,
-                    fetch=etf_provider.fetch_sina_etf_bars,
-                    min_interval_seconds=0.5,
-                ),
-            ]
+            _select_exact_daily_bar_source(
+                sources,
+                exact_source=exact_source,
+                asset_type=normalized_asset_type,
+            )
         )
+    if exact_source is not None:
+        raise ValueError("Exact daily-bar source selection requires a CN ETF or index.")
     primary = get_provider(normalized_provider)
     primary_source = {
         "akshare": "akshare.stock_zh_a_hist",
@@ -567,6 +584,23 @@ def build_daily_bar_fetch_coordinator(
             ]
         )
     return DailyBarFetchCoordinator(sources)
+
+
+def _select_exact_daily_bar_source(
+    sources: list[DailyBarSource],
+    *,
+    exact_source: str | None,
+    asset_type: str,
+) -> list[DailyBarSource]:
+    if exact_source is None:
+        return sources
+    normalized_source = exact_source.strip().lower()
+    selected = [source for source in sources if source.source.lower() == normalized_source]
+    if not selected:
+        raise ValueError(
+            f"Unsupported {asset_type} daily-bar source: {exact_source}"
+        )
+    return selected
 
 
 def _build_batch_status(

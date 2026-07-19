@@ -526,6 +526,54 @@ def test_cn_etf_daily_bar_ingestion_uses_sina_fallback_with_raw_provenance(
     ]
 
 
+def test_cn_etf_daily_bar_coordinator_can_lock_existing_sina_source(monkeypatch):
+    bar = ProviderBar(
+        symbol="510300",
+        timestamp=date(2026, 7, 17),
+        open=Decimal("4"),
+        high=Decimal("4.1"),
+        low=Decimal("3.9"),
+        close=Decimal("4.05"),
+        volume=Decimal("1000"),
+    )
+    monkeypatch.setattr(
+        "packages.providers.akshare_provider.AkShareProvider.fetch_etf_bars",
+        lambda *_args: pytest.fail("locked Sina refresh must not call Eastmoney"),
+    )
+    monkeypatch.setattr(
+        "packages.providers.akshare_provider.AkShareProvider.fetch_sina_etf_bars",
+        lambda *_args: [bar],
+    )
+    coordinator = ingestion_service.build_daily_bar_fetch_coordinator(
+        "akshare",
+        "etf",
+        exact_source="akshare.fund_etf_hist_sina",
+    )
+
+    result = coordinator.fetch(
+        "510300",
+        "1d",
+        date(2026, 7, 10),
+        date(2026, 7, 19),
+        policy=CN_RESILIENT_POLICY,
+    )
+
+    assert result.source == "akshare.fund_etf_hist_sina"
+    assert result.adjustment == "raw"
+    assert [attempt["source"] for attempt in result.attempts] == [
+        "akshare.fund_etf_hist_sina"
+    ]
+
+
+def test_cn_fund_index_coordinator_rejects_unknown_exact_source():
+    with pytest.raises(ValueError, match="Unsupported etf daily-bar source"):
+        ingestion_service.build_daily_bar_fetch_coordinator(
+            "akshare",
+            "etf",
+            exact_source="akshare.unknown",
+        )
+
+
 def test_symbol_daily_bar_ingestion_rejects_unknown_asset_type(
     monkeypatch,
     sqlite_session: Session,

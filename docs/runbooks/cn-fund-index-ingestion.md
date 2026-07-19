@@ -21,6 +21,15 @@ Catalog and bar fallbacks replace the failed source for that request. Rows from 
 
 The default Beat schedule runs on CN weekdays at 19:15 Shanghai time. Configure it with the `CN_FUND_INDEX_PIPELINE_*` keys documented in `.env.example`. Only one fresh run may execute at a time.
 
+Scheduled runs are incremental after the first baseline:
+
+- instruments without bars receive the complete configured lookback;
+- existing instruments refresh a seven-calendar-day overlap from their latest stored date;
+- instruments already current through the target date make no provider request;
+- existing ETFs stay locked to their stored source and adjustment, so `qfq` and `raw` are not mixed.
+
+Manual API runs remain full-window operations. Use them when intentionally extending or rebuilding the configured historical range.
+
 ## Manual Bounded Run
 
 ```powershell
@@ -33,6 +42,8 @@ Use a small symbol limit for provider acceptance. The production default can cov
 ## Verification
 
 Check the Crawler Monitor for the `fund_index_cn` pipeline. A successful result reports catalog sources, per-asset counts, bar counts, source distributions, and bounded diagnostics.
+
+`refresh_mode` is `incremental` for Beat and `full` for manual dispatch. `window_counts` separates `full_seed`, `full_refresh`, `incremental`, and `current` instruments.
 
 Database checks should confirm:
 
