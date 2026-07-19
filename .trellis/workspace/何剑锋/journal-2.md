@@ -1362,3 +1362,36 @@ Added asset-aware ETF/index catalogs and daily bars, explicit Eastmoney-to-Sina 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 101: Optimize CN ETF and index incremental refresh
+
+**Date**: 2026-07-19
+**Task**: Optimize CN ETF and index incremental refresh
+**Branch**: `master`
+
+### Summary
+
+Added scheduled per-instrument incremental windows, provenance-locked ETF/index refreshes, current skips, worker trigger mapping, full regression coverage, and bounded live acceptance evidence.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `050603b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
