@@ -1,0 +1,8 @@
+services:
+  db:
+    # timescaledb-tune reads cgroup memory limits at first boot. On some
+    # constrained/virtualized hosts (e.g. cgroup v2 without memory.max), the
+    # tuner crashes and aborts DB initialization. Skip auto-tuning to keep the
+    # first `docker compose up` reliable; default postgresql.conf is fine for dev.
+    environment:
+      NO_TS_TUNE: "true"
